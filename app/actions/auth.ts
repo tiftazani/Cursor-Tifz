@@ -16,12 +16,13 @@ export async function loginAction(formData: FormData) {
     redirect("/masuk?error=1");
   }
   const jar = await cookies();
+  const https = hdrs.get("x-forwarded-proto") === "https";
   jar.set(COOKIE_NAME, await sessionToken(), {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 30,
-    secure: process.env.NODE_ENV === "production",
+    secure: https,
   });
   redirect(next.startsWith("/") ? next : "/");
 }

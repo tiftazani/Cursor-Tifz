@@ -46,7 +46,7 @@ export async function latestCache(): Promise<DailySnapshot | null> {
       const jsons = files.filter((f) => f.endsWith(".json")).sort();
       const last = jsons[jsons.length - 1];
       if (!last) continue;
-      const hit = await readFileSafe(path.join(dir, last));
+      const hit = await readFileSafe(path.join(/*turbopackIgnore: true*/ dir, last));
       if (hit) return hit;
     } catch {
       /* try next */
