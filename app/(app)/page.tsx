@@ -15,9 +15,9 @@ export default async function HomePage() {
   return (
     <div>
       <PageHeader
-        kicker="Market pulse"
-        title="Rekomendasi harian pasar Indonesia"
-        subtitle={`IHSG dan ranking kuantitatif Cuan untuk ${snap.asOf}. Status: ${marketStatusLabel(snap.marketStatus)}.`}
+        kicker="Desk hari ini"
+        title="Cuan Yuk Guys"
+        subtitle={`Sinyal IHSG dan reksadana untuk ${snap.asOf}. ${marketStatusLabel(snap.marketStatus)}. Bukan keramaian — hanya ranking yang bisa diaudit.`}
       />
       <StaleBanner stale={snap.stale} notes={snap.notes} />
 
@@ -31,7 +31,7 @@ export default async function HomePage() {
                 <Change value={snap.ihsg.changePct} /> · 1 bln <Change value={snap.ihsg.ret1m} />
               </p>
             </div>
-            <Sparkline data={snap.ihsg.spark} color={snap.ihsg.changePct >= 0 ? "#3ee0b0" : "#ff6b8a"} />
+            <Sparkline data={snap.ihsg.spark} color={snap.ihsg.changePct >= 0 ? "#9cba8a" : "#d46a6a"} />
           </div>
           <div className="mt-6 grid grid-cols-3 gap-3 text-sm">
             <Stat label="Open" value={num(snap.ihsg.open, 2)} />
@@ -59,8 +59,8 @@ export default async function HomePage() {
 
       <section className="mt-10">
         <div className="mb-4 flex items-end justify-between">
-          <h2 className="text-xl font-semibold">Top pick saham</h2>
-          <Link href="/saham" className="text-sm text-mint">
+          <h2 className="font-display text-2xl italic">Top pick saham</h2>
+          <Link href="/saham" className="text-sm text-gold">
             Semua ranking →
           </Link>
         </div>
@@ -94,8 +94,8 @@ export default async function HomePage() {
 
       <section className="mt-10">
         <div className="mb-4 flex items-end justify-between">
-          <h2 className="text-xl font-semibold">Pick reksadana per kategori</h2>
-          <Link href="/reksadana" className="text-sm text-mint">
+          <h2 className="font-display text-2xl italic">Pick reksadana</h2>
+          <Link href="/reksadana" className="text-sm text-gold">
             Bandingkan produk →
           </Link>
         </div>
@@ -125,18 +125,18 @@ export default async function HomePage() {
 
       <section className="mt-10 grid gap-4 md:grid-cols-2">
         <Card>
-          <h2 className="text-lg font-semibold">Sinyal investor hari ini</h2>
+          <h2 className="font-display text-2xl italic">Sinyal investor</h2>
           <ul className="mt-3 space-y-2 text-sm leading-6 text-mute">
             {snap.investor.narrative.map((n) => (
               <li key={n}>• {n}</li>
             ))}
           </ul>
-          <Link href="/investor" className="mt-4 inline-block text-sm text-mint">
+          <Link href="/investor" className="mt-4 inline-block text-sm text-gold">
             Buka data investor →
           </Link>
         </Card>
         <Card>
-          <h2 className="text-lg font-semibold">Aktivitas universe</h2>
+          <h2 className="font-display text-2xl italic">Aktivitas universe</h2>
           <div className="mt-4 grid grid-cols-2 gap-4">
             <Stat label="YTD IHSG" value={<Change value={snap.ihsg.retYtd} />} />
             <Stat label="3 bulan IHSG" value={<Change value={snap.ihsg.ret3m} />} />

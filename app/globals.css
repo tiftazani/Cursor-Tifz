@@ -1,15 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #070b14;
-  --foreground: #e8eef9;
-  --card: #101826;
-  --card-2: #161f30;
-  --line: rgba(232, 238, 249, 0.09);
-  --mint: #3ee0b0;
-  --gold: #e4c36a;
-  --rose: #ff6b8a;
-  --mute: #8b9bb4;
+  --background: #050505;
+  --foreground: #f2eee6;
+  --card: #0c0c0c;
+  --card-2: #111111;
+  --line: rgba(201, 162, 79, 0.16);
+  --mint: #c9a24f;
+  --gold: #d4af77;
+  --rose: #d46a6a;
+  --mute: #8a8378;
+  --up: #9cba8a;
+  --down: #d46a6a;
 }
 
 @theme inline {
@@ -22,9 +24,10 @@
   --color-gold: var(--gold);
   --color-rose: var(--rose);
   --color-mute: var(--mute);
-  --color-up: var(--mint);
-  --color-down: var(--rose);
-  --font-sans: var(--font-geist-sans);
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --font-sans: var(--font-outfit);
+  --font-display: var(--font-cormorant);
   --font-mono: var(--font-geist-mono);
 }
 
@@ -35,32 +38,56 @@ body {
 }
 
 body {
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  background-image:
-    radial-gradient(1100px 520px at 8% -12%, rgba(62, 224, 176, 0.09), transparent 55%),
-    radial-gradient(900px 420px at 100% -8%, rgba(228, 195, 106, 0.08), transparent 50%),
-    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
-  background-size: auto, auto, 52px 52px, 52px 52px;
+  font-family: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   min-height: 100%;
+  background-image:
+    radial-gradient(900px 480px at 50% -20%, rgba(201, 162, 79, 0.09), transparent 58%),
+    radial-gradient(700px 360px at 100% 100%, rgba(80, 40, 20, 0.18), transparent 50%),
+    radial-gradient(600px 300px at 0% 80%, rgba(201, 162, 79, 0.04), transparent 45%);
+}
+
+body::before {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  opacity: 0.045;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.9'/%3E%3C/svg%3E");
+}
+
+::selection {
+  background: rgba(201, 162, 79, 0.28);
+  color: #fff8ea;
+}
+
+.font-display {
+  font-family: var(--font-cormorant), ui-serif, Georgia, serif;
 }
 
 .num {
   font-variant-numeric: tabular-nums;
   font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: -0.02em;
 }
 
 .card {
-  background: linear-gradient(180deg, rgba(22, 31, 48, 0.92), rgba(16, 24, 38, 0.92));
+  background: linear-gradient(180deg, rgba(18, 18, 18, 0.94), rgba(8, 8, 8, 0.96));
   border: 1px solid var(--line);
-  border-radius: 1.1rem;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 24px 60px rgba(0, 0, 0, 0.35);
 }
 
 .card-hover {
-  transition: border-color 160ms ease, transform 160ms ease;
+  transition: border-color 220ms ease, box-shadow 220ms ease;
 }
 .card-hover:hover {
-  border-color: rgba(62, 224, 176, 0.28);
-  transform: translateY(-1px);
+  border-color: rgba(212, 175, 119, 0.45);
+  box-shadow: 0 0 0 1px rgba(201, 162, 79, 0.12), 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.hairline {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 162, 79, 0.45), transparent);
 }

@@ -5,7 +5,7 @@ export const CATEGORY_LABEL = {
 } as const;
 
 export const LABEL_STYLE = {
-  Beli: "bg-mint/15 text-mint border-mint/30",
-  Tahan: "bg-gold/15 text-gold border-gold/30",
-  Waspada: "bg-rose/15 text-rose border-rose/30",
+  Beli: "bg-gold/10 text-gold border-gold/35",
+  Tahan: "border-line bg-white/5 text-foreground/80",
+  Waspada: "bg-rose/10 text-rose border-rose/30",
 } as const;

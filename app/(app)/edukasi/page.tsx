@@ -7,12 +7,12 @@ export default function EdukasiPage() {
     <div>
       <PageHeader
         kicker="Transparansi"
-        title="Cara kerja Cuan"
+        title="Cara kerja desk"
         subtitle="Mesin ini kuantitatif dan bisa diaudit. Bukan kecerdasan buatan hitam, dan bukan izin usaha OJK."
       />
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <h2 className="text-lg font-semibold">Cuan Score saham</h2>
+          <h2 className="font-display text-xl italic">Skor saham</h2>
           <p className="mt-2 text-sm leading-6 text-mute">
             Setiap emiten di-z-score terhadap universe yang sama, lalu dibobot: alpha 1 & 3 bulan vs IHSG,
             P/E dan P/B (jika ada), rasio volume, RSI, sinyal MA20/MA50, penalti volatilitas, dan posisi vs
@@ -35,7 +35,7 @@ export default function EdukasiPage() {
           </ul>
         </Card>
         <Card>
-          <h2 className="text-lg font-semibold">Apa yang tidak dilakukan Cuan</h2>
+          <h2 className="font-display text-xl italic">Apa yang tidak kami lakukan</h2>
           <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-mute">
             <li>Tidak mengeksekusi order atau terhubung ke sekuritas.</li>
             <li>Tidak memakai data level-2 atau foreign flow resmi KSEI.</li>

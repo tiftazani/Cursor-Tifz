@@ -15,7 +15,7 @@ export function FactorList({ factors }: { factors: Factor[] }) {
             </div>
             <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/5">
               <div
-                className={clsx("h-full rounded-full", pos ? "bg-mint" : "bg-rose")}
+                className={clsx("h-full rounded-full", pos ? "bg-up" : "bg-rose")}
                 style={{ width: `${Math.max(6, width)}%` }}
               />
             </div>

@@ -51,7 +51,7 @@ export default async function JejakPage() {
                 <td className="px-4 py-3 num">{t.date}</td>
                 <td className="px-4 py-3">
                   {t.tickers.map((tk) => (
-                    <Link key={tk} href={`/saham/${tk}`} className="mr-2 text-mint">
+                    <Link key={tk} href={`/saham/${tk}`} className="mr-2 text-gold">
                       {tk}
                     </Link>
                   ))}

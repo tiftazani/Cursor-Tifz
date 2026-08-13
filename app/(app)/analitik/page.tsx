@@ -16,7 +16,7 @@ export default async function AnalitikPage() {
     <div>
       <PageHeader
         kicker="Dashboard"
-        title="Analitik Cuan"
+        title="Analitik desk"
         subtitle="IHSG vs portofolio equal-weight Top 5 (walk-forward), heatmap sektor, scatter risiko-imbal hasil, dan distribusi skor."
       />
       <StaleBanner stale={snap.stale} notes={snap.notes} />

@@ -110,7 +110,7 @@ export function ScreenerClient({ rows, sectors }: { rows: Row[]; sectors: string
             {filtered.map((r) => (
               <tr key={r.ticker} className="border-t border-line">
                 <td className="px-4 py-3">
-                  <Link href={`/saham/${r.ticker}`} className="font-medium hover:text-mint">
+                  <Link href={`/saham/${r.ticker}`} className="font-medium hover:text-gold">
                     {r.ticker}
                   </Link>
                   <p className="text-[11px] text-mute">{r.sector}</p>

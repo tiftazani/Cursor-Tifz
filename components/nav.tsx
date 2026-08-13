@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/actions/auth";
 import { clsx } from "@/lib/format";
+import { Wordmark } from "./brand";
 
 const LINKS = [
   { href: "/", label: "Beranda" },
@@ -21,23 +22,19 @@ const LINKS = [
 export function AppNav() {
   const pathname = usePathname();
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-background/80 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-mint/15 text-sm font-bold text-mint">
-            C
-          </span>
-          <span className="text-lg font-semibold tracking-tight">
-            Cuan<span className="text-gold">.</span>
-          </span>
-        </Link>
+    <header className="sticky top-0 z-30 border-b border-line bg-background/75 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-7xl items-end justify-between gap-4 px-4 py-4">
+        <Wordmark size="sm" />
         <form action={logoutAction}>
-          <button type="submit" className="text-xs text-mute hover:text-foreground">
+          <button
+            type="submit"
+            className="text-[10px] uppercase tracking-[0.22em] text-mute hover:text-gold"
+          >
             Keluar
           </button>
         </form>
       </div>
-      <nav className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-3 pb-2">
+      <nav className="mx-auto flex max-w-7xl gap-0 overflow-x-auto px-2 pb-0">
         {LINKS.map((l) => {
           const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
           return (
@@ -45,8 +42,10 @@ export function AppNav() {
               key={l.href}
               href={l.href}
               className={clsx(
-                "whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition",
-                active ? "bg-mint/15 text-mint" : "text-mute hover:bg-white/5 hover:text-foreground",
+                "whitespace-nowrap border-b px-3 py-2.5 text-[12px] uppercase tracking-[0.16em] transition",
+                active
+                  ? "border-gold text-gold"
+                  : "border-transparent text-mute hover:border-line hover:text-foreground",
               )}
             >
               {l.label}

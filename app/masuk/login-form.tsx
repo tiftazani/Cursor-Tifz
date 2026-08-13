@@ -9,9 +9,9 @@ function Submit() {
     <button
       type="submit"
       disabled={pending}
-      className="mt-5 w-full rounded-xl bg-mint px-4 py-3 text-sm font-semibold text-background disabled:opacity-60"
+      className="mt-6 w-full border border-gold/50 bg-gold px-4 py-3.5 text-[11px] font-medium uppercase tracking-[0.28em] text-background transition hover:bg-transparent hover:text-gold disabled:opacity-60"
     >
-      {pending ? "Memeriksa…" : "Masuk ke Cuan"}
+      {pending ? "Memeriksa…" : "Masuk ke desk"}
     </button>
   );
 }
@@ -26,8 +26,8 @@ export function LoginForm({ next, error }: { next: string; error?: string }) {
   return (
     <form action={loginAction} className="mt-8">
       <input type="hidden" name="next" value={next} />
-      <label className="text-xs uppercase tracking-wider text-mute" htmlFor="password">
-        Password akses
+      <label className="text-[10px] uppercase tracking-[0.22em] text-mute" htmlFor="password">
+        Password
       </label>
       <input
         id="password"
@@ -35,8 +35,8 @@ export function LoginForm({ next, error }: { next: string; error?: string }) {
         type="password"
         autoFocus
         required
-        className="mt-2 w-full rounded-xl border border-line bg-background/60 px-4 py-3 text-foreground outline-none ring-mint/40 focus:ring-2"
-        placeholder="Masukkan password"
+        className="mt-2 w-full border border-line bg-black/40 px-4 py-3.5 text-foreground outline-none transition focus:border-gold/60"
+        placeholder="••••••••"
       />
       {message ? <p className="mt-3 text-sm text-rose">{message}</p> : null}
       <Submit />

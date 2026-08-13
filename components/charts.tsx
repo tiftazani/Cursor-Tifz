@@ -16,13 +16,14 @@ import {
 } from "recharts";
 
 const tooltipStyle = {
-  background: "#101826",
-  border: "1px solid rgba(232,238,249,0.12)",
-  borderRadius: 12,
+  background: "#0c0c0c",
+  border: "1px solid rgba(201,162,79,0.22)",
+  borderRadius: 2,
   fontSize: 12,
+  color: "#f2eee6",
 };
 
-export function Sparkline({ data, color = "#3ee0b0" }: { data: number[]; color?: string }) {
+export function Sparkline({ data, color = "#c9a24f" }: { data: number[]; color?: string }) {
   const series = data.map((v, i) => ({ i, v }));
   const up = (data[data.length - 1] ?? 0) >= (data[0] ?? 0);
   return (
@@ -32,8 +33,8 @@ export function Sparkline({ data, color = "#3ee0b0" }: { data: number[]; color?:
           <Line
             type="monotone"
             dataKey="v"
-            stroke={color || (up ? "#3ee0b0" : "#ff6b8a")}
-            strokeWidth={1.6}
+            stroke={color || (up ? "#9cba8a" : "#d46a6a")}
+            strokeWidth={1.4}
             dot={false}
           />
         </LineChart>
@@ -44,7 +45,7 @@ export function Sparkline({ data, color = "#3ee0b0" }: { data: number[]; color?:
 
 export function PriceChart({
   data,
-  color = "#3ee0b0",
+  color = "#c9a24f",
 }: {
   data: { date: string; value: number }[];
   color?: string;
@@ -53,9 +54,9 @@ export function PriceChart({
     <div className="h-72 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data}>
-          <CartesianGrid stroke="rgba(232,238,249,0.06)" vertical={false} />
+          <CartesianGrid stroke="rgba(201,162,79,0.08)" vertical={false} />
           <XAxis dataKey="date" hide />
-          <YAxis domain={["auto", "auto"]} tick={{ fill: "#8b9bb4", fontSize: 11 }} width={64} />
+          <YAxis domain={["auto", "auto"]} tick={{ fill: "#8a8378", fontSize: 11 }} width={64} />
           <Tooltip contentStyle={tooltipStyle} />
           <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={false} />
         </LineChart>
@@ -73,12 +74,12 @@ export function DualLineChart({
     <div className="h-72 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data}>
-          <CartesianGrid stroke="rgba(232,238,249,0.06)" vertical={false} />
+          <CartesianGrid stroke="rgba(201,162,79,0.08)" vertical={false} />
           <XAxis dataKey="date" hide />
-          <YAxis domain={["auto", "auto"]} tick={{ fill: "#8b9bb4", fontSize: 11 }} width={48} />
+          <YAxis domain={["auto", "auto"]} tick={{ fill: "#8a8378", fontSize: 11 }} width={48} />
           <Tooltip contentStyle={tooltipStyle} />
-          <Line type="monotone" dataKey="picks" name="Top 5 Cuan" stroke="#3ee0b0" strokeWidth={2} dot={false} />
-          <Line type="monotone" dataKey="ihsg" name="IHSG" stroke="#e4c36a" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="picks" name="Top 5 desk" stroke="#c9a24f" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="ihsg" name="IHSG" stroke="#f2eee6" strokeWidth={1.4} dot={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -91,11 +92,11 @@ export function DrawdownChart({ data }: { data: { date: string; dd: number }[] }
     <div className="h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={series}>
-          <CartesianGrid stroke="rgba(232,238,249,0.06)" vertical={false} />
+          <CartesianGrid stroke="rgba(201,162,79,0.08)" vertical={false} />
           <XAxis dataKey="date" hide />
-          <YAxis tick={{ fill: "#8b9bb4", fontSize: 11 }} width={40} />
+          <YAxis tick={{ fill: "#8a8378", fontSize: 11 }} width={40} />
           <Tooltip contentStyle={tooltipStyle} />
-          <Line type="monotone" dataKey="ddPct" name="Drawdown %" stroke="#ff6b8a" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="ddPct" name="Drawdown %" stroke="#d46a6a" strokeWidth={2} dot={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -107,11 +108,11 @@ export function ScoreBarChart({ data }: { data: { bucket: string; count: number 
     <div className="h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data}>
-          <CartesianGrid stroke="rgba(232,238,249,0.06)" vertical={false} />
-          <XAxis dataKey="bucket" tick={{ fill: "#8b9bb4", fontSize: 11 }} />
-          <YAxis allowDecimals={false} tick={{ fill: "#8b9bb4", fontSize: 11 }} width={28} />
+          <CartesianGrid stroke="rgba(201,162,79,0.08)" vertical={false} />
+          <XAxis dataKey="bucket" tick={{ fill: "#8a8378", fontSize: 11 }} />
+          <YAxis allowDecimals={false} tick={{ fill: "#8a8378", fontSize: 11 }} width={28} />
           <Tooltip contentStyle={tooltipStyle} />
-          <Bar dataKey="count" fill="#3ee0b0" radius={[6, 6, 0, 0]} />
+          <Bar dataKey="count" fill="#c9a24f" radius={[0, 0, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -128,18 +129,18 @@ export function RiskScatter({
     <div className="h-72 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <ScatterChart>
-          <CartesianGrid stroke="rgba(232,238,249,0.06)" />
+          <CartesianGrid stroke="rgba(201,162,79,0.08)" />
           <XAxis
             dataKey="volPct"
             name="Volatilitas %"
-            tick={{ fill: "#8b9bb4", fontSize: 11 }}
+            tick={{ fill: "#8a8378", fontSize: 11 }}
             type="number"
           />
-          <YAxis dataKey="retPct" name="Return 1 bln %" tick={{ fill: "#8b9bb4", fontSize: 11 }} type="number" />
+          <YAxis dataKey="retPct" name="Return 1 bln %" tick={{ fill: "#8a8378", fontSize: 11 }} type="number" />
           <Tooltip cursor={{ strokeDasharray: "3 3" }} contentStyle={tooltipStyle} />
           <Scatter data={series}>
             {series.map((d) => (
-              <Cell key={d.ticker} fill={d.score >= 70 ? "#3ee0b0" : d.score >= 50 ? "#e4c36a" : "#ff6b8a"} />
+              <Cell key={d.ticker} fill={d.score >= 70 ? "#c9a24f" : d.score >= 50 ? "#f2eee6" : "#d46a6a"} />
             ))}
           </Scatter>
         </ScatterChart>

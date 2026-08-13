@@ -26,7 +26,7 @@ export function WatchlistClient({ rows }: { rows: Row[] }) {
       <Card>
         <p className="text-sm text-mute">
           Watchlist masih kosong. Buka halaman{" "}
-          <Link href="/saham" className="text-mint">
+          <Link href="/saham" className="text-gold">
             Saham
           </Link>{" "}
           lalu tambahkan emiten.
@@ -41,7 +41,7 @@ export function WatchlistClient({ rows }: { rows: Row[] }) {
         <Card key={s.ticker}>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <Link href={`/saham/${s.ticker}`} className="text-lg font-semibold hover:text-mint">
+              <Link href={`/saham/${s.ticker}`} className="text-lg font-semibold hover:text-gold">
                 {s.ticker}
               </Link>
               <p className="text-xs text-mute">{s.name}</p>

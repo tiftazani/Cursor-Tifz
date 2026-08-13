@@ -36,8 +36,8 @@ export default async function ReksadanaPage({
             key={c}
             href={`/reksadana?kategori=${c}`}
             className={clsx(
-              "rounded-full px-4 py-1.5 text-sm",
-              active === c ? "bg-mint/15 text-mint" : "border border-line text-mute hover:text-foreground",
+              "border px-4 py-1.5 text-[11px] uppercase tracking-[0.16em]",
+              active === c ? "border-gold bg-gold/10 text-gold" : "border-line text-mute hover:text-foreground",
             )}
           >
             {CATEGORY_LABEL[c]}

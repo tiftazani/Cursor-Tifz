@@ -14,7 +14,7 @@ export default async function SahamPage() {
     <div>
       <PageHeader
         kicker="Mesin saham"
-        title="Ranking Cuan Score IHSG"
+        title="Ranking skor IHSG"
         subtitle="Universe 42 emiten likuid (IDX30/LQ45 + blue chip). Skor 0–100 dari momentum, alpha vs IHSG, likuiditas, teknikal, dan valuasi."
       />
       <StaleBanner stale={snap.stale} notes={snap.notes} />
@@ -38,7 +38,7 @@ export default async function SahamPage() {
               <tr key={s.ticker} className="border-t border-line">
                 <td className="px-4 py-3 num text-mute">{i + 1}</td>
                 <td className="px-4 py-3">
-                  <Link href={`/saham/${s.ticker}`} className="font-medium hover:text-mint">
+                  <Link href={`/saham/${s.ticker}`} className="font-medium hover:text-gold">
                     {s.ticker}
                   </Link>
                   <p className="text-[11px] text-mute">{s.sector}</p>
@@ -46,7 +46,7 @@ export default async function SahamPage() {
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     <span className="num">{idr(s.price)}</span>
-                    <Sparkline data={s.spark} color={s.changePct >= 0 ? "#3ee0b0" : "#ff6b8a"} />
+                    <Sparkline data={s.spark} color={s.changePct >= 0 ? "#9cba8a" : "#d46a6a"} />
                   </div>
                 </td>
                 <td className="px-4 py-3">

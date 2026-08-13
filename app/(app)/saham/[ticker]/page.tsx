@@ -45,7 +45,7 @@ export default async function StockDetailPage({ params }: { params: Promise<{ ti
           </div>
           <PriceChart
             data={stock.bars.map((b) => ({ date: b.date, value: b.close }))}
-            color={stock.changePct >= 0 ? "#3ee0b0" : "#ff6b8a"}
+            color={stock.changePct >= 0 ? "#9cba8a" : "#d46a6a"}
           />
         </Card>
         <Card className="grid grid-cols-2 gap-4">

@@ -133,7 +133,7 @@ export function RiskForm({ funds }: { funds: FundLite[] }) {
                     <span className="num">{pct(alloc[c], 0, false)}</span>
                   </div>
                   <div className="mt-1 h-2 rounded-full bg-white/5">
-                    <div className="h-2 rounded-full bg-mint" style={{ width: `${alloc[c] * 100}%` }} />
+                    <div className="h-2 rounded-full bg-gold" style={{ width: `${alloc[c] * 100}%` }} />
                   </div>
                 </div>
               ))}
@@ -142,7 +142,7 @@ export function RiskForm({ funds }: { funds: FundLite[] }) {
             <ul className="mt-2 space-y-2 text-sm">
               {picks.map((f) => (
                 <li key={f.id}>
-                  <Link href={`/reksadana/${f.id}`} className="text-mint hover:underline">
+                  <Link href={`/reksadana/${f.id}`} className="text-gold hover:underline">
                     {f.name}
                   </Link>
                   <p className="text-xs text-mute">

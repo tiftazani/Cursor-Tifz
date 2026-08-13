@@ -1,6 +1,6 @@
-# Cuan
+# Cuan Yuk Guys
 
-Terminal rekomendasi harian **saham IHSG** dan **reksadana** (pasar uang, saham, obligasi).
+Desk privat rekomendasi harian **saham IHSG** dan **reksadana**.
 
 Kode: [github.com/tiftazani/Cursor-Tifz](https://github.com/tiftazani/Cursor-Tifz)
 
