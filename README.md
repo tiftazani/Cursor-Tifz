@@ -1,26 +1,20 @@
-# Cuan Yuk Guys
+# Cursor-Tifz
 
-Desk privat rekomendasi harian **saham IHSG** dan **reksadana**.
+Repo hub Tiftazani. Aplikasi tidak lagi menempati seluruh root GitHub — tiap project punya foldernya sendiri.
 
-Kode: [github.com/tiftazani/Cursor-Tifz](https://github.com/tiftazani/Cursor-Tifz)
+## Folder project
 
-## URL website publik (Vercel)
+| Folder | Isi |
+| --- | --- |
+| [`cuan-yuk-guys/`](./cuan-yuk-guys) | Website **Cuan Yuk Guys** (IHSG, reksadana, Cuan Bot) |
 
-GitHub publik = kode bisa dilihat. URL website (seperti `https://cuan.vercel.app`) tetap perlu deploy:
+Kode aplikasi: [github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys](https://github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys)
 
-1. Buka [Import Cursor-Tifz di Vercel](https://vercel.com/new/import?s=https://github.com/tiftazani/Cursor-Tifz)
-2. Login dengan GitHub
-3. Biarkan branch **main**, lalu **Deploy**
-
-Vercel akan memberi URL publik. Password situs ada di `.env.example` (`SITE_PASSWORD`).
-
-## Menjalankan di laptop
-
-Repo sudah publik, clone tidak perlu password GitHub:
+## Jalankan di laptop
 
 ```bash
 git clone https://github.com/tiftazani/Cursor-Tifz.git
-cd Cursor-Tifz
+cd Cursor-Tifz/cuan-yuk-guys
 cp .env.example .env.local
 npm install
 npm run dev
@@ -28,10 +22,17 @@ npm run dev
 
 Buka [http://localhost:3000](http://localhost:3000).
 
-## Stack
+## Vercel (wajib sekali)
 
-Next.js (App Router) · TypeScript · Tailwind · Recharts. Data saham dari Yahoo Finance (`^JKSE`, ticker `.JK`) dengan cache harian WIB dan fallback jika feed gagal.
+Situs publik `https://cuan-tif.vercel.app` tetap memakai branch **main**. Karena app sekarang ada di folder, atur Root Directory:
+
+1. Buka [Vercel dashboard](https://vercel.com/dashboard) → project **cuan-tif** (atau nama project-nya)
+2. **Settings** → **General** → **Root Directory**
+3. Isi: `cuan-yuk-guys`
+4. Save, lalu **Deployments** → **Redeploy** (atau push commit baru ke `main`)
+
+Tanpa langkah itu, Vercel masih mencari `package.json` Next.js di root dan build bisa gagal.
 
 ## Catatan
 
-Bukan nasihat investasi OJK. NAB reksadana adalah katalog kurasi + model yang dikaitkan ke pergerakan pasar, bukan feed resmi OJK.
+Bukan nasihat investasi OJK. Copyright by Tiftazani.
