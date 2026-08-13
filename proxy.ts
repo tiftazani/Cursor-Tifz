@@ -6,7 +6,11 @@ export async function proxy(request: NextRequest) {
   const token = request.cookies.get(COOKIE_NAME)?.value;
   const ok = await isValidSession(token);
 
-  if (pathname === "/imo" || pathname.startsWith("/imo/")) {
+  if (
+    pathname === "/imo" ||
+    pathname.startsWith("/imo/") ||
+    pathname === "/imo.html"
+  ) {
     return NextResponse.next();
   }
 
