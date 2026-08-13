@@ -10,8 +10,7 @@ GitHub publik = kode bisa dilihat. URL website (seperti `https://cuan.vercel.app
 
 1. Buka [Import Cursor-Tifz di Vercel](https://vercel.com/new/import?s=https://github.com/tiftazani/Cursor-Tifz)
 2. Login dengan GitHub
-3. Branch: `cursor/cuan-ihsg-reksadana-880a` (jangan `main`)
-4. Deploy
+3. Biarkan branch **main**, lalu **Deploy**
 
 Vercel akan memberi URL publik. Password situs ada di `.env.example` (`SITE_PASSWORD`).
 
@@ -22,7 +21,6 @@ Repo sudah publik, clone tidak perlu password GitHub:
 ```bash
 git clone https://github.com/tiftazani/Cursor-Tifz.git
 cd Cursor-Tifz
-git checkout cursor/cuan-ihsg-reksadana-880a
 cp .env.example .env.local
 npm install
 npm run dev
