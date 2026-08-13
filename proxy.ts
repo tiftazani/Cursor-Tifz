@@ -6,6 +6,10 @@ export async function proxy(request: NextRequest) {
   const token = request.cookies.get(COOKIE_NAME)?.value;
   const ok = await isValidSession(token);
 
+  if (pathname === "/imo" || pathname.startsWith("/imo/")) {
+    return NextResponse.next();
+  }
+
   if (pathname === "/masuk" || pathname.startsWith("/api/auth/login")) {
     if (ok && pathname === "/masuk") {
       return NextResponse.redirect(new URL("/", request.url));
