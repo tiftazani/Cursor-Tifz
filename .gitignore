@@ -4,6 +4,8 @@ node_modules/
 out/
 build/
 .vercel
+.netlify
+imo-factory/.netlify
 .DS_Store
 *.pem
 *.tsbuildinfo
