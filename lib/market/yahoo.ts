@@ -38,7 +38,9 @@ export type YahooQuote = {
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
-async function yahooFetch(url: string, timeoutMs = 8000): Promise<Response> {
+const YAHOO_HOSTS = ["query1.finance.yahoo.com", "query2.finance.yahoo.com"];
+
+async function yahooFetch(url: string, timeoutMs = 3000): Promise<Response> {
   return fetch(url, {
     headers: { "User-Agent": UA, Accept: "application/json" },
     cache: "no-store",
@@ -51,33 +53,36 @@ export async function fetchChart(
   range = "1y",
   interval = "1d",
 ): Promise<Bar[] | null> {
-  try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}&events=div%7Csplit`;
-    const res = await yahooFetch(url);
-    if (!res.ok) return null;
-    const json = (await res.json()) as YahooChartResponse;
-    const result = json.chart?.result?.[0];
-    const ts = result?.timestamp ?? [];
-    const q = result?.indicators?.quote?.[0];
-    if (!ts.length || !q) return null;
-    const bars: Bar[] = [];
-    for (let i = 0; i < ts.length; i += 1) {
-      const close = q.close?.[i];
-      if (close == null || !Number.isFinite(close)) continue;
-      bars.push({
-        date: formatStamp(ts[i], interval),
-        open: q.open?.[i] ?? close,
-        high: q.high?.[i] ?? close,
-        low: q.low?.[i] ?? close,
-        close,
-        volume: q.volume?.[i] ?? 0,
-      });
+  const path = `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}&events=div%7Csplit`;
+  for (const host of YAHOO_HOSTS) {
+    try {
+      const res = await yahooFetch(`https://${host}${path}`, 2800);
+      if (!res.ok) continue;
+      const json = (await res.json()) as YahooChartResponse;
+      const result = json.chart?.result?.[0];
+      const ts = result?.timestamp ?? [];
+      const q = result?.indicators?.quote?.[0];
+      if (!ts.length || !q) continue;
+      const bars: Bar[] = [];
+      for (let i = 0; i < ts.length; i += 1) {
+        const close = q.close?.[i];
+        if (close == null || !Number.isFinite(close)) continue;
+        bars.push({
+          date: formatStamp(ts[i], interval),
+          open: q.open?.[i] ?? close,
+          high: q.high?.[i] ?? close,
+          low: q.low?.[i] ?? close,
+          close,
+          volume: q.volume?.[i] ?? 0,
+        });
+      }
+      const min = interval === "1d" ? 10 : 4;
+      if (bars.length > min) return bars;
+    } catch {
+      continue;
     }
-    const min = interval === "1d" ? 10 : 4;
-    return bars.length > min ? bars : null;
-  } catch {
-    return null;
   }
+  return null;
 }
 
 function formatStamp(ts: number, interval: string): string {
@@ -102,36 +107,43 @@ type QuoteJson = {
 export async function fetchQuotes(symbols: string[]): Promise<Map<string, YahooQuote>> {
   const out = new Map<string, YahooQuote>();
   if (!symbols.length) return out;
-  try {
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(","))}`;
-    const res = await yahooFetch(url, 10000);
-    if (!res.ok) return out;
-    const json = (await res.json()) as QuoteJson;
-    for (const row of json.quoteResponse?.result ?? []) {
-      const symbol = String(row.symbol ?? "");
-      const price = Number(row.regularMarketPrice);
-      if (!symbol || !Number.isFinite(price)) continue;
-      out.set(symbol, {
-        symbol,
-        name: String(row.shortName ?? row.longName ?? ""),
-        exchange: String(row.fullExchangeName ?? row.exchange ?? ""),
-        price,
-        changePct: Number(row.regularMarketChangePercent ?? 0) / 100,
-        open: Number(row.regularMarketOpen ?? price),
-        high: Number(row.regularMarketDayHigh ?? price),
-        low: Number(row.regularMarketDayLow ?? price),
-        volume: Number(row.regularMarketVolume ?? 0),
-        week52High: finiteOrNull(row.fiftyTwoWeekHigh),
-        week52Low: finiteOrNull(row.fiftyTwoWeekLow),
-        marketCap: finiteOrNull(row.marketCap),
-        pe: finiteOrNull(row.trailingPE),
-        pb: finiteOrNull(row.priceToBook),
-        avgVolume: finiteOrNull(row.averageDailyVolume3Month),
-      });
+  const chunks: string[][] = [];
+  for (let i = 0; i < symbols.length; i += 20) chunks.push(symbols.slice(i, i + 20));
+  await Promise.all(chunks.map(async (chunk) => {
+    const path = `/v7/finance/quote?symbols=${encodeURIComponent(chunk.join(","))}`;
+    for (const host of YAHOO_HOSTS) {
+      try {
+        const res = await yahooFetch(`https://${host}${path}`, 3500);
+        if (!res.ok) continue;
+        const json = (await res.json()) as QuoteJson;
+        for (const row of json.quoteResponse?.result ?? []) {
+          const symbol = String(row.symbol ?? "");
+          const price = Number(row.regularMarketPrice);
+          if (!symbol || !Number.isFinite(price)) continue;
+          out.set(symbol, {
+            symbol,
+            name: String(row.shortName ?? row.longName ?? ""),
+            exchange: String(row.fullExchangeName ?? row.exchange ?? ""),
+            price,
+            changePct: Number(row.regularMarketChangePercent ?? 0) / 100,
+            open: Number(row.regularMarketOpen ?? price),
+            high: Number(row.regularMarketDayHigh ?? price),
+            low: Number(row.regularMarketDayLow ?? price),
+            volume: Number(row.regularMarketVolume ?? 0),
+            week52High: finiteOrNull(row.fiftyTwoWeekHigh),
+            week52Low: finiteOrNull(row.fiftyTwoWeekLow),
+            marketCap: finiteOrNull(row.marketCap),
+            pe: finiteOrNull(row.trailingPE),
+            pb: finiteOrNull(row.priceToBook),
+            avgVolume: finiteOrNull(row.averageDailyVolume3Month),
+          });
+        }
+        break;
+      } catch {
+        continue;
+      }
     }
-  } catch {
-    return out;
-  }
+  }));
   return out;
 }
 

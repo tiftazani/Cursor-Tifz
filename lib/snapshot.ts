@@ -32,7 +32,7 @@ export async function getDailySnapshot(): Promise<DailySnapshot> {
     return memory.snapshot;
   }
   if (!inflight) {
-    inflight = buildSnapshot()
+    inflight = buildSnapshotSafe()
       .catch(async (err) => {
         const prev = await latestCache();
         if (prev) {
@@ -77,23 +77,40 @@ function stripHeavy(snapshot: DailySnapshot): DailySnapshot {
   };
 }
 
+function isSlimRuntime(): boolean {
+  return process.env.VERCEL === "1";
+}
+
 async function fetchIhsgIntraday(): Promise<Bar[] | null> {
   const day = await fetchChart(IHSG_SYMBOL, "1d", "5m");
   if (day && day.length > 8) return day;
+  if (isSlimRuntime()) return null;
   return fetchChart(IHSG_SYMBOL, "5d", "15m");
+}
+
+async function buildSnapshotSafe(): Promise<DailySnapshot> {
+  return Promise.race([
+    buildSnapshot(),
+    new Promise<DailySnapshot>((_, reject) => {
+      setTimeout(() => reject(new Error("snapshot budget")), 6500);
+    }),
+  ]);
 }
 
 async function buildSnapshot(): Promise<DailySnapshot> {
   const symbols = stocksMeta.map((s) => `${s.ticker}.JK`);
+  const slim = isSlimRuntime();
   const [liveIhsg, intraday, quotes] = await Promise.all([
     fetchChart(IHSG_SYMBOL, "1y"),
     fetchIhsgIntraday(),
     fetchQuotes([IHSG_SYMBOL, ...symbols]),
   ]);
-  const charts = await mapPool(stocksMeta, 6, async (meta) => {
-    const bars = await fetchChart(`${meta.ticker}.JK`, "1y");
-    return { ticker: meta.ticker, bars };
-  });
+  const charts = slim
+    ? stocksMeta.map((meta) => ({ ticker: meta.ticker, bars: null as Bar[] | null }))
+    : await mapPool(stocksMeta, 6, async (meta) => {
+        const bars = await fetchChart(`${meta.ticker}.JK`, "1y");
+        return { ticker: meta.ticker, bars };
+      });
   const chartMap = new Map(charts.map((c) => [c.ticker, c.bars]));
 
   const liveCount = charts.filter((c) => c.bars).length;

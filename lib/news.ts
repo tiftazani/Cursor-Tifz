@@ -45,7 +45,7 @@ async function fetchRss(url: string, fallbackSource: string): Promise<NewsItem[]
     const res = await fetch(url, {
       headers: { "User-Agent": UA, Accept: "application/rss+xml, application/xml, text/xml, */*" },
       cache: "no-store",
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(2500),
     });
     if (!res.ok) return [];
     const xml = await res.text();

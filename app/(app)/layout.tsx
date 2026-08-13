@@ -2,6 +2,7 @@ import { AppNav } from "@/components/nav";
 import { Disclaimer } from "@/components/disclaimer";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 10;
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
