@@ -1,0 +1,139 @@
+import type { Bar } from "../types";
+
+type YahooChartResponse = {
+  chart?: {
+    result?: Array<{
+      timestamp?: number[];
+      indicators?: {
+        quote?: Array<{
+          open?: Array<number | null>;
+          high?: Array<number | null>;
+          low?: Array<number | null>;
+          close?: Array<number | null>;
+          volume?: Array<number | null>;
+        }>;
+      };
+    }>;
+  };
+};
+
+export type YahooQuote = {
+  symbol: string;
+  price: number;
+  changePct: number;
+  open: number;
+  high: number;
+  low: number;
+  volume: number;
+  week52High: number | null;
+  week52Low: number | null;
+  marketCap: number | null;
+  pe: number | null;
+  pb: number | null;
+  avgVolume: number | null;
+};
+
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
+async function yahooFetch(url: string, timeoutMs = 8000): Promise<Response> {
+  return fetch(url, {
+    headers: { "User-Agent": UA, Accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+}
+
+export async function fetchChart(symbol: string, range = "1y"): Promise<Bar[] | null> {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}&events=div%7Csplit`;
+    const res = await yahooFetch(url);
+    if (!res.ok) return null;
+    const json = (await res.json()) as YahooChartResponse;
+    const result = json.chart?.result?.[0];
+    const ts = result?.timestamp ?? [];
+    const q = result?.indicators?.quote?.[0];
+    if (!ts.length || !q) return null;
+    const bars: Bar[] = [];
+    for (let i = 0; i < ts.length; i += 1) {
+      const close = q.close?.[i];
+      if (close == null || !Number.isFinite(close)) continue;
+      const date = new Date(ts[i] * 1000).toISOString().slice(0, 10);
+      bars.push({
+        date,
+        open: q.open?.[i] ?? close,
+        high: q.high?.[i] ?? close,
+        low: q.low?.[i] ?? close,
+        close,
+        volume: q.volume?.[i] ?? 0,
+      });
+    }
+    return bars.length > 10 ? bars : null;
+  } catch {
+    return null;
+  }
+}
+
+type QuoteJson = {
+  quoteResponse?: {
+    result?: Array<Record<string, number | string | undefined>>;
+  };
+};
+
+export async function fetchQuotes(symbols: string[]): Promise<Map<string, YahooQuote>> {
+  const out = new Map<string, YahooQuote>();
+  if (!symbols.length) return out;
+  try {
+    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(","))}`;
+    const res = await yahooFetch(url, 10000);
+    if (!res.ok) return out;
+    const json = (await res.json()) as QuoteJson;
+    for (const row of json.quoteResponse?.result ?? []) {
+      const symbol = String(row.symbol ?? "");
+      const price = Number(row.regularMarketPrice);
+      if (!symbol || !Number.isFinite(price)) continue;
+      out.set(symbol, {
+        symbol,
+        price,
+        changePct: Number(row.regularMarketChangePercent ?? 0) / 100,
+        open: Number(row.regularMarketOpen ?? price),
+        high: Number(row.regularMarketDayHigh ?? price),
+        low: Number(row.regularMarketDayLow ?? price),
+        volume: Number(row.regularMarketVolume ?? 0),
+        week52High: finiteOrNull(row.fiftyTwoWeekHigh),
+        week52Low: finiteOrNull(row.fiftyTwoWeekLow),
+        marketCap: finiteOrNull(row.marketCap),
+        pe: finiteOrNull(row.trailingPE),
+        pb: finiteOrNull(row.priceToBook),
+        avgVolume: finiteOrNull(row.averageDailyVolume3Month),
+      });
+    }
+  } catch {
+    return out;
+  }
+  return out;
+}
+
+function finiteOrNull(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+export async function mapPool<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const ret: R[] = new Array(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const idx = cursor;
+      cursor += 1;
+      ret[idx] = await fn(items[idx]);
+    }
+  }
+  const n = Math.min(limit, items.length);
+  await Promise.all(Array.from({ length: n }, () => worker()));
+  return ret;
+}
