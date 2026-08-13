@@ -1,14 +1,9 @@
 name: Deploy IMO dashboard to Pages
 
 on:
-  push:
-    branches:
-      - main
-      - cursor/imo-whatsapp-analytics-eb4c
-    paths:
-      - public/imo.html
-      - .github/workflows/imo-pages.yml
   workflow_dispatch:
+
+# Enable GitHub Pages (Settings → Pages → Source: GitHub Actions) then run this workflow.
 
 permissions:
   contents: read
