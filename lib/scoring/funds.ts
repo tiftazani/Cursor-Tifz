@@ -1,5 +1,5 @@
 import { hashString, mulberry32, randn } from "../rng";
-import { maxDrawdown, realizedVol, returnN, sharpe, ytdReturn, zScores } from "../indicators";
+import { consistency, maxDrawdown, realizedVol, returnN, sharpe, ytdReturn, zScores } from "../indicators";
 import { recLabel } from "./stocks";
 import { num, pct } from "../format";
 import type { Bar, Factor, FundCategory, FundMeta, FundPoint, ScoredFund } from "../types";
@@ -8,9 +8,7 @@ export function buildFundSeries(fund: FundMeta, ihsg: Bar[]): FundPoint[] {
   const rng = mulberry32(hashString(`fund:${fund.id}:${ihsg[ihsg.length - 1]?.date}`));
   let nab = 1_000;
   let aum = fund.aumMiliar;
-  const series: FundPoint[] = [
-    { date: ihsg[0].date, nab, aum, flow: 0 },
-  ];
+  const series: FundPoint[] = [{ date: ihsg[0].date, nab, aum, flow: 0 }];
   for (let i = 1; i < ihsg.length; i += 1) {
     const rIhsg = ihsg[i].close / ihsg[i - 1].close - 1;
     let r = 0;
@@ -50,6 +48,8 @@ type RawFund = {
   nabChangePct: number;
   expense: number;
   aumLog: number;
+  consistency: number;
+  calmar: number;
 };
 
 export function prepareFund(meta: FundMeta, series: FundPoint[], ihsg: Bar[]): RawFund {
@@ -63,9 +63,13 @@ export function prepareFund(meta: FundMeta, series: FundPoint[], ihsg: Bar[]): R
     volume: 0,
   }));
   const fund1y = returnN(nabs, 252);
-  const ihsg1y = returnN(ihsg.map((b) => b.close), 252);
+  const ihsg1y = returnN(
+    ihsg.map((b) => b.close),
+    252,
+  );
   const last = series[series.length - 1];
   const prev = series[series.length - 2] ?? last;
+  const dd = maxDrawdown(nabs);
   return {
     meta,
     series,
@@ -74,7 +78,7 @@ export function prepareFund(meta: FundMeta, series: FundPoint[], ihsg: Bar[]): R
     ret1y: fund1y,
     retYtd: ytdReturn(bars),
     vol: realizedVol(nabs, 60),
-    dd: maxDrawdown(nabs),
+    dd,
     sharpe: sharpe(nabs),
     alpha1y: fund1y - ihsg1y,
     flow1d: last.flow,
@@ -83,6 +87,8 @@ export function prepareFund(meta: FundMeta, series: FundPoint[], ihsg: Bar[]): R
     nabChangePct: last.nab / prev.nab - 1,
     expense: -meta.expenseRatio,
     aumLog: Math.log(last.aum),
+    consistency: consistency(nabs, 21),
+    calmar: fund1y / Math.max(Math.abs(dd), 0.02),
   };
 }
 
@@ -104,10 +110,40 @@ function scoreGroup(raws: RawFund[]): ScoredFund[] {
   const cat = raws[0]?.meta.category;
   const weights =
     cat === "pasar_uang"
-      ? { ret1m: 0.22, ret1y: 0.18, sharpe: 0.12, dd: 0.18, vol: 0.12, aum: 0.1, expense: 0.08 }
+      ? {
+          ret1m: 0.16,
+          ret1y: 0.14,
+          sharpe: 0.1,
+          dd: 0.16,
+          vol: 0.1,
+          aum: 0.08,
+          expense: 0.08,
+          consistency: 0.1,
+          flow: 0.08,
+        }
       : cat === "obligasi"
-        ? { ret1m: 0.14, ret1y: 0.18, sharpe: 0.2, dd: 0.16, vol: 0.08, aum: 0.12, expense: 0.12 }
-        : { ret1m: 0.12, ret1y: 0.16, sharpe: 0.22, dd: 0.14, vol: 0.08, aum: 0.14, expense: 0.14 };
+        ? {
+            ret1m: 0.12,
+            ret1y: 0.16,
+            sharpe: 0.16,
+            dd: 0.14,
+            vol: 0.06,
+            aum: 0.1,
+            expense: 0.1,
+            consistency: 0.08,
+            flow: 0.08,
+          }
+        : {
+            ret1m: 0.1,
+            ret1y: 0.14,
+            sharpe: 0.16,
+            dd: 0.1,
+            vol: 0.06,
+            aum: 0.1,
+            expense: 0.1,
+            consistency: 0.12,
+            flow: 0.12,
+          };
 
   const zRet1m = zScores(raws.map((r) => r.ret1m));
   const zRet1y = zScores(raws.map((r) => (cat === "saham" ? r.alpha1y : r.ret1y)));
@@ -116,6 +152,8 @@ function scoreGroup(raws: RawFund[]): ScoredFund[] {
   const zVol = zScores(raws.map((r) => -r.vol));
   const zAum = zScores(raws.map((r) => r.aumLog));
   const zExp = zScores(raws.map((r) => r.expense));
+  const zCons = zScores(raws.map((r) => r.consistency));
+  const zFlow = zScores(raws.map((r) => r.flow21d));
 
   return raws.map((r, i) => {
     const factors: Factor[] = [
@@ -139,7 +177,7 @@ function scoreGroup(raws: RawFund[]): ScoredFund[] {
       },
       {
         key: "sharpe",
-        label: "Sharpe (risk-adjusted)",
+        label: "Sharpe (imbal hasil vs risiko)",
         value: r.sharpe,
         display: num(r.sharpe, 2),
         z: zSharpe[i],
@@ -148,7 +186,7 @@ function scoreGroup(raws: RawFund[]): ScoredFund[] {
       },
       {
         key: "dd",
-        label: "Max drawdown (lebih dangkal lebih baik)",
+        label: "Penurunan terdalam",
         value: r.dd,
         display: pct(r.dd),
         z: zDd[i],
@@ -175,12 +213,30 @@ function scoreGroup(raws: RawFund[]): ScoredFund[] {
       },
       {
         key: "expense",
-        label: "Expense ratio (lebih rendah lebih baik)",
+        label: "Biaya pengelolaan",
         value: r.meta.expenseRatio,
         display: num(r.meta.expenseRatio, 2) + "%",
         z: zExp[i],
         weight: weights.expense,
         contribution: zExp[i] * weights.expense,
+      },
+      {
+        key: "consistency",
+        label: "Konsistensi bulanan",
+        value: r.consistency,
+        display: pct(r.consistency, 0, false),
+        z: zCons[i],
+        weight: weights.consistency,
+        contribution: zCons[i] * weights.consistency,
+      },
+      {
+        key: "flow",
+        label: "Aliran dana 21 hari",
+        value: r.flow21d,
+        display: num(r.flow21d, 1) + " M",
+        z: zFlow[i],
+        weight: weights.flow,
+        contribution: zFlow[i] * weights.flow,
       },
     ];
     const contrib = factors.reduce((s, f) => s + f.contribution, 0);
@@ -214,8 +270,7 @@ function scoreGroup(raws: RawFund[]): ScoredFund[] {
       series: r.series,
       factors,
       insight: "",
-      sourceNote:
-        "NAB katalog kurasi, disimulasikan harian dengan model yang dikaitkan ke pergerakan IHSG (bukan NAB OJK resmi).",
+      sourceNote: "",
     };
   });
 }

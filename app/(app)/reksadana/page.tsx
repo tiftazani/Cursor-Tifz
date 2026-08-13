@@ -3,7 +3,6 @@ import { getDailySnapshot } from "@/lib/snapshot";
 import { num } from "@/lib/format";
 import { CATEGORY_LABEL } from "@/lib/labels";
 import { Card, Change, LabelBadge, PageHeader, ScorePill } from "@/components/ui";
-import { StaleBanner } from "@/components/stale-banner";
 import type { FundCategory } from "@/lib/types";
 import { clsx } from "@/lib/format";
 
@@ -27,9 +26,8 @@ export default async function ReksadanaPage({
       <PageHeader
         kicker="Reksadana harian"
         title="Pasar uang, saham, dan obligasi"
-        subtitle="Katalog 24 produk kurasi. NAB harian dikaitkan ke IHSG (RD saham) dan proksi yield (RDPU/obligasi). Bukan NAB OJK resmi — setiap kartu menampilkan catatan sumber."
+        subtitle="Katalog 24 produk kurasi pasar uang, saham, dan obligasi. Bandingkan skor, imbal hasil, dan dana kelolaan."
       />
-      <StaleBanner stale={snap.stale} notes={snap.notes} />
       <div className="mb-6 flex flex-wrap gap-2">
         {cats.map((c) => (
           <Link
@@ -72,7 +70,6 @@ export default async function ReksadanaPage({
                   <p className="text-[11px] text-mute">AUM {num(f.aumMiliar, 0)} M</p>
                 </div>
               </div>
-              <p className="mt-3 text-xs text-mute">{f.sourceNote}</p>
             </Card>
           </Link>
         ))}

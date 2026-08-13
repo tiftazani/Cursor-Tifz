@@ -9,7 +9,7 @@
   --mint: #c9a24f;
   --gold: #d4af77;
   --rose: #d46a6a;
-  --mute: #8a8378;
+  --mute: #c4bcb2;
   --up: #9cba8a;
   --down: #d46a6a;
 }
@@ -39,6 +39,7 @@ body {
 
 body {
   font-family: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  font-size: 17px;
   min-height: 100%;
   background-image:
     radial-gradient(900px 480px at 50% -20%, rgba(201, 162, 79, 0.09), transparent 58%),
@@ -90,4 +91,63 @@ body::before {
 .hairline {
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(201, 162, 79, 0.45), transparent);
+}
+
+.bubble-bot {
+  background: linear-gradient(180deg, rgba(22, 22, 22, 0.96), rgba(10, 10, 10, 0.96));
+  border: 1px solid var(--line);
+  border-radius: 6px 20px 20px 20px;
+}
+
+.bubble-user {
+  background: rgba(201, 162, 79, 0.18);
+  border: 1px solid rgba(201, 162, 79, 0.4);
+  border-radius: 20px 6px 20px 20px;
+}
+
+@keyframes robot-idle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+.robot-idle {
+  animation: robot-idle 2.8s ease-in-out infinite;
+}
+
+@keyframes robot-blink {
+  0%,
+  45%,
+  55%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.15;
+  }
+}
+.robot-eye {
+  animation: robot-blink 4s ease-in-out infinite;
+}
+
+@keyframes robot-antenna {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.robot-antenna {
+  animation: robot-antenna 1.6s ease-in-out infinite;
+}
+
+.typing-dots::after {
+  display: inline-block;
+  width: 1.2em;
+  content: "...";
 }

@@ -9,8 +9,8 @@ export function Disclaimer({ compact = false }: { compact?: boolean }) {
   }
   return (
     <div className="border border-line bg-black/30 px-4 py-3 text-xs leading-6 text-mute">
-      Informasi di <span className="text-foreground/80">Cuan Yuk Guys</span> bersifat edukasi dan riset. Ini{" "}
-      <strong className="text-foreground/85">bukan</strong> penawaran efek, bukan rekomendasi transaksi, dan
+      Informasi di <span className="text-foreground/90">Cuan Yuk Guys</span> bersifat edukasi dan riset. Ini{" "}
+      <strong className="text-foreground">bukan</strong> penawaran efek, bukan rekomendasi transaksi, dan
       bukan nasihat dari pihak berizin OJK. Data dapat tertunda. Keputusan investasi sepenuhnya tanggung jawab
       Anda.
     </div>

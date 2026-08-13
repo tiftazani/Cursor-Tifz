@@ -11,9 +11,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <footer className="mx-auto w-full max-w-7xl px-4 pb-12">
         <div className="hairline mb-6" />
         <Disclaimer />
-        <p className="mt-4 text-[11px] uppercase tracking-[0.18em] text-mute">
-          Cuan Yuk Guys · desk harian IHSG & reksadana · {new Date().getFullYear()}
-        </p>
+        <p className="mt-5 text-sm tracking-wide text-mute">Copyright by Tiftazani · {new Date().getFullYear()}</p>
       </footer>
     </div>
   );

@@ -46,6 +46,53 @@ export function dailyReturns(closes: number[]): number[] {
   return out;
 }
 
+export function emaLast(values: number[], period: number): number {
+  if (!values.length) return 0;
+  const k = 2 / (period + 1);
+  let ema = values[0];
+  for (let i = 1; i < values.length; i += 1) {
+    ema = values[i] * k + ema * (1 - k);
+  }
+  return ema;
+}
+
+export function macdHistogram(closes: number[]): number {
+  if (closes.length < 35) return 0;
+  const k12 = 2 / 13;
+  const k26 = 2 / 27;
+  const k9 = 2 / 10;
+  let e12 = closes[0];
+  let e26 = closes[0];
+  const macd: number[] = [];
+  for (let i = 0; i < closes.length; i += 1) {
+    e12 = closes[i] * k12 + e12 * (1 - k12);
+    e26 = closes[i] * k26 + e26 * (1 - k26);
+    macd.push(e12 - e26);
+  }
+  let signal = macd[0];
+  for (let i = 0; i < macd.length; i += 1) {
+    signal = macd[i] * k9 + signal * (1 - k9);
+  }
+  return macd[macd.length - 1] - signal;
+}
+
+export function downsideVol(closes: number[], window = 30): number {
+  const rets = dailyReturns(closes.slice(-(window + 1))).filter((r) => r < 0);
+  if (rets.length < 3) return realizedVol(closes, window) * 0.6;
+  return stdev(rets) * Math.sqrt(252);
+}
+
+export function consistency(closes: number[], window = 21): number {
+  if (closes.length < window * 3) return 0.5;
+  let wins = 0;
+  let n = 0;
+  for (let i = window; i < closes.length; i += window) {
+    n += 1;
+    if (closes[i] >= closes[i - window]) wins += 1;
+  }
+  return n ? wins / n : 0.5;
+}
+
 export function sma(values: number[], period: number): number {
   if (!values.length) return 0;
   const slice = values.slice(-period);

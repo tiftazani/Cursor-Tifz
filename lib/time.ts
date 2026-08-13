@@ -68,6 +68,18 @@ export function marketStatusLabel(status: MarketStatus): string {
   return "Bursa tutup";
 }
 
+export function formatNewsTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("id-ID", {
+    timeZone: WIB,
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+}
+
 export function tradingDatesBack(count: number, end = new Date()): string[] {
   const dates: string[] = [];
   const d = new Date(end);

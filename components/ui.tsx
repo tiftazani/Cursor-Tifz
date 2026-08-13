@@ -12,7 +12,7 @@ export function Card({
   className?: string;
   hover?: boolean;
 }) {
-  return <div className={clsx("card p-5", hover && "card-hover", className)}>{children}</div>;
+  return <div className={clsx("card p-6", hover && "card-hover", className)}>{children}</div>;
 }
 
 export function PageHeader({
@@ -22,16 +22,16 @@ export function PageHeader({
 }: {
   kicker: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
 }) {
   return (
     <header className="mb-10">
-      <p className="text-[11px] uppercase tracking-[0.32em] text-gold">{kicker}</p>
-      <h1 className="font-display mt-3 text-4xl font-medium italic leading-[1.05] tracking-tight md:text-5xl">
+      <p className="text-xs uppercase tracking-[0.32em] text-gold">{kicker}</p>
+      <h1 className="font-display mt-3 text-5xl font-medium italic leading-[1.05] tracking-tight md:text-6xl">
         {title}
       </h1>
       <div className="hairline my-5 max-w-xs" />
-      <p className="max-w-2xl text-sm leading-7 text-mute">{subtitle}</p>
+      {subtitle ? <p className="max-w-2xl text-base leading-8 text-mute">{subtitle}</p> : null}
     </header>
   );
 }
@@ -50,16 +50,16 @@ export function Stat({
   const color = tone === "up" ? "text-up" : tone === "down" ? "text-down" : "text-foreground";
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-[0.18em] text-mute">{label}</p>
-      <p className={clsx("mt-1.5 num text-xl font-medium", color)}>{value}</p>
-      {hint ? <p className="mt-1 text-xs text-mute">{hint}</p> : null}
+      <p className="text-xs uppercase tracking-[0.18em] text-mute">{label}</p>
+      <p className={clsx("mt-1.5 num text-2xl font-medium", color)}>{value}</p>
+      {hint ? <p className="mt-1 text-sm text-mute">{hint}</p> : null}
     </div>
   );
 }
 
 export function LabelBadge({ label }: { label: RecLabel }) {
   return (
-    <span className={clsx("rounded-sm border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em]", LABEL_STYLE[label])}>
+    <span className={clsx("rounded-sm border px-2 py-0.5 text-xs uppercase tracking-[0.14em]", LABEL_STYLE[label])}>
       {label}
     </span>
   );
@@ -67,7 +67,7 @@ export function LabelBadge({ label }: { label: RecLabel }) {
 
 export function ScorePill({ score }: { score: number }) {
   const tone = score >= 70 ? "text-gold" : score >= 50 ? "text-foreground" : "text-rose";
-  return <span className={clsx("num text-lg font-medium", tone)}>{Math.round(score)}</span>;
+  return <span className={clsx("num text-xl font-medium", tone)}>{Math.round(score)}</span>;
 }
 
 export function Change({ value, digits = 2 }: { value: number; digits?: number }) {
@@ -83,7 +83,7 @@ export function Change({ value, digits = 2 }: { value: number; digits?: number }
 
 export function AsOf({ date, source }: { date: string; source?: string }) {
   return (
-    <p className="text-xs text-mute">
+    <p className="text-sm text-mute">
       As-of {date}
       {source ? ` · sumber ${source}` : ""}
     </p>

@@ -2,7 +2,6 @@ import { getDailySnapshot } from "@/lib/snapshot";
 import { num, pct } from "@/lib/format";
 import { Card, Change, PageHeader, Stat } from "@/components/ui";
 import { DualLineChart, DrawdownChart, RiskScatter, ScoreBarChart } from "@/components/charts";
-import { StaleBanner } from "@/components/stale-banner";
 import { clsx } from "@/lib/format";
 
 export const metadata = { title: "Analitik" };
@@ -19,7 +18,6 @@ export default async function AnalitikPage() {
         title="Analitik desk"
         subtitle="IHSG vs portofolio equal-weight Top 5 (walk-forward), heatmap sektor, scatter risiko-imbal hasil, dan distribusi skor."
       />
-      <StaleBanner stale={snap.stale} notes={snap.notes} />
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>

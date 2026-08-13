@@ -2,7 +2,6 @@ import { getDailySnapshot } from "@/lib/snapshot";
 import { num, pct } from "@/lib/format";
 import { CATEGORY_LABEL } from "@/lib/labels";
 import { Card, Change, PageHeader, Stat } from "@/components/ui";
-import { StaleBanner } from "@/components/stale-banner";
 
 export const metadata = { title: "Data Investor" };
 
@@ -14,9 +13,8 @@ export default async function InvestorPage() {
       <PageHeader
         kicker="Aliran & breadth"
         title="Data investor harian"
-        subtitle="Proksi internal dari universe likuid Cuan dan estimasi flow reksadana. Bukan data KSEI atau net buy asing IDX."
+        subtitle="Proksi internal dari universe likuid Cuan dan estimasi flow reksadana."
       />
-      <StaleBanner stale={snap.stale} notes={snap.notes} />
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>

@@ -174,5 +174,5 @@ export function sliceAndScore(
       { pe: s.pe, pb: s.pb, marketCap: s.marketCap, dataQuality: s.dataQuality },
     );
   });
-  return scoreUniverse(raws);
+  return scoreUniverse(raws, ihsgSlice);
 }

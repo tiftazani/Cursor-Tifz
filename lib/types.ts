@@ -181,6 +181,8 @@ export type DailySnapshot = {
     open: number;
     spark: number[];
     bars: Bar[];
+    chart: { date: string; value: number }[];
+    chartKind: "intraday" | "daily";
     ret1m: number;
     ret3m: number;
     retYtd: number;

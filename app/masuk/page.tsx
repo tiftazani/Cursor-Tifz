@@ -21,14 +21,13 @@ export default async function MasukPage({
         </div>
         <div className="hairline mx-auto my-8 max-w-48" />
         <div className="card px-8 py-9">
-          <p className="text-center text-sm leading-7 text-mute">
-            Desk harian IHSG dan reksadana. Bukan keramaian timeline — hanya sinyal, skor, dan jejak yang bisa
-            diaudit.
+          <p className="text-center text-base leading-7 text-mute">
+            Desk harian IHSG dan reksadana. Masuk untuk melihat pilihan saham, robot analisa, dan berita pasar.
           </p>
           <LoginForm next={q.next?.startsWith("/") ? q.next : "/"} error={q.error} />
         </div>
-        <p className="mt-6 text-center text-[11px] tracking-wide text-mute">
-          Bukan nasihat OJK. Keputusan tetap di tangan Anda.
+        <p className="mt-6 text-center text-sm tracking-wide text-mute">
+          Copyright by Tiftazani · {new Date().getFullYear()}
         </p>
       </div>
     </div>

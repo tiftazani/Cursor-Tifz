@@ -9,6 +9,7 @@ import { Wordmark } from "./brand";
 const LINKS = [
   { href: "/", label: "Beranda" },
   { href: "/saham", label: "Saham" },
+  { href: "/analisa", label: "Analisa" },
   { href: "/reksadana", label: "Reksadana" },
   { href: "/investor", label: "Investor" },
   { href: "/analitik", label: "Analitik" },
@@ -28,7 +29,7 @@ export function AppNav() {
         <form action={logoutAction}>
           <button
             type="submit"
-            className="text-[10px] uppercase tracking-[0.22em] text-mute hover:text-gold"
+            className="text-xs uppercase tracking-[0.22em] text-mute hover:text-gold"
           >
             Keluar
           </button>
@@ -42,7 +43,7 @@ export function AppNav() {
               key={l.href}
               href={l.href}
               className={clsx(
-                "whitespace-nowrap border-b px-3 py-2.5 text-[12px] uppercase tracking-[0.16em] transition",
+                "whitespace-nowrap border-b px-3 py-2.5 text-[13px] uppercase tracking-[0.14em] transition",
                 active
                   ? "border-gold text-gold"
                   : "border-transparent text-mute hover:border-line hover:text-foreground",

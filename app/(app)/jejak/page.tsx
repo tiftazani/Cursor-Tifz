@@ -2,7 +2,6 @@ import Link from "next/link";
 import { getDailySnapshot } from "@/lib/snapshot";
 import { pct } from "@/lib/format";
 import { Card, Change, PageHeader, Stat } from "@/components/ui";
-import { StaleBanner } from "@/components/stale-banner";
 
 export const metadata = { title: "Jejak Rekomendasi" };
 
@@ -15,9 +14,8 @@ export default async function JejakPage() {
       <PageHeader
         kicker="Akuntabilitas"
         title="Jejak rekomendasi"
-        subtitle="Walk-forward: setiap hari mesin merangking Top 5 dari data hingga hari itu, lalu diukur vs IHSG di sesi berikutnya. Bukan janji imbal hasil."
+        subtitle="Setiap hari mesin merangking Top 5, lalu diukur vs IHSG di sesi berikutnya."
       />
-      <StaleBanner stale={snap.stale} notes={snap.notes} />
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <Stat label="Hit rate" value={pct(snap.analytics.summary.hitRate, 0, false)} />

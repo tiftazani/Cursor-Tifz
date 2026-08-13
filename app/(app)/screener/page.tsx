@@ -1,7 +1,6 @@
 import { getDailySnapshot } from "@/lib/snapshot";
 import { ScreenerClient } from "./screener-client";
 import { PageHeader } from "@/components/ui";
-import { StaleBanner } from "@/components/stale-banner";
 
 export const metadata = { title: "Screener" };
 
@@ -28,7 +27,6 @@ export default async function ScreenerPage() {
         title="Screener saham"
         subtitle="Saring universe Cuan berdasarkan sektor, skor minimum, momentum 1 bulan, dan likuiditas."
       />
-      <StaleBanner stale={snap.stale} notes={snap.notes} />
       <ScreenerClient rows={rows} sectors={sectors} />
     </div>
   );

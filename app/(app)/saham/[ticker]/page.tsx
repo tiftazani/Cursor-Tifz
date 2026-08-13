@@ -31,7 +31,6 @@ export default async function StockDetailPage({ params }: { params: Promise<{ ti
           Cuan Score <ScorePill score={stock.score} />
         </span>
         <WatchButton ticker={stock.ticker} />
-        <span className="text-xs text-mute">Kualitas data: {stock.dataQuality}</span>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

@@ -3,7 +3,6 @@ import { getDailySnapshot } from "@/lib/snapshot";
 import { compactShares, idr, num } from "@/lib/format";
 import { Change, LabelBadge, PageHeader, ScorePill } from "@/components/ui";
 import { Sparkline } from "@/components/charts";
-import { StaleBanner } from "@/components/stale-banner";
 import { WatchButton } from "@/components/watchlist";
 
 export const metadata = { title: "Saham IHSG" };
@@ -17,7 +16,6 @@ export default async function SahamPage() {
         title="Ranking skor IHSG"
         subtitle="Universe 42 emiten likuid (IDX30/LQ45 + blue chip). Skor 0–100 dari momentum, alpha vs IHSG, likuiditas, teknikal, dan valuasi."
       />
-      <StaleBanner stale={snap.stale} notes={snap.notes} />
       <div className="overflow-x-auto card">
         <table className="min-w-full text-sm">
           <thead className="text-left text-[11px] uppercase tracking-wider text-mute">

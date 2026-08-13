@@ -36,7 +36,6 @@ export default async function FundDetailPage({ params }: { params: Promise<{ id:
               <p className="num text-3xl font-semibold">{num(fund.nab, 4)}</p>
               <Change value={fund.nabChangePct} />
             </div>
-            <p className="max-w-xs text-right text-[11px] text-mute">{fund.sourceNote}</p>
           </div>
           <PriceChart data={fund.series.map((s) => ({ date: s.date, value: s.nab }))} color="#e4c36a" />
         </Card>

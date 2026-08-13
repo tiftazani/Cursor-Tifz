@@ -1,7 +1,6 @@
 import { getDailySnapshot } from "@/lib/snapshot";
 import { PageHeader } from "@/components/ui";
 import { WatchlistClient } from "./watchlist-client";
-import { StaleBanner } from "@/components/stale-banner";
 
 export const metadata = { title: "Watchlist" };
 
@@ -24,7 +23,6 @@ export default async function WatchlistPage() {
         title="Watchlist"
         subtitle="Disimpan di browser (localStorage). Bandingkan emiten pantauan dengan Cuan Score hari ini."
       />
-      <StaleBanner stale={snap.stale} notes={snap.notes} />
       <WatchlistClient rows={rows} />
     </div>
   );

@@ -19,6 +19,8 @@ type YahooChartResponse = {
 
 export type YahooQuote = {
   symbol: string;
+  name: string;
+  exchange: string;
   price: number;
   changePct: number;
   open: number;
@@ -44,9 +46,13 @@ async function yahooFetch(url: string, timeoutMs = 8000): Promise<Response> {
   });
 }
 
-export async function fetchChart(symbol: string, range = "1y"): Promise<Bar[] | null> {
+export async function fetchChart(
+  symbol: string,
+  range = "1y",
+  interval = "1d",
+): Promise<Bar[] | null> {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}&events=div%7Csplit`;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}&events=div%7Csplit`;
     const res = await yahooFetch(url);
     if (!res.ok) return null;
     const json = (await res.json()) as YahooChartResponse;
@@ -58,9 +64,8 @@ export async function fetchChart(symbol: string, range = "1y"): Promise<Bar[] | 
     for (let i = 0; i < ts.length; i += 1) {
       const close = q.close?.[i];
       if (close == null || !Number.isFinite(close)) continue;
-      const date = new Date(ts[i] * 1000).toISOString().slice(0, 10);
       bars.push({
-        date,
+        date: formatStamp(ts[i], interval),
         open: q.open?.[i] ?? close,
         high: q.high?.[i] ?? close,
         low: q.low?.[i] ?? close,
@@ -68,10 +73,24 @@ export async function fetchChart(symbol: string, range = "1y"): Promise<Bar[] | 
         volume: q.volume?.[i] ?? 0,
       });
     }
-    return bars.length > 10 ? bars : null;
+    const min = interval === "1d" ? 10 : 4;
+    return bars.length > min ? bars : null;
   } catch {
     return null;
   }
+}
+
+function formatStamp(ts: number, interval: string): string {
+  const d = new Date(ts * 1000);
+  if (interval === "1d") return d.toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Jakarta",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(d);
 }
 
 type QuoteJson = {
@@ -94,6 +113,8 @@ export async function fetchQuotes(symbols: string[]): Promise<Map<string, YahooQ
       if (!symbol || !Number.isFinite(price)) continue;
       out.set(symbol, {
         symbol,
+        name: String(row.shortName ?? row.longName ?? ""),
+        exchange: String(row.fullExchangeName ?? row.exchange ?? ""),
         price,
         changePct: Number(row.regularMarketChangePercent ?? 0) / 100,
         open: Number(row.regularMarketOpen ?? price),
