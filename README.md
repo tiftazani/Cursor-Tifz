@@ -2,29 +2,25 @@
 
 Terminal rekomendasi harian **saham IHSG** dan **reksadana** (pasar uang, saham, obligasi).
 
-## URL publik (Vercel) — tanpa terminal
+Kode: [github.com/tiftazani/Cursor-Tifz](https://github.com/tiftazani/Cursor-Tifz)
 
-Repo GitHub ini privat, jadi website tidak otomatis punya URL. Deploy sekali lewat browser:
+## URL website publik (Vercel)
 
-1. Buka [https://vercel.com/new](https://vercel.com/new)
-2. Pilih **Continue with GitHub**, izinkan akses ke repo `tiftazani/Cursor-Tifz`
-3. Import project **Cursor-Tifz**
-4. Di bagian Branch, pilih `cursor/cuan-ihsg-reksadana-880a` (jangan `main` — `main` masih kosong)
-5. Environment Variable (opsional; default sudah ada di kode):
-   - Name: `SITE_PASSWORD`
-   - Value: sama dengan di `.env.example`
-6. Klik **Deploy**
-7. Setelah hijau, Vercel memberi URL seperti `https://cuan-xxxx.vercel.app`
+GitHub publik = kode bisa dilihat. URL website (seperti `https://cuan.vercel.app`) tetap perlu deploy:
 
-Buka URL itu, lalu masuk dengan password situs. Setiap push ke branch yang sama akan ikut ter-deploy.
+1. Buka [Import Cursor-Tifz di Vercel](https://vercel.com/new/import?s=https://github.com/tiftazani/Cursor-Tifz)
+2. Login dengan GitHub
+3. Branch: `cursor/cuan-ihsg-reksadana-880a` (jangan `main`)
+4. Deploy
+
+Vercel akan memberi URL publik. Password situs ada di `.env.example` (`SITE_PASSWORD`).
 
 ## Menjalankan di laptop
 
-Harus di folder repo, bukan di home directory (`~`):
+Repo sudah publik, clone tidak perlu password GitHub:
 
 ```bash
-gh auth login
-gh repo clone tiftazani/Cursor-Tifz
+git clone https://github.com/tiftazani/Cursor-Tifz.git
 cd Cursor-Tifz
 git checkout cursor/cuan-ihsg-reksadana-880a
 cp .env.example .env.local
@@ -32,9 +28,7 @@ npm install
 npm run dev
 ```
 
-Buka [http://localhost:3000](http://localhost:3000). Password ada di `SITE_PASSWORD` (lihat `.env.example`).
-
-GitHub tidak menerima password akun untuk `git clone`. Pakai `gh auth login` atau Personal Access Token.
+Buka [http://localhost:3000](http://localhost:3000).
 
 ## Stack
 
