@@ -1018,8 +1018,6 @@ select.input:focus {
   padding: max(12vh, var(--safe-top)) max(16px, var(--safe-right)) max(16px, var(--safe-bottom)) max(16px, var(--safe-left));
   z-index: 40;
 }
-  z-index: 40;
-}
 
 .quickfind {
   width: min(560px, 92vw);
