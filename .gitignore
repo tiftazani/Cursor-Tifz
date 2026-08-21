@@ -4,11 +4,13 @@ node_modules/
 out/
 build/
 .vercel
+.netlify
 .DS_Store
 *.pem
 *.tsbuildinfo
 next-env.d.ts
 .env*
 !.env.example
+!**/.env.example
 npm-debug.log*
 .pnpm-debug.log*

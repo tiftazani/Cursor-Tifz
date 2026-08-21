@@ -1,0 +1,18 @@
+{
+  "name": "Kunci",
+  "short_name": "Kunci",
+  "description": "Manajer kata sandi zero-knowledge untuk web, HP, tablet, dan Mac",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0d12",
+  "theme_color": "#0a0d12",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

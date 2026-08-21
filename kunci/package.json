@@ -1,0 +1,38 @@
+{
+  "name": "kunci",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Manajer kata sandi zero-knowledge untuk Mac",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint src tests",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "icons": "node scripts/gen-icons.mjs",
+    "helper": "node helper/daemon.mjs",
+    "mac": "node helper/mac-fill.mjs --with-ui",
+    "start": "node helper/daemon.mjs --serve-ui",
+    "local": "node scripts/run-local.mjs",
+    "install-service": "node helper/install-service.mjs",
+    "uninstall-service": "node helper/install-service.mjs --uninstall",
+    "netlify:dev": "npx netlify dev"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^10.7.13",
+    "@netlify/functions": "^5.3.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "oxlint": "^1.75.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0",
+    "vitest": "^4.1.2"
+  }
+}
