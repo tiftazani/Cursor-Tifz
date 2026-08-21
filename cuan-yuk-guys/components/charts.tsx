@@ -101,7 +101,7 @@ export function IhsgChart({
           <XAxis dataKey="date" interval="preserveStartEnd" tick={{ fill: AXIS, fontSize: 12 }} minTickGap={56} />
           <YAxis domain={["auto", "auto"]} tick={{ fill: AXIS, fontSize: 12 }} width={72} />
           <Tooltip contentStyle={tooltipStyle} />
-          <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2.2} fill="url(#ihsgFill)" />
+          <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2.2} fill="url(#ihsgFill)" isAnimationActive={false} />
         </AreaChart>
       </ResponsiveContainer>
     </div>

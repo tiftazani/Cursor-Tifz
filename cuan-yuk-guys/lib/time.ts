@@ -34,6 +34,17 @@ export function formatWibClock(date: Date | string = new Date()): string {
   return `${t} WIB`;
 }
 
+export function formatIhsgChartTime(date: Date | string = new Date()): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: WIB,
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(date));
+}
+
 export function formatWibDate(date: Date | string = new Date()): string {
   return new Intl.DateTimeFormat("id-ID", {
     timeZone: WIB,
@@ -69,8 +80,23 @@ export function marketStatus(date = new Date()): MarketStatus {
   const { weekday, hour, minute } = wibParts(date);
   if (weekday === "Sat" || weekday === "Sun") return "weekend";
   const mins = hour * 60 + minute;
-  if (mins >= 9 * 60 && mins < 15 * 60 + 50) return "open";
+  if (mins >= 9 * 60 && mins < 16 * 60) return "open";
   return "closed";
+}
+
+export function isIdxSession(date = new Date()): boolean {
+  const { weekday, hour, minute } = wibParts(date);
+  if (weekday === "Sat" || weekday === "Sun") return false;
+  const mins = hour * 60 + minute;
+  const morning = mins >= 9 * 60 && mins < 11 * 60 + 30;
+  const afternoon = mins >= 13 * 60 + 30 && mins < 16 * 60;
+  return morning || afternoon;
+}
+
+export function ihsgPollMs(date = new Date()): number {
+  if (isIdxSession(date)) return 2_000;
+  if (marketStatus(date) === "weekend") return 60_000;
+  return 15_000;
 }
 
 export function marketStatusLabel(status: MarketStatus): string {

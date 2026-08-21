@@ -10,7 +10,7 @@ import { buildFundSeries, prepareFund, scoreFunds } from "./scoring/funds";
 import { narrateFund, narrateStock } from "./insights/narrate";
 import { buildInvestorPulse } from "./investor/pulse";
 import { buildAnalytics, sliceAndScore } from "./analytics";
-import { formatWibLong, marketStatus } from "./time";
+import { formatIhsgChartTime, formatWibLong, marketStatus } from "./time";
 import { pctChange, returnN, ytdReturn } from "./indicators";
 
 const IHSG_SYMBOL = "^JKSE";
@@ -88,6 +88,8 @@ function isSlimRuntime(): boolean {
 }
 
 async function fetchIhsgIntraday(): Promise<Bar[] | null> {
+  const oneMin = await fetchChart(IHSG_SYMBOL, "1d", "1m");
+  if (oneMin && oneMin.length > 8) return oneMin;
   const day = await fetchChart(IHSG_SYMBOL, "1d", "5m");
   if (day && day.length > 8) return day;
   if (isSlimRuntime()) return null;
@@ -198,8 +200,12 @@ function assemble(
       ? intraday.map((b) => ({ date: b.date, value: b.close }))
       : ihsg.slice(-60).map((b) => ({ date: b.date, value: b.close }));
   if (quote?.price && chart.length) {
+    const label = formatIhsgChartTime();
     const lastPt = chart[chart.length - 1];
-    chart = [...chart.slice(0, -1), { date: lastPt.date, value: quote.price }];
+    chart =
+      lastPt.date === label
+        ? [...chart.slice(0, -1), { date: label, value: quote.price }]
+        : [...chart, { date: label, value: quote.price }];
   }
 
   return {

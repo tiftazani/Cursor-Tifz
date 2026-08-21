@@ -4,17 +4,15 @@ import { getMarketNews } from "@/lib/news";
 import { compactShares, idr, num, pct } from "@/lib/format";
 import { CATEGORY_LABEL } from "@/lib/labels";
 import { formatWibClock, marketStatusLabel } from "@/lib/time";
-import { Card, Change, LabelBadge, LiveBadge, PageHeader, ScorePill, Stat } from "@/components/ui";
-import { IhsgChart } from "@/components/charts";
+import { Card, Change, LabelBadge, PageHeader, ScorePill, Stat } from "@/components/ui";
 import { NewsList } from "@/components/news-list";
 import { AnalystChat } from "@/components/analyst-chat";
+import { IhsgLivePanel } from "@/components/ihsg-live";
 import type { FundCategory } from "@/lib/types";
 
 export default async function HomePage() {
   const [snap, news] = await Promise.all([getDailySnapshot(), getMarketNews()]);
   const cats: FundCategory[] = ["pasar_uang", "saham", "obligasi"];
-  const ihsgColor = snap.ihsg.changePct >= 0 ? "#9cba8a" : "#d46a6a";
-  const chartLabel = snap.ihsg.chartKind === "intraday" ? "Hari ini · 5 menit" : "60 hari terakhir";
 
   return (
     <div>
@@ -25,31 +23,21 @@ export default async function HomePage() {
       />
 
       <div className="grid gap-5 lg:grid-cols-12">
-        <Card className="lg:col-span-7">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-gold">IHSG</p>
-              <p className="num mt-2 text-5xl font-semibold">{num(snap.ihsg.last, 2)}</p>
-              <p className="mt-2 text-base">
-                <Change value={snap.ihsg.changePct} /> · 1 bln <Change value={snap.ihsg.ret1m} />
-              </p>
-            </div>
-            <div className="text-right">
-              <LiveBadge
-                marketStatus={snap.marketStatus}
-                stale={snap.stale}
-                clock={formatWibClock(snap.generatedAt)}
-              />
-              <p className="mt-2 text-sm text-mute">{chartLabel}</p>
-            </div>
-          </div>
-          <IhsgChart data={snap.ihsg.chart} color={ihsgColor} />
-          <div className="mt-6 grid grid-cols-3 gap-3 text-base">
-            <Stat label="Open" value={num(snap.ihsg.open, 2)} />
-            <Stat label="High" value={num(snap.ihsg.high, 2)} />
-            <Stat label="Low" value={num(snap.ihsg.low, 2)} />
-          </div>
-        </Card>
+        <IhsgLivePanel
+          className="lg:col-span-7"
+          last={snap.ihsg.last}
+          changePct={snap.ihsg.changePct}
+          ret1m={snap.ihsg.ret1m}
+          open={snap.ihsg.open}
+          high={snap.ihsg.high}
+          low={snap.ihsg.low}
+          chart={snap.ihsg.chart}
+          chartKind={snap.ihsg.chartKind}
+          marketStatus={snap.marketStatus}
+          stale={snap.stale}
+          generatedAt={snap.generatedAt}
+          clock={formatWibClock(snap.generatedAt)}
+        />
         <Card className="lg:col-span-5 max-h-[36rem] overflow-hidden">
           <NewsList items={news} />
         </Card>

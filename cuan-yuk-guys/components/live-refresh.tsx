@@ -2,14 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-
-function refreshMs(now = new Date()): number {
-  const wib = new Date(now.getTime() + 7 * 60 * 60 * 1000);
-  const day = wib.getUTCDay();
-  const mins = wib.getUTCHours() * 60 + wib.getUTCMinutes();
-  const open = day >= 1 && day <= 5 && mins >= 9 * 60 && mins < 15 * 60 + 50;
-  return open ? 20_000 : 90_000;
-}
+import { isIdxSession } from "@/lib/time";
 
 export function LiveRefresh() {
   const router = useRouter();
@@ -20,7 +13,7 @@ export function LiveRefresh() {
       timer = setTimeout(() => {
         router.refresh();
         loop();
-      }, refreshMs());
+      }, isIdxSession() ? 20_000 : 90_000);
     };
     const onVisible = () => {
       if (document.visibilityState === "visible") router.refresh();

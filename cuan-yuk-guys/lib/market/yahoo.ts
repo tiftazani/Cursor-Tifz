@@ -1,4 +1,5 @@
 import type { Bar } from "../types";
+import { formatIhsgChartTime } from "../time";
 
 type YahooChartResponse = {
   chart?: {
@@ -88,14 +89,7 @@ export async function fetchChart(
 function formatStamp(ts: number, interval: string): string {
   const d = new Date(ts * 1000);
   if (interval === "1d") return d.toISOString().slice(0, 10);
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Jakarta",
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).format(d);
+  return formatIhsgChartTime(d);
 }
 
 type ChartMeta = {

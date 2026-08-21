@@ -62,7 +62,7 @@ export function LiveBadge({
       ) : (
         <span>Harga terakhir IDX</span>
       )}
-      <span>· Diperbarui {clock}</span>
+      {clock ? <span>· Diperbarui {clock}</span> : null}
     </p>
   );
 }
