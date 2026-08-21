@@ -1,6 +1,7 @@
 import { getStore } from '@netlify/blobs'
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { isAllowedKunciOrigin } from '../../src/lib/allowed-origins'
+import { isPingPath, isSessionPath, normalizeApiPath } from '../../src/lib/api-path'
 
 const ALLOWED_EMAIL = 'tiftazani.khara@gmail.com'
 const COOKIE = 'kunci_session'
@@ -196,10 +197,14 @@ export default async (req: Request): Promise<Response> => {
     return respond({ error: 'Origin ditolak' }, 403)
   }
   const url = new URL(req.url)
-  const path = url.pathname
+  const path = normalizeApiPath(url.pathname)
 
   try {
-    if (req.method === 'GET' && path === '/api/session') {
+    if ((req.method === 'GET' || req.method === 'HEAD') && isPingPath(path)) {
+      return respond({ ok: true })
+    }
+
+    if (req.method === 'GET' && isSessionPath(path)) {
       const email = sessionEmail(req)
       if (!email) return respond({ ok: false }, 401)
       return respond({ ok: true, email })
@@ -296,4 +301,6 @@ export default async (req: Request): Promise<Response> => {
   }
 }
 
-export const config = { path: ['/api/session', '/api/auth/*', '/api/vault', '/api/mail/recovery'] }
+export const config = {
+  path: ['/api/ping', '/api/me', '/api/session', '/api/auth/*', '/api/vault', '/api/mail/recovery', '/kunci-status'],
+}

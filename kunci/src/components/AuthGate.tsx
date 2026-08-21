@@ -79,8 +79,24 @@ export function AuthGate({ onAuthed }: { onAuthed: () => void }) {
   )
 }
 
-export function ApiMissingScreen() {
+export function ApiMissingScreen({ reason }: { reason?: 'network' | 'missing' }) {
   const local = typeof window !== 'undefined' && !isPublicHost()
+  const offline = reason === 'network'
+  const title = offline
+    ? 'Tidak bisa hubungi server Kunci'
+    : local
+      ? 'Cloud Kunci belum terjangkau'
+      : 'API Kunci belum siap'
+  const subtitle = offline
+    ? 'Jaringan terputus, Safari menolak cek sesi, atau pemblokir iklan menahan API.'
+    : local
+      ? `Localhost harus bisa menghubungi ${DEFAULT_CLOUD_URL}.`
+      : 'Situs publik butuh fungsi Netlify + variabel lingkungan.'
+  const lede = offline
+    ? `Matikan pemblokir iklan untuk ${typeof window !== 'undefined' ? window.location.host : 'situs ini'}, cek Wi-Fi, lalu coba lagi. Kalau masih gagal: di Netlify Base directory kunci, set KUNCI_SESSION_SECRET dan RESEND_API_KEY, lalu redeploy.`
+    : local
+      ? `Pastikan ${DEFAULT_CLOUD_URL} Public di Netlify (Project visibility), lalu nyalakan helper: npm run install-service.`
+      : 'Di Netlify: Base directory kunci, lalu set KUNCI_SESSION_SECRET (min. 16 karakter acak) dan RESEND_API_KEY. Redeploy setelah itu.'
   return (
     <div className="gate">
       <div className="gate-card">
@@ -89,19 +105,11 @@ export function ApiMissingScreen() {
             <IconLock size={28} />
           </span>
           <div>
-            <h1>{local ? 'Cloud Kunci belum terjangkau' : 'API Kunci belum siap'}</h1>
-            <p>
-              {local
-                ? `Localhost harus bisa menghubungi ${DEFAULT_CLOUD_URL}.`
-                : 'Situs publik butuh fungsi Netlify + variabel lingkungan.'}
-            </p>
+            <h1>{title}</h1>
+            <p>{subtitle}</p>
           </div>
         </div>
-        <p className="lede">
-          {local
-            ? `Pastikan ${DEFAULT_CLOUD_URL} Public di Netlify (Project visibility), lalu nyalakan helper: npm run install-service.`
-            : 'Di Netlify: Base directory kunci, lalu set KUNCI_SESSION_SECRET (min. 16 karakter acak) dan RESEND_API_KEY. Redeploy setelah itu.'}
-        </p>
+        <p className="lede">{lede}</p>
         <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>
           Coba lagi
         </button>

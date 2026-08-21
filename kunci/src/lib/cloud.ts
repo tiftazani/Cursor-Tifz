@@ -45,40 +45,107 @@ async function api(path: string, init: RequestInit = {}): Promise<Response> {
   })
 }
 
-export async function sessionStatus(): Promise<{ signedIn: boolean; email?: string; configured?: boolean }> {
-  const urls = isPublicHost()
-    ? ['/api/session']
-    : ['/api/session', `${DEFAULT_CLOUD_URL.replace(/\/$/, '')}/api/session`]
+export type SessionState = {
+  signedIn: boolean
+  email?: string
+  configured: boolean
+  error?: 'network' | 'missing'
+}
 
-  for (const url of urls) {
-    try {
-      const ping = await fetch(url, {
-        method: 'GET',
-        credentials: url.startsWith('/') ? 'include' : 'omit',
+export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
+
+const PING_PATHS = ['/api/ping', '/kunci-status'] as const
+const SESSION_PATHS = ['/api/me', '/api/session'] as const
+
+function jsonContent(res: Response): boolean {
+  return (res.headers.get('content-type') || '').toLowerCase().includes('application/json')
+}
+
+function apiAlive(res: Response): boolean {
+  if (!jsonContent(res)) return false
+  return res.status < 502
+}
+
+async function tryGet(fetchFn: FetchLike, url: string, init: RequestInit): Promise<Response | null> {
+  try {
+    return await fetchFn(url, { method: 'GET', cache: 'no-store', ...init })
+  } catch {
+    return null
+  }
+}
+
+export async function probeCloudSession(opts: {
+  fetch: FetchLike
+  publicHost: boolean
+  token: string | null
+  cloudUrl?: string
+}): Promise<SessionState> {
+  const cloud = (opts.cloudUrl || DEFAULT_CLOUD_URL).replace(/\/$/, '')
+  const origins = opts.publicHost ? [''] : ['', cloud]
+  let network = false
+
+  for (const origin of origins) {
+    const cookies = origin === ''
+    const headers: Record<string, string> = { Accept: 'application/json' }
+    if (opts.token) headers.Authorization = `Bearer ${opts.token}`
+    let contacted = false
+    let email: string | undefined
+
+    for (const path of PING_PATHS) {
+      const res = await tryGet(opts.fetch, `${origin}${path}`, {
+        credentials: 'omit',
+        headers: { Accept: 'application/json' },
       })
-      if (ping.status !== 401 && !ping.ok) continue
-      const token = readToken()
-      if (token) {
-        const authed = await fetch(url, {
-          method: 'GET',
+      if (!res) {
+        network = true
+        continue
+      }
+      if (apiAlive(res)) {
+        contacted = true
+        break
+      }
+    }
+
+    for (const path of SESSION_PATHS) {
+      let res = await tryGet(opts.fetch, `${origin}${path}`, {
+        credentials: cookies ? 'include' : 'omit',
+        headers,
+      })
+      if (!res && cookies) {
+        network = true
+        res = await tryGet(opts.fetch, `${origin}${path}`, {
           credentials: 'omit',
-          headers: { Authorization: `Bearer ${token}` },
+          headers,
         })
-        if (authed.ok) {
-          const body = (await authed.json().catch(() => ({}))) as { email?: string }
-          if (body.email) return { signedIn: true, email: body.email, configured: true }
+      } else if (!res) {
+        network = true
+      }
+      if (!res) continue
+      if (!apiAlive(res)) continue
+      contacted = true
+      if (res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { email?: string }
+        if (body.email) {
+          email = body.email
+          break
         }
       }
-      if (ping.ok) {
-        const body = (await ping.json().catch(() => ({}))) as { email?: string }
-        if (body.email) return { signedIn: true, email: body.email, configured: true }
-      }
-      return { signedIn: false, configured: true }
-    } catch {
-      /* try next URL */
+      break
     }
+
+    if (email) return { signedIn: true, email, configured: true }
+    if (contacted) return { signedIn: false, configured: true }
   }
-  return { signedIn: false, configured: false }
+
+  return { signedIn: false, configured: false, error: network ? 'network' : 'missing' }
+}
+
+export async function sessionStatus(): Promise<SessionState> {
+  return probeCloudSession({
+    fetch: (input, init) => globalThis.fetch(input, init),
+    publicHost: isPublicHost(),
+    token: readToken(),
+  })
 }
 
 function parseApiError(text: string, status: number, fallback: string): string {

@@ -136,6 +136,7 @@ async function wipeLegacyDek() {
 }
 
 function shouldProxyCloud(pathname) {
+  if (pathname === '/kunci-status') return true
   if (!pathname.startsWith('/api/')) return false
   if (pathname === '/api/local-token') return false
   if (pathname.startsWith('/api/recovery')) return false
@@ -191,7 +192,8 @@ async function proxyCloud(req, res, url) {
 }
 
 function serveStatic(req, res) {
-  if (new URL(req.url || '/', 'http://127.0.0.1').pathname.startsWith('/api/')) return false
+  const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname
+  if (pathname.startsWith('/api/') || pathname === '/kunci-status') return false
   if (!serveUi || !existsSync(DIST)) return false
   let path = new URL(req.url || '/', 'http://127.0.0.1').pathname
   if (path === '/') path = '/index.html'

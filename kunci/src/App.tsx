@@ -8,14 +8,16 @@ import { AppShell } from './views/AppShell'
 import { isPublicHost, sessionStatus } from './lib/cloud'
 
 function CloudSessionGate({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<'load' | 'auth' | 'ok' | 'missing'>('load')
+  const [state, setState] = useState<'load' | 'auth' | 'ok' | 'missing' | 'offline'>('load')
 
   useEffect(() => {
-    void sessionStatus().then((s) => {
-      if (s.signedIn) setState('ok')
-      else if (!s.configured) setState('missing')
-      else setState('auth')
-    })
+    void sessionStatus()
+      .then((s) => {
+        if (s.signedIn) setState('ok')
+        else if (!s.configured) setState(s.error === 'network' ? 'offline' : 'missing')
+        else setState('auth')
+      })
+      .catch(() => setState('offline'))
   }, [])
 
   if (state === 'load') {
@@ -25,9 +27,10 @@ function CloudSessionGate({ children }: { children: ReactNode }) {
       </div>
     )
   }
+  if (state === 'offline') return <ApiMissingScreen reason="network" />
   if (state === 'missing') {
     if (!isPublicHost()) return <AuthGate onAuthed={() => setState('ok')} />
-    return <ApiMissingScreen />
+    return <ApiMissingScreen reason="missing" />
   }
   if (state === 'auth') return <AuthGate onAuthed={() => setState('ok')} />
   return children
