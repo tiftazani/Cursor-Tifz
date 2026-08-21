@@ -48,27 +48,30 @@ async function isLoaded() {
 }
 
 async function enableService() {
-  if (await isLoaded()) {
-    await runQuiet('launchctl', ['bootout', `gui/${uid}/${LABEL}`])
-    await sleep(800)
+  await runQuiet('launchctl', ['bootout', `gui/${uid}/${LABEL}`])
+  await runQuiet('launchctl', ['unload', '-w', plistPath])
+  await sleep(1000)
+
+  let loaded = (await runCode('launchctl', ['load', '-w', plistPath])) === 0
+  if (!loaded) {
+    loaded = (await runCode('launchctl', ['bootstrap', `gui/${uid}`, plistPath])) === 0
   }
-  let ok = false
-  for (let i = 0; i < 3 && !ok; i++) {
-    ok = (await runCode('launchctl', ['bootstrap', `gui/${uid}`, plistPath])) === 0
-    if (!ok) await sleep(500)
-  }
-  if (!ok) {
-    await runQuiet('launchctl', ['load', '-w', plistPath])
-    await sleep(400)
-  }
-  if (!(await isLoaded())) {
-    throw new Error(
-      'launchctl tidak memasang layanan. Di Terminal, tanpa sudo:\n' +
-        `  launchctl bootstrap gui/${uid} ${plistPath}\n` +
-        'Atau jalankan sementara: npm run start  lalu buka http://127.0.0.1:8780',
-    )
-  }
+  await sleep(400)
   await runQuiet('launchctl', ['kickstart', '-k', `gui/${uid}/${LABEL}`])
+  return loaded || (await isLoaded())
+}
+
+async function waitForHealth() {
+  for (let i = 0; i < 24; i++) {
+    try {
+      const res = await fetch(`http://127.0.0.1:8780/health`)
+      if (res.ok) return true
+    } catch {
+      /* still starting */
+    }
+    await sleep(250)
+  }
+  return false
 }
 
 if (platform() !== 'darwin') {
@@ -130,10 +133,15 @@ const plist = `<?xml version="1.0" encoding="UTF-8"?>
 `
 await writeFile(plistPath, plist, { mode: 0o644 })
 await enableService()
+const healthy = await waitForHealth()
 
-console.log('\nKunci sekarang jalan di background (tanpa terminal).')
-console.log('Buka: http://127.0.0.1:8780')
-console.log('Reset kata sandi: pakai recovery key di layar Kunci (bukan email DEK).')
-console.log('Log: ~/Library/Logs/kunci.log')
-console.log('\nKalau http://localhost:5173 masih dari npm run dev, itu boleh ditutup.')
-console.log('Stop layanan: npm run uninstall-service')
+if (healthy) {
+  console.log('\nKunci jalan terus di background. Terminal boleh ditutup.')
+  console.log('Buka: http://127.0.0.1:8780')
+  console.log('Ikut nyala lagi setiap login Mac.')
+} else {
+  console.log('\nPlist sudah dipasang, tapi http://127.0.0.1:8780 belum merespons.')
+  console.log('Cek log: ~/Library/Logs/kunci.err.log')
+  process.exit(1)
+}
+console.log('Stop: npm run uninstall-service')

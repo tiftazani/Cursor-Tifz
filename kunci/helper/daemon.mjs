@@ -19,6 +19,7 @@ const TOKEN_PATH = join(TOKEN_DIR, 'helper-token')
 const RECOVERY_PATH = join(TOKEN_DIR, 'recovery.json')
 const OTP_PATH = join(TOKEN_DIR, 'otp.json')
 const CLOUD_ORIGIN = 'https://kunci-tifta.netlify.app'
+const serveUi = process.env.KUNCI_SERVE_UI !== '0'
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
