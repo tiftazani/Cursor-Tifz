@@ -221,7 +221,7 @@ export function AppShell() {
                 entry={selected}
                 isNew={Boolean(draft && draft.id === selected.id)}
                 inTrash={filter === 'trash'}
-                onCloseNew={() => setDraft(null)}
+                onCloseNew={startNew}
               />
             ) : (
               <div className="empty tall">Pilih entri atau buat yang baru.</div>

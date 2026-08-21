@@ -1,6 +1,16 @@
 import { useId, useState, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react'
 import { IconCopy, IconEye, IconEyeOff, IconSpark } from './Icons'
 
+const SHIELD_ATTRS = {
+  autoCorrect: 'off',
+  autoCapitalize: 'off',
+  spellCheck: false,
+  'data-lpignore': 'true',
+  'data-1p-ignore': 'true',
+  'data-bwignore': 'true',
+  'data-form-type': 'other',
+} as const
+
 export function Field({
   label,
   hint,
@@ -19,8 +29,37 @@ export function Field({
   )
 }
 
-export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`input ${props.className ?? ''}`} />
+export function TextInput({
+  shieldAutofill = false,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & { shieldAutofill?: boolean }) {
+  const [readOnly, setReadOnly] = useState(shieldAutofill)
+  const [acceptInput, setAcceptInput] = useState(!shieldAutofill)
+  return (
+    <input
+      {...props}
+      className={`input ${props.className ?? ''}`}
+      autoComplete={shieldAutofill ? 'off' : props.autoComplete}
+      readOnly={shieldAutofill ? readOnly : props.readOnly}
+      {...(shieldAutofill ? SHIELD_ATTRS : {})}
+      onFocus={(e) => {
+        if (shieldAutofill) setReadOnly(false)
+        props.onFocus?.(e)
+      }}
+      onKeyDown={(e) => {
+        if (shieldAutofill) setAcceptInput(true)
+        props.onKeyDown?.(e)
+      }}
+      onPaste={(e) => {
+        if (shieldAutofill) setAcceptInput(true)
+        props.onPaste?.(e)
+      }}
+      onChange={(e) => {
+        if (shieldAutofill && !acceptInput) return
+        props.onChange?.(e)
+      }}
+    />
+  )
 }
 
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
@@ -34,6 +73,7 @@ export function SecretInput({
   onGenerate,
   onCopy,
   autoComplete = 'off',
+  protectFromAutofill = true,
 }: {
   value: string
   onChange: (value: string) => void
@@ -41,24 +81,44 @@ export function SecretInput({
   onGenerate?: () => void
   onCopy?: () => void
   autoComplete?: string
+  protectFromAutofill?: boolean
 }) {
   const [shown, setShown] = useState(false)
+  const [readOnly, setReadOnly] = useState(protectFromAutofill)
+  const [acceptInput, setAcceptInput] = useState(!protectFromAutofill)
   const id = useId()
   return (
     <div className="secret">
       <input
         id={id}
+        name={`kunci-secret-${id.replace(/:/g, '')}`}
         className="input secret-input"
         type={shown ? 'text' : 'password'}
         value={value}
         placeholder={placeholder}
-        autoComplete={autoComplete}
-        spellCheck={false}
-        onChange={(e) => onChange(e.target.value)}
+        autoComplete={protectFromAutofill ? 'new-password' : autoComplete}
+        readOnly={readOnly}
+        {...SHIELD_ATTRS}
+        onFocus={() => setReadOnly(false)}
+        onKeyDown={() => setAcceptInput(true)}
+        onPaste={() => setAcceptInput(true)}
+        onChange={(e) => {
+          if (protectFromAutofill && !acceptInput) return
+          onChange(e.target.value)
+        }}
       />
       <div className="secret-actions">
         {onGenerate ? (
-          <button type="button" className="icon-btn" title="Buat password" onClick={onGenerate}>
+          <button
+            type="button"
+            className="icon-btn"
+            title="Buat password"
+            onClick={() => {
+              setReadOnly(false)
+              setAcceptInput(true)
+              onGenerate()
+            }}
+          >
             <IconSpark size={16} />
           </button>
         ) : null}

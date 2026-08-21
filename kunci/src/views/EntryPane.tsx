@@ -9,6 +9,7 @@ import { formatDateTime, relativeTime } from '../lib/time'
 import { restoreHistoryRecord } from '../lib/history'
 import { newId } from '../lib/id'
 import { useVault } from '../state/VaultContext'
+import { useToast } from '../components/Toast'
 
 const TYPES: { id: EntryType; label: string }[] = [
   { id: 'login', label: 'Website' },
@@ -30,7 +31,9 @@ export function EntryPane({
   onCloseNew?: () => void
 }) {
   const { saveEntry, deleteEntry, restoreEntry, purgeEntry, copySecret, sequentialCopy, fillMac, helperOnline } = useVault()
+  const toast = useToast()
   const [draft, setDraft] = useState(entry)
+  const [saving, setSaving] = useState(false)
   const [totp, setTotp] = useState<{ code: string; remaining: number } | null>(null)
 
   useEffect(() => {
@@ -82,17 +85,23 @@ export function EntryPane({
   }
 
   async function save() {
-    if (!draft.name.trim()) return
-    await saveEntry(
-      {
-        ...draft,
-        name: draft.name.trim(),
-        updatedAt: Date.now(),
-        passwordChangedAt: draft.password ? (draft.passwordChangedAt ?? Date.now()) : draft.passwordChangedAt,
-      },
-      isNew,
-    )
-    onCloseNew?.()
+    if (!draft.name.trim() || saving) return
+    setSaving(true)
+    try {
+      await saveEntry(
+        {
+          ...draft,
+          name: draft.name.trim(),
+          updatedAt: Date.now(),
+          passwordChangedAt: draft.password ? (draft.passwordChangedAt ?? Date.now()) : draft.passwordChangedAt,
+        },
+        isNew,
+      )
+      toast.push('Disimpan')
+      if (isNew) onCloseNew?.()
+    } finally {
+      setSaving(false)
+    }
   }
 
   function addField() {
@@ -128,7 +137,13 @@ export function EntryPane({
 
       <div className="stack">
         <Field label="Nama">
-          <TextInput value={draft.name} onChange={(e) => patch({ name: e.target.value })} placeholder="Netflix, Slack, Wi-Fi rumah…" />
+          <TextInput
+            value={draft.name}
+            onChange={(e) => patch({ name: e.target.value })}
+            placeholder="Netflix, Slack, Wi-Fi rumah…"
+            shieldAutofill
+            autoComplete="off"
+          />
         </Field>
 
         {draft.type === 'login' || draft.type === 'app' ? (
@@ -139,6 +154,8 @@ export function EntryPane({
                 onChange={(e) => patch({ username: e.target.value })}
                 placeholder="opsional"
                 autoComplete="off"
+                name="kunci-entry-username"
+                shieldAutofill
               />
               <button type="button" className="icon-btn" onClick={() => void copySecret('Username', draft.username ?? '')}>
                 <IconCopy size={16} />
@@ -164,7 +181,10 @@ export function EntryPane({
             <TextInput
               value={draft.url ?? ''}
               onChange={(e) => patch({ url: e.target.value })}
-              placeholder="https://accounts.google.com"
+              placeholder="https://"
+              autoComplete="off"
+              name="kunci-entry-url"
+              shieldAutofill
             />
           </Field>
         ) : null}
@@ -263,8 +283,8 @@ export function EntryPane({
       </div>
 
       <div className="pane-actions">
-        <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={!draft.name.trim()}>
-          Simpan
+        <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={!draft.name.trim() || saving}>
+          {saving ? 'Menyimpan…' : 'Simpan'}
         </button>
         {(draft.username || draft.password) && (
           <button type="button" className="btn" onClick={() => void sequentialCopy(draft)}>

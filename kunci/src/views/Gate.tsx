@@ -38,7 +38,7 @@ export function SetupScreen() {
             <p>Brankas kata sandi terenkripsi (zero-knowledge)</p>
           </div>
         </div>
-        <form className="stack" onSubmit={(e) => void onSubmit(e)}>
+        <form className="stack" autoComplete="off" onSubmit={(e) => void onSubmit(e)}>
           <p className="lede">
             Localhost dan URL publik memakai brankas terenkripsi yang sama. Server hanya menerima ciphertext. Setelah
             brankas dibuat, simpan <strong>recovery key</strong> di luar Kunci. Reset kata sandi tidak lewat kode Gmail ke{' '}
@@ -121,7 +121,7 @@ export function LockScreen() {
         {mode === 'unlock' ? (
           <form className="stack" onSubmit={(e) => void onSubmit(e)}>
             <Field label="Kata sandi induk">
-              <SecretInput value={password} onChange={setPassword} autoComplete="current-password" />
+              <SecretInput value={password} onChange={setPassword} autoComplete="current-password" protectFromAutofill={false} />
             </Field>
             {hint ? <p className="hint-pill">Petunjuk: {hint}</p> : null}
             {error ? <p className="error">{error}</p> : null}
