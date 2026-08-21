@@ -31,10 +31,10 @@ Bisa dibuka di `localhost` atau di **URL HTTPS publik** (Netlify). Tidak ada sis
    | `RESEND_API_KEY` | API key [Resend](https://resend.com) untuk OTP masuk |
    | `KUNCI_FROM_EMAIL` | Opsional. Default `Kunci <onboarding@resend.dev>` |
 
-3. Deploy. Buka URL `https://….netlify.app` (atau domain sendiri + HTTPS).
+3. Deploy. Buka URL `https://kunci-tifta.netlify.app` (atau domain sendiri + HTTPS).
 4. Minta kode masuk ke **tiftazani.khara@gmail.com**, lalu buka brankas dengan kata sandi induk.
 
-IndexedDB bersifat per-origin. Tanpa sinkron cloud, situs publik tidak melihat brankas `localhost`. Setelah login, Kunci mengunggah/mengunduh **hanya** blob terenkripsi.
+Localhost (`http://127.0.0.1:8780`) dan URL publik memakai **satu blob terenkripsi** di Netlify Blobs. Setelah kode Gmail di salah satu tampilan, simpan/ubah entri akan muncul di yang lain (butuh kata sandi induk di masing-masing browser). Server tetap tidak melihat password.
 
 Autofill aplikasi Mac tetap butuh helper lokal (`npm run install-service`) di laptop — browser di internet tidak bisa mengetik ke app desktop.
 

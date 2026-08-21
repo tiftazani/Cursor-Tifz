@@ -40,9 +40,9 @@ export function SetupScreen() {
         </div>
         <form className="stack" onSubmit={(e) => void onSubmit(e)}>
           <p className="lede">
-            Data dienkripsi di perangkat ini sebelum disimpan. Server publik hanya menerima ciphertext. Setelah brankas
-            dibuat, kamu akan mendapat <strong>recovery key</strong> — simpan di luar Kunci. Reset kata sandi tidak lewat
-            kode Gmail ke {recoveryEmail}; itu sengaja, supaya Gmail yang bocor tidak membuka brankas.
+            Localhost dan URL publik memakai brankas terenkripsi yang sama. Server hanya menerima ciphertext. Setelah
+            brankas dibuat, simpan <strong>recovery key</strong> di luar Kunci. Reset kata sandi tidak lewat kode Gmail ke{' '}
+            {recoveryEmail}.
           </p>
           <Field label="Kata sandi induk">
             <SecretInput value={password} onChange={setPassword} autoComplete="new-password" placeholder="Minimal 12 karakter" />

@@ -103,14 +103,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     void (async () => {
       try {
         let blob = (await vaultDb.getBlob()) ?? null
-        if (isPublicHost()) {
-          const remote = await cloudGetVault()
-          if (remote && (!blob || (remote.savedAt ?? 0) >= (blob.savedAt ?? 0))) {
-            blob = remote
-            await vaultDb.setBlob(remote)
-          } else if (blob && (!remote || (blob.savedAt ?? 0) > (remote.savedAt ?? 0))) {
-            await cloudPutVault(blob).catch(() => undefined)
-          }
+        const remote = await cloudGetVault()
+        if (remote && (!blob || (remote.savedAt ?? 0) >= (blob.savedAt ?? 0))) {
+          blob = remote
+          await vaultDb.setBlob(remote)
+        } else if (blob && (!remote || (blob.savedAt ?? 0) > (remote.savedAt ?? 0))) {
+          await cloudPutVault(blob).catch(() => undefined)
         }
         const storedHint = (await vaultDb.getHint()) ?? ''
         const storedBackups = await vaultDb.getBackups()
@@ -462,7 +460,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     setVault(null)
     setStatus(blobRef.current ? 'locked' : 'setup')
     notifyExtensionLock()
-    if (isPublicHost()) window.location.reload()
+    window.location.reload()
   }, [])
 
   const setHint = useCallback(async (value: string) => {

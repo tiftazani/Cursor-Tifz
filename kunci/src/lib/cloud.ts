@@ -1,17 +1,45 @@
 import { isEncryptedBlob } from './crypto'
 import type { EncryptedBlob } from '../types'
 import { RECOVERY_EMAIL } from './account'
+import { DEFAULT_CLOUD_URL } from './allowed-origins'
+
+const TOKEN_KEY = 'kunci_cloud_token'
 
 export function isPublicHost(): boolean {
   const host = window.location.hostname
   return host !== 'localhost' && host !== '127.0.0.1' && host !== '[::1]'
 }
 
+export function cloudOrigin(): string {
+  if (isPublicHost()) return ''
+  return DEFAULT_CLOUD_URL.replace(/\/$/, '')
+}
+
+function readToken(): string | null {
+  try {
+    return window.localStorage.getItem(TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function saveCloudToken(token: string): void {
+  window.localStorage.setItem(TOKEN_KEY, token)
+}
+
+export function clearCloudToken(): void {
+  window.localStorage.removeItem(TOKEN_KEY)
+}
+
 async function api(path: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(path, {
+  const token = readToken()
+  const headers = new Headers(init.headers)
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  return fetch(`${cloudOrigin()}${path}`, {
     ...init,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
+    headers,
   })
 }
 
@@ -38,16 +66,17 @@ export async function verifyOtp(code: string): Promise<void> {
     method: 'POST',
     body: JSON.stringify({ email: RECOVERY_EMAIL, code: code.trim() }),
   })
-  const body = (await res.json().catch(() => ({}))) as { error?: string }
+  const body = (await res.json().catch(() => ({}))) as { error?: string; token?: string }
   if (!res.ok) throw new Error(body.error || 'Kode salah')
+  if (body.token) saveCloudToken(body.token)
 }
 
 export async function logoutSession(): Promise<void> {
   await api('/api/auth/logout', { method: 'POST', body: '{}' }).catch(() => undefined)
+  clearCloudToken()
 }
 
 export async function cloudGetVault(): Promise<EncryptedBlob | null> {
-  if (!isPublicHost()) return null
   try {
     const res = await api('/api/vault')
     if (res.status === 401 || res.status === 404) return null
@@ -61,9 +90,8 @@ export async function cloudGetVault(): Promise<EncryptedBlob | null> {
 }
 
 export async function cloudPutVault(blob: EncryptedBlob): Promise<void> {
-  if (!isPublicHost()) return
   const res = await api('/api/vault', { method: 'PUT', body: JSON.stringify({ blob }) })
-  if (res.status === 401) throw new Error('Sesi publik habis. Masuk lagi dengan kode email.')
+  if (res.status === 401) throw new Error('Sesi cloud habis. Masuk lagi dengan kode email.')
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string }
     throw new Error(body.error || 'Gagal sinkron ke cloud')

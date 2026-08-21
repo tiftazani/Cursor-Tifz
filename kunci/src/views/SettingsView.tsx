@@ -14,7 +14,6 @@ export function SettingsView() {
     destroyVault,
     rotateRecoveryKey,
     logoutPublic,
-    publicHost,
     hasRecoveryWrap,
     recoveryEmail,
   } = useVault()
@@ -52,8 +51,8 @@ export function SettingsView() {
       <header className="page-head">
         <h2>Pengaturan</h2>
         <p className="muted">
-          Kunci menyimpan ciphertext di browser ini. Di URL publik, salinan terenkripsi yang sama disinkron ke Netlify
-          Blobs — tanpa kata sandi induk dan tanpa recovery key.
+          Kunci menyimpan ciphertext di browser ini dan menyalinnya ke Netlify Blobs. Localhost dan
+          kunci-tifta.netlify.app membuka brankas yang sama setelah sesi OTP.
         </p>
       </header>
 
@@ -159,20 +158,16 @@ export function SettingsView() {
         <button type="button" className="btn" onClick={lock}>
           Kunci sekarang
         </button>
-        {publicHost ? (
-          <button type="button" className="btn" onClick={() => void logoutPublic()}>
-            Keluar dari gerbang publik ({recoveryEmail})
-          </button>
-        ) : null}
+        <button type="button" className="btn" onClick={() => void logoutPublic()}>
+          Keluar dari sesi cloud ({recoveryEmail})
+        </button>
         <button
           type="button"
           className="btn btn-danger"
           onClick={() => {
             if (
               window.confirm(
-                publicHost
-                  ? 'Hapus brankas dari browser ini? Salinan terenkripsi di cloud tidak ikut terhapus.'
-                  : 'Hapus brankas dari browser ini? File cadangan di disk tidak ikut terhapus.',
+                'Hapus brankas dari browser ini? Salinan terenkripsi di cloud (localhost dan URL publik) tidak ikut terhapus.',
               )
             ) {
               void destroyVault()

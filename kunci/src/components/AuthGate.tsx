@@ -2,13 +2,15 @@ import { useState, type FormEvent } from 'react'
 import { Field, TextInput } from './Field'
 import { IconLock } from './Icons'
 import { RECOVERY_EMAIL } from '../lib/account'
-import { requestOtp, verifyOtp } from '../lib/cloud'
+import { DEFAULT_CLOUD_URL } from '../lib/allowed-origins'
+import { isPublicHost, requestOtp, verifyOtp } from '../lib/cloud'
 
 export function AuthGate({ onAuthed }: { onAuthed: () => void }) {
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [sent, setSent] = useState(false)
+  const local = !isPublicHost()
 
   async function send() {
     setError('')
@@ -44,15 +46,16 @@ export function AuthGate({ onAuthed }: { onAuthed: () => void }) {
             <IconLock size={28} />
           </span>
           <div>
-            <h1>Kunci — gerbang publik</h1>
-            <p>Hanya {RECOVERY_EMAIL} yang boleh membuka situs ini.</p>
+            <h1>Kunci — satu brankas</h1>
+            <p>Hanya {RECOVERY_EMAIL} yang boleh membuka sesi cloud.</p>
           </div>
         </div>
         <p className="lede">
-          Cek address bar: harus HTTPS dan domain Kunci milikmu. Kode 8 karakter hanya membuka sesi — server tetap tidak
-          bisa membaca password. Kata sandi induk dimasukkan setelah ini, di perangkat ini.
+          {local
+            ? `Localhost dan ${DEFAULT_CLOUD_URL} memakai ciphertext yang sama. Kode 8 karakter membuka sesi sinkron — server tetap tidak bisa membaca password.`
+            : 'Cek address bar: harus HTTPS dan domain Kunci milikmu. Kode 8 karakter hanya membuka sesi. Kata sandi induk dimasukkan setelah ini.'}
         </p>
-        <p className="hint-pill">Situs: {window.location.host}</p>
+        <p className="hint-pill">Situs ini: {window.location.host}</p>
         <form className="stack" onSubmit={(e) => void onSubmit(e)}>
           <button type="button" className="btn" onClick={() => void send()} disabled={busy}>
             {sent ? 'Kirim ulang kode' : 'Kirim kode masuk ke Gmail'}
@@ -76,6 +79,7 @@ export function AuthGate({ onAuthed }: { onAuthed: () => void }) {
 }
 
 export function ApiMissingScreen() {
+  const local = typeof window !== 'undefined' && !isPublicHost()
   return (
     <div className="gate">
       <div className="gate-card">
@@ -84,13 +88,18 @@ export function ApiMissingScreen() {
             <IconLock size={28} />
           </span>
           <div>
-            <h1>API Kunci belum siap</h1>
-            <p>Situs publik butuh fungsi Netlify + variabel lingkungan.</p>
+            <h1>{local ? 'Cloud Kunci belum terjangkau' : 'API Kunci belum siap'}</h1>
+            <p>
+              {local
+                ? `Localhost harus bisa menghubungi ${DEFAULT_CLOUD_URL}.`
+                : 'Situs publik butuh fungsi Netlify + variabel lingkungan.'}
+            </p>
           </div>
         </div>
         <p className="lede">
-          Di Netlify: Base directory <code>kunci</code>, lalu set <code>KUNCI_SESSION_SECRET</code> (min. 16 karakter acak)
-          dan <code>RESEND_API_KEY</code>. Redeploy setelah itu.
+          {local
+            ? 'Pastikan site Netlify sudah di-deploy dari branch Kunci, Base directory kunci, dan env KUNCI_SESSION_SECRET plus RESEND_API_KEY terpasang.'
+            : 'Di Netlify: Base directory kunci, lalu set KUNCI_SESSION_SECRET (min. 16 karakter acak) dan RESEND_API_KEY. Redeploy setelah itu.'}
         </p>
       </div>
     </div>

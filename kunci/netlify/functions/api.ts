@@ -1,5 +1,6 @@
 import { getStore } from '@netlify/blobs'
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import { isAllowedKunciOrigin } from '../../src/lib/allowed-origins'
 
 const ALLOWED_EMAIL = 'tiftazani.khara@gmail.com'
 const COOKIE = 'kunci_session'
@@ -14,6 +15,19 @@ function env(name: string): string {
     /* ignore */
   }
   return process.env[name] ?? ''
+}
+
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('origin')
+  if (!origin || !originAllowed(req)) return {}
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+    'Access-Control-Max-Age': '86400',
+    Vary: 'Origin',
+  }
 }
 
 function json(body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
@@ -34,14 +48,8 @@ function clientIp(req: Request): string {
 
 function originAllowed(req: Request): boolean {
   const origin = req.headers.get('origin')
-  if (!origin) return req.method === 'GET' || req.method === 'HEAD'
-  try {
-    const host = req.headers.get('host') || ''
-    const o = new URL(origin)
-    return o.host === host
-  } catch {
-    return false
-  }
+  if (!origin) return req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
+  return isAllowedKunciOrigin(origin, req.headers.get('host') || '')
 }
 
 function secret(): string {
@@ -54,20 +62,20 @@ function sign(payload: string): string {
   return createHmac('sha256', secret()).update(payload).digest('base64url')
 }
 
-function sessionCookie(email: string, req: Request): string {
+function issueSession(email: string, req: Request): { token: string; cookie: string } {
   const exp = Date.now() + SESSION_MS
   const payload = `${email}|${exp}`
-  const value = `${payload}|${sign(payload)}`
+  const token = `${payload}|${sign(payload)}`
   const secure = new URL(req.url).protocol === 'https:'
   const parts = [
-    `${COOKIE}=${encodeURIComponent(value)}`,
+    `${COOKIE}=${encodeURIComponent(token)}`,
     'Path=/',
     'HttpOnly',
     'SameSite=Strict',
     `Max-Age=${Math.floor(SESSION_MS / 1000)}`,
   ]
   if (secure) parts.push('Secure')
-  return parts.join('; ')
+  return { token, cookie: parts.join('; ') }
 }
 
 function clearCookie(): string {
@@ -84,7 +92,9 @@ function readCookie(req: Request, name: string): string | null {
 }
 
 function sessionEmail(req: Request): string | null {
-  const raw = readCookie(req, COOKIE)
+  const auth = req.headers.get('authorization')
+  const bearer = auth?.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : null
+  const raw = bearer || readCookie(req, COOKIE)
   if (!raw) return null
   const bits = raw.split('|')
   if (bits.length !== 3) return null
@@ -172,8 +182,16 @@ function sanitizeBlob(value: unknown): Record<string, unknown> | null {
 }
 
 export default async (req: Request): Promise<Response> => {
+  const respond = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}) =>
+    json(body, status, { ...corsHeaders(req), ...extraHeaders })
+
+  if (req.method === 'OPTIONS') {
+    if (req.headers.get('origin') && !originAllowed(req)) return respond({ error: 'Origin ditolak' }, 403)
+    return new Response(null, { status: 204, headers: corsHeaders(req) })
+  }
+
   if (req.method !== 'GET' && req.method !== 'HEAD' && !originAllowed(req)) {
-    return json({ error: 'Origin ditolak' }, 403)
+    return respond({ error: 'Origin ditolak' }, 403)
   }
   const url = new URL(req.url)
   const path = url.pathname
@@ -181,18 +199,18 @@ export default async (req: Request): Promise<Response> => {
   try {
     if (req.method === 'GET' && path === '/api/session') {
       const email = sessionEmail(req)
-      if (!email) return json({ ok: false }, 401)
-      return json({ ok: true, email })
+      if (!email) return respond({ ok: false }, 401)
+      return respond({ ok: true, email })
     }
 
     if (req.method === 'POST' && path === '/api/auth/logout') {
-      return json({ ok: true }, 200, { 'Set-Cookie': clearCookie() })
+      return respond({ ok: true }, 200, { 'Set-Cookie': clearCookie() })
     }
 
     if (req.method === 'POST' && path === '/api/auth/otp') {
       const ip = clientIp(req)
       if (!(await bumpRateLimit(`rl:otp:${ip}`, 8, 60 * 60 * 1000))) {
-        return json({ error: 'Terlalu banyak permintaan. Coba 1 jam lagi.' }, 429)
+        return respond({ error: 'Terlalu banyak permintaan. Coba 1 jam lagi.' }, 429)
       }
 
       const blobs = await store()
@@ -205,73 +223,74 @@ export default async (req: Request): Promise<Response> => {
         attempts: 0,
       })
       await sendEmail('Kode masuk Kunci', `Kode masuk Kunci: ${code}\nBerlaku 10 menit.\nKalau bukan kamu, abaikan.\n`)
-      return json({ ok: true, email: ALLOWED_EMAIL })
+      return respond({ ok: true, email: ALLOWED_EMAIL })
     }
 
     if (req.method === 'POST' && path === '/api/auth/verify') {
       const ip = clientIp(req)
       if (!(await bumpRateLimit(`rl:verify:${ip}`, 20, 60 * 60 * 1000))) {
-        return json({ error: 'Terlalu banyak percobaan. Coba 1 jam lagi.' }, 429)
+        return respond({ error: 'Terlalu banyak percobaan. Coba 1 jam lagi.' }, 429)
       }
       const body = (await req.json().catch(() => ({}))) as { code?: string; email?: string }
       if ((body.email || ALLOWED_EMAIL).toLowerCase() !== ALLOWED_EMAIL) {
-        return json({ error: 'Email tidak diizinkan' }, 403)
+        return respond({ error: 'Email tidak diizinkan' }, 403)
       }
       const blobs = await store()
       const otp = (await blobs.get('otp', { type: 'json' })) as
         | { hash: string; salt: string; exp: number; attempts: number }
         | null
-      if (!otp) return json({ error: 'Tidak ada kode aktif' }, 400)
-      if (Date.now() > otp.exp) return json({ error: 'Kode kedaluwarsa' }, 400)
-      if (otp.attempts >= 5) return json({ error: 'Terlalu banyak percobaan' }, 429)
+      if (!otp) return respond({ error: 'Tidak ada kode aktif' }, 400)
+      if (Date.now() > otp.exp) return respond({ error: 'Kode kedaluwarsa' }, 400)
+      if (otp.attempts >= 5) return respond({ error: 'Terlalu banyak percobaan' }, 429)
       const incoming = hashOtp(String(body.code || '').trim().toUpperCase(), otp.salt)
       const ok = incoming.length === otp.hash.length && timingSafeEqual(Buffer.from(incoming), Buffer.from(otp.hash))
       otp.attempts += 1
       await blobs.setJSON('otp', otp)
-      if (!ok) return json({ error: 'Kode salah' }, 401)
+      if (!ok) return respond({ error: 'Kode salah' }, 401)
       await blobs.setJSON('otp', { ...otp, exp: 0 })
-      return json({ ok: true, email: ALLOWED_EMAIL }, 200, { 'Set-Cookie': sessionCookie(ALLOWED_EMAIL, req) })
+      const session = issueSession(ALLOWED_EMAIL, req)
+      return respond({ ok: true, email: ALLOWED_EMAIL, token: session.token }, 200, { 'Set-Cookie': session.cookie })
     }
 
     if (req.method === 'POST' && path === '/api/mail/recovery') {
-      if (!sessionEmail(req)) return json({ error: 'Sesi tidak valid' }, 401)
+      if (!sessionEmail(req)) return respond({ error: 'Sesi tidak valid' }, 401)
       const ip = clientIp(req)
       if (!(await bumpRateLimit(`rl:mail:${ip}`, 4, 60 * 60 * 1000))) {
-        return json({ error: 'Terlalu banyak email. Coba 1 jam lagi.' }, 429)
+        return respond({ error: 'Terlalu banyak email. Coba 1 jam lagi.' }, 429)
       }
       const body = (await req.json().catch(() => ({}))) as { recoveryKey?: string }
       const key = (body.recoveryKey || '').trim()
-      if (key.length < 16 || key.length > 80) return json({ error: 'Recovery key tidak valid' }, 400)
+      if (key.length < 16 || key.length > 80) return respond({ error: 'Recovery key tidak valid' }, 400)
       await sendEmail(
         'Recovery key Kunci — simpan aman',
         `Recovery key Kunci kamu:\n\n${key}\n\nIni satu-satunya cara mereset kata sandi induk tanpa kehilangan data. Server Kunci tidak menyimpan kunci ini secara permanen.\n`,
       )
-      return json({ ok: true })
+      return respond({ ok: true })
     }
 
     if (path === '/api/vault') {
       const email = sessionEmail(req)
-      if (!email) return json({ error: 'Sesi tidak valid' }, 401)
+      if (!email) return respond({ error: 'Sesi tidak valid' }, 401)
       const blobs = await store()
       if (req.method === 'GET') {
         const blob = await blobs.get('vault', { type: 'json' })
-        return json({ blob: blob ?? null })
+        return respond({ blob: blob ?? null })
       }
       if (req.method === 'PUT') {
         const body = (await req.json().catch(() => ({}))) as { blob?: unknown }
         const clean = sanitizeBlob(body.blob)
-        if (!clean) return json({ error: 'Format brankas ditolak' }, 400)
+        if (!clean) return respond({ error: 'Format brankas ditolak' }, 400)
         const raw = JSON.stringify(clean)
-        if (raw.length > MAX_VAULT_BYTES) return json({ error: 'Brankas terlalu besar' }, 413)
+        if (raw.length > MAX_VAULT_BYTES) return respond({ error: 'Brankas terlalu besar' }, 413)
         await blobs.setJSON('vault', clean)
-        return json({ ok: true })
+        return respond({ ok: true })
       }
     }
 
-    return json({ error: 'not found' }, 404)
+    return respond({ error: 'not found' }, 404)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Server error'
-    return json({ error: message }, 500)
+    return respond({ error: message }, 500)
   }
 }
 

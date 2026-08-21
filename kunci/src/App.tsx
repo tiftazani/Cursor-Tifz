@@ -5,13 +5,12 @@ import { RecoveryKeyModal } from './components/RecoveryKeyModal'
 import { VaultProvider, useVault } from './state/VaultContext'
 import { LockScreen, SetupScreen } from './views/Gate'
 import { AppShell } from './views/AppShell'
-import { isPublicHost, sessionStatus } from './lib/cloud'
+import { sessionStatus } from './lib/cloud'
 
-function PublicSessionGate({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<'load' | 'auth' | 'ok' | 'missing'>(() => (isPublicHost() ? 'load' : 'ok'))
+function CloudSessionGate({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<'load' | 'auth' | 'ok' | 'missing'>('load')
 
   useEffect(() => {
-    if (!isPublicHost()) return
     void sessionStatus().then((s) => {
       if (s.signedIn) setState('ok')
       else if (!s.configured) setState('missing')
@@ -22,7 +21,7 @@ function PublicSessionGate({ children }: { children: ReactNode }) {
   if (state === 'load') {
     return (
       <div className="gate">
-        <div className="muted">Memeriksa sesi publik…</div>
+        <div className="muted">Memeriksa sesi cloud…</div>
       </div>
     )
   }
@@ -38,7 +37,6 @@ function ThemedApp() {
     pendingRecoveryKey,
     dismissRecoveryKey,
     emailPendingRecoveryKey,
-    publicHost,
   } = useVault()
   const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
 
@@ -72,7 +70,7 @@ function ThemedApp() {
         <RecoveryKeyModal
           recoveryKey={pendingRecoveryKey}
           onDone={dismissRecoveryKey}
-          onEmail={publicHost ? emailPendingRecoveryKey : undefined}
+          onEmail={emailPendingRecoveryKey}
         />
       ) : null}
     </>
@@ -82,11 +80,11 @@ function ThemedApp() {
 export default function App() {
   return (
     <ToastProvider>
-      <PublicSessionGate>
+      <CloudSessionGate>
         <VaultProvider>
           <ThemedApp />
         </VaultProvider>
-      </PublicSessionGate>
+      </CloudSessionGate>
     </ToastProvider>
   )
 }
