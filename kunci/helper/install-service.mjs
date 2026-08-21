@@ -31,6 +31,22 @@ function runQuiet(cmd, args) {
   })
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function enableService() {
+  await runQuiet('launchctl', ['bootout', `gui/${uid}/${LABEL}`])
+  await sleep(400)
+  try {
+    await run('launchctl', ['bootstrap', `gui/${uid}`, plistPath])
+  } catch {
+    // Exit 5 / Input/output error: agent already loaded. Restart it instead.
+    await runQuiet('launchctl', ['kickstart', '-k', `gui/${uid}/${LABEL}`])
+  }
+  await runQuiet('launchctl', ['kickstart', '-k', `gui/${uid}/${LABEL}`])
+}
+
 if (platform() !== 'darwin') {
   console.error('install-service hanya untuk macOS.')
   process.exit(1)
@@ -89,9 +105,7 @@ const plist = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>
 `
 await writeFile(plistPath, plist, { mode: 0o644 })
-await runQuiet('launchctl', ['bootout', `gui/${uid}/${LABEL}`])
-await run('launchctl', ['bootstrap', `gui/${uid}`, plistPath])
-await runQuiet('launchctl', ['kickstart', '-k', `gui/${uid}/${LABEL}`])
+await enableService()
 
 console.log('\nKunci sekarang jalan di background (tanpa terminal).')
 console.log('Buka: http://127.0.0.1:8780')
