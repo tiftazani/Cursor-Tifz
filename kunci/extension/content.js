@@ -1,3 +1,12 @@
+function send(msg) {
+  try {
+    if (!chrome.runtime?.id) return Promise.resolve(null)
+    return chrome.runtime.sendMessage(msg).catch(() => null)
+  } catch {
+    return Promise.resolve(null)
+  }
+}
+
 function setNativeValue(el, value) {
   const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
   const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set
@@ -31,7 +40,7 @@ function fill(match) {
   if (pw && match.password) setNativeValue(pw, match.password)
   const user = pw ? usernameFieldNear(pw) : document.querySelector('input[type="email"], input[autocomplete="username"]')
   if (user && match.username) setNativeValue(user, match.username)
-  if (match.id) chrome.runtime.sendMessage({ type: 'TOUCH', id: match.id })
+  if (match.id) void send({ type: 'TOUCH', id: match.id })
 }
 
 function isKunciPage() {
@@ -83,8 +92,9 @@ function ensureButton(pw) {
   btn.addEventListener('click', async (e) => {
     e.preventDefault()
     e.stopPropagation()
-    const res = await chrome.runtime.sendMessage({ type: 'MATCHES', url: location.href })
-    if (res?.locked) {
+    const res = await send({ type: 'MATCHES', url: location.href })
+    if (!res) return
+    if (res.locked) {
       btn.title = 'Buka ikon Kunci di toolbar, masukkan kata sandi induk'
       btn.classList.add('locked')
       showOtherBar({
@@ -227,19 +237,19 @@ function showSaveBar(pending) {
         label: pending.action === 'update' ? 'Perbarui' : 'Simpan',
         primary: true,
         onClick: () => {
-          void chrome.runtime.sendMessage({ type: 'SAVE_LOGIN', capture }).then(() => hideSaveBar())
+          void send({ type: 'SAVE_LOGIN', capture }).then(() => hideSaveBar())
         },
       },
       {
         label: 'Tidak',
         onClick: () => {
-          void chrome.runtime.sendMessage({ type: 'DISMISS_SAVE' }).then(() => hideSaveBar())
+          void send({ type: 'DISMISS_SAVE' }).then(() => hideSaveBar())
         },
       },
       {
         label: 'Jangan untuk situs ini',
         onClick: () => {
-          void chrome.runtime.sendMessage({ type: 'NEVER_SAVE', url: capture.url }).then(() => hideSaveBar())
+          void send({ type: 'NEVER_SAVE', url: capture.url }).then(() => hideSaveBar())
         },
       },
     ],
@@ -263,7 +273,7 @@ async function maybeAutofill() {
   if (!passwords.length) return
   autofillTried = true
   if (passwords.some((el) => el.value)) return
-  const res = await chrome.runtime.sendMessage({ type: 'MATCHES', url: location.href })
+  const res = await send({ type: 'MATCHES', url: location.href })
   if (res?.locked || !res?.matches?.length) return
   if (res.settings?.autoFillWeb === false) return
   if (res.matches.length === 1) {
@@ -294,14 +304,14 @@ async function maybeOfferSave(creds) {
   if (!password) return
   if (lastFilled && lastFilled.password === password && (lastFilled.username || '') === username) return
   const capture = { url: location.href, username, password }
-  const offer = await chrome.runtime.sendMessage({ type: 'QUEUE_SAVE', capture })
+  const offer = await send({ type: 'OFFER_SAVE', capture })
   if (offer?.locked) return
   if (offer?.action !== 'create' && offer?.action !== 'update') return
   showSaveBar({ capture, action: offer.action })
 }
 
 async function restorePendingSave() {
-  const res = await chrome.runtime.sendMessage({ type: 'GET_PENDING_SAVE' })
+  const res = await send({ type: 'GET_PENDING_SAVE' })
   if (res?.pending?.capture) showSaveBar(res.pending)
 }
 
@@ -315,7 +325,7 @@ function scan() {
 function wireKunciBridge() {
   const sendToken = () => {
     try {
-      chrome.runtime.sendMessage({ type: 'CLOUD_TOKEN', token: window.localStorage.getItem('kunci_cloud_token') || '' })
+      void send({ type: 'CLOUD_TOKEN', token: window.localStorage.getItem('kunci_cloud_token') || '' })
     } catch {
       /* ignore */
     }
@@ -325,13 +335,13 @@ function wireKunciBridge() {
   window.addEventListener('message', (event) => {
     if (event.source !== window) return
     if (event.data?.type === 'KUNCI_VAULT_SYNC' && event.data.blob) {
-      chrome.runtime.sendMessage({ type: 'SYNC', blob: event.data.blob })
+      void send({ type: 'SYNC', blob: event.data.blob })
     }
     if (event.data?.type === 'KUNCI_VAULT_LOCK') {
-      chrome.runtime.sendMessage({ type: 'LOCK' })
+      void send({ type: 'LOCK' })
     }
     if (event.data?.type === 'KUNCI_REQUEST_BLOB') {
-      chrome.runtime.sendMessage({ type: 'GET_BLOB' }, (res) => {
+      void send({ type: 'GET_BLOB' }).then((res) => {
         if (res?.blob) window.postMessage({ type: 'KUNCI_BLOB_FROM_EXT', blob: res.blob }, '*')
       })
     }
@@ -377,7 +387,7 @@ if (isKunciPage()) {
   window.addEventListener('pagehide', () => {
     if (!lastPassword) return
     if (lastFilled && lastFilled.password === lastPassword && (lastFilled.username || '') === lastUsername) return
-    void chrome.runtime.sendMessage({
+    void send({
       type: 'QUEUE_SAVE',
       capture: { url: location.href, username: lastUsername, password: lastPassword },
     })
@@ -391,7 +401,7 @@ if (isKunciPage()) {
   })
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'FILL_NOW') {
-      chrome.runtime.sendMessage({ type: 'MATCHES', url: location.href }, (res) => {
+      void send({ type: 'MATCHES', url: location.href }).then((res) => {
         if (res?.matches?.[0]) fill(res.matches[0])
       })
     }

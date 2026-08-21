@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Kunci Autofill",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Simpan dan isi username/password website seperti pengelola sandi, dari brankas Kunci.",
   "action": {
     "default_popup": "popup.html",

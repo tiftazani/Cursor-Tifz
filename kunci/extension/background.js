@@ -80,9 +80,38 @@ async function clearPendingSave(tabId) {
   await chrome.storage.session.set({ pendingSaves })
 }
 
+async function queueSave(capture, tabId) {
+  const { vault } = await sessionState()
+  if (!vault) return { locked: true }
+  if (vault.settings?.offerSaveWeb === false) return { action: 'skip' }
+  const { neverHosts = [] } = await chrome.storage.local.get('neverHosts')
+  const decision = decideLoginSave(vault.entries || [], capture || {}, neverHosts)
+  if ((decision.action === 'create' || decision.action === 'update') && tabId) {
+    const pendingSaves = (await chrome.storage.session.get('pendingSaves')).pendingSaves || {}
+    pendingSaves[String(tabId)] = { capture, action: decision.action }
+    await chrome.storage.session.set({ pendingSaves })
+  }
+  return decision
+}
+
+function ack(sendResponse, work) {
+  void Promise.resolve()
+    .then(work)
+    .catch(() => undefined)
+  try {
+    sendResponse({ ok: true })
+  } catch {
+    /* sender already gone */
+  }
+  return false
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  const run = async () => {
-    if (msg.type === 'SYNC' && msg.blob) {
+  if (msg.type === 'QUEUE_SAVE') {
+    return ack(sendResponse, () => queueSave(msg.capture, sender.tab?.id))
+  }
+  if (msg.type === 'SYNC' && msg.blob) {
+    return ack(sendResponse, async () => {
       await chrome.storage.local.set({ blob: msg.blob })
       const { dekB64, unlocked } = await chrome.storage.session.get(['dekB64', 'unlocked'])
       if (unlocked && dekB64) {
@@ -93,19 +122,29 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           /* dek mismatch after password change */
         }
       }
-      return { ok: true }
-    }
+    })
+  }
+  if (msg.type === 'CLOUD_TOKEN') {
+    return ack(sendResponse, () => chrome.storage.session.set({ cloudToken: msg.token || '' }))
+  }
+  if (msg.type === 'TOUCH') {
+    return ack(sendResponse, async () => {
+      const { vault, dekB64 } = await sessionState()
+      if (!vault || !dekB64 || !msg.id) return
+      const { blob } = await chrome.storage.local.get('blob')
+      if (!blob) return
+      const entries = (vault.entries || []).map((e) => (e.id === msg.id ? { ...e, lastUsedAt: Date.now() } : e))
+      await writeVault({ ...vault, entries }, dekB64, blob)
+    })
+  }
+  if (msg.type === 'LOCK') {
+    return ack(sendResponse, () => chrome.storage.session.remove(['vault', 'unlocked', 'dekB64']))
+  }
+
+  const run = async () => {
     if (msg.type === 'GET_BLOB') {
       const { blob } = await chrome.storage.local.get('blob')
       return { blob: blob || null }
-    }
-    if (msg.type === 'CLOUD_TOKEN') {
-      await chrome.storage.session.set({ cloudToken: msg.token || '' })
-      return { ok: true }
-    }
-    if (msg.type === 'LOCK') {
-      await chrome.storage.session.remove(['vault', 'unlocked', 'dekB64'])
-      return { ok: true }
     }
     if (msg.type === 'UNLOCK') {
       const { blob } = await chrome.storage.local.get('blob')
@@ -141,18 +180,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }))
       return { locked: false, entries }
     }
-    if (msg.type === 'OFFER_SAVE' || msg.type === 'QUEUE_SAVE') {
-      const { vault } = await sessionState()
-      if (!vault) return { locked: true }
-      if (vault.settings?.offerSaveWeb === false) return { action: 'skip' }
-      const { neverHosts = [] } = await chrome.storage.local.get('neverHosts')
-      const decision = decideLoginSave(vault.entries || [], msg.capture, neverHosts)
-      if ((decision.action === 'create' || decision.action === 'update') && sender.tab?.id) {
-        const pendingSaves = (await chrome.storage.session.get('pendingSaves')).pendingSaves || {}
-        pendingSaves[String(sender.tab.id)] = { capture: msg.capture, action: decision.action }
-        await chrome.storage.session.set({ pendingSaves })
-      }
-      return decision
+    if (msg.type === 'OFFER_SAVE') {
+      return queueSave(msg.capture, sender.tab?.id)
     }
     if (msg.type === 'GET_PENDING_SAVE') {
       const tabId = sender.tab?.id
@@ -183,17 +212,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       await clearPendingSave(sender.tab?.id)
       return { ok: true }
     }
-    if (msg.type === 'TOUCH') {
-      const { vault, dekB64 } = await sessionState()
-      if (!vault || !dekB64 || !msg.id) return { ok: false }
-      const { blob } = await chrome.storage.local.get('blob')
-      const entries = (vault.entries || []).map((e) => (e.id === msg.id ? { ...e, lastUsedAt: Date.now() } : e))
-      await writeVault({ ...vault, entries }, dekB64, blob)
-      return { ok: true }
-    }
     return { ok: false }
   }
-  run().then(sendResponse).catch((err) => sendResponse({ error: err.message || String(err) }))
+  run()
+    .then((value) => {
+      try {
+        sendResponse(value)
+      } catch {
+        /* tab already gone */
+      }
+    })
+    .catch((err) => {
+      try {
+        sendResponse({ error: err instanceof Error ? err.message : String(err) })
+      } catch {
+        /* tab already gone */
+      }
+    })
   return true
 })
 
@@ -204,5 +239,5 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.commands.onCommand.addListener(async (command) => {
   if (command !== 'fill-login') return
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'FILL_NOW' })
+  if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'FILL_NOW' }).catch(() => undefined)
 })
