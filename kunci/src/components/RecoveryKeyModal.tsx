@@ -16,15 +16,13 @@ export function RecoveryKeyModal({
 
   return (
     <div className="modal-back">
-      <div className="quickfind" style={{ padding: 20 }}>
+      <div className="modal-card">
         <h2>Simpan recovery key</h2>
         <p className="muted">
           Ini satu-satunya cara mereset kata sandi induk tanpa kehilangan data. Server tidak menyimpan kunci ini. Simpan di
           tempat yang bukan brankas Kunci (pengelola password lain, kertas, atau disk terenkripsi).
         </p>
-        <p className="totp-code" style={{ fontSize: '1.1rem', letterSpacing: '0.08em', margin: '16px 0' }}>
-          {recoveryKey}
-        </p>
+        <code className="gen-password">{recoveryKey}</code>
         <div className="row-actions">
           <button
             type="button"
@@ -71,7 +69,7 @@ export function RecoveryKeyModal({
         </div>
         {emailed === 'fail' ? <p className="error">Gagal mengirim email. Simpan kunci secara offline.</p> : null}
         {onEmail ? (
-          <p className="muted" style={{ marginTop: 12 }}>
+          <p className="muted">
             Mengirim recovery key ke Gmail berarti orang yang menguasai kotak masuk itu bisa mereset brankas jika mereka
             juga masuk ke situs ini. Lebih aman tidak mengirim.
           </p>

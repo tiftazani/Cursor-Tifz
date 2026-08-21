@@ -21,7 +21,7 @@ function CloudSessionGate({ children }: { children: ReactNode }) {
   if (state === 'load') {
     return (
       <div className="gate">
-        <div className="muted">Memeriksa sesi cloud…</div>
+        <p className="muted">Memeriksa sesi cloud…</p>
       </div>
     )
   }
@@ -60,7 +60,7 @@ function ThemedApp() {
   if (status === 'loading') {
     return (
       <div className="gate">
-        <div className="muted">Membuka Kunci…</div>
+        <p className="muted">Membuka Kunci…</p>
       </div>
     )
   }

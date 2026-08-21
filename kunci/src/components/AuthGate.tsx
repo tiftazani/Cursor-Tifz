@@ -62,6 +62,7 @@ export function AuthGate({ onAuthed }: { onAuthed: () => void }) {
           </button>
           <Field label="Kode dari email">
             <TextInput
+              className="otp-input"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               autoComplete="one-time-code"

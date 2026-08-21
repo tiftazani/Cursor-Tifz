@@ -75,6 +75,33 @@ export function SecretInput({
   )
 }
 
+export function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T
+  onChange: (value: T) => void
+  options: readonly { id: T; label: string }[]
+}) {
+  return (
+    <div className="segmented" role="tablist">
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          role="tab"
+          aria-selected={value === option.id}
+          className={`segmented-btn ${value === option.id ? 'active' : ''}`}
+          onClick={() => onChange(option.id)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function StrengthBar({ score, label }: { score: number; label: string }) {
   return (
     <div className="strength">

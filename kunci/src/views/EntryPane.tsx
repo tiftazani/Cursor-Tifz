@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CustomField, Entry, EntryType } from '../types'
-import { Field, SecretInput, StrengthBar, TextArea, TextInput } from '../components/Field'
+import { Field, SecretInput, Segmented, StrengthBar, TextArea, TextInput } from '../components/Field'
 import { IconCopy, IconFill, IconStar, IconTrash } from '../components/Icons'
 import { generatePassword, DEFAULT_GENERATOR } from '../lib/generator'
 import { passwordStrength } from '../lib/strength'
@@ -124,18 +124,7 @@ export function EntryPane({
         </div>
       </header>
 
-      <div className="type-row">
-        {TYPES.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`chip ${draft.type === t.id ? 'active' : ''}`}
-            onClick={() => patch({ type: t.id })}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Segmented value={draft.type} options={TYPES} onChange={(type) => patch({ type })} />
 
       <div className="stack">
         <Field label="Nama">

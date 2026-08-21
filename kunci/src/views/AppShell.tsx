@@ -108,7 +108,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="shell">
+    <div className={view === 'vault' ? 'shell shell-vault' : 'shell'}>
       <aside className="sidebar">
         <div className="brand brand-side">
           <span className="brand-mark sm">
@@ -116,7 +116,7 @@ export function AppShell() {
           </span>
           <div>
             <strong>Kunci</strong>
-            <span className="muted">Brankas Mac</span>
+            <span className="muted">Satu brankas</span>
           </div>
         </div>
         <nav>
