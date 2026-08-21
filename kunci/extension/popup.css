@@ -21,6 +21,8 @@ h1 {
 
 .error {
   color: #ff6b7a;
+  min-height: 1.2em;
+  margin: 8px 0 0;
 }
 
 input,
@@ -48,6 +50,11 @@ button[type='submit'] {
   color: #06221c;
   font-weight: 650;
   cursor: pointer;
+}
+
+button[type='submit']:disabled {
+  opacity: 0.7;
+  cursor: wait;
 }
 
 ul {

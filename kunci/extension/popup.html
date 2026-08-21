@@ -10,8 +10,16 @@
       <h1>Kunci</h1>
       <p id="status" class="muted">Memuat…</p>
       <form id="unlock" hidden>
-        <input id="password" type="password" placeholder="Kata sandi induk" autocomplete="current-password" />
-        <button type="submit">Buka</button>
+        <input
+          id="password"
+          name="kunci-master-password"
+          type="password"
+          placeholder="Kata sandi induk"
+          autocomplete="off"
+          data-lpignore="true"
+          data-1p-ignore="true"
+        />
+        <button type="submit" id="unlock-btn">Buka</button>
       </form>
       <div id="app" hidden>
         <input id="search" type="search" placeholder="Cari…" />

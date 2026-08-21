@@ -107,6 +107,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   }, [vault])
 
   useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== window) return
+      if (event.data?.type !== 'KUNCI_PULL_BLOB') return
+      if (blobRef.current) syncExtension(blobRef.current)
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
     void (async () => {
       try {

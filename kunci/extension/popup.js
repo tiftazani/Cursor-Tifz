@@ -1,5 +1,8 @@
+import { decryptVault, dekToB64, isEncryptedBlob, unlockErrorMessage } from './crypto.js'
+
 const status = document.getElementById('status')
 const unlock = document.getElementById('unlock')
+const unlockBtn = document.getElementById('unlock-btn')
 const app = document.getElementById('app')
 const password = document.getElementById('password')
 const search = document.getElementById('search')
@@ -12,6 +15,16 @@ async function send(msg) {
   } catch {
     return null
   }
+}
+
+function setBusy(on) {
+  unlockBtn.disabled = on
+  password.disabled = on
+  unlockBtn.textContent = on ? 'Membuka…' : 'Buka'
+}
+
+function nextPaint() {
+  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
 }
 
 async function refresh() {
@@ -30,7 +43,9 @@ async function refresh() {
   } else {
     unlock.hidden = false
     app.hidden = true
-    status.textContent = s.hasBlob ? 'Brankas terkunci' : 'Buka aplikasi web Kunci dulu, lalu kembali ke sini.'
+    status.textContent = s.hasBlob
+      ? 'Brankas terkunci. Buka bisa 5–10 detik — jangan tutup popup.'
+      : 'Buka aplikasi web Kunci dulu, lalu kembali ke sini.'
   }
 }
 
@@ -67,17 +82,41 @@ function escapeHtml(s) {
 unlock.addEventListener('submit', async (e) => {
   e.preventDefault()
   error.textContent = ''
-  const res = await send({ type: 'UNLOCK', password: password.value })
-  if (!res) {
-    error.textContent = 'Ekstensi sedang dimuat ulang. Tutup popup ini, lalu buka lagi.'
+  const pw = password.value
+  if (!pw) {
+    error.textContent = 'Masukkan kata sandi induk'
     return
   }
-  if (res?.error) {
-    error.textContent = res.error
-    return
+  setBusy(true)
+  status.textContent = 'Membuka brankas… jangan tutup jendela ini.'
+  await nextPaint()
+  try {
+    const blobRes = await send({ type: 'GET_BLOB' })
+    const blob = blobRes?.blob
+    if (!isEncryptedBlob(blob)) {
+      error.textContent = 'Belum ada brankas. Buka tab Kunci, buka brankas di sana, lalu coba lagi.'
+      status.textContent = 'Buka aplikasi web Kunci dulu, lalu kembali ke sini.'
+      return
+    }
+    let vault
+    let dekRaw
+    try {
+      ;({ vault, dekRaw } = await decryptVault(blob, pw))
+    } catch (err) {
+      error.textContent = unlockErrorMessage(err)
+      status.textContent = 'Brankas terkunci. Buka bisa 5–10 detik — jangan tutup popup.'
+      return
+    }
+    const res = await send({ type: 'UNLOCKED', vault, dekB64: dekToB64(dekRaw) })
+    if (!res?.ok) {
+      error.textContent = res?.error || 'Gagal menyimpan sesi. Tutup popup, lalu coba lagi.'
+      return
+    }
+    password.value = ''
+    await refresh()
+  } finally {
+    setBusy(false)
   }
-  password.value = ''
-  await refresh()
 })
 
 search.addEventListener('input', () => {

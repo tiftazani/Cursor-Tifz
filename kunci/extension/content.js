@@ -15,6 +15,8 @@ function setNativeValue(el, value) {
   el.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
+const BIND_GEN = crypto.randomUUID()
+
 function passwordFields() {
   return [...document.querySelectorAll('input[type="password"]:not([disabled])')].filter((el) => el.offsetParent !== null || el.getClientRects().length)
 }
@@ -78,8 +80,10 @@ function captureFromEvent(target) {
 }
 
 function ensureButton(pw) {
-  if (pw.dataset.kunciBound) return
-  pw.dataset.kunciBound = '1'
+  if (pw.dataset.kunciBound === BIND_GEN) return
+  const sibling = pw.nextElementSibling
+  if (sibling?.classList?.contains('kunci-wrap')) sibling.remove()
+  pw.dataset.kunciBound = BIND_GEN
   const wrap = document.createElement('span')
   wrap.className = 'kunci-wrap'
   const btn = document.createElement('button')
@@ -237,7 +241,17 @@ function showSaveBar(pending) {
         label: pending.action === 'update' ? 'Perbarui' : 'Simpan',
         primary: true,
         onClick: () => {
-          void send({ type: 'SAVE_LOGIN', capture }).then(() => hideSaveBar())
+          void send({ type: 'SAVE_LOGIN', capture }).then((res) => {
+            if (res?.locked) {
+              showOtherBar({
+                title: 'Kunci terkunci',
+                subtitle: 'Buka ikon Kunci di toolbar, masukkan kata sandi induk.',
+                actions: [{ label: 'Tutup', onClick: () => undefined }],
+              })
+              return
+            }
+            if (res?.ok) hideSaveBar()
+          })
         },
       },
       {
@@ -305,14 +319,23 @@ async function maybeOfferSave(creds) {
   if (lastFilled && lastFilled.password === password && (lastFilled.username || '') === username) return
   const capture = { url: location.href, username, password }
   const offer = await send({ type: 'OFFER_SAVE', capture })
-  if (offer?.locked) return
+  if (offer?.locked) {
+    showOtherBar({
+      title: 'Kunci terkunci',
+      subtitle: 'Buka ikon Kunci di toolbar, masukkan kata sandi induk, lalu login ini bisa disimpan.',
+      actions: [{ label: 'Tutup', onClick: () => undefined }],
+    })
+    return
+  }
   if (offer?.action !== 'create' && offer?.action !== 'update') return
   showSaveBar({ capture, action: offer.action })
 }
 
 async function restorePendingSave() {
   const res = await send({ type: 'GET_PENDING_SAVE' })
-  if (res?.pending?.capture) showSaveBar(res.pending)
+  if (!res?.pending?.capture) return
+  const st = await send({ type: 'STATUS' })
+  if (st?.unlocked) showSaveBar(res.pending)
 }
 
 function scan() {
@@ -351,6 +374,10 @@ function wireKunciBridge() {
       window.postMessage({ type: 'KUNCI_BLOB_FROM_EXT', blob: msg.blob }, '*')
     }
   })
+  const pull = () => window.postMessage({ type: 'KUNCI_PULL_BLOB' }, '*')
+  pull()
+  window.setTimeout(pull, 500)
+  window.setTimeout(pull, 2000)
 }
 
 if (isKunciPage()) {
@@ -407,5 +434,11 @@ if (isKunciPage()) {
     }
     if (msg.type === 'FILL_ENTRY') fill(msg.entry)
     if (msg.type === 'SHOW_PENDING_SAVE' && msg.pending) showSaveBar(msg.pending)
+    if (msg.type === 'VAULT_UNLOCKED') {
+      autofillTried = false
+      document.querySelectorAll('.kunci-fill-btn.locked').forEach((btn) => btn.classList.remove('locked'))
+      void restorePendingSave()
+      void maybeAutofill()
+    }
   })
 }

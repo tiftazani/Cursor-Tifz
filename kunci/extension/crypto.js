@@ -172,3 +172,17 @@ export function dekToB64(dekRaw) {
 export function dekFromB64(b64) {
   return b64ToBytes(b64)
 }
+
+export function isEncryptedBlob(value) {
+  if (!value || typeof value !== 'object') return false
+  return (value.v === 1 || value.v === 2) && typeof value.salt === 'string' && typeof value.data === 'string'
+}
+
+export function unlockErrorMessage(err) {
+  const name = err && typeof err === 'object' && 'name' in err ? String(err.name) : ''
+  const msg = err instanceof Error ? err.message : String(err || '')
+  if (!msg.trim() || name === 'OperationError' || /operationerror/i.test(msg)) {
+    return 'Kata sandi induk salah'
+  }
+  return msg
+}

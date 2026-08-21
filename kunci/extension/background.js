@@ -80,18 +80,71 @@ async function clearPendingSave(tabId) {
   await chrome.storage.session.set({ pendingSaves })
 }
 
+async function storePending(tabId, pending) {
+  if (!tabId) return
+  const pendingSaves = (await chrome.storage.session.get('pendingSaves')).pendingSaves || {}
+  pendingSaves[String(tabId)] = pending
+  await chrome.storage.session.set({ pendingSaves })
+}
+
 async function queueSave(capture, tabId) {
+  if (!capture?.password) return { action: 'skip', reason: 'empty' }
   const { vault } = await sessionState()
-  if (!vault) return { locked: true }
-  if (vault.settings?.offerSaveWeb === false) return { action: 'skip' }
   const { neverHosts = [] } = await chrome.storage.local.get('neverHosts')
+  if (!vault) {
+    await storePending(tabId, { capture, action: 'create', needsUnlock: true })
+    return { locked: true }
+  }
+  if (vault.settings?.offerSaveWeb === false) return { action: 'skip' }
   const decision = decideLoginSave(vault.entries || [], capture || {}, neverHosts)
-  if ((decision.action === 'create' || decision.action === 'update') && tabId) {
-    const pendingSaves = (await chrome.storage.session.get('pendingSaves')).pendingSaves || {}
-    pendingSaves[String(tabId)] = { capture, action: decision.action }
-    await chrome.storage.session.set({ pendingSaves })
+  if (decision.action === 'create' || decision.action === 'update') {
+    await storePending(tabId, { capture, action: decision.action })
   }
   return decision
+}
+
+async function broadcastToHttpTabs(message) {
+  try {
+    const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] })
+    await Promise.all(tabs.map((tab) => (tab.id ? chrome.tabs.sendMessage(tab.id, message).catch(() => undefined) : null)))
+  } catch {
+    /* no tabs */
+  }
+}
+
+async function onVaultUnlocked() {
+  const { vault } = await sessionState()
+  const { neverHosts = [] } = await chrome.storage.local.get('neverHosts')
+  const pendingSaves = (await chrome.storage.session.get('pendingSaves')).pendingSaves || {}
+  const next = {}
+  for (const [tabId, pending] of Object.entries(pendingSaves)) {
+    if (!pending?.capture || !vault) continue
+    const decision = decideLoginSave(vault.entries || [], pending.capture, neverHosts)
+    if (decision.action === 'create' || decision.action === 'update') {
+      next[tabId] = { capture: pending.capture, action: decision.action }
+    }
+  }
+  await chrome.storage.session.set({ pendingSaves: next })
+  await broadcastToHttpTabs({ type: 'VAULT_UNLOCKED' })
+}
+
+async function injectContentScripts() {
+  try {
+    const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] })
+    await Promise.all(
+      tabs.map(async (tab) => {
+        if (!tab.id) return
+        try {
+          await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ['content.css'] })
+          await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] })
+        } catch {
+          /* chrome://, PDF, or no host access */
+        }
+      }),
+    )
+  } catch {
+    /* ignore */
+  }
 }
 
 function ack(sendResponse, work) {
@@ -146,11 +199,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const { blob } = await chrome.storage.local.get('blob')
       return { blob: blob || null }
     }
+    if (msg.type === 'UNLOCKED') {
+      if (!msg.vault || !msg.dekB64) return { ok: false, error: 'Sesi tidak lengkap' }
+      await chrome.storage.session.set({ vault: msg.vault, unlocked: true, dekB64: msg.dekB64 })
+      await onVaultUnlocked()
+      return { ok: true, count: msg.vault.entries?.length ?? 0 }
+    }
     if (msg.type === 'UNLOCK') {
       const { blob } = await chrome.storage.local.get('blob')
       if (!blob) throw new Error('Belum ada brankas. Buka aplikasi Kunci dulu.')
       const { vault, dekRaw } = await decryptVault(blob, msg.password)
       await chrome.storage.session.set({ vault, unlocked: true, dekB64: dekToB64(dekRaw) })
+      await onVaultUnlocked()
       return { ok: true, count: vault.entries?.length ?? 0 }
     }
     if (msg.type === 'STATUS') {
@@ -224,7 +284,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     })
     .catch((err) => {
       try {
-        sendResponse({ error: err instanceof Error ? err.message : String(err) })
+        const message = err instanceof Error ? err.message : String(err)
+        sendResponse({ error: message.trim() || 'Kata sandi induk salah' })
       } catch {
         /* tab already gone */
       }
@@ -240,4 +301,8 @@ chrome.commands.onCommand.addListener(async (command) => {
   if (command !== 'fill-login') return
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'FILL_NOW' }).catch(() => undefined)
+})
+
+chrome.runtime.onInstalled.addListener(() => {
+  void injectContentScripts()
 })
