@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
-import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { existsSync, createReadStream, statSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
 import { dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { createConnection as tlsConnect } from 'node:tls'
+import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
@@ -19,7 +18,6 @@ const TOKEN_DIR = join(homedir(), '.kunci')
 const TOKEN_PATH = join(TOKEN_DIR, 'helper-token')
 const RECOVERY_PATH = join(TOKEN_DIR, 'recovery.json')
 const OTP_PATH = join(TOKEN_DIR, 'otp.json')
-const SMTP_PATH = join(TOKEN_DIR, 'smtp.json')
 const serveUi = process.argv.includes('--serve-ui') || process.env.KUNCI_SERVE_UI === '1'
 
 const MIME = {
@@ -122,97 +120,16 @@ async function fillMac(username, password, mode) {
   }
 }
 
-function hashOtp(code, salt) {
-  return createHash('sha256').update(`${salt}:${code}`).digest('hex')
-}
-
-async function sendViaMailApp(subject, body) {
-  const script = `
-tell application "Mail"
-  set msg to make new outgoing message with properties {subject:${JSON.stringify(subject)}, content:${JSON.stringify(body + '\n')}, visible:false}
-  tell msg
-    make new to recipient at end of to recipients with properties {address:${JSON.stringify(RECOVERY_EMAIL)}}
-    send
-  end tell
-end tell
-`
-  await run('osascript', ['-e', script])
-}
-
-function smtpCommand(socket, command) {
-  return new Promise((resolve, reject) => {
-    const onData = (buf) => {
-      const text = buf.toString('utf8')
-      socket.off('data', onData)
-      if (/^[45]/.test(text.split('\n').pop() || text)) reject(new Error(text.trim()))
-      else resolve(text)
-    }
-    socket.once('data', onData)
-    socket.once('error', reject)
-    if (command !== null) socket.write(command)
-  })
-}
-
-async function sendViaSmtp(subject, text) {
-  if (!existsSync(SMTP_PATH)) throw new Error('smtp belum dikonfigurasi')
-  const cfg = JSON.parse(await readFile(SMTP_PATH, 'utf8'))
-  const host = cfg.host || 'smtp.gmail.com'
-  const port = Number(cfg.port || 465)
-  const user = cfg.user || RECOVERY_EMAIL
-  const pass = cfg.pass || cfg.appPassword
-  if (!pass) throw new Error('Isi app password Gmail di ~/.kunci/smtp.json')
-
-  await new Promise((resolve, reject) => {
-    const socket = tlsConnect(port, host, { servername: host }, async () => {
+async function wipeLegacyDek() {
+  for (const path of [RECOVERY_PATH, OTP_PATH]) {
+    if (existsSync(path)) {
       try {
-        await smtpCommand(socket, null)
-        await smtpCommand(socket, `EHLO kunci.local\r\n`)
-        await smtpCommand(socket, `AUTH LOGIN\r\n`)
-        await smtpCommand(socket, `${Buffer.from(user).toString('base64')}\r\n`)
-        await smtpCommand(socket, `${Buffer.from(pass).toString('base64')}\r\n`)
-        await smtpCommand(socket, `MAIL FROM:<${user}>\r\n`)
-        await smtpCommand(socket, `RCPT TO:<${RECOVERY_EMAIL}>\r\n`)
-        await smtpCommand(socket, `DATA\r\n`)
-        const payload = [
-          `From: Kunci <${user}>`,
-          `To: ${RECOVERY_EMAIL}`,
-          `Subject: ${subject}`,
-          'Content-Type: text/plain; charset=utf-8',
-          '',
-          text,
-          '.',
-          '',
-        ].join('\r\n')
-        await smtpCommand(socket, payload)
-        await smtpCommand(socket, `QUIT\r\n`)
-        socket.end()
-        resolve()
-      } catch (err) {
-        socket.destroy()
-        reject(err)
+        await unlink(path)
+      } catch {
+        /* ignore */
       }
-    })
-    socket.setTimeout(20_000, () => {
-      socket.destroy()
-      reject(new Error('SMTP timeout'))
-    })
-    socket.on('error', reject)
-  })
-}
-
-async function sendResetEmail(code) {
-  const subject = 'Kode reset Kunci'
-  const body = `Kode reset Kunci kamu: ${code}\n\nBerlaku 15 menit. Jika bukan kamu yang meminta, abaikan email ini.\n`
-  if (isMac) {
-    try {
-      await sendViaMailApp(subject, body)
-      return 'mail.app'
-    } catch {
-      /* try smtp */
     }
   }
-  await sendViaSmtp(subject, body)
-  return 'smtp'
 }
 
 function serveStatic(req, res) {
@@ -233,6 +150,7 @@ function serveStatic(req, res) {
 }
 
 const token = await loadToken()
+await wipeLegacyDek()
 const server = createServer(async (req, res) => {
   cors(req, res)
   if (req.method === 'OPTIONS') {
@@ -243,7 +161,7 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://127.0.0.1:${PORT}`)
   try {
     if (req.method === 'GET' && url.pathname === '/health') {
-      json(res, 200, { ok: true, platform: platform(), version: '1.1.0', email: RECOVERY_EMAIL, ui: serveUi })
+      json(res, 200, { ok: true, platform: platform(), version: '1.2.0', email: RECOVERY_EMAIL, ui: serveUi })
       return
     }
     if (req.method === 'GET' && url.pathname === '/api/local-token') {
@@ -261,86 +179,17 @@ const server = createServer(async (req, res) => {
       json(res, 200, { ok: true })
       return
     }
-    if (req.method === 'POST' && url.pathname === '/api/recovery/register') {
-      const body = JSON.parse((await readBody(req)) || '{}')
-      if (!body.dek || typeof body.dek !== 'string') {
-        json(res, 400, { ok: false, error: 'dek wajib' })
-        return
-      }
-      await ensureDir()
-      await writeFile(
-        RECOVERY_PATH,
-        JSON.stringify({ email: RECOVERY_EMAIL, dek: body.dek, updatedAt: Date.now() }),
-        { mode: 0o600 },
-      )
-      json(res, 200, { ok: true, email: RECOVERY_EMAIL })
-      return
-    }
-    if (req.method === 'POST' && url.pathname === '/api/recovery/request') {
-      if (!existsSync(RECOVERY_PATH)) {
-        json(res, 400, { ok: false, error: 'Reset belum diaktifkan. Buka brankas sekali saat layanan Kunci sedang jalan.' })
-        return
-      }
-      let prev = {}
-      if (existsSync(OTP_PATH)) prev = JSON.parse(await readFile(OTP_PATH, 'utf8'))
-      if (prev.sentAt && Date.now() - prev.sentAt < 30_000) {
-        json(res, 429, { ok: false, error: 'Tunggu 30 detik sebelum meminta kode baru' })
-        return
-      }
-      const code = String(randomInt(100000, 1000000)).padStart(6, '0')
-      const salt = randomBytes(16).toString('hex')
-      await writeFile(
-        OTP_PATH,
-        JSON.stringify({
-          hash: hashOtp(code, salt),
-          salt,
-          expiresAt: Date.now() + 15 * 60 * 1000,
-          attempts: 0,
-          sentAt: Date.now(),
-        }),
-        { mode: 0o600 },
-      )
-      try {
-        const via = await sendResetEmail(code)
-        json(res, 200, { ok: true, email: RECOVERY_EMAIL, via })
-      } catch (err) {
-        json(res, 500, {
-          ok: false,
-          error:
-            'Gagal mengirim email. Setel Gmail di Mail.app, atau buat ~/.kunci/smtp.json berisi { "user": "tiftazani.khara@gmail.com", "pass": "APP_PASSWORD" }.',
-          detail: err instanceof Error ? err.message : String(err),
-        })
-      }
-      return
-    }
-    if (req.method === 'POST' && url.pathname === '/api/recovery/confirm') {
-      const body = JSON.parse((await readBody(req)) || '{}')
-      if (!existsSync(OTP_PATH) || !existsSync(RECOVERY_PATH)) {
-        json(res, 400, { ok: false, error: 'Tidak ada permintaan reset yang aktif' })
-        return
-      }
-      const otp = JSON.parse(await readFile(OTP_PATH, 'utf8'))
-      const rec = JSON.parse(await readFile(RECOVERY_PATH, 'utf8'))
-      if (Date.now() > otp.expiresAt) {
-        json(res, 400, { ok: false, error: 'Kode kedaluwarsa. Minta kode baru.' })
-        return
-      }
-      if (otp.attempts >= 5) {
-        json(res, 429, { ok: false, error: 'Terlalu banyak percobaan. Minta kode baru.' })
-        return
-      }
-      const incoming = hashOtp(String(body.code || ''), otp.salt)
-      const a = Buffer.from(incoming)
-      const b = Buffer.from(otp.hash)
-      const match = a.length === b.length && timingSafeEqual(a, b)
-      otp.attempts += 1
-      await writeFile(OTP_PATH, JSON.stringify(otp), { mode: 0o600 })
-      if (!match) {
-        json(res, 401, { ok: false, error: 'Kode salah' })
-        return
-      }
-      await writeFile(OTP_PATH, JSON.stringify({ ...otp, expiresAt: 0 }), { mode: 0o600 })
-      json(res, 200, { ok: true, dek: rec.dek })
+    if (
+      req.method === 'POST' &&
+      (url.pathname === '/api/recovery/register' ||
+        url.pathname === '/api/recovery/request' ||
+        url.pathname === '/api/recovery/confirm')
+    ) {
+      await wipeLegacyDek()
+      json(res, 410, {
+        ok: false,
+        error: 'Reset memakai recovery key di layar Kunci. Helper tidak lagi menyimpan DEK di disk.',
+      })
       return
     }
     if (req.method === 'GET' && serveStatic(req, res)) return
@@ -358,5 +207,4 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Kunci layanan http://127.0.0.1:${PORT}${serveUi ? ' (UI + API)' : ' (API)'}`)
-  console.log(`Reset password: ${RECOVERY_EMAIL}`)
 })

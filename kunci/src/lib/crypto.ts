@@ -73,15 +73,18 @@ export async function encryptVault(
   password: string,
   iterations: number = KDF_ITERATIONS,
   salt: Uint8Array = newSalt(),
-): Promise<{ blob: EncryptedBlob; key: CryptoKey; dekBytes: Uint8Array }> {
+): Promise<{ blob: EncryptedBlob; key: CryptoKey; dekBytes: Uint8Array; recoveryKey: string }> {
   const dek = await generateDek()
   const dekBytes = await exportDek(dek)
   const kek = await deriveKey(password, salt, iterations)
   const wrap = await encryptBytes(dekBytes, kek)
   const vault = await encryptWithKey(data, dek)
+  const recoveryKey = generateRecoveryKey()
+  const rec = await wrapWithRecovery(dekBytes, recoveryKey, iterations)
   return {
     key: dek,
     dekBytes,
+    recoveryKey,
     blob: {
       v: 2,
       kdf: 'PBKDF2-SHA256',
@@ -89,8 +92,67 @@ export async function encryptVault(
       salt: bytesToB64(salt),
       wrapIv: wrap.iv,
       wrap: wrap.data,
+      recSalt: rec.recSalt,
+      recWrapIv: rec.recWrapIv,
+      recWrap: rec.recWrap,
       iv: vault.iv,
       data: vault.data,
+      savedAt: Date.now(),
+    },
+  }
+}
+
+const RECOVERY_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+export function generateRecoveryKey(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24))
+  const chars = Array.from(bytes, (b) => RECOVERY_ALPHABET[b % RECOVERY_ALPHABET.length]!)
+  return (chars.join('').match(/.{1,4}/g) ?? chars).join('-')
+}
+
+export async function wrapWithRecovery(
+  dekBytes: Uint8Array,
+  recoveryKey: string,
+  iterations: number = KDF_ITERATIONS,
+): Promise<{ recSalt: string; recWrapIv: string; recWrap: string }> {
+  const recSalt = newSalt()
+  const recKey = await deriveKey(recoveryKey.replace(/-/g, ''), recSalt, iterations)
+  const wrap = await encryptBytes(dekBytes, recKey)
+  return { recSalt: bytesToB64(recSalt), recWrapIv: wrap.iv, recWrap: wrap.data }
+}
+
+export async function unlockWithRecoveryKey(
+  blob: EncryptedBlob,
+  recoveryKey: string,
+): Promise<{ dek: CryptoKey; dekBytes: Uint8Array }> {
+  if (!blob.recSalt || !blob.recWrap || !blob.recWrapIv) {
+    throw new Error('Brankas ini belum punya recovery key. Buka dulu dengan kata sandi lama.')
+  }
+  const recKey = await deriveKey(recoveryKey.replace(/-/g, ''), b64ToBytes(blob.recSalt), blob.iter)
+  const dekBytes = await decryptBytes({ iv: blob.recWrapIv, data: blob.recWrap }, recKey)
+  return { dek: await importDek(dekBytes), dekBytes }
+}
+
+export function hasRecoveryWrap(blob: EncryptedBlob): boolean {
+  return Boolean(blob.recSalt && blob.recWrap && blob.recWrapIv)
+}
+
+export async function attachRecoveryWrap(
+  blob: EncryptedBlob,
+  dek: CryptoKey,
+  recoveryKey: string = generateRecoveryKey(),
+): Promise<{ blob: EncryptedBlob; recoveryKey: string }> {
+  const dekBytes = await exportDek(dek)
+  const rec = await wrapWithRecovery(dekBytes, recoveryKey, blob.iter || KDF_ITERATIONS)
+  return {
+    recoveryKey,
+    blob: {
+      ...blob,
+      v: 2,
+      recSalt: rec.recSalt,
+      recWrapIv: rec.recWrapIv,
+      recWrap: rec.recWrap,
+      savedAt: Date.now(),
     },
   }
 }
@@ -138,7 +200,7 @@ export async function unlockBlob<T>(
 
 export async function persistWithKey(data: unknown, key: CryptoKey, blob: EncryptedBlob): Promise<EncryptedBlob> {
   const { iv, data: cipher } = await encryptWithKey(data, key)
-  return { ...blob, iv, data: cipher }
+  return { ...blob, iv, data: cipher, savedAt: Date.now() }
 }
 
 export function isEncryptedBlob(value: unknown): value is EncryptedBlob {

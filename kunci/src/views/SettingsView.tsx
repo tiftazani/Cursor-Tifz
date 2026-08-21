@@ -4,7 +4,20 @@ import { isStrongMaster } from '../lib/strength'
 import { useVault } from '../state/VaultContext'
 
 export function SettingsView() {
-  const { vault, updateSettings, changeMasterPassword, setHint, hint, lock, destroyVault } = useVault()
+  const {
+    vault,
+    updateSettings,
+    changeMasterPassword,
+    setHint,
+    hint,
+    lock,
+    destroyVault,
+    rotateRecoveryKey,
+    logoutPublic,
+    publicHost,
+    hasRecoveryWrap,
+    recoveryEmail,
+  } = useVault()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [next2, setNext2] = useState('')
@@ -38,7 +51,10 @@ export function SettingsView() {
     <div className="page">
       <header className="page-head">
         <h2>Pengaturan</h2>
-        <p className="muted">Kunci menyimpan brankas terenkripsi di browser ini (IndexedDB).</p>
+        <p className="muted">
+          Kunci menyimpan ciphertext di browser ini. Di URL publik, salinan terenkripsi yang sama disinkron ke Netlify
+          Blobs — tanpa kata sandi induk dan tanpa recovery key.
+        </p>
       </header>
 
       <div className="card stack">
@@ -115,15 +131,50 @@ export function SettingsView() {
       </div>
 
       <div className="card stack">
+        <h3>Recovery key</h3>
+        <p className="muted">
+          {hasRecoveryWrap
+            ? 'Brankas ini punya recovery wrap. Kunci plaintext hanya ada di tempat kamu menyimpannya.'
+            : 'Brankas ini belum punya recovery key. Buka lalu buat yang baru.'}
+        </p>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => {
+            if (
+              window.confirm(
+                'Recovery key lama tidak berlaku lagi. Pastikan kamu bisa menyimpan yang baru sekarang.',
+              )
+            ) {
+              void rotateRecoveryKey()
+            }
+          }}
+        >
+          Buat recovery key baru
+        </button>
+      </div>
+
+      <div className="card stack">
         <h3>Sesi</h3>
         <button type="button" className="btn" onClick={lock}>
           Kunci sekarang
         </button>
+        {publicHost ? (
+          <button type="button" className="btn" onClick={() => void logoutPublic()}>
+            Keluar dari gerbang publik ({recoveryEmail})
+          </button>
+        ) : null}
         <button
           type="button"
           className="btn btn-danger"
           onClick={() => {
-            if (window.confirm('Hapus brankas dari browser ini? File cadangan di disk tidak ikut terhapus.')) {
+            if (
+              window.confirm(
+                publicHost
+                  ? 'Hapus brankas dari browser ini? Salinan terenkripsi di cloud tidak ikut terhapus.'
+                  : 'Hapus brankas dari browser ini? File cadangan di disk tidak ikut terhapus.',
+              )
+            ) {
               void destroyVault()
             }
           }}

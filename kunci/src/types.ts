@@ -66,6 +66,10 @@ export interface EncryptedBlob {
   data: string
   wrapIv?: string
   wrap?: string
+  recSalt?: string
+  recWrapIv?: string
+  recWrap?: string
+  savedAt?: number
 }
 
 export interface StoredBackup {

@@ -7,7 +7,7 @@ Repo hub Tiftazani. Aplikasi tidak lagi menempati seluruh root GitHub — tiap p
 | Folder | Isi |
 | --- | --- |
 | [`cuan-yuk-guys/`](./cuan-yuk-guys) | Website **Cuan Yuk Guys** (IHSG, reksadana, Cuan Bot) |
-| [`kunci/`](./kunci) | **Kunci** — manajer kata sandi lokal (web) untuk Mac |
+| [`kunci/`](./kunci) | **Kunci** — manajer kata sandi zero-knowledge (web + URL publik HTTPS) |
 
 Kode Cuan Yuk Guys: [github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys](https://github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys)
 
@@ -33,7 +33,7 @@ npm install
 npm run dev
 ```
 
-Buka [http://localhost:5173](http://localhost:5173). Panduan autofill Mac dan ekstensi: [`kunci/README.md`](./kunci/README.md).
+Buka [http://localhost:5173](http://localhost:5173). URL publik HTTPS (zero-knowledge, gerbang OTP): lihat [`kunci/README.md`](./kunci/README.md). Autofill Mac dan ekstensi juga di situ.
 
 ## Vercel (wajib sekali)
 

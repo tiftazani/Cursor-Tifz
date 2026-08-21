@@ -2,7 +2,7 @@
   "name": "kunci",
   "private": true,
   "version": "1.0.0",
-  "description": "Manajer kata sandi lokal untuk Mac",
+  "description": "Manajer kata sandi zero-knowledge untuk Mac",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,9 +15,12 @@
     "mac": "node helper/mac-fill.mjs --with-ui",
     "start": "node helper/daemon.mjs --serve-ui",
     "install-service": "node helper/install-service.mjs",
-    "uninstall-service": "node helper/install-service.mjs --uninstall"
+    "uninstall-service": "node helper/install-service.mjs --uninstall",
+    "netlify:dev": "npx netlify dev"
   },
   "dependencies": {
+    "@netlify/blobs": "^10.7.13",
+    "@netlify/functions": "^5.3.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

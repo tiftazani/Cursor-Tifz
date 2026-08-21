@@ -1,20 +1,44 @@
 # Kunci
 
-Manajer kata sandi **lokal** untuk Mac, dalam bentuk website. Brankas dienkripsi di perangkat (AES-256-GCM + PBKDF2 600.000 iterasi). Kata sandi induk tidak pernah dikirim ke server.
+Manajer kata sandi **zero-knowledge** untuk Mac, berbentuk website. Brankas dienkripsi di perangkat (AES-256-GCM + PBKDF2 600.000 iterasi) **sebelum** disimpan. Kata sandi induk, DEK, dan recovery key **tidak pernah** disimpan di server.
 
-Cocok dibuka di Safari/Chrome di MacBook, atau dipasang sebagai app (Add to Dock / standalone).
+Bisa dibuka di `localhost` atau di **URL HTTPS publik** (Netlify). Tidak ada sistem yang “anti-hack 100%”: yang dikunci di sini adalah agar peretas server, Netlify, atau cadangan cloud **tidak bisa membaca** username/password tanpa kata sandi induk atau recovery key.
 
-## Fitur
+## Ancaman yang ditahan vs yang tidak
 
-- Simpan **username + password**, atau **password saja**, untuk website atau aplikasi Mac
-- **Autofill website** lewat ekstensi browser (tombol K di field password, atau ⌘⇧L)
-- **Autofill aplikasi desktop Mac** lewat helper lokal (`npm run helper`) yang mengetik ke app di depan
-- Cadangan **Salin berurutan** jika helper belum jalan (username dulu, password menyusul)
-- **Riwayat** username/password lama tiap kali kredensial diganti, bisa disalin atau dipakai lagi
-- Cadangan **manual** (unduh file terenkripsi) dan **otomatis** (setiap perubahan / jam / hari), plus folder di disk lewat Chrome/Edge
-- Generator password & passphrase, kesehatan brankas, cek kebocoran Have I Been Pwned (k-anonymity), TOTP/authenticator, catatan aman, field kustom, favorit, tag, auto-lock, hapus papan klip, impor CSV Chrome/Bitwarden
+**Ditahan**
 
-## Jalankan 24 jam (tanpa terminal)
+- Server / Netlify Blobs hanya menyimpan ciphertext. Bocornya blob cloud tidak membuka brankas.
+- Gerbang publik: hanya email allowlist, OTP 8 karakter, cookie HttpOnly + SameSite=Strict, HTTPS, HSTS, CSP, rate limit.
+- Helper Mac tidak lagi menulis DEK ke `~/.kunci/recovery.json`.
+- Reset kata sandi memakai recovery key di klien, bukan “kode email yang mengeluarkan kunci enkripsi”.
+
+**Tidak ditahan (risiko yang tetap ada)**
+
+- Phishing: kamu memasukkan kata sandi induk di situs palsu. Selalu cek URL HTTPS milikmu.
+- Kata sandi induk yang lemah atau tercuri di perangkat.
+- Gmail yang dikuasai orang lain: mereka bisa masuk gerbang OTP dan mengunduh ciphertext, **tetapi tidak bisa mendekripsi** kecuali recovery key juga ada di Gmail (jangan kirim, kecuali kamu sadar risikonya).
+- Malware di Mac yang membaca memori / menekan keylogger saat brankas terbuka.
+
+## URL publik (Netlify)
+
+1. Buat site Netlify, **Base directory** = `kunci`.
+2. Environment variables (Production + Deploy previews):
+
+   | Variabel | Isi |
+   | --- | --- |
+   | `KUNCI_SESSION_SECRET` | String acak ≥ 16 karakter (`openssl rand -base64 32`) |
+   | `RESEND_API_KEY` | API key [Resend](https://resend.com) untuk OTP masuk |
+   | `KUNCI_FROM_EMAIL` | Opsional. Default `Kunci <onboarding@resend.dev>` |
+
+3. Deploy. Buka URL `https://….netlify.app` (atau domain sendiri + HTTPS).
+4. Minta kode masuk ke **tiftazani.khara@gmail.com**, lalu buka brankas dengan kata sandi induk.
+
+IndexedDB bersifat per-origin. Tanpa sinkron cloud, situs publik tidak melihat brankas `localhost`. Setelah login, Kunci mengunggah/mengunduh **hanya** blob terenkripsi.
+
+Autofill aplikasi Mac tetap butuh helper lokal (`npm run install-service`) di laptop — browser di internet tidak bisa mengetik ke app desktop.
+
+## Jalankan 24 jam di Mac (tanpa terminal)
 
 ```bash
 cd ~/Cursor-Tifz/kunci
@@ -22,11 +46,20 @@ npm install
 npm run install-service
 ```
 
-Lalu buka **http://127.0.0.1:8780** — layanan ikut nyala setiap login Mac. Terminal boleh ditutup.
-
-Reset kata sandi: di layar kunci pilih **Lupa kata sandi?** Kode 6 digit dikirim ke **tiftazani.khara@gmail.com** (Mail.app harus sudah login Gmail, atau isi `~/.kunci/smtp.json`).
+Buka **http://127.0.0.1:8780**. Layanan ikut nyala setiap login Mac. Terminal boleh ditutup.
 
 Stop: `npm run uninstall-service`
+
+Di localhost **tidak** ada gerbang OTP email. Enkripsi tetap sama.
+
+## Recovery key
+
+Saat brankas dibuat (atau saat upgrade brankas lama), Kunci menampilkan recovery key sekali.
+
+- Simpan di luar Kunci (kertas, disk terenkripsi, pengelola password lain).
+- **Lupa kata sandi?** Masukkan recovery key + kata sandi baru. Server tidak bisa mereset untukmu.
+- Kirim ke Gmail hanya jika kamu menerima risiko: Gmail + OTP = orang itu bisa mereset.
+- Recovery key hilang + kata sandi induk lupa = data tidak bisa dipulihkan. Itu desain zero-knowledge, bukan bug.
 
 ## Jalankan sementara (dev)
 
@@ -36,7 +69,9 @@ npm install
 npm run dev
 ```
 
-Buka [http://localhost:5173](http://localhost:5173). Ini mati kalau terminal ditutup.
+Buka [http://localhost:5173](http://localhost:5173). Mati kalau terminal ditutup.
+
+Untuk mengetes gerbang publik secara lokal: set env, lalu `npx netlify dev` di folder `kunci`.
 
 ### Ekstensi browser (autofill website)
 
@@ -61,15 +96,11 @@ Buka [http://localhost:5173](http://localhost:5173). Ini mati kalau terminal dit
 | ⌘L | Kunci brankas |
 | ⌘⇧L | Autofill di tab aktif (ekstensi) |
 
-## Deploy (opsional)
+## Keamanan teknis
 
-Ini aplikasi klien: yang di-host hanya UI. Data tetap di browser masing-masing.
-
-Di Netlify, set **Base directory** ke `kunci`. `netlify.toml` sudah mengatur SPA redirect dan header keamanan.
-
-## Keamanan
-
-- Enkripsi di klien; blob IndexedDB tidak bisa dibaca tanpa kata sandi induk
-- Helper Mac hanya `127.0.0.1` dan membutuhkan token
-- Cek kebocoran hanya mengirim 5 karakter pertama hash SHA-1
-- Website **tidak bisa** menyuntik input ke aplikasi native tanpa helper — itu batasan sandbox browser, bukan kekurangan UI
+- AES-256-GCM, DEK terbungkus kata sandi induk (PBKDF2-SHA-256, 600k) dan recovery key terpisah
+- PUT `/api/vault` menolak field `dek` / `password` / `recoveryKey`; hanya ciphertext yang disimpan
+- Cookie sesi HMAC, Origin harus sama dengan Host, rate limit OTP
+- Cek kebocoran HIBP hanya mengirim 5 karakter pertama hash SHA-1
+- Helper Mac hanya `127.0.0.1` + token
+- Website tidak bisa menyuntik input ke aplikasi native tanpa helper — batasan sandbox browser

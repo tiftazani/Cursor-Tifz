@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { encryptVault, unlockBlob, persistWithKey, isEncryptedBlob, rewrapWithPassword } from '../src/lib/crypto'
+import { encryptVault, unlockBlob, persistWithKey, isEncryptedBlob, rewrapWithPassword, unlockWithRecoveryKey, unlockWithDek } from '../src/lib/crypto'
 
 describe('vault crypto', () => {
   it('round-trips JSON with the master password', async () => {
@@ -13,6 +13,19 @@ describe('vault crypto', () => {
     const next = await persistWithKey({ hello: 'lagi' }, key, blob)
     const again = await unlockBlob<{ hello: string }>(next, 'KunciMaster-2026!')
     expect(again.data.hello).toBe('lagi')
+    expect(next.recWrap).toBe(blob.recWrap)
+  })
+
+  it('unlocks with recovery key and rejects a wrong key', async () => {
+    const vault = { secret: 'nilai' }
+    const { blob, recoveryKey, dekBytes } = await encryptVault(vault, 'KunciMaster-2026!', 8_000)
+    expect(blob.recWrap).toBeTruthy()
+    const opened = await unlockWithRecoveryKey(blob, recoveryKey)
+    expect(opened.dekBytes).toEqual(dekBytes)
+    expect(JSON.stringify(blob)).not.toContain(recoveryKey.replace(/-/g, ''))
+    const data = await unlockWithDek<typeof vault>(blob, opened.dek)
+    expect(data).toEqual(vault)
+    await expect(unlockWithRecoveryKey(blob, 'AAAA-BBBB-CCCC-DDDD-EEEE-FFFF')).rejects.toBeTruthy()
   })
 
   it('rejects the wrong master password', async () => {

@@ -95,7 +95,7 @@ await runQuiet('launchctl', ['kickstart', '-k', `gui/${uid}/${LABEL}`])
 
 console.log('\nKunci sekarang jalan di background (tanpa terminal).')
 console.log('Buka: http://127.0.0.1:8780')
-console.log('Reset kata sandi dikirim ke tiftazani.khara@gmail.com')
+console.log('Reset kata sandi: pakai recovery key di layar Kunci (bukan email DEK).')
 console.log('Log: ~/Library/Logs/kunci.log')
 console.log('\nKalau http://localhost:5173 masih dari npm run dev, itu boleh ditutup.')
 console.log('Stop layanan: npm run uninstall-service')

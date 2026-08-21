@@ -46,7 +46,7 @@ export function AutofillView() {
           <li>Fokuskan aplikasi tujuan, di Kunci pilih entri → <em>Isi ke app Mac</em></li>
         </ol>
         <p className="muted">
-          Reset kata sandi dikirim ke <code>tiftazani.khara@gmail.com</code> (Mail.app atau Gmail SMTP).
+          Helper hanya mengisi app di Mac ini. Reset kata sandi memakai recovery key, bukan DEK di disk.
         </p>
         <Field label="URL helper">
           <TextInput value={s.helperUrl} onChange={(e) => void updateSettings({ helperUrl: e.target.value })} />

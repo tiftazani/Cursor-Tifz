@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Field, SecretInput, StrengthBar, TextInput } from '../components/Field'
+import { Field, SecretInput, StrengthBar, TextArea, TextInput } from '../components/Field'
 import { IconKey, IconLock } from '../components/Icons'
 import { isStrongMaster, passwordStrength } from '../lib/strength'
 import { useVault } from '../state/VaultContext'
@@ -35,13 +35,14 @@ export function SetupScreen() {
           </span>
           <div>
             <h1>Kunci</h1>
-            <p>Brankas kata sandi lokal untuk Mac</p>
+            <p>Brankas kata sandi terenkripsi (zero-knowledge)</p>
           </div>
         </div>
         <form className="stack" onSubmit={(e) => void onSubmit(e)}>
           <p className="lede">
-            Data dienkripsi di Mac ini. Kalau lupa kata sandi, reset dikirim ke <strong>{recoveryEmail}</strong> — layanan
-            24 jam harus aktif (<code>npm run install-service</code>).
+            Data dienkripsi di perangkat ini sebelum disimpan. Server publik hanya menerima ciphertext. Setelah brankas
+            dibuat, kamu akan mendapat <strong>recovery key</strong> — simpan di luar Kunci. Reset kata sandi tidak lewat
+            kode Gmail ke {recoveryEmail}; itu sengaja, supaya Gmail yang bocor tidak membuka brankas.
           </p>
           <Field label="Kata sandi induk">
             <SecretInput value={password} onChange={setPassword} autoComplete="new-password" placeholder="Minimal 12 karakter" />
@@ -65,14 +66,13 @@ export function SetupScreen() {
 }
 
 export function LockScreen() {
-  const { unlock, hint, busy, requestPasswordReset, confirmPasswordReset, recoveryEmail } = useVault()
+  const { unlock, hint, busy, confirmPasswordReset, recoveryEmail } = useVault()
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [mode, setMode] = useState<'unlock' | 'reset'>('unlock')
-  const [code, setCode] = useState('')
+  const [recoveryKey, setRecoveryKey] = useState('')
   const [next, setNext] = useState('')
   const [next2, setNext2] = useState('')
-  const [sent, setSent] = useState(false)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -81,16 +81,6 @@ export function LockScreen() {
       await unlock(password)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal membuka')
-    }
-  }
-
-  async function onSendCode() {
-    setError('')
-    try {
-      await requestPasswordReset()
-      setSent(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal kirim kode')
     }
   }
 
@@ -106,7 +96,7 @@ export function LockScreen() {
       return
     }
     try {
-      await confirmPasswordReset(code, next)
+      await confirmPasswordReset(recoveryKey, next)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal reset')
     }
@@ -124,7 +114,7 @@ export function LockScreen() {
             <p>
               {mode === 'unlock'
                 ? 'Masukkan kata sandi induk untuk membuka brankas'
-                : `Kode dikirim ke ${recoveryEmail}`}
+                : 'Pakai recovery key yang kamu simpan saat membuat brankas'}
             </p>
           </div>
         </div>
@@ -144,12 +134,19 @@ export function LockScreen() {
           </form>
         ) : (
           <form className="stack" onSubmit={(e) => void onReset(e)}>
-            <p className="lede">Kode 6 digit dikirim ke Mail.app / Gmail kamu. Layanan 24 jam harus aktif.</p>
-            <button type="button" className="btn" onClick={() => void onSendCode()} disabled={busy}>
-              {sent ? 'Kirim ulang kode' : `Kirim kode ke ${recoveryEmail}`}
-            </button>
-            <Field label="Kode dari email">
-              <TextInput value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" />
+            <p className="lede">
+              Recovery key tidak dikirim otomatis ke {recoveryEmail}. Kalau kunci itu hilang dan kata sandi induk lupa,
+              data tidak bisa dipulihkan — itu harga zero-knowledge.
+            </p>
+            <Field label="Recovery key">
+              <TextArea
+                value={recoveryKey}
+                onChange={(e) => setRecoveryKey(e.target.value.toUpperCase())}
+                rows={3}
+                spellCheck={false}
+                autoComplete="off"
+                placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+              />
             </Field>
             <Field label="Kata sandi baru">
               <SecretInput value={next} onChange={setNext} autoComplete="new-password" />
@@ -158,7 +155,7 @@ export function LockScreen() {
               <SecretInput value={next2} onChange={setNext2} autoComplete="new-password" />
             </Field>
             {error ? <p className="error">{error}</p> : null}
-            <button className="btn btn-primary" type="submit" disabled={busy || !code || !next}>
+            <button className="btn btn-primary" type="submit" disabled={busy || !recoveryKey || !next}>
               {busy ? 'Mengganti…' : 'Ganti kata sandi'}
             </button>
             <button type="button" className="btn btn-ghost" onClick={() => setMode('unlock')}>
