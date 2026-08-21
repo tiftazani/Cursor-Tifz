@@ -20,7 +20,7 @@ import {
 } from '../components/Icons'
 import { searchEntries } from '../lib/search'
 import { faviconUrl, letterAvatar } from '../lib/favicon'
-import { COMPACT_NAV_QUERY, PHONE_QUERY, useMediaQuery } from '../lib/media'
+import { COMPACT_NAV_QUERY, useMediaQuery } from '../lib/media'
 import { blankEntry, useVault } from '../state/VaultContext'
 import { EntryPane } from './EntryPane'
 import { GeneratorView } from './GeneratorView'
@@ -56,8 +56,7 @@ const FILTERS: { id: FilterId; label: string }[] = [
 
 export function AppShell() {
   const { vault, lock, helperOnline, emptyTrash } = useVault()
-  const isPhone = useMediaQuery(PHONE_QUERY)
-  const compactNav = useMediaQuery(COMPACT_NAV_QUERY)
+  const compact = useMediaQuery(COMPACT_NAV_QUERY)
   const [view, setView] = useState<AppView>('vault')
   const [filter, setFilter] = useState<FilterId>('all')
   const [query, setQuery] = useState('')
@@ -78,7 +77,7 @@ export function AppShell() {
     return searchEntries(list, query).sort((a, b) => b.updatedAt - a.updatedAt)
   }, [source, filter, query])
 
-  const selected = draft ?? filtered.find((e) => e.id === selectedId) ?? (!isPhone ? filtered[0] : null)
+  const selected = draft ?? filtered.find((e) => e.id === selectedId) ?? (!compact ? filtered[0] : null)
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -103,7 +102,7 @@ export function AppShell() {
   function goView(next: AppView) {
     setView(next)
     setMoreOpen(false)
-    if (next === 'vault' && isPhone) setMobileDetail(false)
+    if (next === 'vault' && compact) setMobileDetail(false)
   }
 
   function startNew() {
@@ -133,7 +132,7 @@ export function AppShell() {
   const shellClass = [
     'shell',
     view === 'vault' ? 'shell-vault' : '',
-    isPhone && view === 'vault' && mobileDetail ? 'mobile-detail' : '',
+    compact && view === 'vault' && mobileDetail ? 'mobile-detail' : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -166,7 +165,7 @@ export function AppShell() {
         <nav>
           {NAV.map((item) => {
             const Icon = item.icon
-            const compactHidden = compactNav && MORE_NAV.has(item.id)
+            const compactHidden = compact && MORE_NAV.has(item.id)
             return (
               <button
                 key={item.id}
@@ -174,12 +173,12 @@ export function AppShell() {
                 className={`nav-item ${view === item.id ? 'active' : ''} ${compactHidden ? 'nav-secondary' : ''}`}
                 onClick={() => goView(item.id)}
               >
-                <Icon size={compactNav ? 22 : 18} />
+                <Icon size={compact ? 22 : 18} />
                 <span>{item.label}</span>
               </button>
             )
           })}
-          {compactNav ? (
+          {compact ? (
             <button
               type="button"
               className={`nav-item nav-more-btn ${MORE_NAV.has(view) || moreOpen ? 'active' : ''}`}
@@ -197,7 +196,7 @@ export function AppShell() {
             <IconLock size={16} />
           </button>
         </div>
-        {compactNav && moreOpen ? (
+        {compact && moreOpen ? (
           <div className="more-back" onClick={() => setMoreOpen(false)}>
             <div className="more-sheet" onClick={(e) => e.stopPropagation()}>
               <p className="more-sheet-title">Lainnya</p>
@@ -226,6 +225,7 @@ export function AppShell() {
 
       {view === 'vault' ? (
         <>
+          {!compact || !mobileDetail ? (
           <section className="list-col">
             <div className="list-toolbar">
               <div className="search">
@@ -262,7 +262,7 @@ export function AppShell() {
                   onClick={() => {
                     setFilter(f.id)
                     setDraft(null)
-                    if (isPhone) setMobileDetail(false)
+                    if (compact) setMobileDetail(false)
                   }}
                 >
                   {f.label}
@@ -297,6 +297,8 @@ export function AppShell() {
               )}
             </ul>
           </section>
+          ) : null}
+          {!compact || mobileDetail ? (
           <section className="detail-col">
             {selected ? (
               <EntryPane
@@ -305,12 +307,13 @@ export function AppShell() {
                 isNew={Boolean(draft && draft.id === selected.id)}
                 inTrash={filter === 'trash'}
                 onCloseNew={startNew}
-                onBack={isPhone ? backToList : undefined}
+                onBack={compact ? backToList : undefined}
               />
             ) : (
               <div className="empty tall">Pilih entri atau buat yang baru.</div>
             )}
           </section>
+          ) : null}
         </>
       ) : (
         <section className="main-col">

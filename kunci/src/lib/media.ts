@@ -14,5 +14,5 @@ export function useMediaQuery(query: string): boolean {
   return matches
 }
 
-export const PHONE_QUERY = '(max-width: 700px)'
 export const COMPACT_NAV_QUERY = '(max-width: 1100px)'
+export const PHONE_QUERY = COMPACT_NAV_QUERY
