@@ -1,11 +1,12 @@
 {
   "name": "Kunci",
   "short_name": "Kunci",
-  "description": "Manajer kata sandi lokal untuk Mac",
+  "description": "Manajer kata sandi zero-knowledge untuk web, HP, tablet, dan Mac",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0b0e13",
-  "theme_color": "#0b0e13",
+  "orientation": "any",
+  "background_color": "#0a0d12",
+  "theme_color": "#0a0d12",
   "icons": [
     {
       "src": "/favicon.svg",

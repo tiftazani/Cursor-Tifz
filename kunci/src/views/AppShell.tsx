@@ -8,6 +8,7 @@ import {
   IconGlobe,
   IconKey,
   IconLock,
+  IconMore,
   IconNote,
   IconOtp,
   IconPlus,
@@ -19,6 +20,7 @@ import {
 } from '../components/Icons'
 import { searchEntries } from '../lib/search'
 import { faviconUrl, letterAvatar } from '../lib/favicon'
+import { COMPACT_NAV_QUERY, PHONE_QUERY, useMediaQuery } from '../lib/media'
 import { blankEntry, useVault } from '../state/VaultContext'
 import { EntryPane } from './EntryPane'
 import { GeneratorView } from './GeneratorView'
@@ -39,6 +41,8 @@ const NAV: { id: AppView; label: string; icon: typeof IconKey }[] = [
   { id: 'settings', label: 'Pengaturan', icon: IconSettings },
 ]
 
+const MORE_NAV = new Set<AppView>(['history', 'backup', 'settings'])
+
 const FILTERS: { id: FilterId; label: string }[] = [
   { id: 'all', label: 'Semua' },
   { id: 'favorite', label: 'Favorit' },
@@ -52,12 +56,16 @@ const FILTERS: { id: FilterId; label: string }[] = [
 
 export function AppShell() {
   const { vault, lock, helperOnline, emptyTrash } = useVault()
+  const isPhone = useMediaQuery(PHONE_QUERY)
+  const compactNav = useMediaQuery(COMPACT_NAV_QUERY)
   const [view, setView] = useState<AppView>('vault')
   const [filter, setFilter] = useState<FilterId>('all')
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<Entry | null>(null)
   const [findOpen, setFindOpen] = useState(false)
+  const [mobileDetail, setMobileDetail] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
 
   const source = useMemo(
     () => (filter === 'trash' ? (vault?.trash ?? []) : (vault?.entries ?? [])),
@@ -70,7 +78,7 @@ export function AppShell() {
     return searchEntries(list, query).sort((a, b) => b.updatedAt - a.updatedAt)
   }, [source, filter, query])
 
-  const selected = draft ?? filtered.find((e) => e.id === selectedId) ?? filtered[0] ?? null
+  const selected = draft ?? filtered.find((e) => e.id === selectedId) ?? (!isPhone ? filtered[0] : null)
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -92,12 +100,20 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', onKey)
   }, [lock])
 
+  function goView(next: AppView) {
+    setView(next)
+    setMoreOpen(false)
+    if (next === 'vault' && isPhone) setMobileDetail(false)
+  }
+
   function startNew() {
     const entry = blankEntry('login')
     setDraft(entry)
     setSelectedId(entry.id)
     setView('vault')
     setFilter('all')
+    setMobileDetail(true)
+    setMoreOpen(false)
   }
 
   function openEntry(id: string) {
@@ -105,10 +121,38 @@ export function AppShell() {
     setSelectedId(id)
     setView('vault')
     setFilter('all')
+    setMobileDetail(true)
+    setMoreOpen(false)
   }
 
+  function backToList() {
+    setMobileDetail(false)
+    setDraft(null)
+  }
+
+  const shellClass = [
+    'shell',
+    view === 'vault' ? 'shell-vault' : '',
+    isPhone && view === 'vault' && mobileDetail ? 'mobile-detail' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <div className={view === 'vault' ? 'shell shell-vault' : 'shell'}>
+    <div className={shellClass}>
+      <header className="mobile-top">
+        <span className="brand-mark sm">
+          <IconKey size={18} />
+        </span>
+        <div className="mobile-top-copy">
+          <strong>Kunci</strong>
+          <span className="muted">{NAV.find((item) => item.id === view)?.label}</span>
+        </div>
+        <button type="button" className="icon-btn" title="Kunci brankas" onClick={lock}>
+          <IconLock size={18} />
+        </button>
+      </header>
+
       <aside className="sidebar">
         <div className="brand brand-side">
           <span className="brand-mark sm">
@@ -122,18 +166,29 @@ export function AppShell() {
         <nav>
           {NAV.map((item) => {
             const Icon = item.icon
+            const compactHidden = compactNav && MORE_NAV.has(item.id)
             return (
               <button
                 key={item.id}
                 type="button"
-                className={`nav-item ${view === item.id ? 'active' : ''}`}
-                onClick={() => setView(item.id)}
+                className={`nav-item ${view === item.id ? 'active' : ''} ${compactHidden ? 'nav-secondary' : ''}`}
+                onClick={() => goView(item.id)}
               >
-                <Icon size={18} />
-                {item.label}
+                <Icon size={compactNav ? 22 : 18} />
+                <span>{item.label}</span>
               </button>
             )
           })}
+          {compactNav ? (
+            <button
+              type="button"
+              className={`nav-item nav-more-btn ${MORE_NAV.has(view) || moreOpen ? 'active' : ''}`}
+              onClick={() => setMoreOpen((open) => !open)}
+            >
+              <IconMore size={22} />
+              <span>Lainnya</span>
+            </button>
+          ) : null}
         </nav>
         <div className="sidebar-foot">
           <span className={`dot ${helperOnline ? 'on' : ''}`} />
@@ -142,6 +197,31 @@ export function AppShell() {
             <IconLock size={16} />
           </button>
         </div>
+        {compactNav && moreOpen ? (
+          <div className="more-back" onClick={() => setMoreOpen(false)}>
+            <div className="more-sheet" onClick={(e) => e.stopPropagation()}>
+              <p className="more-sheet-title">Lainnya</p>
+              {NAV.filter((item) => MORE_NAV.has(item.id)).map((item) => {
+                const Icon = item.icon
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`nav-item ${view === item.id ? 'active' : ''}`}
+                    onClick={() => goView(item.id)}
+                  >
+                    <Icon size={20} />
+                    {item.label}
+                  </button>
+                )
+              })}
+              <button type="button" className="nav-item" onClick={() => lock()}>
+                <IconLock size={20} />
+                Kunci brankas
+              </button>
+            </div>
+          </div>
+        ) : null}
       </aside>
 
       {view === 'vault' ? (
@@ -154,6 +234,7 @@ export function AppShell() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Cari nama, situs, username…"
+                  enterKeyHint="search"
                 />
               </div>
               {filter === 'trash' ? (
@@ -181,6 +262,7 @@ export function AppShell() {
                   onClick={() => {
                     setFilter(f.id)
                     setDraft(null)
+                    if (isPhone) setMobileDetail(false)
                   }}
                 >
                   {f.label}
@@ -199,6 +281,7 @@ export function AppShell() {
                       onClick={() => {
                         setDraft(null)
                         setSelectedId(e.id)
+                        setMobileDetail(true)
                       }}
                     >
                       <EntryGlyph entry={e} />
@@ -222,6 +305,7 @@ export function AppShell() {
                 isNew={Boolean(draft && draft.id === selected.id)}
                 inTrash={filter === 'trash'}
                 onCloseNew={startNew}
+                onBack={isPhone ? backToList : undefined}
               />
             ) : (
               <div className="empty tall">Pilih entri atau buat yang baru.</div>
@@ -250,7 +334,7 @@ export function AppShell() {
           onAction={(action) => {
             if (action === 'new') startNew()
             if (action === 'lock') lock()
-            if (action === 'generator') setView('generator')
+            if (action === 'generator') goView('generator')
             setFindOpen(false)
           }}
         />

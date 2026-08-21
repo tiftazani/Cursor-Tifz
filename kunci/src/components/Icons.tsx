@@ -189,3 +189,21 @@ export function IconCheck(props: IconProps) {
     </svg>
   )
 }
+
+export function IconChevronLeft(props: IconProps) {
+  return (
+    <svg {...glyph(props)}>
+      <path d="M15 5l-7 7 7 7" />
+    </svg>
+  )
+}
+
+export function IconMore(props: IconProps) {
+  return (
+    <svg {...glyph(props)}>
+      <circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}

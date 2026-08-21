@@ -52,7 +52,7 @@ export function AutofillView() {
         <p className="muted">Safari: Develop → Show Feature Flags → allow unsigned extensions, lalu load folder yang sama.</p>
       </div>
 
-      <div className="card">
+      <div className="card mac-only">
         <h3>Aplikasi desktop Mac</h3>
         <p>
           Helper status:{' '}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { CustomField, Entry, EntryType } from '../types'
 import { Field, SecretInput, Segmented, StrengthBar, TextArea, TextInput } from '../components/Field'
-import { IconCopy, IconFill, IconStar, IconTrash } from '../components/Icons'
+import { IconCopy, IconFill, IconStar, IconTrash, IconChevronLeft } from '../components/Icons'
 import { generatePassword, DEFAULT_GENERATOR } from '../lib/generator'
 import { passwordStrength } from '../lib/strength'
 import { totpCode } from '../lib/totp'
@@ -24,11 +24,13 @@ export function EntryPane({
   isNew,
   inTrash = false,
   onCloseNew,
+  onBack,
 }: {
   entry: Entry
   isNew: boolean
   inTrash?: boolean
   onCloseNew?: () => void
+  onBack?: () => void
 }) {
   const { saveEntry, deleteEntry, restoreEntry, purgeEntry, copySecret, sequentialCopy, fillMac, helperOnline } = useVault()
   const toast = useToast()
@@ -60,9 +62,16 @@ export function EntryPane({
     return (
       <article className="pane">
         <header className="pane-head">
-          <div>
-            <h2>{entry.name}</h2>
-            <p className="muted">Di sampah</p>
+          <div className="pane-title">
+            {onBack ? (
+              <button type="button" className="icon-btn back-btn" title="Kembali" onClick={onBack}>
+                <IconChevronLeft />
+              </button>
+            ) : null}
+            <div>
+              <h2>{entry.name}</h2>
+              <p className="muted">Di sampah</p>
+            </div>
           </div>
         </header>
         <p className="muted">{entry.username || entry.url || entry.appName}</p>
@@ -112,9 +121,16 @@ export function EntryPane({
   return (
     <article className="pane">
       <header className="pane-head">
-        <div>
-          <h2>{isNew ? 'Entri baru' : draft.name || 'Tanpa nama'}</h2>
-          <p className="muted">{TYPES.find((t) => t.id === draft.type)?.label}</p>
+        <div className="pane-title">
+          {onBack ? (
+            <button type="button" className="icon-btn back-btn" title="Kembali ke daftar" onClick={onBack}>
+              <IconChevronLeft />
+            </button>
+          ) : null}
+          <div>
+            <h2>{isNew ? 'Entri baru' : draft.name || 'Tanpa nama'}</h2>
+            <p className="muted">{TYPES.find((t) => t.id === draft.type)?.label}</p>
+          </div>
         </div>
         <div className="row-actions">
           <button
@@ -291,7 +307,7 @@ export function EntryPane({
             Salin berurutan
           </button>
         )}
-        <button type="button" className="btn" onClick={() => void fillMac(draft)} disabled={!helperOnline}>
+        <button type="button" className="btn mac-only" onClick={() => void fillMac(draft)} disabled={!helperOnline}>
           <IconFill size={16} /> Isi ke app Mac
         </button>
       </div>
