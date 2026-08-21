@@ -141,27 +141,34 @@ function shouldProxyCloud(pathname) {
 }
 
 async function proxyCloud(req, res, url) {
-  const dest = `${CLOUD_ORIGIN}${url.pathname}${url.search}`
-  const headers = {
-    Origin: `http://127.0.0.1:${PORT}`,
-    Accept: 'application/json',
+  try {
+    const dest = `${CLOUD_ORIGIN}${url.pathname}${url.search}`
+    const headers = {
+      Origin: `http://127.0.0.1:${PORT}`,
+      Accept: 'application/json',
+      'User-Agent': 'Kunci-local/1',
+    }
+    if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type']
+    if (req.headers.authorization) headers.Authorization = req.headers.authorization
+    if (req.headers.cookie) headers.Cookie = req.headers.cookie
+    const init = { method: req.method, headers }
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      init.body = await readBody(req)
+    }
+    const forwarded = await fetch(dest, init)
+    const text = await forwarded.text()
+    const out = {
+      'Content-Type': forwarded.headers.get('content-type') || 'application/json',
+      'Cache-Control': 'no-store',
+    }
+    const cookies = typeof forwarded.headers.getSetCookie === 'function' ? forwarded.headers.getSetCookie() : []
+    res.writeHead(forwarded.status, cookies.length ? { ...out, 'Set-Cookie': cookies } : out)
+    res.end(text)
+  } catch (err) {
+    json(res, 502, {
+      error: err instanceof Error ? `Gagal menghubungi cloud: ${err.message}` : 'Gagal menghubungi cloud',
+    })
   }
-  if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type']
-  if (req.headers.authorization) headers.Authorization = req.headers.authorization
-  if (req.headers.cookie) headers.Cookie = req.headers.cookie
-  const init = { method: req.method, headers }
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    init.body = await readBody(req)
-  }
-  const forwarded = await fetch(dest, init)
-  const text = await forwarded.text()
-  const out = {
-    'Content-Type': forwarded.headers.get('content-type') || 'application/json',
-    'Cache-Control': 'no-store',
-  }
-  const cookies = typeof forwarded.headers.getSetCookie === 'function' ? forwarded.headers.getSetCookie() : []
-  res.writeHead(forwarded.status, cookies.length ? { ...out, 'Set-Cookie': cookies } : out)
-  res.end(text)
 }
 
 function serveStatic(req, res) {

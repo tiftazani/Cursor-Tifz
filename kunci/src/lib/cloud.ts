@@ -11,8 +11,7 @@ export function isPublicHost(): boolean {
 }
 
 export function cloudOrigin(): string {
-  if (isPublicHost()) return ''
-  return DEFAULT_CLOUD_URL.replace(/\/$/, '')
+  return ''
 }
 
 function readToken(): string | null {
@@ -40,7 +39,7 @@ async function api(path: string, init: RequestInit = {}): Promise<Response> {
   if (token) headers.set('Authorization', `Bearer ${token}`)
   return fetch(`${cloudOrigin()}${path}`, {
     ...init,
-    credentials: isPublicHost() ? 'include' : 'omit',
+    credentials: 'include',
     headers,
   })
 }
@@ -48,11 +47,14 @@ async function api(path: string, init: RequestInit = {}): Promise<Response> {
 export async function sessionStatus(): Promise<{ signedIn: boolean; email?: string; configured?: boolean }> {
   const urls = isPublicHost()
     ? ['/api/session']
-    : [`${DEFAULT_CLOUD_URL.replace(/\/$/, '')}/api/session`, '/api/session']
+    : ['/api/session', `${DEFAULT_CLOUD_URL.replace(/\/$/, '')}/api/session`]
 
   for (const url of urls) {
     try {
-      const ping = await fetch(url, { method: 'GET', credentials: isPublicHost() ? 'include' : 'omit' })
+      const ping = await fetch(url, {
+        method: 'GET',
+        credentials: url.startsWith('/') ? 'include' : 'omit',
+      })
       if (ping.status !== 401 && !ping.ok) continue
       const token = readToken()
       if (token) {
