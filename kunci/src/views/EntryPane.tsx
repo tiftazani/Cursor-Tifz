@@ -8,6 +8,7 @@ import { totpCode } from '../lib/totp'
 import { formatDateTime, relativeTime } from '../lib/time'
 import { restoreHistoryRecord } from '../lib/history'
 import { newId } from '../lib/id'
+import { useCompactLayout } from '../lib/media'
 import { useVault } from '../state/VaultContext'
 import { useToast } from '../components/Toast'
 
@@ -34,6 +35,7 @@ export function EntryPane({
 }) {
   const { saveEntry, deleteEntry, restoreEntry, purgeEntry, copySecret, sequentialCopy, fillMac, helperOnline } = useVault()
   const toast = useToast()
+  const compact = useCompactLayout()
   const [draft, setDraft] = useState(entry)
   const [saving, setSaving] = useState(false)
   const [totp, setTotp] = useState<{ code: string; remaining: number } | null>(null)
@@ -149,9 +151,21 @@ export function EntryPane({
         </div>
       </header>
 
-      <Segmented value={draft.type} options={TYPES} onChange={(type) => patch({ type })} />
-
       <div className="stack">
+      {compact ? (
+        <Field label="Jenis">
+          <select className="input" value={draft.type} onChange={(e) => patch({ type: e.target.value as EntryType })}>
+            {TYPES.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : (
+        <Segmented value={draft.type} options={TYPES} onChange={(type) => patch({ type })} />
+      )}
+
         <Field label="Nama">
           <TextInput
             value={draft.name}

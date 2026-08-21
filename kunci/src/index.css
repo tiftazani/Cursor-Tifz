@@ -445,21 +445,16 @@ select.input:focus {
 }
 
 .shell {
-  height: 100%;
-  max-height: 100%;
+  position: fixed;
+  inset: 0;
+  height: auto;
+  max-height: none;
   display: grid;
   grid-template-areas: 'nav main';
   grid-template-columns: var(--sidebar) minmax(0, 1fr);
   grid-template-rows: 1fr;
   padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
   overflow: hidden;
-}
-
-@supports (height: 100svh) {
-  .shell {
-    height: 100svh;
-    max-height: 100svh;
-  }
 }
 
 .shell-vault {
@@ -562,6 +557,7 @@ select.input:focus {
   flex-direction: column;
   min-width: 0;
   background: color-mix(in srgb, var(--bg) 82%, var(--bg-2));
+  position: relative;
 }
 
 .list-toolbar {
@@ -1079,7 +1075,10 @@ select.input:focus {
   font-size: 0.8rem;
 }
 
-.nav-more-btn {
+.nav-more-btn,
+.toolbar-lock,
+.fab-new,
+.back-btn {
   display: none;
 }
 
@@ -1128,46 +1127,30 @@ select.input:focus {
     grid-template-rows: none;
     padding: 0;
     width: 100%;
+    min-height: 0;
   }
 
-  .mobile-top {
-    display: flex;
-    order: 1;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 10px;
-    padding: calc(10px + var(--safe-top)) max(12px, var(--safe-right)) 10px max(12px, var(--safe-left));
-    background: var(--bg-2);
-    border-bottom: 1px solid var(--line);
+  /* Never stack list + detail. CSS is the source of truth even if JS compact lags. */
+  .shell-vault:not(.mobile-detail) .detail-col {
+    display: none !important;
   }
 
-  .mobile-top-copy {
-    flex: 1;
-    min-width: 0;
+  .shell-vault.mobile-detail .list-col,
+  .shell-vault.mobile-detail .sidebar {
+    display: none !important;
   }
 
-  .mobile-top-copy strong,
-  .mobile-top-copy .muted {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .mobile-top .icon-btn {
-    width: 44px;
-    height: 44px;
-  }
-
+  .mobile-top,
   .brand-side,
-  .sidebar-foot {
+  .sidebar-foot,
+  .toolbar-new {
     display: none;
   }
 
   .list-col,
   .detail-col,
   .main-col {
-    order: 2;
+    order: 1;
     flex: 1 1 auto;
     min-height: 0;
     width: 100%;
@@ -1180,23 +1163,25 @@ select.input:focus {
     flex-direction: column;
     border-right: 0;
     overflow: hidden;
+    padding-top: var(--safe-top);
   }
 
   .entry-list {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
+    padding-bottom: 88px;
   }
 
   .sidebar {
-    order: 3;
+    order: 2;
     flex: 0 0 auto;
     flex-direction: row;
     align-items: stretch;
     width: 100%;
     border-right: 0;
     border-top: 1px solid var(--line);
-    padding: 4px max(6px, var(--safe-right)) calc(4px + var(--safe-bottom)) max(6px, var(--safe-left));
+    padding: 2px max(4px, var(--safe-right)) calc(2px + var(--safe-bottom)) max(4px, var(--safe-left));
     background: color-mix(in srgb, var(--bg-2) 94%, transparent);
     backdrop-filter: blur(16px);
   }
@@ -1231,21 +1216,52 @@ select.input:focus {
   }
 
   .nav-secondary {
-    display: none;
+    display: none !important;
   }
 
-  .nav-more-btn {
+  .nav-more-btn,
+  .toolbar-lock,
+  .back-btn {
+    display: inline-flex;
+  }
+
+  .fab-new {
     display: flex;
+    position: absolute;
+    right: max(16px, var(--safe-right));
+    bottom: 16px;
+    z-index: 20;
+    width: 56px;
+    height: 56px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 18px;
+    background: var(--accent);
+    color: var(--accent-text);
+    box-shadow: var(--shadow);
+    cursor: pointer;
   }
 
-  .shell-vault.mobile-detail .mobile-top {
-    display: none;
+  .more-sheet .nav-item {
+    flex-direction: row;
+    justify-content: flex-start;
+    text-align: left;
+    min-height: 48px;
+    font-size: 0.95rem;
+    padding: 0 12px;
+    gap: 10px;
+    width: 100%;
   }
 
   .toasts {
     bottom: calc(72px + var(--safe-bottom));
     left: max(12px, var(--safe-left));
     right: max(12px, var(--safe-right));
+  }
+
+  .shell-vault.mobile-detail .toasts {
+    bottom: max(16px, var(--safe-bottom));
   }
 
   .toast {
@@ -1258,17 +1274,58 @@ select.input:focus {
     grid-template-columns: 1fr;
   }
 
-  .pane,
   .page {
-    padding: 16px 16px 24px;
+    padding: max(16px, var(--safe-top)) 16px 24px;
+  }
+
+  .pane {
+    min-height: 100%;
+    padding: 0 0 calc(24px + var(--safe-bottom));
+    max-width: none;
+    gap: 16px;
+  }
+
+  .pane-head {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    align-items: center;
+    margin: 0;
+    padding: max(8px, var(--safe-top)) 12px 10px;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .pane .stack,
+  .pane .history-block,
+  .pane .meta-line,
+  .pane > .muted,
+  .pane > .row-actions {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+
+  .pane-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    margin-left: 0;
+    margin-right: 0;
+    padding: 12px 16px max(12px, var(--safe-bottom));
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid var(--line);
   }
 
   .segmented {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     width: 100%;
   }
 
   .segmented-btn {
-    flex: 1 1 auto;
+    width: 100%;
   }
 
   .input,
@@ -1281,6 +1338,11 @@ select.input:focus {
   .chip {
     height: 36px;
     padding: 0 14px;
+  }
+
+  .filter-row {
+    flex: 0 0 auto;
+    mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
   }
 
   .entry-row {
@@ -1296,10 +1358,6 @@ select.input:focus {
   .list-toolbar {
     flex: 0 0 auto;
     padding: 12px 12px 8px;
-  }
-
-  .filter-row {
-    flex: 0 0 auto;
   }
 
   .pane-actions .btn,

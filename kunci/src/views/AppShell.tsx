@@ -20,7 +20,7 @@ import {
 } from '../components/Icons'
 import { searchEntries } from '../lib/search'
 import { faviconUrl, letterAvatar } from '../lib/favicon'
-import { COMPACT_NAV_QUERY, useMediaQuery } from '../lib/media'
+import { useCompactLayout } from '../lib/media'
 import { blankEntry, useVault } from '../state/VaultContext'
 import { EntryPane } from './EntryPane'
 import { GeneratorView } from './GeneratorView'
@@ -41,7 +41,7 @@ const NAV: { id: AppView; label: string; icon: typeof IconKey }[] = [
   { id: 'settings', label: 'Pengaturan', icon: IconSettings },
 ]
 
-const MORE_NAV = new Set<AppView>(['history', 'backup', 'settings'])
+const MORE_NAV = new Set<AppView>(['history', 'autofill', 'backup', 'settings'])
 
 const FILTERS: { id: FilterId; label: string }[] = [
   { id: 'all', label: 'Semua' },
@@ -56,7 +56,7 @@ const FILTERS: { id: FilterId; label: string }[] = [
 
 export function AppShell() {
   const { vault, lock, helperOnline, emptyTrash } = useVault()
-  const compact = useMediaQuery(COMPACT_NAV_QUERY)
+  const compact = useCompactLayout()
   const [view, setView] = useState<AppView>('vault')
   const [filter, setFilter] = useState<FilterId>('all')
   const [query, setQuery] = useState('')
@@ -102,7 +102,7 @@ export function AppShell() {
   function goView(next: AppView) {
     setView(next)
     setMoreOpen(false)
-    if (next === 'vault' && compact) setMobileDetail(false)
+    if (next === 'vault') setMobileDetail(false)
   }
 
   function startNew() {
@@ -132,26 +132,13 @@ export function AppShell() {
   const shellClass = [
     'shell',
     view === 'vault' ? 'shell-vault' : '',
-    compact && view === 'vault' && mobileDetail ? 'mobile-detail' : '',
+    view === 'vault' && mobileDetail ? 'mobile-detail' : '',
   ]
     .filter(Boolean)
     .join(' ')
 
   return (
     <div className={shellClass}>
-      <header className="mobile-top">
-        <span className="brand-mark sm">
-          <IconKey size={18} />
-        </span>
-        <div className="mobile-top-copy">
-          <strong>Kunci</strong>
-          <span className="muted">{NAV.find((item) => item.id === view)?.label}</span>
-        </div>
-        <button type="button" className="icon-btn" title="Kunci brankas" onClick={lock}>
-          <IconLock size={18} />
-        </button>
-      </header>
-
       <aside className="sidebar">
         <div className="brand brand-side">
           <span className="brand-mark sm">
@@ -165,12 +152,12 @@ export function AppShell() {
         <nav>
           {NAV.map((item) => {
             const Icon = item.icon
-            const compactHidden = compact && MORE_NAV.has(item.id)
+            const hiddenInBar = MORE_NAV.has(item.id)
             return (
               <button
                 key={item.id}
                 type="button"
-                className={`nav-item ${view === item.id ? 'active' : ''} ${compactHidden ? 'nav-secondary' : ''}`}
+                className={`nav-item ${view === item.id ? 'active' : ''} ${hiddenInBar ? 'nav-secondary' : ''}`}
                 onClick={() => goView(item.id)}
               >
                 <Icon size={compact ? 22 : 18} />
@@ -178,16 +165,14 @@ export function AppShell() {
               </button>
             )
           })}
-          {compact ? (
-            <button
-              type="button"
-              className={`nav-item nav-more-btn ${MORE_NAV.has(view) || moreOpen ? 'active' : ''}`}
-              onClick={() => setMoreOpen((open) => !open)}
-            >
-              <IconMore size={22} />
-              <span>Lainnya</span>
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className={`nav-item nav-more-btn ${MORE_NAV.has(view) || moreOpen ? 'active' : ''}`}
+            onClick={() => setMoreOpen((open) => !open)}
+          >
+            <IconMore size={22} />
+            <span>Lainnya</span>
+          </button>
         </nav>
         <div className="sidebar-foot">
           <span className={`dot ${helperOnline ? 'on' : ''}`} />
@@ -196,7 +181,7 @@ export function AppShell() {
             <IconLock size={16} />
           </button>
         </div>
-        {compact && moreOpen ? (
+        {moreOpen ? (
           <div className="more-back" onClick={() => setMoreOpen(false)}>
             <div className="more-sheet" onClick={(e) => e.stopPropagation()}>
               <p className="more-sheet-title">Lainnya</p>
@@ -237,6 +222,9 @@ export function AppShell() {
                   enterKeyHint="search"
                 />
               </div>
+              <button type="button" className="icon-btn toolbar-lock" title="Kunci brankas" onClick={lock}>
+                <IconLock size={18} />
+              </button>
               {filter === 'trash' ? (
                 <button
                   type="button"
@@ -248,7 +236,7 @@ export function AppShell() {
                   Kosongkan
                 </button>
               ) : (
-                <button type="button" className="btn btn-primary" onClick={startNew}>
+                <button type="button" className="btn btn-primary toolbar-new" onClick={startNew}>
                   <IconPlus size={16} /> Baru
                 </button>
               )}
@@ -262,7 +250,7 @@ export function AppShell() {
                   onClick={() => {
                     setFilter(f.id)
                     setDraft(null)
-                    if (compact) setMobileDetail(false)
+                    setMobileDetail(false)
                   }}
                 >
                   {f.label}
@@ -296,6 +284,11 @@ export function AppShell() {
                 ))
               )}
             </ul>
+            {filter !== 'trash' ? (
+              <button type="button" className="fab-new" onClick={startNew} aria-label="Entri baru">
+                <IconPlus size={22} />
+              </button>
+            ) : null}
           </section>
           ) : null}
           {!compact || mobileDetail ? (
@@ -307,7 +300,7 @@ export function AppShell() {
                 isNew={Boolean(draft && draft.id === selected.id)}
                 inTrash={filter === 'trash'}
                 onCloseNew={startNew}
-                onBack={compact ? backToList : undefined}
+                onBack={backToList}
               />
             ) : (
               <div className="empty tall">Pilih entri atau buat yang baru.</div>
