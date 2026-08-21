@@ -37,16 +37,16 @@ export function AutofillView() {
         </p>
         <ol className="steps">
           <li>
-            Di folder <code>kunci</code> jalankan <code>npm run mac</code> (web + helper) atau <code>npm run helper</code>
+            Sekali saja, di folder <code>kunci</code>: <code>npm run install-service</code>
           </li>
+          <li>Setelah itu Kunci hidup terus di <code>http://127.0.0.1:8780</code> — terminal boleh ditutup</li>
           <li>
-            Izinkan Terminal/Node di System Settings → Privacy & Security → Accessibility (supaya bisa mengetik ke app lain)
+            Izinkan Node di System Settings → Privacy & Security → Accessibility (untuk isi app Mac)
           </li>
-          <li>Salin token helper ke bawah ini</li>
           <li>Fokuskan aplikasi tujuan, di Kunci pilih entri → <em>Isi ke app Mac</em></li>
         </ol>
         <p className="muted">
-          Tanpa helper, pakai <em>Salin berurutan</em>: username disalin dulu, password menyusul beberapa detik kemudian.
+          Reset kata sandi dikirim ke <code>tiftazani.khara@gmail.com</code> (Mail.app atau Gmail SMTP).
         </p>
         <Field label="URL helper">
           <TextInput value={s.helperUrl} onChange={(e) => void updateSettings({ helperUrl: e.target.value })} />

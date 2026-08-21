@@ -14,7 +14,21 @@ Cocok dibuka di Safari/Chrome di MacBook, atau dipasang sebagai app (Add to Dock
 - Cadangan **manual** (unduh file terenkripsi) dan **otomatis** (setiap perubahan / jam / hari), plus folder di disk lewat Chrome/Edge
 - Generator password & passphrase, kesehatan brankas, cek kebocoran Have I Been Pwned (k-anonymity), TOTP/authenticator, catatan aman, field kustom, favorit, tag, auto-lock, hapus papan klip, impor CSV Chrome/Bitwarden
 
-## Jalankan di MacBook
+## Jalankan 24 jam (tanpa terminal)
+
+```bash
+cd ~/Cursor-Tifz/kunci
+npm install
+npm run install-service
+```
+
+Lalu buka **http://127.0.0.1:8780** — layanan ikut nyala setiap login Mac. Terminal boleh ditutup.
+
+Reset kata sandi: di layar kunci pilih **Lupa kata sandi?** Kode 6 digit dikirim ke **tiftazani.khara@gmail.com** (Mail.app harus sudah login Gmail, atau isi `~/.kunci/smtp.json`).
+
+Stop: `npm run uninstall-service`
+
+## Jalankan sementara (dev)
 
 ```bash
 cd kunci
@@ -22,19 +36,7 @@ npm install
 npm run dev
 ```
 
-Buka [http://localhost:5173](http://localhost:5173). Buat kata sandi induk (min. 12 karakter, kuat). **Kalau lupa, brankas tidak bisa dipulihkan** — simpan cadangan terenkripsi.
-
-### Website + helper Mac sekaligus
-
-```bash
-npm run mac
-```
-
-Helper mendengar di `http://127.0.0.1:17834` dan mencetak **token**. Tempel token itu di Kunci → Autofill.
-
-Izinkan Terminal (atau Node) di **System Settings → Privacy & Security → Accessibility** supaya bisa mengetik ke aplikasi lain.
-
-Fokuskan aplikasi tujuan, buka entri di Kunci, klik **Isi ke app Mac**.
+Buka [http://localhost:5173](http://localhost:5173). Ini mati kalau terminal ditutup.
 
 ### Ekstensi browser (autofill website)
 

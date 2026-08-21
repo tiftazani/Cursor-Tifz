@@ -65,7 +65,7 @@ export function downloadBlob(filename: string, json: unknown): void {
 export function parseBackupFile(json: unknown): EncryptedBlob {
   if (!json || typeof json !== 'object') throw new Error('File cadangan rusak')
   const raw = json as { blob?: EncryptedBlob; v?: number; data?: string }
-  if (raw.blob && raw.blob.v === 1 && raw.blob.data) return raw.blob
-  if (raw.v === 1 && typeof raw.data === 'string') return raw as EncryptedBlob
+  if (raw.blob && (raw.blob.v === 1 || raw.blob.v === 2) && raw.blob.data) return raw.blob
+  if ((raw.v === 1 || raw.v === 2) && typeof raw.data === 'string') return raw as EncryptedBlob
   throw new Error('File bukan cadangan Kunci yang terenkripsi')
 }

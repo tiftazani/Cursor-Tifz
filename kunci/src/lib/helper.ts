@@ -1,3 +1,5 @@
+import { DAEMON_URL } from './account'
+
 export interface HelperStatus {
   ok: boolean
   platform?: string
@@ -6,7 +8,7 @@ export interface HelperStatus {
 }
 
 export async function pingHelper(baseUrl: string): Promise<HelperStatus> {
-  const url = baseUrl.replace(/\/$/, '')
+  const url = (baseUrl || DAEMON_URL).replace(/\/$/, '')
   try {
     const res = await fetch(`${url}/health`, { method: 'GET' })
     if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
@@ -21,7 +23,7 @@ export async function fillHelper(
   token: string,
   payload: { username?: string; password?: string; mode: 'login' | 'password' },
 ): Promise<{ ok: boolean; error?: string }> {
-  const url = baseUrl.replace(/\/$/, '')
+  const url = (baseUrl || DAEMON_URL).replace(/\/$/, '')
   try {
     const res = await fetch(`${url}/fill`, {
       method: 'POST',
@@ -35,6 +37,6 @@ export async function fillHelper(
     if (!res.ok || !body.ok) return { ok: false, error: body.error || `HTTP ${res.status}` }
     return { ok: true }
   } catch {
-    return { ok: false, error: 'Tidak bisa menghubungi helper Mac. Jalankan npm run helper.' }
+    return { ok: false, error: 'Layanan Kunci belum jalan. Jalankan npm run install-service.' }
   }
 }

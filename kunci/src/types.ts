@@ -58,12 +58,14 @@ export interface Vault {
 }
 
 export interface EncryptedBlob {
-  v: 1
+  v: 1 | 2
   kdf: 'PBKDF2-SHA256'
   iter: number
   salt: string
   iv: string
   data: string
+  wrapIv?: string
+  wrap?: string
 }
 
 export interface StoredBackup {
@@ -82,7 +84,7 @@ export const DEFAULT_SETTINGS: VaultSettings = {
   backupKeep: 12,
   hibpEnabled: true,
   theme: 'dark',
-  helperUrl: 'http://127.0.0.1:17834',
+  helperUrl: 'http://127.0.0.1:8780',
   helperToken: '',
   sequentialCopySeconds: 6,
 }

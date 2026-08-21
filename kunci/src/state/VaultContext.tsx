@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { EMPTY_VAULT, type EncryptedBlob, type Entry, type StoredBackup, type Vault, type VaultSettings } from '../types'
 import { DEFAULT_SETTINGS } from '../types'
-import { encryptVault, persistWithKey, unlockBlob } from '../lib/crypto'
+import { encryptVault, importDek, persistWithKey, rewrapWithPassword, unlockBlob, unlockWithDek } from '../lib/crypto'
 import { vaultDb, pushIdbBackup } from '../db/idb'
 import { withCredentialHistory } from '../lib/history'
 import { entriesFromCsv } from '../lib/csv'
@@ -11,6 +11,8 @@ import { downloadBlob, parseBackupFile, writeFolderBackup } from '../lib/folder-
 import { notifyExtensionLock, syncExtension } from '../extension/bridge'
 import { useToast } from '../components/Toast'
 import { newId } from '../lib/id'
+import { RECOVERY_EMAIL } from '../lib/account'
+import { fetchResetDek, localToken, registerRecovery, requestPasswordReset as requestResetApi } from '../lib/recovery-api'
 
 interface VaultApi {
   status: 'loading' | 'setup' | 'locked' | 'unlocked'
@@ -22,6 +24,9 @@ interface VaultApi {
   backupFolderName: string | null
   setup: (password: string, hint: string) => Promise<void>
   unlock: (password: string) => Promise<void>
+  requestPasswordReset: () => Promise<void>
+  confirmPasswordReset: (code: string, newPassword: string) => Promise<void>
+  recoveryEmail: string
   lock: () => void
   saveEntry: (entry: Entry, isNew?: boolean) => Promise<void>
   deleteEntry: (id: string) => Promise<void>
@@ -144,7 +149,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       setBusy(true)
       try {
         const initial: Vault = { ...EMPTY_VAULT, settings: { ...DEFAULT_SETTINGS } }
-        const { blob, key } = await encryptVault(initial, password)
+        const { blob, key, dekBytes } = await encryptVault(initial, password)
         keyRef.current = key
         blobRef.current = blob
         await vaultDb.setBlob(blob)
@@ -154,7 +159,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         setVault(initial)
         setStatus('unlocked')
         syncExtension(blob)
-        toast.push('Brankas dibuat. Kata sandi induk tidak bisa dipulihkan jika lupa.')
+        const rec = await registerRecovery(dekBytes, initial.settings.helperUrl)
+        toast.push(
+          rec.ok
+            ? `Brankas dibuat. Reset kata sandi dikirim ke ${RECOVERY_EMAIL}.`
+            : 'Brankas dibuat. Aktifkan layanan 24 jam (npm run install-service) supaya reset email jalan.',
+          rec.ok ? 'ok' : 'warn',
+        )
       } finally {
         setBusy(false)
       }
@@ -168,13 +179,24 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       if (!blob) throw new Error('Brankas belum dibuat')
       setBusy(true)
       try {
-        const { data, key } = await unlockBlob<unknown>(blob, password)
+        const unlocked = await unlockBlob<unknown>(blob, password)
+        let nextBlob = blob
+        let key = unlocked.key
+        if (blob.v === 1) {
+          const migrated = await encryptVault(unlocked.data, password)
+          nextBlob = migrated.blob
+          key = migrated.key
+          await vaultDb.setBlob(nextBlob)
+          await registerRecovery(migrated.dekBytes, normalizeVault(unlocked.data).settings.helperUrl)
+        } else if (unlocked.dekBytes) {
+          await registerRecovery(unlocked.dekBytes, normalizeVault(unlocked.data).settings.helperUrl)
+        }
         keyRef.current = key
-        blobRef.current = blob
-        const next = normalizeVault(data)
+        blobRef.current = nextBlob
+        const next = normalizeVault(unlocked.data)
         setVault(next)
         setStatus('unlocked')
-        syncExtension(blob)
+        syncExtension(nextBlob)
       } catch {
         throw new Error('Kata sandi induk salah')
       } finally {
@@ -293,13 +315,59 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       const blob = blobRef.current
       const current = vaultRef.current
       if (!blob || !current) throw new Error('Brankas terkunci')
-      await unlockBlob(blob, currentPassword)
-      const { blob: nextBlob, key } = await encryptVault(current, nextPassword)
+      const unlocked = await unlockBlob<unknown>(blob, currentPassword)
+      let nextBlob: EncryptedBlob
+      let key = unlocked.key
+      if (unlocked.dekBytes && blob.wrap) {
+        nextBlob = await rewrapWithPassword(blob, unlocked.key, nextPassword)
+      } else {
+        const created = await encryptVault(current, nextPassword)
+        nextBlob = created.blob
+        key = created.key
+        await registerRecovery(created.dekBytes, current.settings.helperUrl)
+      }
       keyRef.current = key
       blobRef.current = nextBlob
       await vaultDb.setBlob(nextBlob)
       syncExtension(nextBlob)
       toast.push('Kata sandi induk diganti')
+    },
+    [toast],
+  )
+
+  const requestPasswordReset = useCallback(async () => {
+    const url = vaultRef.current?.settings.helperUrl
+    const result = await requestResetApi(url)
+    if (!result.ok) throw new Error(result.error || 'Gagal meminta reset')
+    toast.push(`Kode reset dikirim ke ${RECOVERY_EMAIL}`)
+  }, [toast])
+
+  const confirmPasswordReset = useCallback(
+    async (code: string, newPassword: string) => {
+      const blob = blobRef.current ?? (await vaultDb.getBlob())
+      if (!blob) throw new Error('Brankas belum dibuat')
+      if (blob.v !== 2 || !blob.wrap) {
+        throw new Error('Reset email butuh brankas versi baru. Buka sekali dengan kata sandi lama, lalu coba lagi.')
+      }
+      setBusy(true)
+      try {
+        const url = vaultRef.current?.settings.helperUrl
+        const dekBytes = await fetchResetDek(code, url)
+        const dek = await importDek(dekBytes)
+        const data = await unlockWithDek<unknown>(blob, dek)
+        const nextBlob = await rewrapWithPassword(blob, dek, newPassword)
+        keyRef.current = dek
+        blobRef.current = nextBlob
+        await vaultDb.setBlob(nextBlob)
+        const next = normalizeVault(data)
+        setVault(next)
+        setStatus('unlocked')
+        syncExtension(nextBlob)
+        await registerRecovery(dekBytes, next.settings.helperUrl)
+        toast.push('Kata sandi diganti. Brankas terbuka.')
+      } finally {
+        setBusy(false)
+      }
     },
     [toast],
   )
@@ -510,6 +578,21 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     }
   }, [status, vault?.settings.helperUrl, vault])
 
+  useEffect(() => {
+    if (status !== 'unlocked') return
+    let cancelled = false
+    void (async () => {
+      const current = vaultRef.current
+      if (!current) return
+      const token = await localToken(current.settings.helperUrl)
+      if (cancelled || !token || token === current.settings.helperToken) return
+      await updateSettings({ helperToken: token })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [status, updateSettings])
+
   const api = useMemo<VaultApi>(
     () => ({
       status,
@@ -521,6 +604,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       backupFolderName,
       setup,
       unlock,
+      requestPasswordReset,
+      confirmPasswordReset,
+      recoveryEmail: RECOVERY_EMAIL,
       lock,
       saveEntry,
       deleteEntry,
@@ -552,6 +638,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       backupFolderName,
       setup,
       unlock,
+      requestPasswordReset,
+      confirmPasswordReset,
       lock,
       saveEntry,
       deleteEntry,

@@ -11,8 +11,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "icons": "node scripts/gen-icons.mjs",
-    "helper": "node helper/mac-fill.mjs",
-    "mac": "node helper/mac-fill.mjs --with-ui"
+    "helper": "node helper/daemon.mjs",
+    "mac": "node helper/mac-fill.mjs --with-ui",
+    "start": "node helper/daemon.mjs --serve-ui",
+    "install-service": "node helper/install-service.mjs",
+    "uninstall-service": "node helper/install-service.mjs --uninstall"
   },
   "dependencies": {
     "react": "^19.2.8",

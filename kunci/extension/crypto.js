@@ -7,17 +7,24 @@ function b64ToBytes(b64) {
 
 export async function decryptVault(blob, password) {
   const salt = b64ToBytes(blob.salt)
-  const iv = b64ToBytes(blob.iv)
-  const data = b64ToBytes(blob.data)
   const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey'])
-  const key = await crypto.subtle.deriveKey(
+  const kek = await crypto.subtle.deriveKey(
     { name: 'PBKDF2', salt, iterations: blob.iter, hash: 'SHA-256' },
     material,
     { name: 'AES-GCM', length: 256 },
     false,
     ['decrypt'],
   )
-  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data)
+  let vaultKey = kek
+  if (blob.v === 2 && blob.wrap && blob.wrapIv) {
+    const wrapIv = b64ToBytes(blob.wrapIv)
+    const wrap = b64ToBytes(blob.wrap)
+    const dekRaw = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: wrapIv }, kek, wrap)
+    vaultKey = await crypto.subtle.importKey('raw', dekRaw, { name: 'AES-GCM' }, false, ['decrypt'])
+  }
+  const iv = b64ToBytes(blob.iv)
+  const data = b64ToBytes(blob.data)
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, vaultKey, data)
   return JSON.parse(new TextDecoder().decode(plain))
 }
 
