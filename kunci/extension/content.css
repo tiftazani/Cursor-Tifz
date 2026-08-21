@@ -2,21 +2,31 @@
   display: inline-flex;
   margin-left: 6px;
   vertical-align: middle;
+  width: 28px;
+  height: 28px;
+  flex: none;
 }
 
 .kunci-fill-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid rgba(94, 224, 197, 0.4);
-  background: #121820;
-  color: #5ee0c5;
-  font: 700 13px/1 -apple-system, BlinkMacSystemFont, sans-serif;
+  box-sizing: border-box;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
+  padding: 0 !important;
+  line-height: 28px !important;
+  border-radius: 8px !important;
+  border: 1px solid rgba(62, 224, 195, 0.4) !important;
+  background: #121820 !important;
+  color: #3ee0c3 !important;
+  font: 700 13px/28px -apple-system, BlinkMacSystemFont, sans-serif !important;
   cursor: pointer;
 }
 
 .kunci-fill-btn.locked {
-  color: #f5c16c;
+  color: #f5c16c !important;
 }
 
 .kunci-menu {
@@ -35,6 +45,7 @@
 .kunci-menu button {
   display: block;
   width: 100%;
+  height: auto;
   text-align: left;
   background: transparent;
   color: inherit;

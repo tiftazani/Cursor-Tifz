@@ -47,6 +47,8 @@ export interface VaultSettings {
   helperUrl: string
   helperToken: string
   sequentialCopySeconds: number
+  autoFillWeb: boolean
+  offerSaveWeb: boolean
   lastAutoBackupAt?: number
 }
 
@@ -91,6 +93,8 @@ export const DEFAULT_SETTINGS: VaultSettings = {
   helperUrl: 'http://127.0.0.1:8780',
   helperToken: '',
   sequentialCopySeconds: 6,
+  autoFillWeb: true,
+  offerSaveWeb: true,
 }
 
 export const EMPTY_VAULT: Vault = {

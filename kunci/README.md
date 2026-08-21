@@ -74,13 +74,16 @@ Buka [http://localhost:5173](http://localhost:5173). Mati kalau terminal ditutup
 
 Untuk mengetes gerbang publik secara lokal: set env, lalu `npx netlify dev` di folder `kunci`.
 
-### Ekstensi browser (autofill website)
+### Ekstensi browser (simpan + isi website)
 
-1. Chrome / Edge / Arc → `chrome://extensions`
-2. Developer mode → Load unpacked → pilih folder `kunci/extension`
-3. Buka tab Kunci dan buka brankas (ekstensi menyimpan salinan terenkripsi)
-4. Di popup ekstensi, masukkan kata sandi induk
-5. Di halaman login, klik tombol **K** di samping password
+Bekerja seperti Google Password Manager untuk **situs web**:
+
+1. Chrome / Edge / Arc → `chrome://extensions` → Developer mode → Load unpacked → `kunci/extension` (Reload jika sudah terpasang)
+2. Buka tab Kunci, buka brankas, lalu di popup ekstensi masukkan kata sandi induk
+3. Di halaman login, Kunci mengisi otomatis jika hanya ada satu akun (atau klik **K** / `⌘⇧L`)
+4. Setelah kamu login, bar Kunci menawar **Simpan** atau **Perbarui** ke brankas terenkripsi
+
+App desktop Mac tidak bisa diambil password-nya diam-diam (batasan macOS, bukan bug). Isi lewat helper: halaman Autofill → *Isi ke app yang saya klik*.
 
 ## Cadangan
 
@@ -104,4 +107,5 @@ Untuk mengetes gerbang publik secara lokal: set env, lalu `npx netlify dev` di f
 - Cookie sesi HMAC, Origin allowlist (HTTPS site + localhost), rate limit OTP
 - Cek kebocoran HIBP hanya mengirim 5 karakter pertama hash SHA-1
 - Helper Mac hanya `127.0.0.1` + token
-- Website tidak bisa menyuntik input ke aplikasi native tanpa helper — batasan sandbox browser
+- Ekstensi menyimpan login website ke blob terenkripsi yang sama (butuh brankas terbuka di popup)
+- Website tidak bisa menyuntik input ke aplikasi native tanpa helper — batasan sandbox browser / macOS

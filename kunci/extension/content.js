@@ -7,23 +7,20 @@ function setNativeValue(el, value) {
 }
 
 function passwordFields() {
-  return [...document.querySelectorAll('input[type="password"]')].filter((el) => el.offsetParent !== null)
+  return [...document.querySelectorAll('input[type="password"]:not([disabled])')].filter((el) => el.offsetParent !== null || el.getClientRects().length)
+}
+
+function isUsernameInput(el) {
+  if (!(el instanceof HTMLInputElement) || el.type === 'password' || el.type === 'hidden' || el.type === 'checkbox') return false
+  const type = (el.type || 'text').toLowerCase()
+  const hint = `${el.name} ${el.id} ${el.autocomplete} ${el.placeholder} ${el.getAttribute('aria-label') || ''}`.toLowerCase()
+  return type === 'email' || type === 'text' || type === 'tel' || /user|email|login|id|account|nama/.test(hint)
 }
 
 function usernameFieldNear(password) {
   const form = password.form
   const scope = form ? [...form.querySelectorAll('input')] : [...document.querySelectorAll('input')]
-  const candidates = scope.filter((el) => {
-    if (el === password || el.type === 'password' || el.type === 'hidden') return false
-    const type = (el.type || 'text').toLowerCase()
-    const hint = `${el.name} ${el.id} ${el.autocomplete} ${el.placeholder}`.toLowerCase()
-    return (
-      type === 'email' ||
-      type === 'text' ||
-      type === 'tel' ||
-      /user|email|login|id|account|nama/.test(hint)
-    )
-  })
+  const candidates = scope.filter(isUsernameInput)
   const idx = scope.indexOf(password)
   return candidates.reverse().find((el) => scope.indexOf(el) < idx) || candidates[0] || null
 }
@@ -34,33 +31,68 @@ function fill(match) {
   if (pw && match.password) setNativeValue(pw, match.password)
   const user = pw ? usernameFieldNear(pw) : document.querySelector('input[type="email"], input[autocomplete="username"]')
   if (user && match.username) setNativeValue(user, match.username)
+  if (match.id) chrome.runtime.sendMessage({ type: 'TOUCH', id: match.id })
+}
+
+function isKunciPage() {
+  const { hostname, port } = location
+  if (hostname === 'kunci-tifta.netlify.app') return true
+  return (hostname === '127.0.0.1' || hostname === 'localhost') && ['8780', '5173', '4173'].includes(port)
+}
+
+let lastUsername = ''
+let lastPassword = ''
+let lastFilled = null
+let autofilled = false
+let autofillTried = false
+let saveBarHost = null
+let scanTimer = 0
+
+function readFormCreds(form) {
+  const pw = form
+    ? [...form.querySelectorAll('input[type="password"]')].find((el) => el.value) || passwordFields()[0]
+    : passwordFields()[0]
+  const userEl = pw ? usernameFieldNear(pw) : [...document.querySelectorAll('input')].find(isUsernameInput)
+  const username = (userEl?.value || lastUsername || '').trim()
+  const password = pw?.value || lastPassword || ''
+  return { username, password }
+}
+
+function captureFromEvent(target) {
+  const form = target instanceof HTMLElement ? target.closest('form') : null
+  const creds = readFormCreds(form)
+  if (creds.username) lastUsername = creds.username
+  if (creds.password) lastPassword = creds.password
+  return creds
 }
 
 function ensureButton(pw) {
   if (pw.dataset.kunciBound) return
   pw.dataset.kunciBound = '1'
+  const wrap = document.createElement('span')
+  wrap.className = 'kunci-wrap'
   const btn = document.createElement('button')
   btn.type = 'button'
   btn.className = 'kunci-fill-btn'
   btn.title = 'Isi dengan Kunci'
   btn.textContent = 'K'
-  pw.parentElement?.style && (pw.parentElement.style.position ||= 'relative')
-  const wrap = document.createElement('span')
-  wrap.className = 'kunci-wrap'
-  pw.insertAdjacentElement('afterend', wrap)
   wrap.appendChild(btn)
+  pw.insertAdjacentElement('afterend', wrap)
   btn.addEventListener('click', async (e) => {
     e.preventDefault()
     e.stopPropagation()
     const res = await chrome.runtime.sendMessage({ type: 'MATCHES', url: location.href })
     if (res?.locked) {
-      btn.title = 'Buka popup Kunci lalu masukkan kata sandi induk'
+      btn.title = 'Buka ikon Kunci di toolbar, masukkan kata sandi induk'
       btn.classList.add('locked')
+      showToast('Buka ekstensi Kunci dan masukkan kata sandi induk.')
       return
     }
     const matches = res?.matches || []
-    if (matches.length === 1) fill(matches[0])
-    else showMenu(btn, matches)
+    if (matches.length === 1) {
+      fill(matches[0])
+      lastFilled = matches[0]
+    } else showMenu(btn, matches)
   })
 }
 
@@ -69,7 +101,7 @@ function showMenu(anchor, matches) {
   const menu = document.createElement('div')
   menu.className = 'kunci-menu'
   if (!matches.length) {
-    menu.innerHTML = '<div class="kunci-empty">Tidak ada login untuk situs ini. Buka aplikasi Kunci.</div>'
+    menu.innerHTML = '<div class="kunci-empty">Belum ada login untuk situs ini. Masuk seperti biasa — Kunci akan menawar simpan.</div>'
   } else {
     for (const m of matches) {
       const item = document.createElement('button')
@@ -77,6 +109,7 @@ function showMenu(anchor, matches) {
       item.textContent = `${m.name}${m.username ? ' · ' + m.username : ''}`
       item.addEventListener('click', () => {
         fill(m)
+        lastFilled = m
         menu.remove()
       })
       menu.appendChild(item)
@@ -85,7 +118,7 @@ function showMenu(anchor, matches) {
   document.body.appendChild(menu)
   const r = anchor.getBoundingClientRect()
   menu.style.top = `${r.bottom + window.scrollY + 6}px`
-  menu.style.left = `${r.left + window.scrollX - 120}px`
+  menu.style.left = `${Math.max(8, r.left + window.scrollX - 80)}px`
   setTimeout(() => {
     const close = (ev) => {
       if (!menu.contains(ev.target)) {
@@ -97,29 +130,218 @@ function showMenu(anchor, matches) {
   }, 0)
 }
 
-function scan() {
-  passwordFields().forEach(ensureButton)
+function barStyles() {
+  return `
+    :host { all: initial; }
+    .bar {
+      font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #eef3f8;
+      background: #12171f;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(0,0,0,.4);
+      padding: 10px 12px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      min-width: min(420px, 92vw);
+    }
+    .mark {
+      width: 28px; height: 28px; border-radius: 8px; flex: none;
+      display: grid; place-items: center;
+      background: #16332e; color: #3ee0c3; font-weight: 800;
+    }
+    .copy { flex: 1; min-width: 0; }
+    .copy strong { display: block; font-size: 13px; }
+    .copy span { color: #8b97a8; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    button {
+      appearance: none; border: 1px solid rgba(255,255,255,.1); background: #1b232e;
+      color: #eef3f8; border-radius: 8px; padding: 7px 10px; cursor: pointer; font: inherit; height: 32px;
+    }
+    button.primary { background: #3ee0c3; color: #06241d; border-color: transparent; font-weight: 650; }
+  `
 }
 
-scan()
-const mo = new MutationObserver(scan)
-mo.observe(document.documentElement, { childList: true, subtree: true })
-
-window.addEventListener('message', (event) => {
-  if (event.source !== window) return
-  if (event.data?.type === 'KUNCI_VAULT_SYNC' && event.data.blob) {
-    chrome.runtime.sendMessage({ type: 'SYNC', blob: event.data.blob })
-  }
-  if (event.data?.type === 'KUNCI_VAULT_LOCK') {
-    chrome.runtime.sendMessage({ type: 'LOCK' })
-  }
-})
-
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === 'FILL_NOW') {
-    chrome.runtime.sendMessage({ type: 'MATCHES', url: location.href }, (res) => {
-      if (res?.matches?.[0]) fill(res.matches[0])
+function showChromeBar({ title, subtitle, actions }) {
+  saveBarHost?.remove()
+  saveBarHost = document.createElement('div')
+  saveBarHost.style.cssText = 'position:fixed;z-index:2147483646;top:12px;left:50%;transform:translateX(-50%);'
+  const shadow = saveBarHost.attachShadow({ mode: 'closed' })
+  const wrap = document.createElement('div')
+  wrap.className = 'bar'
+  wrap.innerHTML = `<div class="mark">K</div><div class="copy"><strong></strong><span></span></div>`
+  wrap.querySelector('strong').textContent = title
+  wrap.querySelector('span').textContent = subtitle
+  for (const action of actions) {
+    const btn = document.createElement('button')
+    if (action.primary) btn.className = 'primary'
+    btn.textContent = action.label
+    btn.addEventListener('click', () => {
+      saveBarHost?.remove()
+      saveBarHost = null
+      action.onClick()
     })
+    wrap.appendChild(btn)
   }
-  if (msg.type === 'FILL_ENTRY') fill(msg.entry)
-})
+  const style = document.createElement('style')
+  style.textContent = barStyles()
+  shadow.append(style, wrap)
+  document.documentElement.appendChild(saveBarHost)
+}
+
+function showToast(text) {
+  showChromeBar({
+    title: 'Kunci',
+    subtitle: text,
+    actions: [{ label: 'Tutup', onClick: () => undefined }],
+  })
+}
+
+async function maybeAutofill() {
+  if (autofillTried || autofilled || isKunciPage()) return
+  const passwords = passwordFields()
+  if (!passwords.length) return
+  autofillTried = true
+  if (passwords.some((el) => el.value)) return
+  const res = await chrome.runtime.sendMessage({ type: 'MATCHES', url: location.href })
+  if (res?.locked || !res?.matches?.length) return
+  if (res.settings?.autoFillWeb === false) return
+  if (res.matches.length === 1) {
+    fill(res.matches[0])
+    lastFilled = res.matches[0]
+    autofilled = true
+    return
+  }
+  showChromeBar({
+    title: 'Pilih login Kunci',
+    subtitle: `${res.matches.length} akun untuk ${location.hostname}`,
+    actions: res.matches.slice(0, 3).map((m) => ({
+      label: m.username || m.name,
+      primary: false,
+      onClick: () => {
+        fill(m)
+        lastFilled = m
+        autofilled = true
+      },
+    })),
+  })
+}
+
+async function maybeOfferSave(creds) {
+  if (isKunciPage()) return
+  const password = creds.password || lastPassword
+  const username = creds.username || lastUsername
+  if (!password) return
+  if (lastFilled && lastFilled.password === password && (lastFilled.username || '') === username) return
+  const capture = { url: location.href, username, password }
+  const offer = await chrome.runtime.sendMessage({ type: 'OFFER_SAVE', capture })
+  if (offer?.locked) return
+  if (offer?.action !== 'create' && offer?.action !== 'update') return
+  const host = location.hostname.replace(/^www\./, '')
+  showChromeBar({
+    title: offer.action === 'update' ? 'Perbarui password di Kunci?' : 'Simpan password di Kunci?',
+    subtitle: username ? `${username} · ${host}` : host,
+    actions: [
+      {
+        label: offer.action === 'update' ? 'Perbarui' : 'Simpan',
+        primary: true,
+        onClick: () => {
+          void chrome.runtime.sendMessage({ type: 'SAVE_LOGIN', capture })
+        },
+      },
+      { label: 'Tidak', onClick: () => undefined },
+      {
+        label: 'Jangan untuk situs ini',
+        onClick: () => {
+          void chrome.runtime.sendMessage({ type: 'NEVER_SAVE', url: location.href })
+        },
+      },
+    ],
+  })
+}
+
+function scan() {
+  if (isKunciPage()) return
+  passwordFields().forEach(ensureButton)
+  void maybeAutofill()
+}
+
+function wireKunciBridge() {
+  const sendToken = () => {
+    try {
+      chrome.runtime.sendMessage({ type: 'CLOUD_TOKEN', token: window.localStorage.getItem('kunci_cloud_token') || '' })
+    } catch {
+      /* ignore */
+    }
+  }
+  sendToken()
+  window.addEventListener('storage', sendToken)
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return
+    if (event.data?.type === 'KUNCI_VAULT_SYNC' && event.data.blob) {
+      chrome.runtime.sendMessage({ type: 'SYNC', blob: event.data.blob })
+    }
+    if (event.data?.type === 'KUNCI_VAULT_LOCK') {
+      chrome.runtime.sendMessage({ type: 'LOCK' })
+    }
+    if (event.data?.type === 'KUNCI_REQUEST_BLOB') {
+      chrome.runtime.sendMessage({ type: 'GET_BLOB' }, (res) => {
+        if (res?.blob) window.postMessage({ type: 'KUNCI_BLOB_FROM_EXT', blob: res.blob }, '*')
+      })
+    }
+  })
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'KUNCI_BLOB_FROM_EXT' && msg.blob) {
+      window.postMessage({ type: 'KUNCI_BLOB_FROM_EXT', blob: msg.blob }, '*')
+    }
+  })
+}
+
+if (isKunciPage()) {
+  wireKunciBridge()
+} else {
+  document.addEventListener(
+    'input',
+    (e) => {
+      const t = e.target
+      if (!(t instanceof HTMLInputElement)) return
+      if (t.type === 'password' && t.value) lastPassword = t.value
+      else if (isUsernameInput(t) && t.value) lastUsername = t.value
+    },
+    true,
+  )
+  document.addEventListener(
+    'submit',
+    (e) => {
+      const creds = captureFromEvent(e.target)
+      window.setTimeout(() => void maybeOfferSave(creds), 250)
+    },
+    true,
+  )
+  document.addEventListener(
+    'click',
+    (e) => {
+      const t = e.target instanceof Element ? e.target.closest('button, input[type="submit"]') : null
+      if (!t) return
+      const creds = captureFromEvent(t)
+      if (creds.password) window.setTimeout(() => void maybeOfferSave(creds), 400)
+    },
+    true,
+  )
+  window.addEventListener('pagehide', () => {
+    if (lastPassword) void maybeOfferSave({ username: lastUsername, password: lastPassword })
+  })
+  scan()
+  new MutationObserver(() => {
+    window.clearTimeout(scanTimer)
+    scanTimer = window.setTimeout(scan, 250)
+  }).observe(document.documentElement, { childList: true, subtree: true })
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'FILL_NOW') {
+      chrome.runtime.sendMessage({ type: 'MATCHES', url: location.href }, (res) => {
+        if (res?.matches?.[0]) fill(res.matches[0])
+      })
+    }
+    if (msg.type === 'FILL_ENTRY') fill(msg.entry)
+  })
+}

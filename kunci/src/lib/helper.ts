@@ -40,3 +40,15 @@ export async function fillHelper(
     return { ok: false, error: 'Layanan Kunci belum jalan. Jalankan npm run install-service.' }
   }
 }
+
+export async function frontmostApp(baseUrl: string): Promise<string | null> {
+  const url = (baseUrl || DAEMON_URL).replace(/\/$/, '')
+  try {
+    const res = await fetch(`${url}/frontmost`)
+    if (!res.ok) return null
+    const body = (await res.json()) as { app?: string | null }
+    return body.app || null
+  } catch {
+    return null
+  }
+}

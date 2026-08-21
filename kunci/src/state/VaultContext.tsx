@@ -15,14 +15,15 @@ import { vaultDb, pushIdbBackup } from '../db/idb'
 import { withCredentialHistory } from '../lib/history'
 import { entriesFromCsv } from '../lib/csv'
 import { copyText, scheduleClipboardClear, sequentialCopy as runSequential } from '../lib/clipboard'
-import { fillHelper, pingHelper } from '../lib/helper'
+import { fillHelper, frontmostApp, pingHelper } from '../lib/helper'
 import { downloadBlob, parseBackupFile, writeFolderBackup } from '../lib/folder-backup'
-import { notifyExtensionLock, syncExtension } from '../extension/bridge'
+import { listenExtensionVault, notifyExtensionLock, requestExtensionBlob, syncExtension } from '../extension/bridge'
 import { useToast } from '../components/Toast'
 import { newId } from '../lib/id'
 import { RECOVERY_EMAIL } from '../lib/account'
 import { localToken } from '../lib/recovery-api'
 import { cloudGetVault, cloudPutVault, emailRecoveryKey, isPublicHost, logoutSession } from '../lib/cloud'
+import { matchAppName } from '../lib/capture'
 
 interface VaultApi {
   status: 'loading' | 'setup' | 'locked' | 'unlocked'
@@ -60,6 +61,7 @@ interface VaultApi {
   backupNow: () => Promise<void>
   restoreIdbBackup: (id: string, password: string) => Promise<void>
   fillMac: (entry: Entry) => Promise<void>
+  fillFrontmostApp: () => Promise<void>
   copySecret: (label: string, value: string) => Promise<void>
   sequentialCopy: (entry: Entry) => Promise<void>
   destroyVault: () => Promise<void>
@@ -120,6 +122,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         setBackups(storedBackups)
         setBackupFolderName(dir?.name ?? null)
         setStatus(blob ? 'locked' : 'setup')
+        requestExtensionBlob()
       } catch {
         if (!cancelled) setStatus('setup')
       }
@@ -179,6 +182,32 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     })
     await persistChain.current
   }, [toast])
+
+  useEffect(() => {
+    const stop = listenExtensionVault((incoming) => {
+      void (async () => {
+        const current = blobRef.current
+        if (current && (current.savedAt ?? 0) >= (incoming.savedAt ?? 0)) return
+        blobRef.current = incoming
+        setRecoveryWrapReady(hasRecoveryWrap(incoming))
+        await vaultDb.setBlob(incoming)
+        await cloudPutVault(incoming).catch(() => undefined)
+        const key = keyRef.current
+        if (key) {
+          try {
+            const next = normalizeVault(await unlockWithDek(incoming, key))
+            vaultRef.current = next
+            setVault(next)
+          } catch {
+            /* dek changed */
+          }
+        } else {
+          setStatus((prev) => (prev === 'setup' ? 'locked' : prev))
+        }
+      })()
+    })
+    return stop
+  }, [])
 
   const setup = useCallback(
     async (password: string, newHint: string) => {
@@ -575,6 +604,24 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     [toast, touchEntry],
   )
 
+  const fillFrontmostApp = useCallback(async () => {
+    const current = vaultRef.current
+    if (!current) return
+    toast.push('Klik jendela app yang mau diisi — 2 detik…')
+    await new Promise((resolve) => window.setTimeout(resolve, 2200))
+    const app = await frontmostApp(current.settings.helperUrl)
+    if (!app) {
+      toast.push('Tidak bisa membaca app di depan. Izinkan Accessibility untuk Node.', 'warn')
+      return
+    }
+    const matches = matchAppName(current.entries, app).sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0))
+    if (!matches.length) {
+      toast.push(`Tidak ada login untuk ${app}. Simpan dulu sebagai tipe Aplikasi Mac.`, 'warn')
+      return
+    }
+    await fillMac(matches[0]!)
+  }, [fillMac, toast])
+
   const copySecret = useCallback(
     async (label: string, value: string) => {
       if (!value) return
@@ -723,6 +770,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       backupNow,
       restoreIdbBackup,
       fillMac,
+      fillFrontmostApp,
       copySecret,
       sequentialCopy,
       destroyVault,
@@ -761,6 +809,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       backupNow,
       restoreIdbBackup,
       fillMac,
+      fillFrontmostApp,
       copySecret,
       sequentialCopy,
       destroyVault,

@@ -220,11 +220,26 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://127.0.0.1:${PORT}`)
   try {
     if (req.method === 'GET' && url.pathname === '/health') {
-      json(res, 200, { ok: true, platform: platform(), version: '1.2.0', email: RECOVERY_EMAIL, ui: serveUi })
+      json(res, 200, { ok: true, platform: platform(), version: '1.3.0', email: RECOVERY_EMAIL, ui: serveUi })
       return
     }
     if (req.method === 'GET' && url.pathname === '/api/local-token') {
       json(res, 200, { token, email: RECOVERY_EMAIL })
+      return
+    }
+    if (req.method === 'GET' && url.pathname === '/frontmost') {
+      if (!isMac) {
+        json(res, 200, { app: null })
+        return
+      }
+      try {
+        const name = (
+          await run('osascript', ['-e', 'tell application "System Events" to get name of first process whose frontmost is true'])
+        ).trim()
+        json(res, 200, { app: name || null })
+      } catch {
+        json(res, 200, { app: null })
+      }
       return
     }
     if (req.method === 'POST' && url.pathname === '/fill') {

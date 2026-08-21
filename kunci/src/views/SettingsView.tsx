@@ -93,6 +93,22 @@ export function SettingsView() {
           />{' '}
           Izinkan cek kebocoran Have I Been Pwned
         </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={s.autoFillWeb !== false}
+            onChange={(e) => void updateSettings({ autoFillWeb: e.target.checked })}
+          />{' '}
+          Isi otomatis login website (ekstensi)
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={s.offerSaveWeb !== false}
+            onChange={(e) => void updateSettings({ offerSaveWeb: e.target.checked })}
+          />{' '}
+          Tawarkan simpan password website setelah login
+        </label>
         <Field label="Tema">
           <select
             className="input"

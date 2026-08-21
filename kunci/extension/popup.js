@@ -11,7 +11,7 @@ async function refresh() {
   if (s.unlocked) {
     unlock.hidden = true
     app.hidden = false
-    status.textContent = `${s.count} entri terbuka`
+    status.textContent = `${s.count} entri · isi & simpan login website`
     await render('')
   } else {
     unlock.hidden = false
