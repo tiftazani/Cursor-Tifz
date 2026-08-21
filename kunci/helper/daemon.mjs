@@ -18,7 +18,7 @@ const TOKEN_DIR = join(homedir(), '.kunci')
 const TOKEN_PATH = join(TOKEN_DIR, 'helper-token')
 const RECOVERY_PATH = join(TOKEN_DIR, 'recovery.json')
 const OTP_PATH = join(TOKEN_DIR, 'otp.json')
-const serveUi = process.argv.includes('--serve-ui') || process.env.KUNCI_SERVE_UI === '1'
+const CLOUD_ORIGIN = 'https://kunci-tifta.netlify.app'
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -34,8 +34,8 @@ const MIME = {
 function cors(req, res) {
   const origin = req.headers.origin || '*'
   res.setHeader('Access-Control-Allow-Origin', origin)
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Kunci-Token')
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Kunci-Token')
   res.setHeader('Access-Control-Allow-Private-Network', 'true')
   res.setHeader('Vary', 'Origin')
 }
@@ -132,7 +132,39 @@ async function wipeLegacyDek() {
   }
 }
 
+function shouldProxyCloud(pathname) {
+  if (!pathname.startsWith('/api/')) return false
+  if (pathname === '/api/local-token') return false
+  if (pathname.startsWith('/api/recovery')) return false
+  return true
+}
+
+async function proxyCloud(req, res, url) {
+  const dest = `${CLOUD_ORIGIN}${url.pathname}${url.search}`
+  const headers = {
+    Origin: `http://127.0.0.1:${PORT}`,
+    Accept: 'application/json',
+  }
+  if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type']
+  if (req.headers.authorization) headers.Authorization = req.headers.authorization
+  if (req.headers.cookie) headers.Cookie = req.headers.cookie
+  const init = { method: req.method, headers }
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    init.body = await readBody(req)
+  }
+  const forwarded = await fetch(dest, init)
+  const text = await forwarded.text()
+  const out = {
+    'Content-Type': forwarded.headers.get('content-type') || 'application/json',
+    'Cache-Control': 'no-store',
+  }
+  const cookies = typeof forwarded.headers.getSetCookie === 'function' ? forwarded.headers.getSetCookie() : []
+  res.writeHead(forwarded.status, cookies.length ? { ...out, 'Set-Cookie': cookies } : out)
+  res.end(text)
+}
+
 function serveStatic(req, res) {
+  if (new URL(req.url || '/', 'http://127.0.0.1').pathname.startsWith('/api/')) return false
   if (!serveUi || !existsSync(DIST)) return false
   let path = new URL(req.url || '/', 'http://127.0.0.1').pathname
   if (path === '/') path = '/index.html'
@@ -190,6 +222,10 @@ const server = createServer(async (req, res) => {
         ok: false,
         error: 'Reset memakai recovery key di layar Kunci. Helper tidak lagi menyimpan DEK di disk.',
       })
+      return
+    }
+    if (shouldProxyCloud(url.pathname)) {
+      await proxyCloud(req, res, url)
       return
     }
     if (req.method === 'GET' && serveStatic(req, res)) return

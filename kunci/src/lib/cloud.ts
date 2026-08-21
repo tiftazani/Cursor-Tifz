@@ -1,7 +1,6 @@
 import { isEncryptedBlob } from './crypto'
 import type { EncryptedBlob } from '../types'
 import { RECOVERY_EMAIL } from './account'
-import { DEFAULT_CLOUD_URL } from './allowed-origins'
 
 const TOKEN_KEY = 'kunci_cloud_token'
 
@@ -11,8 +10,7 @@ export function isPublicHost(): boolean {
 }
 
 export function cloudOrigin(): string {
-  if (isPublicHost()) return ''
-  return DEFAULT_CLOUD_URL.replace(/\/$/, '')
+  return ''
 }
 
 function readToken(): string | null {
@@ -47,7 +45,8 @@ export async function sessionStatus(): Promise<{ signedIn: boolean; email?: stri
   try {
     const res = await api('/api/session')
     if (res.status === 401) return { signedIn: false, configured: true }
-    if (!res.ok) return { signedIn: false, configured: false }
+    const type = res.headers.get('content-type') || ''
+    if (!res.ok || !type.includes('json')) return { signedIn: false, configured: false }
     const body = (await res.json()) as { email?: string }
     return { signedIn: true, email: body.email, configured: true }
   } catch {

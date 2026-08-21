@@ -98,9 +98,12 @@ export function ApiMissingScreen() {
         </div>
         <p className="lede">
           {local
-            ? 'Pastikan site Netlify sudah di-deploy dari branch Kunci, Base directory kunci, dan env KUNCI_SESSION_SECRET plus RESEND_API_KEY terpasang.'
+            ? 'Pastikan site Netlify sudah live, lalu nyalakan helper: npm run start (biarkan Terminal terbuka) atau npm run install-service.'
             : 'Di Netlify: Base directory kunci, lalu set KUNCI_SESSION_SECRET (min. 16 karakter acak) dan RESEND_API_KEY. Redeploy setelah itu.'}
         </p>
+        <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>
+          Coba lagi
+        </button>
       </div>
     </div>
   )
