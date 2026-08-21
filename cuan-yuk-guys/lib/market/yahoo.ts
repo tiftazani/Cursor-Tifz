@@ -98,58 +98,66 @@ function formatStamp(ts: number, interval: string): string {
   }).format(d);
 }
 
-type QuoteJson = {
-  quoteResponse?: {
-    result?: Array<Record<string, number | string | undefined>>;
-  };
+type ChartMeta = {
+  symbol?: string;
+  shortName?: string;
+  exchangeName?: string;
+  regularMarketPrice?: number;
+  previousClose?: number;
+  chartPreviousClose?: number;
+  regularMarketDayHigh?: number;
+  regularMarketDayLow?: number;
+  regularMarketOpen?: number;
+  regularMarketVolume?: number;
+  regularMarketChangePercent?: number;
 };
 
-export async function fetchQuotes(symbols: string[]): Promise<Map<string, YahooQuote>> {
-  const out = new Map<string, YahooQuote>();
-  if (!symbols.length) return out;
-  const chunks: string[][] = [];
-  for (let i = 0; i < symbols.length; i += 20) chunks.push(symbols.slice(i, i + 20));
-  await Promise.all(chunks.map(async (chunk) => {
-    const path = `/v7/finance/quote?symbols=${encodeURIComponent(chunk.join(","))}`;
-    for (const host of YAHOO_HOSTS) {
-      try {
-        const res = await yahooFetch(`https://${host}${path}`, 3500);
-        if (!res.ok) continue;
-        const json = (await res.json()) as QuoteJson;
-        for (const row of json.quoteResponse?.result ?? []) {
-          const symbol = String(row.symbol ?? "");
-          const price = Number(row.regularMarketPrice);
-          if (!symbol || !Number.isFinite(price)) continue;
-          out.set(symbol, {
-            symbol,
-            name: String(row.shortName ?? row.longName ?? ""),
-            exchange: String(row.fullExchangeName ?? row.exchange ?? ""),
-            price,
-            changePct: Number(row.regularMarketChangePercent ?? 0) / 100,
-            open: Number(row.regularMarketOpen ?? price),
-            high: Number(row.regularMarketDayHigh ?? price),
-            low: Number(row.regularMarketDayLow ?? price),
-            volume: Number(row.regularMarketVolume ?? 0),
-            week52High: finiteOrNull(row.fiftyTwoWeekHigh),
-            week52Low: finiteOrNull(row.fiftyTwoWeekLow),
-            marketCap: finiteOrNull(row.marketCap),
-            pe: finiteOrNull(row.trailingPE),
-            pb: finiteOrNull(row.priceToBook),
-            avgVolume: finiteOrNull(row.averageDailyVolume3Month),
-          });
-        }
-        break;
-      } catch {
-        continue;
-      }
+export async function fetchQuoteViaChart(symbol: string): Promise<YahooQuote | null> {
+  const path = `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+  for (const host of YAHOO_HOSTS) {
+    try {
+      const res = await yahooFetch(`https://${host}${path}`, 3500);
+      if (!res.ok) continue;
+      const json = (await res.json()) as YahooChartResponse & {
+        chart?: { result?: Array<{ meta?: ChartMeta }> };
+      };
+      const result = json.chart?.result?.[0];
+      const meta = result?.meta;
+      const closes = (result?.indicators?.quote?.[0]?.close ?? []).filter(
+        (c): c is number => c != null && Number.isFinite(c) && c > 0,
+      );
+      const price = Number(meta?.regularMarketPrice ?? closes[closes.length - 1]);
+      if (!Number.isFinite(price) || price <= 0) continue;
+      const prevFromBars = closes.length >= 2 ? closes[closes.length - 2] : 0;
+      const prev = prevFromBars > 0 ? prevFromBars : Number(meta?.previousClose ?? meta?.chartPreviousClose ?? 0);
+      const changePct = prev > 0 ? price / prev - 1 : 0;
+      return {
+        symbol,
+        name: String(meta?.shortName ?? ""),
+        exchange: String(meta?.exchangeName ?? ""),
+        price,
+        changePct,
+        open: Number(meta?.regularMarketOpen ?? price),
+        high: Number(meta?.regularMarketDayHigh ?? price),
+        low: Number(meta?.regularMarketDayLow ?? price),
+        volume: Number(meta?.regularMarketVolume ?? 0),
+        week52High: null,
+        week52Low: null,
+        marketCap: null,
+        pe: null,
+        pb: null,
+        avgVolume: null,
+      };
+    } catch {
+      continue;
     }
-  }));
-  return out;
+  }
+  return null;
 }
 
-function finiteOrNull(value: unknown): number | null {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
+export async function fetchQuotes(symbols: string[]): Promise<Map<string, YahooQuote>> {
+  const { fetchLiveQuotes } = await import("./live");
+  return fetchLiveQuotes(symbols);
 }
 
 export async function mapPool<T, R>(

@@ -1,5 +1,6 @@
 import { AppNav } from "@/components/nav";
 import { Disclaimer } from "@/components/disclaimer";
+import { LiveRefresh } from "@/components/live-refresh";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 10;
@@ -7,6 +8,7 @@ export const maxDuration = 10;
 export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-full flex-col">
+      <LiveRefresh />
       <AppNav />
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-10">{children}</main>
       <footer className="mx-auto w-full max-w-7xl px-4 pb-12">

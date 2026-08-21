@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import { getDailySnapshot } from "@/lib/snapshot";
 import { compactShares, idr, num, pct } from "@/lib/format";
-import { Card, Change, LabelBadge, PageHeader, ScorePill, Stat } from "@/components/ui";
+import { Card, Change, LabelBadge, LiveBadge, PageHeader, ScorePill, Stat } from "@/components/ui";
 import { PriceChart } from "@/components/charts";
 import { FactorList } from "@/components/factor-list";
 import { WatchButton } from "@/components/watchlist";
 import { Disclaimer } from "@/components/disclaimer";
+import { formatWibClock } from "@/lib/time";
 
 export async function generateMetadata({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker } = await params;
@@ -40,7 +41,11 @@ export default async function StockDetailPage({ params }: { params: Promise<{ ti
               <p className="num text-3xl font-semibold">{idr(stock.price)}</p>
               <Change value={stock.changePct} />
             </div>
-            <p className="text-xs text-mute">Yahoo {stock.yahooSymbol}</p>
+            <LiveBadge
+              marketStatus={snap.marketStatus}
+              stale={snap.stale}
+              clock={formatWibClock(snap.generatedAt)}
+            />
           </div>
           <PriceChart
             data={stock.bars.map((b) => ({ date: b.date, value: b.close }))}

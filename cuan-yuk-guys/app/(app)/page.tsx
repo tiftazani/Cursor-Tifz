@@ -3,8 +3,8 @@ import { getDailySnapshot } from "@/lib/snapshot";
 import { getMarketNews } from "@/lib/news";
 import { compactShares, idr, num, pct } from "@/lib/format";
 import { CATEGORY_LABEL } from "@/lib/labels";
-import { marketStatusLabel } from "@/lib/time";
-import { Card, Change, LabelBadge, PageHeader, ScorePill, Stat } from "@/components/ui";
+import { formatWibClock, marketStatusLabel } from "@/lib/time";
+import { Card, Change, LabelBadge, LiveBadge, PageHeader, ScorePill, Stat } from "@/components/ui";
 import { IhsgChart } from "@/components/charts";
 import { NewsList } from "@/components/news-list";
 import { AnalystChat } from "@/components/analyst-chat";
@@ -34,7 +34,14 @@ export default async function HomePage() {
                 <Change value={snap.ihsg.changePct} /> · 1 bln <Change value={snap.ihsg.ret1m} />
               </p>
             </div>
-            <p className="text-sm text-mute">{chartLabel}</p>
+            <div className="text-right">
+              <LiveBadge
+                marketStatus={snap.marketStatus}
+                stale={snap.stale}
+                clock={formatWibClock(snap.generatedAt)}
+              />
+              <p className="mt-2 text-sm text-mute">{chartLabel}</p>
+            </div>
           </div>
           <IhsgChart data={snap.ihsg.chart} color={ihsgColor} />
           <div className="mt-6 grid grid-cols-3 gap-3 text-base">
@@ -164,7 +171,7 @@ export default async function HomePage() {
               value={snap.stocks.slice().sort((a, b) => b.volume - a.volume)[0]?.ticker ?? "—"}
               hint={compactShares(snap.stocks.slice().sort((a, b) => b.volume - a.volume)[0]?.volume ?? 0)}
             />
-            <Stat label="Diperbarui" value={snap.asOf} hint={snap.asOfWib} />
+            <Stat label="Diperbarui" value={formatWibClock(snap.generatedAt)} hint={snap.asOfWib} />
           </div>
         </Card>
       </section>

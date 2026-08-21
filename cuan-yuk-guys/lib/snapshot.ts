@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import stockUniverse from "@/data/stocks-universe.json";
 import fundCatalog from "@/data/funds-catalog.json";
 import type { Bar, DailySnapshot, FundMeta, ScoredStock, StockMeta } from "./types";
-import { cacheKey, latestCache, readCache, writeCache } from "./cache";
+import { cacheKey, latestCache, writeCache } from "./cache";
 import { fetchChart, fetchQuotes, mapPool, type YahooQuote } from "./market/yahoo";
 import { overlayQuote, syntheticIhsg, syntheticStock } from "./market/synthetic";
 import { prepareStock, scoreUniverse } from "./scoring/stocks";
@@ -17,18 +17,24 @@ const IHSG_SYMBOL = "^JKSE";
 const stocksMeta = stockUniverse as StockMeta[];
 const fundsMeta = fundCatalog as FundMeta[];
 
-let memory: { key: string; snapshot: DailySnapshot } | null = null;
+let memory: { at: number; key: string; snapshot: DailySnapshot } | null = null;
 let inflight: Promise<DailySnapshot> | null = null;
+
+function liveTtlMs(status: DailySnapshot["marketStatus"]): number {
+  if (status === "open") return 20_000;
+  return 90_000;
+}
 
 export async function getDailySnapshot(): Promise<DailySnapshot> {
   await connection();
   const key = cacheKey();
-  if (memory && memory.key === key && !memory.snapshot.stale) {
-    return memory.snapshot;
-  }
-  const cached = await readCache(key);
-  if (cached) {
-    memory = { key, snapshot: hydrateIhsg(cached) };
+  const now = Date.now();
+  if (
+    memory &&
+    memory.key === key &&
+    !memory.snapshot.stale &&
+    now - memory.at < liveTtlMs(memory.snapshot.marketStatus)
+  ) {
     return memory.snapshot;
   }
   if (!inflight) {
@@ -46,7 +52,7 @@ export async function getDailySnapshot(): Promise<DailySnapshot> {
   }
   const snap = await inflight;
   const hydrated = hydrateIhsg(snap);
-  memory = { key, snapshot: hydrated };
+  memory = { at: Date.now(), key, snapshot: hydrated };
   await writeCache(key, stripHeavy(hydrated));
   return hydrated;
 }
@@ -92,7 +98,7 @@ async function buildSnapshotSafe(): Promise<DailySnapshot> {
   return Promise.race([
     buildSnapshot(),
     new Promise<DailySnapshot>((_, reject) => {
-      setTimeout(() => reject(new Error("snapshot budget")), 6500);
+      setTimeout(() => reject(new Error("snapshot budget")), 8000);
     }),
   ]);
 }
@@ -100,10 +106,10 @@ async function buildSnapshotSafe(): Promise<DailySnapshot> {
 async function buildSnapshot(): Promise<DailySnapshot> {
   const symbols = stocksMeta.map((s) => `${s.ticker}.JK`);
   const slim = isSlimRuntime();
-  const [liveIhsg, intraday, quotes] = await Promise.all([
-    fetchChart(IHSG_SYMBOL, "1y"),
-    fetchIhsgIntraday(),
+  const [quotes, intraday, liveIhsg] = await Promise.all([
     fetchQuotes([IHSG_SYMBOL, ...symbols]),
+    fetchIhsgIntraday(),
+    fetchChart(IHSG_SYMBOL, "1y"),
   ]);
   const charts = slim
     ? stocksMeta.map((meta) => ({ ticker: meta.ticker, bars: null as Bar[] | null }))
@@ -114,12 +120,12 @@ async function buildSnapshot(): Promise<DailySnapshot> {
   const chartMap = new Map(charts.map((c) => [c.ticker, c.bars]));
 
   const liveCount = charts.filter((c) => c.bars).length;
-  const source =
-    liveIhsg && liveCount > 12
-      ? liveCount > 30 && quotes.size > 20
+  const source: DailySnapshot["source"] =
+    quotes.size > 10
+      ? liveIhsg && liveCount > 12
         ? "live"
         : "mixed"
-      : quotes.size > 10
+      : liveIhsg
         ? "mixed"
         : "fallback";
 
@@ -145,6 +151,12 @@ async function buildSnapshot(): Promise<DailySnapshot> {
       pb: q?.pb ?? null,
       marketCap: q?.marketCap ?? null,
       dataQuality: quality,
+      price: q?.price,
+      changePct: q?.changePct,
+      open: q?.open,
+      high: q?.high,
+      low: q?.low,
+      volume: q?.volume,
     });
   });
 
@@ -158,7 +170,7 @@ function buildFallback(source: DailySnapshot["source"]): DailySnapshot {
     prepareStock(meta, syntheticStock(meta, ihsg), ihsg, { dataQuality: "synthetic" }),
   );
   const stocks = scoreUniverse(raws, ihsg).map((s) => ({ ...s, insight: narrateStock(s) }));
-  return assemble(ihsg, stocks, source, source !== "live");
+  return assemble(ihsg, stocks, source, true);
 }
 
 function assemble(
@@ -181,10 +193,14 @@ function assemble(
   );
 
   const intraday = extras?.intraday ?? [];
-  const chart =
+  let chart =
     intraday.length > 8
       ? intraday.map((b) => ({ date: b.date, value: b.close }))
       : ihsg.slice(-60).map((b) => ({ date: b.date, value: b.close }));
+  if (quote?.price && chart.length) {
+    const lastPt = chart[chart.length - 1];
+    chart = [...chart.slice(0, -1), { date: lastPt.date, value: quote.price }];
+  }
 
   return {
     asOf: last.date,

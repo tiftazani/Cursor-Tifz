@@ -1,6 +1,6 @@
 import { hashString, mulberry32, randn } from "../rng";
 import type { Bar, StockMeta } from "../types";
-import { tradingDatesBack } from "../time";
+import { tradingDatesBack, wibDateKey } from "../time";
 
 export function syntheticIhsg(days = 260, end = new Date()): Bar[] {
   const dates = tradingDatesBack(days, end);
@@ -67,17 +67,24 @@ export function scaleLast(bars: Bar[], lastPrice: number): Bar[] {
 export function overlayQuote(
   bars: Bar[],
   quote: { price: number; open: number; high: number; low: number; volume: number },
+  today = wibDateKey(),
 ): Bar[] {
-  if (!bars.length) return bars;
-  const scaled = scaleLast(bars, quote.price);
-  const last = scaled[scaled.length - 1];
-  scaled[scaled.length - 1] = {
-    ...last,
-    open: quote.open || last.open,
-    high: quote.high || last.high,
-    low: quote.low || last.low,
+  if (!bars.length || !quote.price) return bars;
+  const last = bars[bars.length - 1];
+  const ratio = quote.price / last.close;
+  const series = ratio > 1.12 || ratio < 0.88 ? scaleLast(bars, quote.price) : bars.slice();
+  const cur = series[series.length - 1];
+  const liveBar: Bar = {
+    date: today,
+    open: quote.open || cur.open,
+    high: quote.high || cur.high,
+    low: quote.low || cur.low,
     close: quote.price,
-    volume: quote.volume || last.volume,
+    volume: quote.volume || cur.volume,
   };
-  return scaled;
+  if (cur.date === today) {
+    series[series.length - 1] = { ...cur, ...liveBar };
+    return series;
+  }
+  return [...series, liveBar];
 }

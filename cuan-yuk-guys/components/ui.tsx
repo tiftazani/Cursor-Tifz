@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { clsx } from "@/lib/format";
 import { LABEL_STYLE } from "@/lib/labels";
-import type { RecLabel } from "@/lib/types";
+import type { MarketStatus, RecLabel } from "@/lib/types";
 
 export function Card({
   children,
@@ -19,10 +19,12 @@ export function PageHeader({
   kicker,
   title,
   subtitle,
+  meta,
 }: {
   kicker: string;
   title: string;
   subtitle?: string;
+  meta?: React.ReactNode;
 }) {
   return (
     <header className="mb-10">
@@ -32,7 +34,36 @@ export function PageHeader({
       </h1>
       <div className="hairline my-5 max-w-xs" />
       {subtitle ? <p className="max-w-2xl text-base leading-8 text-mute">{subtitle}</p> : null}
+      {meta ? <div className="mt-4">{meta}</div> : null}
     </header>
+  );
+}
+
+export function LiveBadge({
+  marketStatus,
+  stale,
+  clock,
+}: {
+  marketStatus: MarketStatus;
+  stale?: boolean;
+  clock: string;
+}) {
+  if (stale) {
+    return <p className="text-sm text-gold">Data cadangan · {clock}</p>;
+  }
+  const live = marketStatus === "open";
+  return (
+    <p className="inline-flex flex-wrap items-center gap-2 text-sm text-mute">
+      {live ? (
+        <span className="inline-flex items-center gap-1.5 text-up">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-up" />
+          Live IDX
+        </span>
+      ) : (
+        <span>Harga terakhir IDX</span>
+      )}
+      <span>· Diperbarui {clock}</span>
+    </p>
   );
 }
 

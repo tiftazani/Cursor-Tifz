@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { getDailySnapshot } from "@/lib/snapshot";
 import { compactShares, idr, num } from "@/lib/format";
-import { Change, LabelBadge, PageHeader, ScorePill } from "@/components/ui";
+import { Change, LabelBadge, LiveBadge, PageHeader, ScorePill } from "@/components/ui";
 import { Sparkline } from "@/components/charts";
 import { WatchButton } from "@/components/watchlist";
+import { formatWibClock } from "@/lib/time";
 
 export const metadata = { title: "Saham IHSG" };
 
@@ -14,7 +15,14 @@ export default async function SahamPage() {
       <PageHeader
         kicker="Mesin saham"
         title="Ranking skor IHSG"
-        subtitle="Universe 42 emiten likuid (IDX30/LQ45 + blue chip). Skor 0–100 dari momentum, alpha vs IHSG, likuiditas, teknikal, dan valuasi."
+        subtitle="Universe 42 emiten likuid (IDX30/LQ45 + blue chip). Harga last IDX hari ini. Skor 0–100 dari momentum, alpha vs IHSG, likuiditas, teknikal, dan valuasi."
+        meta={
+          <LiveBadge
+            marketStatus={snap.marketStatus}
+            stale={snap.stale}
+            clock={formatWibClock(snap.generatedAt)}
+          />
+        }
       />
       <div className="overflow-x-auto card">
         <table className="min-w-full text-sm">

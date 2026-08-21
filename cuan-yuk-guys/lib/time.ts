@@ -23,6 +23,17 @@ export function formatWibLong(date: Date | string = new Date()): string {
   }).format(new Date(date));
 }
 
+export function formatWibClock(date: Date | string = new Date()): string {
+  const t = new Intl.DateTimeFormat("id-ID", {
+    timeZone: WIB,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(date));
+  return `${t} WIB`;
+}
+
 export function formatWibDate(date: Date | string = new Date()): string {
   return new Intl.DateTimeFormat("id-ID", {
     timeZone: WIB,
