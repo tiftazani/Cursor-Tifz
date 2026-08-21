@@ -20,6 +20,8 @@ const RECOVERY_PATH = join(TOKEN_DIR, 'recovery.json')
 const OTP_PATH = join(TOKEN_DIR, 'otp.json')
 const CLOUD_ORIGIN = 'https://kunci-tifta.netlify.app'
 const serveUi = process.env.KUNCI_SERVE_UI !== '0'
+const NETLIFY_PRIVATE_SITE_HELP =
+  'Situs Netlify Kunci masih Private / Team login. Helper di Mac tidak punya cookie login Netlify, jadi OTP gagal. Di Netlify: Project configuration → General → Visitor access → Project visibility → Public (production). Kunci tetap dikunci kode Gmail + kata sandi induk.'
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -140,11 +142,23 @@ function shouldProxyCloud(pathname) {
   return true
 }
 
+function isNetlifyAccessGate(status, body) {
+  if (status !== 401 && status !== 403) return false
+  const text = String(body || '').toLowerCase()
+  return (
+    text.includes('edge-access') ||
+    text.includes('login redirect') ||
+    text.includes('app.netlify.com') ||
+    (text.includes('<!doctype html') && text.includes('netlify'))
+  )
+}
+
 async function proxyCloud(req, res, url) {
   try {
     const dest = `${CLOUD_ORIGIN}${url.pathname}${url.search}`
     const headers = {
-      Origin: `http://127.0.0.1:${PORT}`,
+      Origin: CLOUD_ORIGIN,
+      Referer: `${CLOUD_ORIGIN}/`,
       Accept: 'application/json',
       'User-Agent': 'Kunci-local/1',
     }
@@ -157,6 +171,11 @@ async function proxyCloud(req, res, url) {
     }
     const forwarded = await fetch(dest, init)
     const text = await forwarded.text()
+    if (isNetlifyAccessGate(forwarded.status, text)) {
+      console.error('Cloud Kunci ditolak Site protection Netlify (Private / Team login).')
+      json(res, 403, { error: NETLIFY_PRIVATE_SITE_HELP })
+      return
+    }
     const out = {
       'Content-Type': forwarded.headers.get('content-type') || 'application/json',
       'Cache-Control': 'no-store',

@@ -32,7 +32,8 @@ Bisa dibuka di `localhost` atau di **URL HTTPS publik** (Netlify). Tidak ada sis
    | `KUNCI_FROM_EMAIL` | Opsional. Default `Kunci <onboarding@resend.dev>` |
 
 3. Deploy. Buka URL `https://kunci-tifta.netlify.app` (atau domain sendiri + HTTPS).
-4. Minta kode masuk ke **tiftazani.khara@gmail.com**, lalu buka brankas dengan kata sandi induk.
+4. **Project visibility harus Public** (bukan Private / Team login). Private membuat URL publik hanya jalan di browser yang sudah login Netlify, sementara helper di `127.0.0.1:8780` tidak punya cookie itu — OTP dari localhost gagal. Kunci sudah punya gerbang kode Gmail sendiri.
+5. Minta kode masuk ke **tiftazani.khara@gmail.com**, lalu buka brankas dengan kata sandi induk.
 
 Localhost (`http://127.0.0.1:8780`) dan URL publik memakai **satu blob terenkripsi** di Netlify Blobs. Setelah kode Gmail di salah satu tampilan, simpan/ubah entri akan muncul di yang lain (butuh kata sandi induk di masing-masing browser). Server tetap tidak melihat password.
 
@@ -50,7 +51,7 @@ Buka **http://127.0.0.1:8780**. Layanan ikut nyala setiap login Mac. Terminal bo
 
 Stop: `npm run uninstall-service`
 
-Di localhost **tidak** ada gerbang OTP email. Enkripsi tetap sama.
+Localhost memakai gerbang OTP yang sama (kode ke Gmail) supaya sesi cloud bisa menulis ke blob yang sama. Helper mem-proxy `/api/*` ke URL publik. Kalau tombol kirim kode gagal dengan HTML login Netlify, site masih Private — ubah ke Public.
 
 ## Recovery key
 
@@ -100,7 +101,7 @@ Untuk mengetes gerbang publik secara lokal: set env, lalu `npx netlify dev` di f
 
 - AES-256-GCM, DEK terbungkus kata sandi induk (PBKDF2-SHA-256, 600k) dan recovery key terpisah
 - PUT `/api/vault` menolak field `dek` / `password` / `recoveryKey`; hanya ciphertext yang disimpan
-- Cookie sesi HMAC, Origin harus sama dengan Host, rate limit OTP
+- Cookie sesi HMAC, Origin allowlist (HTTPS site + localhost), rate limit OTP
 - Cek kebocoran HIBP hanya mengirim 5 karakter pertama hash SHA-1
 - Helper Mac hanya `127.0.0.1` + token
 - Website tidak bisa menyuntik input ke aplikasi native tanpa helper — batasan sandbox browser

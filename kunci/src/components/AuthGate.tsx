@@ -52,7 +52,7 @@ export function AuthGate({ onAuthed }: { onAuthed: () => void }) {
         </div>
         <p className="lede">
           {local
-            ? `Localhost dan ${DEFAULT_CLOUD_URL} memakai ciphertext yang sama. Kode 8 karakter membuka sesi sinkron — server tetap tidak bisa membaca password.`
+            ? `Localhost dan ${DEFAULT_CLOUD_URL} memakai ciphertext yang sama. Kode 8 karakter membuka sesi sinkron — server tetap tidak bisa membaca password. Site Netlify harus Public (bukan Private / Team login), kalau tidak helper tidak bisa kirim kode.`
             : 'Cek address bar: harus HTTPS dan domain Kunci milikmu. Kode 8 karakter hanya membuka sesi. Kata sandi induk dimasukkan setelah ini.'}
         </p>
         <p className="hint-pill">Situs ini: {window.location.host}</p>
@@ -98,7 +98,7 @@ export function ApiMissingScreen() {
         </div>
         <p className="lede">
           {local
-            ? 'Pastikan site Netlify sudah live, lalu nyalakan helper: npm run start (biarkan Terminal terbuka) atau npm run install-service.'
+            ? `Pastikan ${DEFAULT_CLOUD_URL} Public di Netlify (Project visibility), lalu nyalakan helper: npm run install-service.`
             : 'Di Netlify: Base directory kunci, lalu set KUNCI_SESSION_SECRET (min. 16 karakter acak) dan RESEND_API_KEY. Redeploy setelah itu.'}
         </p>
         <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>

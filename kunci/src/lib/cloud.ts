@@ -2,6 +2,7 @@ import { isEncryptedBlob } from './crypto'
 import type { EncryptedBlob } from '../types'
 import { RECOVERY_EMAIL } from './account'
 import { DEFAULT_CLOUD_URL } from './allowed-origins'
+import { isNetlifyAccessGate, NETLIFY_PRIVATE_SITE_HELP } from './netlify-gate'
 
 const TOKEN_KEY = 'kunci_cloud_token'
 
@@ -80,10 +81,23 @@ export async function sessionStatus(): Promise<{ signedIn: boolean; email?: stri
   return { signedIn: false, configured: false }
 }
 
+function parseApiError(text: string, status: number, fallback: string): string {
+  try {
+    const body = JSON.parse(text) as { error?: string }
+    if (body.error) return body.error
+  } catch {
+    /* not json */
+  }
+  if (isNetlifyAccessGate(status, text)) return NETLIFY_PRIVATE_SITE_HELP
+  if (status === 404) return 'API cloud tidak ditemukan. Tunggu deploy Netlify, lalu coba lagi.'
+  if (status === 429) return 'Terlalu banyak permintaan. Coba beberapa menit lagi.'
+  return `${fallback} (HTTP ${status})`
+}
+
 export async function requestOtp(): Promise<void> {
   const res = await api('/api/auth/otp', { method: 'POST', body: JSON.stringify({ email: RECOVERY_EMAIL }) })
-  const body = (await res.json().catch(() => ({}))) as { error?: string }
-  if (!res.ok) throw new Error(body.error || 'Gagal mengirim kode masuk')
+  const text = await res.text()
+  if (!res.ok) throw new Error(parseApiError(text, res.status, 'Gagal mengirim kode masuk'))
 }
 
 export async function verifyOtp(code: string): Promise<void> {
@@ -91,8 +105,15 @@ export async function verifyOtp(code: string): Promise<void> {
     method: 'POST',
     body: JSON.stringify({ email: RECOVERY_EMAIL, code: code.trim() }),
   })
-  const body = (await res.json().catch(() => ({}))) as { error?: string; token?: string }
-  if (!res.ok) throw new Error(body.error || 'Kode salah')
+  const text = await res.text()
+  if (!res.ok) throw new Error(parseApiError(text, res.status, 'Kode salah'))
+  const body = (() => {
+    try {
+      return JSON.parse(text) as { token?: string }
+    } catch {
+      return {} as { token?: string }
+    }
+  })()
   if (body.token) saveCloudToken(body.token)
 }
 

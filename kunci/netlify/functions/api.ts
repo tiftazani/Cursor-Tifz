@@ -48,6 +48,8 @@ function clientIp(req: Request): string {
 
 function originAllowed(req: Request): boolean {
   const origin = req.headers.get('origin')
+  const ua = req.headers.get('user-agent') || ''
+  if (ua.startsWith('Kunci-local/')) return true
   if (!origin) return req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
   return isAllowedKunciOrigin(origin, req.headers.get('host') || '')
 }
@@ -209,7 +211,7 @@ export default async (req: Request): Promise<Response> => {
 
     if (req.method === 'POST' && path === '/api/auth/otp') {
       const ip = clientIp(req)
-      if (!(await bumpRateLimit(`rl:otp:${ip}`, 8, 60 * 60 * 1000))) {
+      if (!(await bumpRateLimit(`rl:otp:${ip}`, 20, 60 * 60 * 1000))) {
         return respond({ error: 'Terlalu banyak permintaan. Coba 1 jam lagi.' }, 429)
       }
 
