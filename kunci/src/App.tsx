@@ -5,7 +5,7 @@ import { RecoveryKeyModal } from './components/RecoveryKeyModal'
 import { VaultProvider, useVault } from './state/VaultContext'
 import { LockScreen, SetupScreen } from './views/Gate'
 import { AppShell } from './views/AppShell'
-import { sessionStatus } from './lib/cloud'
+import { isPublicHost, sessionStatus } from './lib/cloud'
 
 function CloudSessionGate({ children }: { children: ReactNode }) {
   const [state, setState] = useState<'load' | 'auth' | 'ok' | 'missing'>('load')
@@ -25,7 +25,10 @@ function CloudSessionGate({ children }: { children: ReactNode }) {
       </div>
     )
   }
-  if (state === 'missing') return <ApiMissingScreen />
+  if (state === 'missing') {
+    if (!isPublicHost()) return <AuthGate onAuthed={() => setState('ok')} />
+    return <ApiMissingScreen />
+  }
   if (state === 'auth') return <AuthGate onAuthed={() => setState('ok')} />
   return children
 }

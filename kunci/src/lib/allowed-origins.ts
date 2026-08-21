@@ -14,6 +14,9 @@ export function isAllowedKunciOrigin(origin: string, requestHost: string): boole
     const o = new URL(origin)
     if (o.host === requestHost) return true
     if (LOCAL_APP_ORIGINS.includes(origin)) return true
+    if (o.protocol === 'http:' && (o.hostname === '127.0.0.1' || o.hostname === 'localhost' || o.hostname === '[::1]')) {
+      return true
+    }
     return o.host === new URL(DEFAULT_CLOUD_URL).host
   } catch {
     return false

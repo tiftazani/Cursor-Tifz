@@ -11,6 +11,10 @@ describe('cloud origin allowlist', () => {
     }
   })
 
+  it('allows any localhost HTTP port', () => {
+    expect(isAllowedKunciOrigin('http://127.0.0.1:9999', 'kunci-tifta.netlify.app')).toBe(true)
+  })
+
   it('rejects a random website', () => {
     expect(isAllowedKunciOrigin('https://evil.example', 'kunci-tifta.netlify.app')).toBe(false)
   })

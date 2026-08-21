@@ -1,6 +1,7 @@
 import { isEncryptedBlob } from './crypto'
 import type { EncryptedBlob } from '../types'
 import { RECOVERY_EMAIL } from './account'
+import { DEFAULT_CLOUD_URL } from './allowed-origins'
 
 const TOKEN_KEY = 'kunci_cloud_token'
 
@@ -10,7 +11,8 @@ export function isPublicHost(): boolean {
 }
 
 export function cloudOrigin(): string {
-  return ''
+  if (isPublicHost()) return ''
+  return DEFAULT_CLOUD_URL.replace(/\/$/, '')
 }
 
 function readToken(): string | null {
@@ -32,26 +34,48 @@ export function clearCloudToken(): void {
 async function api(path: string, init: RequestInit = {}): Promise<Response> {
   const token = readToken()
   const headers = new Headers(init.headers)
-  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+  const method = (init.method || 'GET').toUpperCase()
+  const hasBody = init.body != null && method !== 'GET' && method !== 'HEAD'
+  if (hasBody && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
   if (token) headers.set('Authorization', `Bearer ${token}`)
   return fetch(`${cloudOrigin()}${path}`, {
     ...init,
-    credentials: 'include',
+    credentials: isPublicHost() ? 'include' : 'omit',
     headers,
   })
 }
 
 export async function sessionStatus(): Promise<{ signedIn: boolean; email?: string; configured?: boolean }> {
-  try {
-    const res = await api('/api/session')
-    if (res.status === 401) return { signedIn: false, configured: true }
-    const type = res.headers.get('content-type') || ''
-    if (!res.ok || !type.includes('json')) return { signedIn: false, configured: false }
-    const body = (await res.json()) as { email?: string }
-    return { signedIn: true, email: body.email, configured: true }
-  } catch {
-    return { signedIn: false, configured: false }
+  const urls = isPublicHost()
+    ? ['/api/session']
+    : [`${DEFAULT_CLOUD_URL.replace(/\/$/, '')}/api/session`, '/api/session']
+
+  for (const url of urls) {
+    try {
+      const ping = await fetch(url, { method: 'GET', credentials: isPublicHost() ? 'include' : 'omit' })
+      if (ping.status !== 401 && !ping.ok) continue
+      const token = readToken()
+      if (token) {
+        const authed = await fetch(url, {
+          method: 'GET',
+          credentials: 'omit',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (authed.ok) {
+          const body = (await authed.json().catch(() => ({}))) as { email?: string }
+          if (body.email) return { signedIn: true, email: body.email, configured: true }
+        }
+      }
+      if (ping.ok) {
+        const body = (await ping.json().catch(() => ({}))) as { email?: string }
+        if (body.email) return { signedIn: true, email: body.email, configured: true }
+      }
+      return { signedIn: false, configured: true }
+    } catch {
+      /* try next URL */
+    }
   }
+  return { signedIn: false, configured: false }
 }
 
 export async function requestOtp(): Promise<void> {

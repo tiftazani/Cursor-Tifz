@@ -14,6 +14,7 @@
     "helper": "node helper/daemon.mjs",
     "mac": "node helper/mac-fill.mjs --with-ui",
     "start": "node helper/daemon.mjs --serve-ui",
+    "local": "node scripts/run-local.mjs",
     "install-service": "node helper/install-service.mjs",
     "uninstall-service": "node helper/install-service.mjs --uninstall",
     "netlify:dev": "npx netlify dev"
