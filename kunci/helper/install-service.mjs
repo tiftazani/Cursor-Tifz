@@ -31,18 +31,42 @@ function runQuiet(cmd, args) {
   })
 }
 
+function runCode(cmd, args) {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { stdio: 'ignore' })
+    child.on('error', () => resolve(1))
+    child.on('close', (code) => resolve(code ?? 1))
+  })
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+async function isLoaded() {
+  return (await runCode('launchctl', ['print', `gui/${uid}/${LABEL}`])) === 0
+}
+
 async function enableService() {
-  await runQuiet('launchctl', ['bootout', `gui/${uid}/${LABEL}`])
-  await sleep(400)
-  try {
-    await run('launchctl', ['bootstrap', `gui/${uid}`, plistPath])
-  } catch {
-    // Exit 5 / Input/output error: agent already loaded. Restart it instead.
-    await runQuiet('launchctl', ['kickstart', '-k', `gui/${uid}/${LABEL}`])
+  if (await isLoaded()) {
+    await runQuiet('launchctl', ['bootout', `gui/${uid}/${LABEL}`])
+    await sleep(800)
+  }
+  let ok = false
+  for (let i = 0; i < 3 && !ok; i++) {
+    ok = (await runCode('launchctl', ['bootstrap', `gui/${uid}`, plistPath])) === 0
+    if (!ok) await sleep(500)
+  }
+  if (!ok) {
+    await runQuiet('launchctl', ['load', '-w', plistPath])
+    await sleep(400)
+  }
+  if (!(await isLoaded())) {
+    throw new Error(
+      'launchctl tidak memasang layanan. Di Terminal, tanpa sudo:\n' +
+        `  launchctl bootstrap gui/${uid} ${plistPath}\n` +
+        'Atau jalankan sementara: npm run start  lalu buka http://127.0.0.1:8780',
+    )
   }
   await runQuiet('launchctl', ['kickstart', '-k', `gui/${uid}/${LABEL}`])
 }
