@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IMO Factory — Almanak 2021–2026</title>
+  <meta name="description" content="Laporan visual grup WhatsApp IMO Pelindo/IPC. 29.699 pesan, 24 orang, 4 tahun. Ranking, topik, dan ritme — tanpa isi chat mentah." />
+  <meta name="theme-color" content="#f6f0e6" />
+  <meta property="og:title" content="IMO Factory — Almanak 2021–2026" />
+  <meta property="og:description" content="29.699 pesan. 24 orang. Siapa yang menghidupkan grup." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <a class="skip" href="#angka">Lewati ke isi</a>
+
+  <header class="mast">
+    <div class="mast-inner">
+      <a class="logo" href="#atas">
+        <span class="seal" aria-hidden="true">IMO</span>
+        <span>Factory <em>Almanak</em></span>
+      </a>
+      <nav class="toc" aria-label="Bagian">
+        <a href="#lima">Lima besar</a>
+        <a href="#orang">Anggota</a>
+        <a href="#topik">Topik</a>
+        <a href="#waktu">Ritme</a>
+        <a href="#nama">Nama</a>
+      </nav>
+      <button class="copy" type="button" id="copy">Salin tautan</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="cover" id="atas">
+      <p class="running">Vol. 01 · Tidak resmi · Pelindo / IPC · 15 Nov 2021 — 13 Agu 2026</p>
+      <div class="cover-grid">
+        <div class="cover-copy">
+          <p class="kicker">Grup WhatsApp · 1.731 hari</p>
+          <h1>Satu grup.<br />24 orang.<br /><em>29.699 alasan</em><br />mereka tidak bisa diam.</h1>
+          <p class="lead">
+            Ini peta siapa yang menghidupkan IMO Factory — ranking, topik, dan jam-jam
+            ketika grup ini benar-benar bernyawa. Bukan arsip chat. Nomor telepon,
+            sandi rapat, dan isi pesan tidak ikut.
+          </p>
+        </div>
+        <aside class="ticket" aria-label="Ringkasan">
+          <div class="ticket-top">
+            <span>Tiket masuk</span>
+            <span>No. 001</span>
+          </div>
+          <div class="ticket-num" id="hero-count">0</div>
+          <div class="ticket-label">pesan tercatat</div>
+          <svg class="ticket-clock" id="hero-clock" viewBox="0 0 200 200" aria-hidden="true"></svg>
+          <p class="ticket-foot">83% masuk pukul 09–18 · akhir pekan hanya 4%</p>
+        </aside>
+      </div>
+      <a class="scroll" href="#angka">Turun ke angkanya</a>
+    </section>
+
+    <section class="chapter" id="angka">
+      <p class="chapno">01</p>
+      <div class="chaphead">
+        <h2>Yang tersisa kalau chat-nya dihitung</h2>
+        <p>Bukan siapa paling lucu. Siapa yang paling sering ada.</p>
+      </div>
+      <div class="stats" id="stats"></div>
+    </section>
+
+    <section class="chapter" id="lima">
+      <p class="chapno">02</p>
+      <div class="chaphead">
+        <h2>Lima orang, 58% obrolan</h2>
+        <p>Hermawan, Danti, Lucky, Tifta, Fajar — pentarki yang menahan grup ini tetap hidup.</p>
+      </div>
+      <div class="pentarchy" id="pentarchy"></div>
+    </section>
+
+    <section class="chapter" id="orang">
+      <p class="chapno">03</p>
+      <div class="chaphead">
+        <h2>Dua puluh empat nama</h2>
+        <p>Klik seseorang. Di kanan, berkasnya terbuka — volume, kebiasaan, tahun-tahunnya.</p>
+      </div>
+      <div class="roster-wrap">
+        <div class="roster" id="roster" role="listbox" aria-label="Anggota"></div>
+        <aside class="dossier" id="dossier" aria-live="polite"></aside>
+      </div>
+    </section>
+
+    <section class="chapter" id="peran">
+      <p class="chapno">04</p>
+      <div class="chaphead">
+        <h2>Peran yang muncul sendiri</h2>
+        <p>Bukan jabatan. Ini yang data katakan tentang kebiasaan mereka.</p>
+      </div>
+      <div class="roles" id="roles"></div>
+    </section>
+
+    <section class="chapter" id="topik">
+      <p class="chapno">05</p>
+      <div class="chaphead">
+        <h2>Yang dibicarakan</h2>
+        <p>Dihitung dari kata kunci di pesan teks. 2026 melonjak di KPI — musim alokasi terasa sampai ke grup.</p>
+      </div>
+      <div class="topics" id="topics"></div>
+    </section>
+
+    <section class="chapter" id="waktu">
+      <p class="chapno">06</p>
+      <div class="chaphead">
+        <h2>Ritme kantor, bukan grup malam</h2>
+        <p>Puncaknya 2023. Selasa dan Kamis paling ramai. Sabtu-Minggu hampir mati.</p>
+      </div>
+      <div class="time-grid">
+        <article class="panel span-2">
+          <h3>Pesan per bulan</h3>
+          <div id="monthly"></div>
+        </article>
+        <article class="panel">
+          <h3>Tahun</h3>
+          <div id="yearly"></div>
+        </article>
+        <article class="panel">
+          <h3>Hari</h3>
+          <div id="week"></div>
+        </article>
+        <article class="panel">
+          <h3>Jam kerja</h3>
+          <div id="clock"></div>
+          <p class="hint">Cincin dalam = malam. Cincin luar = siang. Tebal = ramai.</p>
+        </article>
+        <article class="panel span-2">
+          <h3>Heatmap · jam × hari</h3>
+          <div id="heat"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="chapter" id="nama">
+      <p class="chapno">07</p>
+      <div class="chaphead">
+        <h2>Nama yang tidak mau diam</h2>
+        <p>Delapan kali ganti nama dalam 30 menit pertama — lalu, bertahun-tahun kemudian, menetap jadi IMO FACTORY.</p>
+      </div>
+      <div class="name-grid">
+        <article class="panel">
+          <h3>Sejarah nama</h3>
+          <ol class="timeline" id="names"></ol>
+        </article>
+        <article class="panel">
+          <h3>Panggilan di grup</h3>
+          <div class="pills" id="nicks"></div>
+          <h3 class="spaced">Kata yang sering lolos</h3>
+          <div class="pills" id="words"></div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="colophon">
+    <p id="privacy"></p>
+    <p>IMO Factory Almanak · laporan visual, bukan transkrip · 2021–2026</p>
+  </footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>

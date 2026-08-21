@@ -4,6 +4,11 @@ node_modules/
 out/
 build/
 .vercel
+.netlify
+imo-factory/.netlify
+qa-screenshots/
+screenshot-index.txt
+visual-qa-report.md
 .DS_Store
 *.pem
 *.tsbuildinfo
