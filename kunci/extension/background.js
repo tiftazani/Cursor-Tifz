@@ -73,6 +73,13 @@ async function writeVault(vault, dekB64, blob) {
   return nextBlob
 }
 
+async function clearPendingSave(tabId) {
+  if (!tabId) return
+  const pendingSaves = (await chrome.storage.session.get('pendingSaves')).pendingSaves || {}
+  delete pendingSaves[String(tabId)]
+  await chrome.storage.session.set({ pendingSaves })
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const run = async () => {
     if (msg.type === 'SYNC' && msg.blob) {
@@ -134,12 +141,28 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }))
       return { locked: false, entries }
     }
-    if (msg.type === 'OFFER_SAVE') {
+    if (msg.type === 'OFFER_SAVE' || msg.type === 'QUEUE_SAVE') {
       const { vault } = await sessionState()
       if (!vault) return { locked: true }
       if (vault.settings?.offerSaveWeb === false) return { action: 'skip' }
       const { neverHosts = [] } = await chrome.storage.local.get('neverHosts')
-      return decideLoginSave(vault.entries || [], msg.capture, neverHosts)
+      const decision = decideLoginSave(vault.entries || [], msg.capture, neverHosts)
+      if ((decision.action === 'create' || decision.action === 'update') && sender.tab?.id) {
+        const pendingSaves = (await chrome.storage.session.get('pendingSaves')).pendingSaves || {}
+        pendingSaves[String(sender.tab.id)] = { capture: msg.capture, action: decision.action }
+        await chrome.storage.session.set({ pendingSaves })
+      }
+      return decision
+    }
+    if (msg.type === 'GET_PENDING_SAVE') {
+      const tabId = sender.tab?.id
+      if (!tabId) return { pending: null }
+      const pendingSaves = (await chrome.storage.session.get('pendingSaves')).pendingSaves || {}
+      return { pending: pendingSaves[String(tabId)] || null }
+    }
+    if (msg.type === 'DISMISS_SAVE') {
+      await clearPendingSave(sender.tab?.id)
+      return { ok: true }
     }
     if (msg.type === 'SAVE_LOGIN') {
       const { vault, dekB64 } = await sessionState()
@@ -147,6 +170,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const { blob } = await chrome.storage.local.get('blob')
       if (!blob) throw new Error('Brankas tidak ada')
       const next = applyLoginCapture(vault.entries || [], msg.capture)
+      await clearPendingSave(sender.tab?.id)
       if (next.changed === 'skip') return { ok: true, changed: 'skip' }
       await writeVault({ ...vault, entries: next.entries }, dekB64, blob)
       return { ok: true, changed: next.changed }
@@ -156,6 +180,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (!host) return { ok: false }
       const { neverHosts = [] } = await chrome.storage.local.get('neverHosts')
       await chrome.storage.local.set({ neverHosts: Array.from(new Set([...neverHosts, host])) })
+      await clearPendingSave(sender.tab?.id)
       return { ok: true }
     }
     if (msg.type === 'TOUCH') {
@@ -170,6 +195,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   run().then(sendResponse).catch((err) => sendResponse({ error: err.message || String(err) }))
   return true
+})
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void clearPendingSave(tabId)
 })
 
 chrome.commands.onCommand.addListener(async (command) => {

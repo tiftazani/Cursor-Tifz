@@ -46,6 +46,8 @@ let lastFilled = null
 let autofilled = false
 let autofillTried = false
 let saveBarHost = null
+let otherBarHost = null
+let saveOffer = null
 let scanTimer = 0
 
 function readFormCreds(form) {
@@ -85,7 +87,11 @@ function ensureButton(pw) {
     if (res?.locked) {
       btn.title = 'Buka ikon Kunci di toolbar, masukkan kata sandi induk'
       btn.classList.add('locked')
-      showToast('Buka ekstensi Kunci dan masukkan kata sandi induk.')
+      showOtherBar({
+        title: 'Kunci terkunci',
+        subtitle: 'Buka ikon Kunci di toolbar, masukkan kata sandi induk.',
+        actions: [{ label: 'Tutup', onClick: () => undefined }],
+      })
       return
     }
     const matches = res?.matches || []
@@ -162,11 +168,12 @@ function barStyles() {
   `
 }
 
-function showChromeBar({ title, subtitle, actions }) {
-  saveBarHost?.remove()
-  saveBarHost = document.createElement('div')
-  saveBarHost.style.cssText = 'position:fixed;z-index:2147483646;top:12px;left:50%;transform:translateX(-50%);'
-  const shadow = saveBarHost.attachShadow({ mode: 'closed' })
+function mountBar(existing, { title, subtitle, actions, sticky }) {
+  existing?.remove()
+  const host = document.createElement('div')
+  host.dataset.kunciBar = sticky ? 'save' : 'other'
+  host.style.cssText = 'position:fixed;z-index:2147483646;top:12px;left:50%;transform:translateX(-50%);'
+  const shadow = host.attachShadow({ mode: 'closed' })
   const wrap = document.createElement('div')
   wrap.className = 'bar'
   wrap.innerHTML = `<div class="mark">K</div><div class="copy"><strong></strong><span></span></div>`
@@ -176,9 +183,13 @@ function showChromeBar({ title, subtitle, actions }) {
     const btn = document.createElement('button')
     if (action.primary) btn.className = 'primary'
     btn.textContent = action.label
-    btn.addEventListener('click', () => {
-      saveBarHost?.remove()
-      saveBarHost = null
+    btn.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!sticky) {
+        host.remove()
+        if (otherBarHost === host) otherBarHost = null
+      }
       action.onClick()
     })
     wrap.appendChild(btn)
@@ -186,15 +197,64 @@ function showChromeBar({ title, subtitle, actions }) {
   const style = document.createElement('style')
   style.textContent = barStyles()
   shadow.append(style, wrap)
-  document.documentElement.appendChild(saveBarHost)
+  document.documentElement.appendChild(host)
+  return host
 }
 
-function showToast(text) {
-  showChromeBar({
-    title: 'Kunci',
-    subtitle: text,
-    actions: [{ label: 'Tutup', onClick: () => undefined }],
+function showOtherBar(opts) {
+  if (saveOffer && saveBarHost) return
+  otherBarHost = mountBar(otherBarHost, { ...opts, sticky: false })
+}
+
+function showSaveBar(pending) {
+  saveOffer = pending
+  otherBarHost?.remove()
+  otherBarHost = null
+  const capture = pending.capture
+  const hostName = (() => {
+    try {
+      return new URL(capture.url).hostname.replace(/^www\./, '')
+    } catch {
+      return location.hostname.replace(/^www\./, '')
+    }
+  })()
+  saveBarHost = mountBar(saveBarHost, {
+    sticky: true,
+    title: pending.action === 'update' ? 'Perbarui password di Kunci?' : 'Simpan password di Kunci?',
+    subtitle: capture.username ? `${capture.username} · ${hostName}` : hostName,
+    actions: [
+      {
+        label: pending.action === 'update' ? 'Perbarui' : 'Simpan',
+        primary: true,
+        onClick: () => {
+          void chrome.runtime.sendMessage({ type: 'SAVE_LOGIN', capture }).then(() => hideSaveBar())
+        },
+      },
+      {
+        label: 'Tidak',
+        onClick: () => {
+          void chrome.runtime.sendMessage({ type: 'DISMISS_SAVE' }).then(() => hideSaveBar())
+        },
+      },
+      {
+        label: 'Jangan untuk situs ini',
+        onClick: () => {
+          void chrome.runtime.sendMessage({ type: 'NEVER_SAVE', url: capture.url }).then(() => hideSaveBar())
+        },
+      },
+    ],
   })
+}
+
+function hideSaveBar() {
+  saveOffer = null
+  saveBarHost?.remove()
+  saveBarHost = null
+}
+
+function keepSaveBar() {
+  if (!saveOffer) return
+  if (!saveBarHost || !saveBarHost.isConnected) showSaveBar(saveOffer)
 }
 
 async function maybeAutofill() {
@@ -212,7 +272,7 @@ async function maybeAutofill() {
     autofilled = true
     return
   }
-  showChromeBar({
+  showOtherBar({
     title: 'Pilih login Kunci',
     subtitle: `${res.matches.length} akun untuk ${location.hostname}`,
     actions: res.matches.slice(0, 3).map((m) => ({
@@ -234,36 +294,22 @@ async function maybeOfferSave(creds) {
   if (!password) return
   if (lastFilled && lastFilled.password === password && (lastFilled.username || '') === username) return
   const capture = { url: location.href, username, password }
-  const offer = await chrome.runtime.sendMessage({ type: 'OFFER_SAVE', capture })
+  const offer = await chrome.runtime.sendMessage({ type: 'QUEUE_SAVE', capture })
   if (offer?.locked) return
   if (offer?.action !== 'create' && offer?.action !== 'update') return
-  const host = location.hostname.replace(/^www\./, '')
-  showChromeBar({
-    title: offer.action === 'update' ? 'Perbarui password di Kunci?' : 'Simpan password di Kunci?',
-    subtitle: username ? `${username} · ${host}` : host,
-    actions: [
-      {
-        label: offer.action === 'update' ? 'Perbarui' : 'Simpan',
-        primary: true,
-        onClick: () => {
-          void chrome.runtime.sendMessage({ type: 'SAVE_LOGIN', capture })
-        },
-      },
-      { label: 'Tidak', onClick: () => undefined },
-      {
-        label: 'Jangan untuk situs ini',
-        onClick: () => {
-          void chrome.runtime.sendMessage({ type: 'NEVER_SAVE', url: location.href })
-        },
-      },
-    ],
-  })
+  showSaveBar({ capture, action: offer.action })
+}
+
+async function restorePendingSave() {
+  const res = await chrome.runtime.sendMessage({ type: 'GET_PENDING_SAVE' })
+  if (res?.pending?.capture) showSaveBar(res.pending)
 }
 
 function scan() {
   if (isKunciPage()) return
+  keepSaveBar()
   passwordFields().forEach(ensureButton)
-  void maybeAutofill()
+  if (!saveOffer) void maybeAutofill()
 }
 
 function wireKunciBridge() {
@@ -314,7 +360,7 @@ if (isKunciPage()) {
     'submit',
     (e) => {
       const creds = captureFromEvent(e.target)
-      window.setTimeout(() => void maybeOfferSave(creds), 250)
+      void maybeOfferSave(creds)
     },
     true,
   )
@@ -324,18 +370,25 @@ if (isKunciPage()) {
       const t = e.target instanceof Element ? e.target.closest('button, input[type="submit"]') : null
       if (!t) return
       const creds = captureFromEvent(t)
-      if (creds.password) window.setTimeout(() => void maybeOfferSave(creds), 400)
+      if (creds.password) void maybeOfferSave(creds)
     },
     true,
   )
   window.addEventListener('pagehide', () => {
-    if (lastPassword) void maybeOfferSave({ username: lastUsername, password: lastPassword })
+    if (!lastPassword) return
+    if (lastFilled && lastFilled.password === lastPassword && (lastFilled.username || '') === lastUsername) return
+    void chrome.runtime.sendMessage({
+      type: 'QUEUE_SAVE',
+      capture: { url: location.href, username: lastUsername, password: lastPassword },
+    })
   })
-  scan()
-  new MutationObserver(() => {
-    window.clearTimeout(scanTimer)
-    scanTimer = window.setTimeout(scan, 250)
-  }).observe(document.documentElement, { childList: true, subtree: true })
+  void restorePendingSave().finally(() => {
+    scan()
+    new MutationObserver(() => {
+      window.clearTimeout(scanTimer)
+      scanTimer = window.setTimeout(scan, 250)
+    }).observe(document.documentElement, { childList: true, subtree: true })
+  })
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'FILL_NOW') {
       chrome.runtime.sendMessage({ type: 'MATCHES', url: location.href }, (res) => {
@@ -343,5 +396,6 @@ if (isKunciPage()) {
       })
     }
     if (msg.type === 'FILL_ENTRY') fill(msg.entry)
+    if (msg.type === 'SHOW_PENDING_SAVE' && msg.pending) showSaveBar(msg.pending)
   })
 }
