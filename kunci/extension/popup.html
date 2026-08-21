@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Kunci</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Kunci</h1>
+      <p id="status" class="muted">Memuat…</p>
+      <form id="unlock" hidden>
+        <input id="password" type="password" placeholder="Kata sandi induk" autocomplete="current-password" />
+        <button type="submit">Buka</button>
+      </form>
+      <div id="app" hidden>
+        <input id="search" type="search" placeholder="Cari…" />
+        <ul id="list"></ul>
+      </div>
+      <p id="error" class="error"></p>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

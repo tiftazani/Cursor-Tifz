@@ -1,0 +1,17 @@
+{
+  "name": "Kunci",
+  "short_name": "Kunci",
+  "description": "Manajer kata sandi lokal untuk Mac",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0e13",
+  "theme_color": "#0b0e13",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
