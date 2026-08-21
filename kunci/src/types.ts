@@ -38,7 +38,7 @@ export interface Entry {
 export type AutoBackupMode = 'off' | 'on-change' | 'hourly' | 'daily'
 
 export interface VaultSettings {
-  autoLockMinutes: number
+  autoLockSeconds: number
   clipboardSeconds: number
   autoBackup: AutoBackupMode
   backupKeep: number
@@ -84,7 +84,7 @@ export interface StoredBackup {
 export const KDF_ITERATIONS = 600_000
 
 export const DEFAULT_SETTINGS: VaultSettings = {
-  autoLockMinutes: 5,
+  autoLockSeconds: 300,
   clipboardSeconds: 20,
   autoBackup: 'on-change',
   backupKeep: 12,

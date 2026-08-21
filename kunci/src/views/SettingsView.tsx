@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Field, SecretInput, TextInput } from '../components/Field'
 import { isStrongMaster } from '../lib/strength'
+import { AUTO_LOCK_OPTIONS, resolveAutoLockSeconds } from '../lib/autolock'
 import { useVault } from '../state/VaultContext'
 
 export function SettingsView() {
@@ -58,14 +59,21 @@ export function SettingsView() {
 
       <div className="card stack">
         <h3>Keamanan</h3>
-        <Field label="Kunci otomatis (menit, 0 = jangan)">
-          <TextInput
-            type="number"
-            min={0}
-            max={120}
-            value={s.autoLockMinutes}
-            onChange={(e) => void updateSettings({ autoLockMinutes: Number(e.target.value) })}
-          />
+        <Field
+          label="Kunci otomatis"
+          hint="Mengunci brankas (minta kata sandi induk lagi). Tidak mengeluarkan sesi cloud Gmail."
+        >
+          <select
+            className="input"
+            value={resolveAutoLockSeconds(s)}
+            onChange={(e) => void updateSettings({ autoLockSeconds: Number(e.target.value) })}
+          >
+            {AUTO_LOCK_OPTIONS.map((option) => (
+              <option key={option.seconds} value={option.seconds}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field label="Hapus papan klip (detik, 0 = jangan)">
           <TextInput

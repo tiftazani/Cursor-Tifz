@@ -23,6 +23,7 @@ import { newId } from '../lib/id'
 import { RECOVERY_EMAIL } from '../lib/account'
 import { localToken } from '../lib/recovery-api'
 import { cloudGetVault, cloudPutVault, emailRecoveryKey, isPublicHost, logoutSession } from '../lib/cloud'
+import { resolveAutoLockSeconds } from '../lib/autolock'
 import { matchAppName } from '../lib/capture'
 
 interface VaultApi {
@@ -71,11 +72,16 @@ const Ctx = createContext<VaultApi | null>(null)
 
 function normalizeVault(raw: unknown): Vault {
   const v = raw as Partial<Vault>
+  const settingsIn = (v.settings ?? {}) as VaultSettings & { autoLockMinutes?: number }
   return {
     version: 1,
     entries: Array.isArray(v.entries) ? v.entries : [],
     trash: Array.isArray(v.trash) ? v.trash : [],
-    settings: { ...DEFAULT_SETTINGS, ...(v.settings ?? {}) },
+    settings: {
+      ...DEFAULT_SETTINGS,
+      ...settingsIn,
+      autoLockSeconds: resolveAutoLockSeconds(settingsIn),
+    },
   }
 }
 
@@ -670,22 +676,43 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (status !== 'unlocked' || !vault) return
-    const minutes = vault.settings.autoLockMinutes
-    if (minutes <= 0) return
+    const seconds = resolveAutoLockSeconds(vault.settings)
+    if (seconds < 0) return
+
+    const lockNow = () => lock()
+
+    if (seconds === 0) {
+      const onVisibility = () => {
+        if (document.hidden) lockNow()
+      }
+      const onBlur = () => lockNow()
+      document.addEventListener('visibilitychange', onVisibility)
+      window.addEventListener('blur', onBlur)
+      return () => {
+        document.removeEventListener('visibilitychange', onVisibility)
+        window.removeEventListener('blur', onBlur)
+      }
+    }
+
     let timer: number
     const bump = () => {
       window.clearTimeout(timer)
-      timer = window.setTimeout(() => lock(), minutes * 60_000)
+      timer = window.setTimeout(lockNow, seconds * 1000)
     }
     bump()
-    window.addEventListener('pointerdown', bump)
+    const opts = { passive: true } as const
+    window.addEventListener('pointerdown', bump, opts)
     window.addEventListener('keydown', bump)
+    window.addEventListener('mousemove', bump, opts)
+    window.addEventListener('scroll', bump, opts)
     return () => {
       window.clearTimeout(timer)
       window.removeEventListener('pointerdown', bump)
       window.removeEventListener('keydown', bump)
+      window.removeEventListener('mousemove', bump)
+      window.removeEventListener('scroll', bump)
     }
-  }, [status, vault?.settings.autoLockMinutes, lock, vault])
+  }, [status, vault?.settings.autoLockSeconds, lock, vault])
 
   useEffect(() => {
     if (status !== 'unlocked' || !vault) return
