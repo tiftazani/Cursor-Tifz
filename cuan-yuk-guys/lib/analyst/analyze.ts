@@ -15,6 +15,8 @@ import {
   ytdReturn,
 } from "../indicators";
 import { recLabel } from "../scoring/stocks";
+import { overlayQuote } from "../market/synthetic";
+import { formatWibClock } from "../time";
 import type { Bar, RecLabel, ScoredStock } from "../types";
 import { EMITEN_NOT_FOUND } from "./copy";
 import { commodityFocus, getGlobalMarkets, type MarketPrint } from "./markets";
@@ -33,31 +35,33 @@ export async function analyzeEmiten(rawQuery: string): Promise<AnalyzeResult> {
   }
 
   const uni = matchUniverse(query);
-  const code = uni?.ticker ?? tickerCode(query);
-  if (!uni && !looksLikeTicker(query)) {
+  const code = tickerCode(query) ?? uni?.ticker;
+  if (!code) {
     return { found: false, text: EMITEN_NOT_FOUND };
   }
-  if (!code) {
+  if (!uni && !looksLikeTicker(query)) {
     return { found: false, text: EMITEN_NOT_FOUND };
   }
 
   const symbol = `${code}.JK`;
   const [snap, quotes, bars, markets] = await Promise.all([
-    getDailySnapshot().catch(() => null),
-    fetchQuotes([symbol]),
+    uni ? getDailySnapshot().catch(() => null) : Promise.resolve(null),
+    fetchQuotes([symbol, "^JKSE"]),
     fetchChart(symbol, "1y"),
     getGlobalMarkets(),
   ]);
 
   const scored = snap?.stocks.find((s) => s.ticker === code) ?? null;
   const quote = quotes.get(symbol);
-  const liveBars = bars ?? scored?.bars ?? null;
+  const ihsgQuote = quotes.get("^JKSE");
+  let liveBars = bars ?? scored?.bars ?? null;
+  if (liveBars && quote) liveBars = overlayQuote(liveBars, quote);
 
   if (!scored && !quote && !liveBars && !uni) {
     return { found: false, text: EMITEN_NOT_FOUND };
   }
 
-  const name = scored?.name ?? uni?.name ?? quote?.name ?? code;
+  const name = scored?.name ?? uni?.name ?? (quote?.name || undefined) ?? code;
   const sector = scored?.sector ?? uni?.sector ?? "Saham BEI";
   const news = await getTickerNews(code, name).catch(() => []);
 
@@ -66,19 +70,20 @@ export async function analyzeEmiten(rawQuery: string): Promise<AnalyzeResult> {
     name,
     sector,
     scored,
-    quotePrice: quote?.price ?? uni?.lastPrice,
+    quotePrice: quote?.price,
     quoteChange: quote?.changePct,
     quotePe: quote?.pe ?? scored?.pe ?? null,
     quotePb: quote?.pb ?? scored?.pb ?? null,
     bars: liveBars ?? [],
     ihsg: snap?.ihsg.bars ?? [],
-    ihsgLast: snap?.ihsg.last ?? 0,
-    ihsgChange: snap?.ihsg.changePct ?? 0,
+    ihsgLast: ihsgQuote?.price ?? snap?.ihsg.last ?? 0,
+    ihsgChange: ihsgQuote?.changePct ?? snap?.ihsg.changePct ?? 0,
     markets,
     news: news.map((n) => n.title),
+    asOf: formatWibClock(),
   });
 
-  return { found: true, text, ticker: scored ? code : undefined };
+  return { found: true, text, ticker: uni ? code : undefined };
 }
 
 type ReportInput = {
@@ -96,6 +101,7 @@ type ReportInput = {
   ihsgChange: number;
   markets: MarketPrint[];
   news: string[];
+  asOf: string;
 };
 
 function buildReport(input: ReportInput): string {
@@ -157,7 +163,7 @@ function buildReport(input: ReportInput): string {
   const lines: string[] = [];
   lines.push(`${input.ticker} — ${input.name}`);
   lines.push(
-    `Harga ${idr(price)} (${signedPct(change)} hari ini). Sektor ${input.sector}. Skor analisa ${num(score, 0)} · ${label}.`,
+    `Harga ${idr(price)} (${signedPct(change)} hari ini). Sektor ${input.sector}. Skor analisa ${num(score, 0)} · ${label}. Last IDX per ${input.asOf}.`,
   );
   lines.push(
     `Teknikal: ${trend}. ${rsiText} ${macdText} ${volText} Posisi ${pct(pos52, 0, false)} dari rentang 52 minggu (${idr(weekLow)}–${idr(weekHigh)}). Support dekat ${idr(support)}, resistensi ${idr(resist)}.`,

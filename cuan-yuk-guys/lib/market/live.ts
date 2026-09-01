@@ -47,7 +47,7 @@ async function fetchTradingViewQuotes(symbols: string[]): Promise<Map<string, Ya
       },
       body: JSON.stringify({
         symbols: { tickers, query: { types: [] } },
-        columns: ["close", "change", "change_abs", "volume", "open", "high", "low", "previous_close"],
+        columns: ["close", "change", "change_abs", "volume", "open", "high", "low", "previous_close", "description"],
         range: [0, tickers.length],
       }),
       cache: "no-store",
@@ -55,7 +55,7 @@ async function fetchTradingViewQuotes(symbols: string[]): Promise<Map<string, Ya
     });
     if (!res.ok) return out;
     const json = (await res.json()) as {
-      data?: Array<{ s: string; d: Array<number | null> }>;
+      data?: Array<{ s: string; d: Array<number | string | null> }>;
     };
     for (const row of json.data ?? []) {
       const mapped = fromTvTicker(row.s);
@@ -67,9 +67,10 @@ async function fetchTradingViewQuotes(symbols: string[]): Promise<Map<string, Ya
       const open = Number(row.d[4] ?? close);
       const high = Number(row.d[5] ?? close);
       const low = Number(row.d[6] ?? close);
+      const desc = typeof row.d[8] === "string" ? row.d[8].replace(/^PT\s+/i, "").trim() : "";
       out.set(mapped, {
         symbol: mapped,
-        name: "",
+        name: desc,
         exchange: "IDX",
         price: close,
         changePct: Number.isFinite(changeAbs) && close !== changeAbs

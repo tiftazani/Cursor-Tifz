@@ -56,24 +56,30 @@ export function tickerCode(raw: string): string | null {
 export function matchUniverse(query: string): StockMeta | null {
   const q = normalizeQuery(query);
   if (!q) return null;
-  const compact = q.replace(/[\s.-]/g, "").toUpperCase();
-  const aliased = ALIASES[compact] ?? compact;
-  const exact = stocks.find((s) => s.ticker === aliased || s.ticker === compact);
-  if (exact) return exact;
+  const code = tickerCode(q);
+  if (code) {
+    return stocks.find((s) => s.ticker === code) ?? null;
+  }
 
   const lower = q.toLowerCase();
   const tokens = lower.split(" ").filter((t) => t.length > 2);
   if (tokens.length) {
     const hit = stocks.find((s) => {
       const hay = `${s.ticker} ${s.name}`.toLowerCase();
-      return tokens.every((t) => hay.includes(t));
+      return tokens.every((t) => wholeToken(hay, t));
     });
     if (hit) return hit;
   }
 
-  return stocks.find((s) => s.name.toLowerCase().includes(lower)) ?? null;
+  return stocks.find((s) => wholeToken(s.name.toLowerCase(), lower)) ?? null;
 }
 
 export function looksLikeTicker(query: string): boolean {
   return tickerCode(query) != null;
+}
+
+function wholeToken(hay: string, token: string): boolean {
+  if (!token) return false;
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i").test(hay);
 }

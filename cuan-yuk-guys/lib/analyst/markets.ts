@@ -26,7 +26,7 @@ const WATCH: { symbol: string; label: string; group: MarketPrint["group"] }[] = 
 let cache: { at: number; items: MarketPrint[] } | null = null;
 
 export async function getGlobalMarkets(): Promise<MarketPrint[]> {
-  if (cache && Date.now() - cache.at < 10 * 60 * 1000) return cache.items;
+  if (cache && Date.now() - cache.at < 45_000) return cache.items;
   const quotes = await fetchQuotes(WATCH.map((w) => w.symbol));
   const items = WATCH.map((w) => toPrint(w, quotes.get(w.symbol))).filter((x): x is MarketPrint => Boolean(x));
   cache = { at: Date.now(), items };
