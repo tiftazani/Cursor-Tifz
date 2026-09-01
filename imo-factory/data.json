@@ -1,0 +1,2962 @@
+{
+  "meta": {
+    "groupLabel": "IMO FACTORY",
+    "subtitle": "Analitik grup WhatsApp IMO · Pelindo / IPC",
+    "source": "Ekspor WhatsApp (agregat). Isi pesan, tautan, dan nomor tidak dipublikasikan.",
+    "generatedAt": "2026-08-13",
+    "firstMessageAt": "2021-11-15",
+    "lastMessageAt": "2026-08-13",
+    "spanDays": 1731,
+    "privacyNote": "Dashboard publik ini hanya menampilkan hitungan, ranking, dan pola waktu. Nomor telepon disamarkan. Sandi rapat, tautan Zoom, dan kutipan chat tidak disertakan."
+  },
+  "totals": {
+    "messages": 29699,
+    "text": 27188,
+    "stickers": 1390,
+    "images": 830,
+    "videos": 59,
+    "documents": 108,
+    "deleted": 86,
+    "members": 24,
+    "activeDays": 903,
+    "avgPerDay": 17.2,
+    "medianPerActiveDay": 20,
+    "urlsShared": 499,
+    "mentions": 705,
+    "top5SharePct": 58.2,
+    "officePct": 83.1,
+    "weekendPct": 4.0,
+    "topicCoveragePct": 10.7
+  },
+  "mix": [
+    {
+      "kind": "Teks",
+      "count": 27188
+    },
+    {
+      "kind": "Stiker",
+      "count": 1390
+    },
+    {
+      "kind": "Gambar",
+      "count": 830
+    },
+    {
+      "kind": "Dokumen",
+      "count": 108
+    },
+    {
+      "kind": "Video",
+      "count": 59
+    },
+    {
+      "kind": "Dihapus",
+      "count": 86
+    }
+  ],
+  "members": [
+    {
+      "name": "Hermawan IPC",
+      "bot": false,
+      "messages": 4598,
+      "sharePct": 15.48,
+      "text": 4435,
+      "stickers": 17,
+      "images": 126,
+      "videos": 7,
+      "documents": 2,
+      "avgChars": 51.8,
+      "emojis": 794,
+      "mentionsGiven": 228,
+      "mentionsReceived": 65,
+      "activeDays": 601,
+      "peakHour": 10,
+      "afterHoursPct": 12.0,
+      "threadsStarted": 250,
+      "firstAt": "2021-11-18",
+      "lastAt": "2026-08-11",
+      "spanDays": 1728,
+      "quietDays": 2,
+      "alumni": false,
+      "byYear": {
+        "2021": 70,
+        "2022": 331,
+        "2023": 1440,
+        "2024": 1392,
+        "2025": 688,
+        "2026": 677
+      },
+      "rank": 1
+    },
+    {
+      "name": "Danti IPC",
+      "bot": false,
+      "messages": 3815,
+      "sharePct": 12.85,
+      "text": 3374,
+      "stickers": 206,
+      "images": 198,
+      "videos": 13,
+      "documents": 5,
+      "avgChars": 39.3,
+      "emojis": 1878,
+      "mentionsGiven": 394,
+      "mentionsReceived": 51,
+      "activeDays": 673,
+      "peakHour": 10,
+      "afterHoursPct": 13.5,
+      "threadsStarted": 248,
+      "firstAt": "2021-11-15",
+      "lastAt": "2026-08-01",
+      "spanDays": 1721,
+      "quietDays": 12,
+      "alumni": false,
+      "byYear": {
+        "2021": 69,
+        "2022": 613,
+        "2023": 906,
+        "2024": 987,
+        "2025": 590,
+        "2026": 650
+      },
+      "rank": 2
+    },
+    {
+      "name": "Lucky IPC",
+      "bot": false,
+      "messages": 3267,
+      "sharePct": 11.0,
+      "text": 2932,
+      "stickers": 290,
+      "images": 32,
+      "videos": 4,
+      "documents": 4,
+      "avgChars": 32.8,
+      "emojis": 232,
+      "mentionsGiven": 17,
+      "mentionsReceived": 55,
+      "activeDays": 524,
+      "peakHour": 9,
+      "afterHoursPct": 6.6,
+      "threadsStarted": 103,
+      "firstAt": "2021-11-18",
+      "lastAt": "2026-08-13",
+      "spanDays": 1730,
+      "quietDays": 0,
+      "alumni": false,
+      "byYear": {
+        "2021": 102,
+        "2022": 640,
+        "2023": 1152,
+        "2024": 763,
+        "2025": 206,
+        "2026": 404
+      },
+      "rank": 3
+    },
+    {
+      "name": "Mr Tifta",
+      "bot": false,
+      "messages": 3111,
+      "sharePct": 10.48,
+      "text": 2837,
+      "stickers": 40,
+      "images": 200,
+      "videos": 12,
+      "documents": 20,
+      "avgChars": 54.1,
+      "emojis": 300,
+      "mentionsGiven": 208,
+      "mentionsReceived": 42,
+      "activeDays": 504,
+      "peakHour": 15,
+      "afterHoursPct": 11.4,
+      "threadsStarted": 181,
+      "firstAt": "2021-11-18",
+      "lastAt": "2026-08-13",
+      "spanDays": 1730,
+      "quietDays": 0,
+      "alumni": false,
+      "byYear": {
+        "2021": 57,
+        "2022": 434,
+        "2023": 463,
+        "2024": 844,
+        "2025": 563,
+        "2026": 750
+      },
+      "rank": 4
+    },
+    {
+      "name": "Fajar SDM Budaya",
+      "bot": false,
+      "messages": 2486,
+      "sharePct": 8.37,
+      "text": 2237,
+      "stickers": 176,
+      "images": 61,
+      "videos": 1,
+      "documents": 6,
+      "avgChars": 77.8,
+      "emojis": 1535,
+      "mentionsGiven": 277,
+      "mentionsReceived": 49,
+      "activeDays": 625,
+      "peakHour": 9,
+      "afterHoursPct": 10.6,
+      "threadsStarted": 114,
+      "firstAt": "2021-11-18",
+      "lastAt": "2026-08-11",
+      "spanDays": 1728,
+      "quietDays": 2,
+      "alumni": false,
+      "byYear": {
+        "2021": 11,
+        "2022": 381,
+        "2023": 869,
+        "2024": 509,
+        "2025": 429,
+        "2026": 287
+      },
+      "rank": 5
+    },
+    {
+      "name": "Indah PPI IPC",
+      "bot": false,
+      "messages": 1874,
+      "sharePct": 6.31,
+      "text": 1683,
+      "stickers": 119,
+      "images": 31,
+      "videos": 9,
+      "documents": 18,
+      "avgChars": 62.7,
+      "emojis": 586,
+      "mentionsGiven": 284,
+      "mentionsReceived": 31,
+      "activeDays": 374,
+      "peakHour": 15,
+      "afterHoursPct": 10.1,
+      "threadsStarted": 68,
+      "firstAt": "2022-10-18",
+      "lastAt": "2026-08-13",
+      "spanDays": 1396,
+      "quietDays": 0,
+      "alumni": false,
+      "byYear": {
+        "2021": 0,
+        "2022": 78,
+        "2023": 908,
+        "2024": 480,
+        "2025": 117,
+        "2026": 291
+      },
+      "rank": 6
+    },
+    {
+      "name": "Oky Management Integrasi",
+      "bot": false,
+      "messages": 1560,
+      "sharePct": 5.25,
+      "text": 1497,
+      "stickers": 40,
+      "images": 13,
+      "videos": 0,
+      "documents": 7,
+      "avgChars": 32.3,
+      "emojis": 232,
+      "mentionsGiven": 141,
+      "mentionsReceived": 60,
+      "activeDays": 438,
+      "peakHour": 10,
+      "afterHoursPct": 7.1,
+      "threadsStarted": 46,
+      "firstAt": "2021-12-07",
+      "lastAt": "2026-08-11",
+      "spanDays": 1709,
+      "quietDays": 2,
+      "alumni": false,
+      "byYear": {
+        "2021": 9,
+        "2022": 243,
+        "2023": 541,
+        "2024": 363,
+        "2025": 165,
+        "2026": 239
+      },
+      "rank": 7
+    },
+    {
+      "name": "Rini IMO Pelindo",
+      "bot": false,
+      "messages": 1405,
+      "sharePct": 4.73,
+      "text": 1316,
+      "stickers": 52,
+      "images": 28,
+      "videos": 2,
+      "documents": 3,
+      "avgChars": 37.6,
+      "emojis": 454,
+      "mentionsGiven": 89,
+      "mentionsReceived": 37,
+      "activeDays": 418,
+      "peakHour": 10,
+      "afterHoursPct": 8.6,
+      "threadsStarted": 67,
+      "firstAt": "2022-06-21",
+      "lastAt": "2026-08-13",
+      "spanDays": 1515,
+      "quietDays": 0,
+      "alumni": false,
+      "byYear": {
+        "2021": 0,
+        "2022": 165,
+        "2023": 488,
+        "2024": 306,
+        "2025": 134,
+        "2026": 312
+      },
+      "rank": 8
+    },
+    {
+      "name": "Yulisar IPC",
+      "bot": false,
+      "messages": 1161,
+      "sharePct": 3.91,
+      "text": 994,
+      "stickers": 123,
+      "images": 26,
+      "videos": 3,
+      "documents": 2,
+      "avgChars": 26.1,
+      "emojis": 137,
+      "mentionsGiven": 55,
+      "mentionsReceived": 32,
+      "activeDays": 363,
+      "peakHour": 15,
+      "afterHoursPct": 10.9,
+      "threadsStarted": 42,
+      "firstAt": "2021-11-19",
+      "lastAt": "2026-08-13",
+      "spanDays": 1729,
+      "quietDays": 0,
+      "alumni": false,
+      "byYear": {
+        "2021": 54,
+        "2022": 202,
+        "2023": 345,
+        "2024": 353,
+        "2025": 121,
+        "2026": 86
+      },
+      "rank": 9
+    },
+    {
+      "name": "Mona Ridwan Pelindo",
+      "bot": false,
+      "messages": 1020,
+      "sharePct": 3.43,
+      "text": 975,
+      "stickers": 15,
+      "images": 15,
+      "videos": 1,
+      "documents": 7,
+      "avgChars": 40.1,
+      "emojis": 380,
+      "mentionsGiven": 73,
+      "mentionsReceived": 15,
+      "activeDays": 254,
+      "peakHour": 15,
+      "afterHoursPct": 7.9,
+      "threadsStarted": 38,
+      "firstAt": "2022-11-30",
+      "lastAt": "2026-08-11",
+      "spanDays": 1351,
+      "quietDays": 2,
+      "alumni": false,
+      "byYear": {
+        "2021": 0,
+        "2022": 8,
+        "2023": 376,
+        "2024": 209,
+        "2025": 135,
+        "2026": 292
+      },
+      "rank": 10
+    },
+    {
+      "name": "Ismi Mey IPC",
+      "bot": false,
+      "messages": 768,
+      "sharePct": 2.59,
+      "text": 751,
+      "stickers": 6,
+      "images": 0,
+      "videos": 0,
+      "documents": 9,
+      "avgChars": 24.6,
+      "emojis": 32,
+      "mentionsGiven": 24,
+      "mentionsReceived": 21,
+      "activeDays": 251,
+      "peakHour": 9,
+      "afterHoursPct": 10.9,
+      "threadsStarted": 14,
+      "firstAt": "2021-11-19",
+      "lastAt": "2026-07-29",
+      "spanDays": 1714,
+      "quietDays": 15,
+      "alumni": false,
+      "byYear": {
+        "2021": 35,
+        "2022": 221,
+        "2023": 169,
+        "2024": 225,
+        "2025": 45,
+        "2026": 73
+      },
+      "rank": 11
+    },
+    {
+      "name": "Mbak Merry IPC",
+      "bot": false,
+      "messages": 636,
+      "sharePct": 2.14,
+      "text": 555,
+      "stickers": 39,
+      "images": 30,
+      "videos": 4,
+      "documents": 4,
+      "avgChars": 45.4,
+      "emojis": 324,
+      "mentionsGiven": 34,
+      "mentionsReceived": 19,
+      "activeDays": 282,
+      "peakHour": 14,
+      "afterHoursPct": 15.6,
+      "threadsStarted": 48,
+      "firstAt": "2021-11-18",
+      "lastAt": "2026-08-05",
+      "spanDays": 1722,
+      "quietDays": 8,
+      "alumni": false,
+      "byYear": {
+        "2021": 60,
+        "2022": 172,
+        "2023": 144,
+        "2024": 104,
+        "2025": 85,
+        "2026": 71
+      },
+      "rank": 12
+    },
+    {
+      "name": "Garry IPC",
+      "bot": false,
+      "messages": 622,
+      "sharePct": 2.09,
+      "text": 450,
+      "stickers": 163,
+      "images": 6,
+      "videos": 0,
+      "documents": 1,
+      "avgChars": 72.5,
+      "emojis": 64,
+      "mentionsGiven": 55,
+      "mentionsReceived": 28,
+      "activeDays": 239,
+      "peakHour": 9,
+      "afterHoursPct": 6.4,
+      "threadsStarted": 30,
+      "firstAt": "2021-11-18",
+      "lastAt": "2026-08-11",
+      "spanDays": 1728,
+      "quietDays": 2,
+      "alumni": false,
+      "byYear": {
+        "2021": 13,
+        "2022": 115,
+        "2023": 393,
+        "2024": 85,
+        "2025": 11,
+        "2026": 5
+      },
+      "rank": 13
+    },
+    {
+      "name": "Rama IPC",
+      "bot": false,
+      "messages": 524,
+      "sharePct": 1.76,
+      "text": 496,
+      "stickers": 12,
+      "images": 16,
+      "videos": 0,
+      "documents": 0,
+      "avgChars": 41.5,
+      "emojis": 50,
+      "mentionsGiven": 63,
+      "mentionsReceived": 14,
+      "activeDays": 216,
+      "peakHour": 9,
+      "afterHoursPct": 3.1,
+      "threadsStarted": 12,
+      "firstAt": "2021-11-18",
+      "lastAt": "2026-08-11",
+      "spanDays": 1728,
+      "quietDays": 2,
+      "alumni": false,
+      "byYear": {
+        "2021": 11,
+        "2022": 75,
+        "2023": 144,
+        "2024": 140,
+        "2025": 91,
+        "2026": 63
+      },
+      "rank": 14
+    },
+    {
+      "name": "Yusuf IMO Pelindo",
+      "bot": false,
+      "messages": 490,
+      "sharePct": 1.65,
+      "text": 473,
+      "stickers": 9,
+      "images": 1,
+      "videos": 1,
+      "documents": 5,
+      "avgChars": 56.0,
+      "emojis": 221,
+      "mentionsGiven": 41,
+      "mentionsReceived": 34,
+      "activeDays": 187,
+      "peakHour": 10,
+      "afterHoursPct": 9.8,
+      "threadsStarted": 16,
+      "firstAt": "2021-12-20",
+      "lastAt": "2026-08-11",
+      "spanDays": 1696,
+      "quietDays": 2,
+      "alumni": false,
+      "byYear": {
+        "2021": 2,
+        "2022": 152,
+        "2023": 191,
+        "2024": 95,
+        "2025": 16,
+        "2026": 34
+      },
+      "rank": 15
+    },
+    {
+      "name": "Bagus Amir IPC",
+      "bot": false,
+      "messages": 481,
+      "sharePct": 1.62,
+      "text": 435,
+      "stickers": 25,
+      "images": 6,
+      "videos": 0,
+      "documents": 4,
+      "avgChars": 36.0,
+      "emojis": 130,
+      "mentionsGiven": 21,
+      "mentionsReceived": 30,
+      "activeDays": 178,
+      "peakHour": 14,
+      "afterHoursPct": 7.3,
+      "threadsStarted": 32,
+      "firstAt": "2021-11-19",
+      "lastAt": "2026-07-22",
+      "spanDays": 1707,
+      "quietDays": 22,
+      "alumni": false,
+      "byYear": {
+        "2021": 5,
+        "2022": 86,
+        "2023": 258,
+        "2024": 84,
+        "2025": 43,
+        "2026": 5
+      },
+      "rank": 16
+    },
+    {
+      "name": "Mbak Nurul SDM Budaya",
+      "bot": false,
+      "messages": 426,
+      "sharePct": 1.43,
+      "text": 403,
+      "stickers": 6,
+      "images": 8,
+      "videos": 0,
+      "documents": 4,
+      "avgChars": 53.6,
+      "emojis": 133,
+      "mentionsGiven": 35,
+      "mentionsReceived": 21,
+      "activeDays": 126,
+      "peakHour": 9,
+      "afterHoursPct": 2.6,
+      "threadsStarted": 28,
+      "firstAt": "2021-11-24",
+      "lastAt": "2026-03-13",
+      "spanDays": 1571,
+      "quietDays": 153,
+      "alumni": false,
+      "byYear": {
+        "2021": 56,
+        "2022": 207,
+        "2023": 132,
+        "2024": 17,
+        "2025": 10,
+        "2026": 4
+      },
+      "rank": 17
+    },
+    {
+      "name": "Anis PMO IPC",
+      "bot": false,
+      "messages": 420,
+      "sharePct": 1.41,
+      "text": 391,
+      "stickers": 5,
+      "images": 13,
+      "videos": 1,
+      "documents": 4,
+      "avgChars": 64.8,
+      "emojis": 181,
+      "mentionsGiven": 33,
+      "mentionsReceived": 16,
+      "activeDays": 143,
+      "peakHour": 15,
+      "afterHoursPct": 6.9,
+      "threadsStarted": 55,
+      "firstAt": "2021-11-18",
+      "lastAt": "2026-08-12",
+      "spanDays": 1729,
+      "quietDays": 1,
+      "alumni": false,
+      "byYear": {
+        "2021": 14,
+        "2022": 128,
+        "2023": 183,
+        "2024": 60,
+        "2025": 13,
+        "2026": 22
+      },
+      "rank": 18
+    },
+    {
+      "name": "Pak Oscar IPC",
+      "bot": false,
+      "messages": 377,
+      "sharePct": 1.27,
+      "text": 339,
+      "stickers": 19,
+      "images": 11,
+      "videos": 1,
+      "documents": 2,
+      "avgChars": 35.4,
+      "emojis": 147,
+      "mentionsGiven": 6,
+      "mentionsReceived": 12,
+      "activeDays": 191,
+      "peakHour": 9,
+      "afterHoursPct": 12.7,
+      "threadsStarted": 19,
+      "firstAt": "2021-11-18",
+      "lastAt": "2026-06-25",
+      "spanDays": 1681,
+      "quietDays": 49,
+      "alumni": false,
+      "byYear": {
+        "2021": 15,
+        "2022": 9,
+        "2023": 102,
+        "2024": 149,
+        "2025": 76,
+        "2026": 26
+      },
+      "rank": 19
+    },
+    {
+      "name": "Febri IPC",
+      "bot": false,
+      "messages": 268,
+      "sharePct": 0.9,
+      "text": 260,
+      "stickers": 4,
+      "images": 4,
+      "videos": 0,
+      "documents": 0,
+      "avgChars": 30.3,
+      "emojis": 4,
+      "mentionsGiven": 2,
+      "mentionsReceived": 1,
+      "activeDays": 46,
+      "peakHour": 9,
+      "afterHoursPct": 3.7,
+      "threadsStarted": 4,
+      "firstAt": "2021-11-18",
+      "lastAt": "2022-08-04",
+      "spanDays": 260,
+      "quietDays": 1470,
+      "alumni": true,
+      "byYear": {
+        "2021": 85,
+        "2022": 183,
+        "2023": 0,
+        "2024": 0,
+        "2025": 0,
+        "2026": 0
+      },
+      "rank": 20
+    },
+    {
+      "name": "Mahesa IMO Pelindo",
+      "bot": false,
+      "messages": 125,
+      "sharePct": 0.42,
+      "text": 121,
+      "stickers": 3,
+      "images": 0,
+      "videos": 0,
+      "documents": 0,
+      "avgChars": 45.1,
+      "emojis": 113,
+      "mentionsGiven": 24,
+      "mentionsReceived": 30,
+      "activeDays": 77,
+      "peakHour": 10,
+      "afterHoursPct": 23.2,
+      "threadsStarted": 4,
+      "firstAt": "2023-01-19",
+      "lastAt": "2026-07-09",
+      "spanDays": 1268,
+      "quietDays": 35,
+      "alumni": false,
+      "byYear": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 73,
+        "2024": 15,
+        "2025": 31,
+        "2026": 6
+      },
+      "rank": 21
+    },
+    {
+      "name": "Joko PMO IPC",
+      "bot": false,
+      "messages": 106,
+      "sharePct": 0.36,
+      "text": 97,
+      "stickers": 6,
+      "images": 0,
+      "videos": 0,
+      "documents": 1,
+      "avgChars": 39.5,
+      "emojis": 42,
+      "mentionsGiven": 12,
+      "mentionsReceived": 31,
+      "activeDays": 74,
+      "peakHour": 9,
+      "afterHoursPct": 14.2,
+      "threadsStarted": 5,
+      "firstAt": "2021-11-18",
+      "lastAt": "2026-07-16",
+      "spanDays": 1702,
+      "quietDays": 28,
+      "alumni": false,
+      "byYear": {
+        "2021": 6,
+        "2022": 17,
+        "2023": 47,
+        "2024": 21,
+        "2025": 10,
+        "2026": 5
+      },
+      "rank": 22
+    },
+    {
+      "name": "Pembuat grup (·7879)",
+      "bot": false,
+      "messages": 82,
+      "sharePct": 0.28,
+      "text": 71,
+      "stickers": 7,
+      "images": 4,
+      "videos": 0,
+      "documents": 0,
+      "avgChars": 39.1,
+      "emojis": 12,
+      "mentionsGiven": 5,
+      "mentionsReceived": 1,
+      "activeDays": 23,
+      "peakHour": 14,
+      "afterHoursPct": 2.4,
+      "threadsStarted": 1,
+      "firstAt": "2021-11-18",
+      "lastAt": "2022-06-17",
+      "spanDays": 212,
+      "quietDays": 1518,
+      "alumni": true,
+      "byYear": {
+        "2021": 37,
+        "2022": 45,
+        "2023": 0,
+        "2024": 0,
+        "2025": 0,
+        "2026": 0
+      },
+      "rank": 23
+    },
+    {
+      "name": "Rafsa PMO IPC",
+      "bot": false,
+      "messages": 54,
+      "sharePct": 0.18,
+      "text": 43,
+      "stickers": 8,
+      "images": 1,
+      "videos": 0,
+      "documents": 0,
+      "avgChars": 69.9,
+      "emojis": 42,
+      "mentionsGiven": 19,
+      "mentionsReceived": 10,
+      "activeDays": 28,
+      "peakHour": 11,
+      "afterHoursPct": 14.8,
+      "threadsStarted": 4,
+      "firstAt": "2021-11-19",
+      "lastAt": "2024-04-25",
+      "spanDays": 889,
+      "quietDays": 840,
+      "alumni": true,
+      "byYear": {
+        "2021": 4,
+        "2022": 27,
+        "2023": 20,
+        "2024": 3,
+        "2025": 0,
+        "2026": 0
+      },
+      "rank": 24
+    },
+    {
+      "name": "Meta AI",
+      "bot": true,
+      "messages": 23,
+      "sharePct": 0.08,
+      "text": 23,
+      "stickers": 0,
+      "images": 0,
+      "videos": 0,
+      "documents": 0,
+      "avgChars": 318.1,
+      "emojis": 10,
+      "mentionsGiven": 0,
+      "mentionsReceived": 1,
+      "activeDays": 5,
+      "peakHour": 11,
+      "afterHoursPct": 0.0,
+      "threadsStarted": 0,
+      "firstAt": "2024-12-18",
+      "lastAt": "2026-03-31",
+      "spanDays": 469,
+      "quietDays": 135,
+      "alumni": false,
+      "byYear": {
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 2,
+        "2025": 15,
+        "2026": 6
+      }
+    }
+  ],
+  "topics": [
+    {
+      "id": "organisasi",
+      "label": "Direksi & organisasi",
+      "blurb": "Direksi, komisaris, Group Head, transformasi Pelindo.",
+      "messages": 1455,
+      "sharePct": 5.4,
+      "byYear": {
+        "2021": 7,
+        "2022": 129,
+        "2023": 404,
+        "2024": 409,
+        "2025": 244,
+        "2026": 262
+      }
+    },
+    {
+      "id": "sosial",
+      "label": "Sosial & ucapan",
+      "blurb": "Makan siang, ultah, ucapan selamat, kopi.",
+      "messages": 516,
+      "sharePct": 1.9,
+      "byYear": {
+        "2021": 8,
+        "2022": 52,
+        "2023": 171,
+        "2024": 144,
+        "2025": 80,
+        "2026": 61
+      }
+    },
+    {
+      "id": "rapat",
+      "label": "Rapat & Zoom",
+      "blurb": "Undangan, konsinyering, daftar hadir, VC, Google Meet.",
+      "messages": 257,
+      "sharePct": 0.9,
+      "byYear": {
+        "2021": 11,
+        "2022": 70,
+        "2023": 93,
+        "2024": 37,
+        "2025": 17,
+        "2026": 29
+      }
+    },
+    {
+      "id": "perjalanan",
+      "label": "Dinas, cuti & libur",
+      "blurb": "Perjalanan dinas, cuti, lebaran, natal, tahun baru.",
+      "messages": 215,
+      "sharePct": 0.8,
+      "byYear": {
+        "2021": 42,
+        "2022": 26,
+        "2023": 55,
+        "2024": 53,
+        "2025": 21,
+        "2026": 18
+      }
+    },
+    {
+      "id": "kpi",
+      "label": "KPI, KAI & alokasi",
+      "blurb": "Kamus KPI, bobot, target, My Team, BOPO, output, change management.",
+      "messages": 174,
+      "sharePct": 0.6,
+      "byYear": {
+        "2021": 1,
+        "2022": 7,
+        "2023": 17,
+        "2024": 23,
+        "2025": 5,
+        "2026": 121
+      }
+    },
+    {
+      "id": "belajar",
+      "label": "Pelatihan & knowledge",
+      "blurb": "Pelatihan, training, sertifikasi, knowledge portal.",
+      "messages": 142,
+      "sharePct": 0.5,
+      "byYear": {
+        "2021": 2,
+        "2022": 12,
+        "2023": 47,
+        "2024": 42,
+        "2025": 13,
+        "2026": 26
+      }
+    },
+    {
+      "id": "anggaran",
+      "label": "Anggaran & RKAP",
+      "blurb": "RKAP, capex, opex, budget, realisasi.",
+      "messages": 88,
+      "sharePct": 0.3,
+      "byYear": {
+        "2021": 1,
+        "2022": 23,
+        "2023": 20,
+        "2024": 23,
+        "2025": 5,
+        "2026": 16
+      }
+    },
+    {
+      "id": "sistem",
+      "label": "Sistem, aplikasi & AI",
+      "blurb": "Aplikasi internal, vendor, Office 365, dashboard, AI.",
+      "messages": 83,
+      "sharePct": 0.3,
+      "byYear": {
+        "2021": 3,
+        "2022": 6,
+        "2023": 16,
+        "2024": 20,
+        "2025": 20,
+        "2026": 18
+      }
+    },
+    {
+      "id": "investasi",
+      "label": "Investasi & pasar",
+      "blurb": "Saham, IPO, IHSG, reksadana, portofolio.",
+      "messages": 75,
+      "sharePct": 0.3,
+      "byYear": {
+        "2021": 1,
+        "2022": 6,
+        "2023": 16,
+        "2024": 18,
+        "2025": 17,
+        "2026": 17
+      }
+    },
+    {
+      "id": "kesehatan",
+      "label": "Kesehatan & pandemi",
+      "blurb": "Prokes, masker, COVID, WFH, wisma.",
+      "messages": 75,
+      "sharePct": 0.3,
+      "byYear": {
+        "2021": 11,
+        "2022": 26,
+        "2023": 10,
+        "2024": 10,
+        "2025": 3,
+        "2026": 15
+      }
+    },
+    {
+      "id": "excel",
+      "label": "Excel & rumus",
+      "blurb": "Worksheet, spreadsheet, template, protect sheet.",
+      "messages": 53,
+      "sharePct": 0.2,
+      "byYear": {
+        "2021": 4,
+        "2022": 13,
+        "2023": 18,
+        "2024": 8,
+        "2025": 1,
+        "2026": 9
+      }
+    },
+    {
+      "id": "proker",
+      "label": "Program kerja",
+      "blurb": "Proker, progress, tasklist, missing sheet, Dirinvest.",
+      "messages": 24,
+      "sharePct": 0.1,
+      "byYear": {
+        "2021": 10,
+        "2022": 5,
+        "2023": 5,
+        "2024": 4,
+        "2025": 0,
+        "2026": 0
+      }
+    }
+  ],
+  "monthly": [
+    {
+      "month": "2021-11",
+      "count": 451
+    },
+    {
+      "month": "2021-12",
+      "count": 264
+    },
+    {
+      "month": "2022-01",
+      "count": 112
+    },
+    {
+      "month": "2022-02",
+      "count": 35
+    },
+    {
+      "month": "2022-03",
+      "count": 108
+    },
+    {
+      "month": "2022-04",
+      "count": 68
+    },
+    {
+      "month": "2022-05",
+      "count": 139
+    },
+    {
+      "month": "2022-06",
+      "count": 859
+    },
+    {
+      "month": "2022-07",
+      "count": 511
+    },
+    {
+      "month": "2022-08",
+      "count": 826
+    },
+    {
+      "month": "2022-09",
+      "count": 481
+    },
+    {
+      "month": "2022-10",
+      "count": 576
+    },
+    {
+      "month": "2022-11",
+      "count": 305
+    },
+    {
+      "month": "2022-12",
+      "count": 512
+    },
+    {
+      "month": "2023-01",
+      "count": 434
+    },
+    {
+      "month": "2023-02",
+      "count": 535
+    },
+    {
+      "month": "2023-03",
+      "count": 707
+    },
+    {
+      "month": "2023-04",
+      "count": 452
+    },
+    {
+      "month": "2023-05",
+      "count": 1163
+    },
+    {
+      "month": "2023-06",
+      "count": 1195
+    },
+    {
+      "month": "2023-07",
+      "count": 1065
+    },
+    {
+      "month": "2023-08",
+      "count": 966
+    },
+    {
+      "month": "2023-09",
+      "count": 878
+    },
+    {
+      "month": "2023-10",
+      "count": 549
+    },
+    {
+      "month": "2023-11",
+      "count": 474
+    },
+    {
+      "month": "2023-12",
+      "count": 926
+    },
+    {
+      "month": "2024-01",
+      "count": 469
+    },
+    {
+      "month": "2024-02",
+      "count": 510
+    },
+    {
+      "month": "2024-03",
+      "count": 832
+    },
+    {
+      "month": "2024-04",
+      "count": 407
+    },
+    {
+      "month": "2024-05",
+      "count": 544
+    },
+    {
+      "month": "2024-06",
+      "count": 595
+    },
+    {
+      "month": "2024-07",
+      "count": 1005
+    },
+    {
+      "month": "2024-08",
+      "count": 899
+    },
+    {
+      "month": "2024-09",
+      "count": 551
+    },
+    {
+      "month": "2024-10",
+      "count": 477
+    },
+    {
+      "month": "2024-11",
+      "count": 346
+    },
+    {
+      "month": "2024-12",
+      "count": 571
+    },
+    {
+      "month": "2025-01",
+      "count": 247
+    },
+    {
+      "month": "2025-02",
+      "count": 186
+    },
+    {
+      "month": "2025-03",
+      "count": 452
+    },
+    {
+      "month": "2025-04",
+      "count": 419
+    },
+    {
+      "month": "2025-05",
+      "count": 187
+    },
+    {
+      "month": "2025-06",
+      "count": 303
+    },
+    {
+      "month": "2025-07",
+      "count": 442
+    },
+    {
+      "month": "2025-08",
+      "count": 382
+    },
+    {
+      "month": "2025-09",
+      "count": 318
+    },
+    {
+      "month": "2025-10",
+      "count": 193
+    },
+    {
+      "month": "2025-11",
+      "count": 203
+    },
+    {
+      "month": "2025-12",
+      "count": 262
+    },
+    {
+      "month": "2026-01",
+      "count": 667
+    },
+    {
+      "month": "2026-02",
+      "count": 299
+    },
+    {
+      "month": "2026-03",
+      "count": 345
+    },
+    {
+      "month": "2026-04",
+      "count": 771
+    },
+    {
+      "month": "2026-05",
+      "count": 1012
+    },
+    {
+      "month": "2026-06",
+      "count": 538
+    },
+    {
+      "month": "2026-07",
+      "count": 482
+    },
+    {
+      "month": "2026-08",
+      "count": 194
+    }
+  ],
+  "yearly": [
+    {
+      "year": "2021",
+      "count": 715
+    },
+    {
+      "year": "2022",
+      "count": 4532
+    },
+    {
+      "year": "2023",
+      "count": 9344
+    },
+    {
+      "year": "2024",
+      "count": 7206
+    },
+    {
+      "year": "2025",
+      "count": 3594
+    },
+    {
+      "year": "2026",
+      "count": 4308
+    }
+  ],
+  "hourly": [
+    {
+      "hour": 0,
+      "count": 17
+    },
+    {
+      "hour": 1,
+      "count": 5
+    },
+    {
+      "hour": 2,
+      "count": 4
+    },
+    {
+      "hour": 3,
+      "count": 7
+    },
+    {
+      "hour": 4,
+      "count": 11
+    },
+    {
+      "hour": 5,
+      "count": 61
+    },
+    {
+      "hour": 6,
+      "count": 195
+    },
+    {
+      "hour": 7,
+      "count": 421
+    },
+    {
+      "hour": 8,
+      "count": 1604
+    },
+    {
+      "hour": 9,
+      "count": 3714
+    },
+    {
+      "hour": 10,
+      "count": 3470
+    },
+    {
+      "hour": 11,
+      "count": 3101
+    },
+    {
+      "hour": 12,
+      "count": 2008
+    },
+    {
+      "hour": 13,
+      "count": 2545
+    },
+    {
+      "hour": 14,
+      "count": 3048
+    },
+    {
+      "hour": 15,
+      "count": 2987
+    },
+    {
+      "hour": 16,
+      "count": 2258
+    },
+    {
+      "hour": 17,
+      "count": 1538
+    },
+    {
+      "hour": 18,
+      "count": 794
+    },
+    {
+      "hour": 19,
+      "count": 724
+    },
+    {
+      "hour": 20,
+      "count": 508
+    },
+    {
+      "hour": 21,
+      "count": 365
+    },
+    {
+      "hour": 22,
+      "count": 228
+    },
+    {
+      "hour": 23,
+      "count": 86
+    }
+  ],
+  "weekdays": [
+    {
+      "day": "Sen",
+      "count": 5286
+    },
+    {
+      "day": "Sel",
+      "count": 6184
+    },
+    {
+      "day": "Rab",
+      "count": 5887
+    },
+    {
+      "day": "Kam",
+      "count": 6102
+    },
+    {
+      "day": "Jum",
+      "count": 5039
+    },
+    {
+      "day": "Sab",
+      "count": 646
+    },
+    {
+      "day": "Min",
+      "count": 555
+    }
+  ],
+  "heatmap": [
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 0,
+      "count": 0
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 1,
+      "count": 0
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 2,
+      "count": 1
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 3,
+      "count": 1
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 4,
+      "count": 1
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 5,
+      "count": 3
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 6,
+      "count": 24
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 7,
+      "count": 56
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 8,
+      "count": 356
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 9,
+      "count": 685
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 10,
+      "count": 594
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 11,
+      "count": 477
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 12,
+      "count": 487
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 13,
+      "count": 513
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 14,
+      "count": 532
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 15,
+      "count": 554
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 16,
+      "count": 289
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 17,
+      "count": 243
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 18,
+      "count": 96
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 19,
+      "count": 117
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 20,
+      "count": 91
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 21,
+      "count": 117
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 22,
+      "count": 39
+    },
+    {
+      "dow": 0,
+      "day": "Sen",
+      "hour": 23,
+      "count": 10
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 0,
+      "count": 0
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 1,
+      "count": 1
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 2,
+      "count": 1
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 3,
+      "count": 1
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 4,
+      "count": 5
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 5,
+      "count": 2
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 6,
+      "count": 24
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 7,
+      "count": 21
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 8,
+      "count": 246
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 9,
+      "count": 637
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 10,
+      "count": 697
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 11,
+      "count": 774
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 12,
+      "count": 416
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 13,
+      "count": 455
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 14,
+      "count": 700
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 15,
+      "count": 860
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 16,
+      "count": 604
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 17,
+      "count": 282
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 18,
+      "count": 121
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 19,
+      "count": 141
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 20,
+      "count": 76
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 21,
+      "count": 54
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 22,
+      "count": 61
+    },
+    {
+      "dow": 1,
+      "day": "Sel",
+      "hour": 23,
+      "count": 5
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 0,
+      "count": 0
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 1,
+      "count": 0
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 2,
+      "count": 0
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 3,
+      "count": 1
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 4,
+      "count": 4
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 5,
+      "count": 12
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 6,
+      "count": 41
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 7,
+      "count": 80
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 8,
+      "count": 328
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 9,
+      "count": 634
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 10,
+      "count": 644
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 11,
+      "count": 425
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 12,
+      "count": 374
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 13,
+      "count": 486
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 14,
+      "count": 732
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 15,
+      "count": 697
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 16,
+      "count": 590
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 17,
+      "count": 381
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 18,
+      "count": 116
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 19,
+      "count": 135
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 20,
+      "count": 101
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 21,
+      "count": 45
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 22,
+      "count": 55
+    },
+    {
+      "dow": 2,
+      "day": "Rab",
+      "hour": 23,
+      "count": 6
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 0,
+      "count": 0
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 1,
+      "count": 0
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 2,
+      "count": 0
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 3,
+      "count": 0
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 4,
+      "count": 1
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 5,
+      "count": 18
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 6,
+      "count": 12
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 7,
+      "count": 101
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 8,
+      "count": 378
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 9,
+      "count": 881
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 10,
+      "count": 675
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 11,
+      "count": 584
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 12,
+      "count": 315
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 13,
+      "count": 564
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 14,
+      "count": 581
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 15,
+      "count": 560
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 16,
+      "count": 435
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 17,
+      "count": 378
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 18,
+      "count": 236
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 19,
+      "count": 152
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 20,
+      "count": 123
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 21,
+      "count": 55
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 22,
+      "count": 15
+    },
+    {
+      "dow": 3,
+      "day": "Kam",
+      "hour": 23,
+      "count": 38
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 0,
+      "count": 5
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 1,
+      "count": 1
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 2,
+      "count": 1
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 3,
+      "count": 2
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 4,
+      "count": 0
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 5,
+      "count": 14
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 6,
+      "count": 60
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 7,
+      "count": 94
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 8,
+      "count": 233
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 9,
+      "count": 769
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 10,
+      "count": 721
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 11,
+      "count": 751
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 12,
+      "count": 356
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 13,
+      "count": 438
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 14,
+      "count": 445
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 15,
+      "count": 255
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 16,
+      "count": 287
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 17,
+      "count": 202
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 18,
+      "count": 128
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 19,
+      "count": 112
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 20,
+      "count": 50
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 21,
+      "count": 72
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 22,
+      "count": 32
+    },
+    {
+      "dow": 4,
+      "day": "Jum",
+      "hour": 23,
+      "count": 11
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 0,
+      "count": 12
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 1,
+      "count": 3
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 2,
+      "count": 0
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 3,
+      "count": 2
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 4,
+      "count": 0
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 5,
+      "count": 10
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 6,
+      "count": 17
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 7,
+      "count": 32
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 8,
+      "count": 33
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 9,
+      "count": 88
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 10,
+      "count": 94
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 11,
+      "count": 62
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 12,
+      "count": 35
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 13,
+      "count": 25
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 14,
+      "count": 29
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 15,
+      "count": 19
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 16,
+      "count": 11
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 17,
+      "count": 31
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 18,
+      "count": 49
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 19,
+      "count": 38
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 20,
+      "count": 20
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 21,
+      "count": 15
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 22,
+      "count": 15
+    },
+    {
+      "dow": 5,
+      "day": "Sab",
+      "hour": 23,
+      "count": 6
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 0,
+      "count": 0
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 1,
+      "count": 0
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 2,
+      "count": 1
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 3,
+      "count": 0
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 4,
+      "count": 0
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 5,
+      "count": 2
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 6,
+      "count": 17
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 7,
+      "count": 37
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 8,
+      "count": 30
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 9,
+      "count": 20
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 10,
+      "count": 45
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 11,
+      "count": 28
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 12,
+      "count": 25
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 13,
+      "count": 64
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 14,
+      "count": 29
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 15,
+      "count": 42
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 16,
+      "count": 42
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 17,
+      "count": 21
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 18,
+      "count": 48
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 19,
+      "count": 29
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 20,
+      "count": 47
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 21,
+      "count": 7
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 22,
+      "count": 11
+    },
+    {
+      "dow": 6,
+      "day": "Min",
+      "hour": 23,
+      "count": 10
+    }
+  ],
+  "peakDays": [
+    {
+      "date": "2026-05-19",
+      "count": 367
+    },
+    {
+      "date": "2022-06-28",
+      "count": 249
+    },
+    {
+      "date": "2023-04-11",
+      "count": 204
+    },
+    {
+      "date": "2022-08-26",
+      "count": 192
+    },
+    {
+      "date": "2023-07-31",
+      "count": 190
+    },
+    {
+      "date": "2023-08-04",
+      "count": 183
+    },
+    {
+      "date": "2021-11-19",
+      "count": 180
+    },
+    {
+      "date": "2026-04-06",
+      "count": 180
+    },
+    {
+      "date": "2023-05-25",
+      "count": 168
+    },
+    {
+      "date": "2026-06-25",
+      "count": 165
+    }
+  ],
+  "topWords": [
+    {
+      "word": "keren",
+      "count": 429
+    },
+    {
+      "word": "semoga",
+      "count": 328
+    },
+    {
+      "word": "selamat",
+      "count": 298
+    },
+    {
+      "word": "ngeri",
+      "count": 291
+    },
+    {
+      "word": "semangat",
+      "count": 242
+    },
+    {
+      "word": "mantap",
+      "count": 239
+    },
+    {
+      "word": "sehat",
+      "count": 229
+    },
+    {
+      "word": "kerja",
+      "count": 226
+    },
+    {
+      "word": "direksi",
+      "count": 223
+    },
+    {
+      "word": "aman",
+      "count": 212
+    },
+    {
+      "word": "bumn",
+      "count": 206
+    },
+    {
+      "word": "kelas",
+      "count": 205
+    },
+    {
+      "word": "anak",
+      "count": 201
+    },
+    {
+      "word": "bikin",
+      "count": 199
+    },
+    {
+      "word": "sukses",
+      "count": 199
+    },
+    {
+      "word": "bonus",
+      "count": 195
+    },
+    {
+      "word": "naik",
+      "count": 186
+    },
+    {
+      "word": "kakk",
+      "count": 184
+    },
+    {
+      "word": "terima",
+      "count": 183
+    },
+    {
+      "word": "salah",
+      "count": 182
+    },
+    {
+      "word": "punya",
+      "count": 181
+    },
+    {
+      "word": "lain",
+      "count": 178
+    },
+    {
+      "word": "dapat",
+      "count": 173
+    },
+    {
+      "word": "beda",
+      "count": 172
+    },
+    {
+      "word": "spmt",
+      "count": 172
+    },
+    {
+      "word": "ikut",
+      "count": 169
+    },
+    {
+      "word": "coba",
+      "count": 168
+    },
+    {
+      "word": "joko",
+      "count": 168
+    },
+    {
+      "word": "pmli",
+      "count": 164
+    },
+    {
+      "word": "kantor",
+      "count": 164
+    },
+    {
+      "word": "kasih",
+      "count": 163
+    },
+    {
+      "word": "sampe",
+      "count": 159
+    },
+    {
+      "word": "perusahaan",
+      "count": 158
+    },
+    {
+      "word": "indonesia",
+      "count": 154
+    },
+    {
+      "word": "okky",
+      "count": 151
+    },
+    {
+      "word": "pernah",
+      "count": 149
+    }
+  ],
+  "topEmojis": [
+    {
+      "emoji": "🤣",
+      "count": 1031
+    },
+    {
+      "emoji": "🙏",
+      "count": 817
+    },
+    {
+      "emoji": "🏻",
+      "count": 741
+    },
+    {
+      "emoji": "👀",
+      "count": 517
+    },
+    {
+      "emoji": "👍",
+      "count": 396
+    },
+    {
+      "emoji": "😂",
+      "count": 394
+    },
+    {
+      "emoji": "😅",
+      "count": 243
+    },
+    {
+      "emoji": "🔥",
+      "count": 239
+    },
+    {
+      "emoji": "🥹",
+      "count": 194
+    },
+    {
+      "emoji": "😁",
+      "count": 150
+    },
+    {
+      "emoji": "👏",
+      "count": 149
+    },
+    {
+      "emoji": "🙈",
+      "count": 142
+    },
+    {
+      "emoji": "🥳",
+      "count": 142
+    },
+    {
+      "emoji": "😆",
+      "count": 133
+    }
+  ],
+  "nicknames": [
+    {
+      "nick": "her",
+      "refersTo": "Hermawan IPC",
+      "count": 615
+    },
+    {
+      "nick": "tifta",
+      "refersTo": "Mr Tifta",
+      "count": 467
+    },
+    {
+      "nick": "tif",
+      "refersTo": "Mr Tifta",
+      "count": 265
+    },
+    {
+      "nick": "ical",
+      "refersTo": "Yulisar IPC",
+      "count": 232
+    },
+    {
+      "nick": "sultif",
+      "refersTo": "Mr Tifta",
+      "count": 86
+    },
+    {
+      "nick": "dak",
+      "refersTo": "Danti IPC",
+      "count": 52
+    }
+  ],
+  "topMentions": [
+    {
+      "name": "Hermawan IPC",
+      "count": 65
+    },
+    {
+      "name": "Oky Management Integrasi",
+      "count": 60
+    },
+    {
+      "name": "Lucky IPC",
+      "count": 55
+    },
+    {
+      "name": "Danti IPC",
+      "count": 51
+    },
+    {
+      "name": "Fajar SDM Budaya",
+      "count": 49
+    },
+    {
+      "name": "Mr Tifta",
+      "count": 42
+    },
+    {
+      "name": "Rini IMO Pelindo",
+      "count": 37
+    },
+    {
+      "name": "Yusuf IMO Pelindo",
+      "count": 34
+    },
+    {
+      "name": "Yulisar IPC",
+      "count": 32
+    },
+    {
+      "name": "Indah PPI IPC",
+      "count": 31
+    }
+  ],
+  "urlHosts": [
+    {
+      "host": "instagram.com",
+      "count": 68
+    },
+    {
+      "host": "bit.ly",
+      "count": 64
+    },
+    {
+      "host": "linktr.ee",
+      "count": 28
+    },
+    {
+      "host": "pelindo2-my.sharepoint.com",
+      "count": 27
+    },
+    {
+      "host": "youtu.be",
+      "count": 24
+    },
+    {
+      "host": "youtube.com",
+      "count": 19
+    },
+    {
+      "host": "cnbcindonesia.com",
+      "count": 17
+    },
+    {
+      "host": "knowledge-portaverse.pelindo.co.id",
+      "count": 14
+    },
+    {
+      "host": "finance.detik.com",
+      "count": 13
+    },
+    {
+      "host": "cnnindonesia.com",
+      "count": 10
+    }
+  ],
+  "nameHistory": [
+    {
+      "at": "2021-11-18",
+      "name": "IMO experts",
+      "by": "Danti IPC"
+    },
+    {
+      "at": "2021-11-18",
+      "name": "VC OH VC",
+      "by": "Pembuat grup (·7879)"
+    },
+    {
+      "at": "2021-11-18",
+      "name": "IMO OH IMO",
+      "by": "Pembuat grup (·7879)"
+    },
+    {
+      "at": "2021-11-18",
+      "name": "EMOH IMO",
+      "by": "Febri IPC"
+    },
+    {
+      "at": "2021-11-18",
+      "name": "DAH IMO AJA",
+      "by": "Akun ekspor (You)"
+    },
+    {
+      "at": "2022-06-16",
+      "name": "IMO STAFF",
+      "by": "Hermawan IPC"
+    },
+    {
+      "at": "2024-07-29",
+      "name": "imo factory",
+      "by": "Hermawan IPC"
+    },
+    {
+      "at": "2024-12-04",
+      "name": "IMO FACTORY",
+      "by": "Hermawan IPC"
+    }
+  ],
+  "highlights": [
+    {
+      "kicker": "Usia grup",
+      "title": "1731 hari · 24 anggota",
+      "body": "Obrolan dari 15 Nov 2021 sampai 13 Aug 2026. Rata-rata 17.2 pesan per hari kalender, median 20 pada hari yang ada chat."
+    },
+    {
+      "kicker": "Konsentrasi",
+      "title": "5 orang menulis 58.2% pesan",
+      "body": "Hermawan IPC, Danti IPC, Lucky IPC, Mr Tifta, Fajar SDM Budaya. Hermawan IPC di peringkat 1 dengan 4.598 pesan (15.48%)."
+    },
+    {
+      "kicker": "Tahun puncak",
+      "title": "2023 · 9.344 pesan",
+      "body": "Bulan tersibuk 2023-06 (1.195 pesan). Hari tersibuk 2026-05-19 dengan 367 pesan."
+    },
+    {
+      "kicker": "Jam kerja",
+      "title": "83% masuk pukul 09–18",
+      "body": "Puncak jam 09.00. Akhir pekan hanya 4%. Larut malam (22–05) 1% — grup ini hidup di jam kantor."
+    },
+    {
+      "kicker": "Media",
+      "title": "1.390 stiker · 830 gambar",
+      "body": "Lucky IPC raja stiker (290). Mr Tifta paling banyak kirim gambar (200)."
+    },
+    {
+      "kicker": "Identitas grup",
+      "title": "8 kali ganti nama",
+      "body": "IMO experts → VC OH VC → IMO OH IMO → EMOH IMO → DAH IMO AJA → IMO STAFF → imo factory → IMO FACTORY"
+    },
+    {
+      "kicker": "Jaringan",
+      "title": "Paling di-tag: Hermawan IPC",
+      "body": "65 mention. Pembuka thread: Hermawan IPC (250 percakapan baru setelah jeda ≥2 jam)."
+    },
+    {
+      "kicker": "Konsistensi",
+      "title": "Danti IPC hadir 673 hari",
+      "body": "Bukan hanya volume — ini orang yang paling sering muncul di kalender grup."
+    },
+    {
+      "kicker": "Night owl",
+      "title": "Mahesa IMO Pelindo",
+      "body": "23.2% pesannya di luar 07.00–18.00 (min. 80 pesan)."
+    },
+    {
+      "kicker": "Teks terpanjang",
+      "title": "Fajar SDM Budaya",
+      "body": "Rata-rata 77.8 karakter per pesan — cenderung menjelaskan, bukan cuma react."
+    },
+    {
+      "kicker": "Jedah terpanjang",
+      "title": "26 hari sepi",
+      "body": "2022-03-18 → 2022-04-13."
+    },
+    {
+      "kicker": "Alumni",
+      "title": "3 anggota sudah >6 bulan sepi",
+      "body": "Febri IPC (terakhir 2022-08-04), Pembuat grup (·7879) (terakhir 2022-06-17), Rafsa PMO IPC (terakhir 2024-04-25)"
+    }
+  ],
+  "roles": {
+    "mostActive": "Hermawan IPC",
+    "mostPresent": "Danti IPC",
+    "stickerKing": "Lucky IPC",
+    "imageKing": "Mr Tifta",
+    "mentionMagnet": "Hermawan IPC",
+    "threadStarter": "Hermawan IPC",
+    "nightOwl": "Mahesa IMO Pelindo",
+    "longWriter": "Fajar SDM Budaya",
+    "emojiKing": "Danti IPC"
+  },
+  "silence": {
+    "days": 26.0,
+    "from": "2022-03-18",
+    "to": "2022-04-13"
+  },
+  "alumni": [
+    {
+      "name": "Febri IPC",
+      "lastAt": "2022-08-04",
+      "messages": 268
+    },
+    {
+      "name": "Pembuat grup (·7879)",
+      "lastAt": "2022-06-17",
+      "messages": 82
+    },
+    {
+      "name": "Rafsa PMO IPC",
+      "lastAt": "2024-04-25",
+      "messages": 54
+    }
+  ]
+}
