@@ -207,3 +207,13 @@ export function IconMore(props: IconProps) {
     </svg>
   )
 }
+
+export function IconShare(props: IconProps) {
+  return (
+    <svg {...glyph(props)}>
+      <path d="M12 4v10" />
+      <path d="M8 8l4-4 4 4" />
+      <path d="M6 13v6h12v-6" />
+    </svg>
+  )
+}

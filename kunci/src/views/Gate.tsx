@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Field, SecretInput, StrengthBar, TextArea, TextInput } from '../components/Field'
 import { IconKey, IconLock } from '../components/Icons'
+import { IosInstallCard } from '../components/IosInstallCard'
 import { isStrongMaster, passwordStrength } from '../lib/strength'
 import { useVault } from '../state/VaultContext'
 
@@ -44,6 +45,7 @@ export function SetupScreen() {
             brankas dibuat, simpan <strong>recovery key</strong> di luar Kunci. Reset kata sandi tidak lewat kode Gmail ke{' '}
             {recoveryEmail}.
           </p>
+          <IosInstallCard />
           <Field label="Kata sandi induk">
             <SecretInput value={password} onChange={setPassword} autoComplete="new-password" placeholder="Minimal 12 karakter" />
           </Field>
@@ -118,6 +120,7 @@ export function LockScreen() {
             </p>
           </div>
         </div>
+        <IosInstallCard />
         {mode === 'unlock' ? (
           <form className="stack" onSubmit={(e) => void onSubmit(e)}>
             <Field label="Kata sandi induk">

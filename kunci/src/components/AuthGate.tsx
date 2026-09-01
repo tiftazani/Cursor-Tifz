@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Field, TextInput } from './Field'
 import { IconLock } from './Icons'
+import { IosInstallCard } from './IosInstallCard'
 import { RECOVERY_EMAIL } from '../lib/account'
 import { DEFAULT_CLOUD_URL } from '../lib/allowed-origins'
 import { isPublicHost, requestOtp, verifyOtp } from '../lib/cloud'
@@ -56,6 +57,7 @@ export function AuthGate({ onAuthed }: { onAuthed: () => void }) {
             : 'Cek address bar: harus HTTPS dan domain Kunci milikmu. Kode 8 karakter hanya membuka sesi. Kata sandi induk dimasukkan setelah ini.'}
         </p>
         <p className="hint-pill">Situs ini: {window.location.host}</p>
+        <IosInstallCard />
         <form className="stack" onSubmit={(e) => void onSubmit(e)}>
           <button type="button" className="btn" onClick={() => void send()} disabled={busy}>
             {sent ? 'Kirim ulang kode' : 'Kirim kode masuk ke Gmail'}

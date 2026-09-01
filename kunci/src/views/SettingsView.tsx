@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Field, SecretInput, TextInput } from '../components/Field'
 import { isStrongMaster } from '../lib/strength'
 import { AUTO_LOCK_OPTIONS, resolveAutoLockSeconds } from '../lib/autolock'
+import { IosInstallGuide } from '../components/IosInstallCard'
 import { useVault } from '../state/VaultContext'
 
 export function SettingsView() {
@@ -56,6 +57,8 @@ export function SettingsView() {
           kunci-tifta.netlify.app membuka brankas yang sama setelah sesi OTP.
         </p>
       </header>
+
+      <IosInstallGuide />
 
       <div className="card stack">
         <h3>Keamanan</h3>

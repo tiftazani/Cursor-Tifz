@@ -444,6 +444,34 @@ select.input:focus {
   width: fit-content;
 }
 
+.install-card h3 {
+  margin: 0;
+}
+
+.install-steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.install-share {
+  display: inline-flex;
+  vertical-align: -0.2em;
+  margin: 0 0.25em;
+  color: var(--accent);
+}
+
+.gate-card .install-card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  box-shadow: none;
+  padding: 14px 16px;
+}
+
 .shell {
   position: fixed;
   inset: 0;
