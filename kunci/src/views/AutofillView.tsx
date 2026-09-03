@@ -111,6 +111,11 @@ export function AutofillView() {
               app-nya dihapus.
             </p>
           )}
+          <p className="muted">
+            Helper tidak boleh muncul di Dock. Kalau ikonnya numpuk: di Terminal jalankan{' '}
+            <code>killall -9 &quot;Kunci Helper&quot;</code> lalu{' '}
+            <code>launchctl bootout gui/$(id -u)/com.kunci.daemon</code>, baru install-service lagi.
+          </p>
           <ol className="steps">
             <li>
               <code>cd ~/Cursor-Tifz && git pull origin cursor/kunci-password-manager-4eaf</code>

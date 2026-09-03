@@ -2,6 +2,13 @@ ObjC.import('Foundation')
 ObjC.import('ApplicationServices')
 ObjC.import('AppKit')
 
+function becomeSilent() {
+  try {
+    const app = $.NSApplication.sharedApplication
+    app.setActivationPolicy($.NSApplicationActivationPolicyAccessory)
+  } catch (e) {}
+}
+
 function unwrap(val) {
   try {
     return ObjC.unwrap(val)
@@ -11,16 +18,16 @@ function unwrap(val) {
 }
 
 function printOut(text) {
-  const s = String(text)
   try {
-    $.NSFileHandle.fileHandleWithStandardOutput.writeData($(s + '\n').dataUsingEncoding($.NSUTF8StringEncoding))
+    const s = String(text) + '\n'
+    $.NSFileHandle.fileHandleWithStandardOutput.writeData($(s).dataUsingEncoding($.NSUTF8StringEncoding))
   } catch (e) {}
-  return s
 }
 
 function printErr(text) {
   try {
-    $.NSFileHandle.fileHandleWithStandardError.writeData($(String(text) + '\n').dataUsingEncoding($.NSUTF8StringEncoding))
+    const s = String(text) + '\n'
+    $.NSFileHandle.fileHandleWithStandardError.writeData($(s).dataUsingEncoding($.NSUTF8StringEncoding))
   } catch (e) {}
 }
 
@@ -33,19 +40,63 @@ function home() {
   return unwrap($.NSHomeDirectory())
 }
 
-function request(argv) {
-  const known = { status: 1, prompt: 1, apps: 1, frontmost: 1, fill: 1 }
-  const args = (argv || []).map(String)
-  let start = 0
-  if (args.length && !known[args[0]]) start = 1
-  if (args.length > start && known[args[start]]) {
-    return { cmd: args[start], args: args.slice(start + 1) }
+function toJsStrings(val) {
+  const out = []
+  if (val === undefined || val === null || val === false) return out
+  if (typeof val === 'string') {
+    out.push(val)
+    return out
   }
   try {
-    const fromFile = JSON.parse(readUtf8(home() + '/.kunci/helper-request.json') || '{}')
-    if (fromFile && fromFile.cmd) return { cmd: String(fromFile.cmd), args: (fromFile.args || []).map(String) }
+    const len = Number(val.length)
+    if (!isFinite(len) || len < 0 || len > 64) return out
+    for (let i = 0; i < len; i++) {
+      try {
+        out.push(String(val[i]))
+      } catch (e) {}
+    }
+  } catch (e2) {}
+  return out
+}
+
+function processArgv() {
+  const out = []
+  try {
+    const nsArgs = $.NSProcessInfo.processInfo.arguments
+    const n = Number(nsArgs.count)
+    for (let i = 0; i < n; i++) out.push(String(nsArgs.objectAtIndex(i)))
+    if (out.length) out.shift()
   } catch (e) {}
-  return { cmd: 'prompt', args: [] }
+  return out
+}
+
+function knownCmd(name) {
+  return name === 'status' || name === 'prompt' || name === 'apps' || name === 'frontmost' || name === 'fill'
+}
+
+function parseArgs(list) {
+  let start = 0
+  if (list.length && !knownCmd(list[0])) start = 1
+  if (list.length > start && knownCmd(list[start])) {
+    const rest = []
+    for (let i = start + 1; i < list.length; i++) rest.push(list[i])
+    return { cmd: list[start], args: rest }
+  }
+  return null
+}
+
+function requestFromFile() {
+  try {
+    const fromFile = JSON.parse(readUtf8(home() + '/.kunci/helper-request.json') || '{}')
+    if (fromFile && knownCmd(String(fromFile.cmd || ''))) {
+      return { cmd: String(fromFile.cmd), args: toJsStrings(fromFile.args) }
+    }
+  } catch (e) {}
+  return { cmd: 'status', args: [] }
+}
+
+function request(argv) {
+  return parseArgs(processArgv()) || parseArgs(toJsStrings(argv)) || requestFromFile()
 }
 
 function trusted() {
@@ -97,7 +148,9 @@ function pressTab(se) {
 
 function doFill(job) {
   if (!promptTrust()) {
-    throw new Error('Kunci Helper belum diizinkan. System Settings → Privacy & Security → Accessibility → centang Kunci Helper.')
+    printErr('Kunci Helper belum diizinkan. System Settings → Privacy & Security → Accessibility → centang Kunci Helper.')
+    printOut('ok=false')
+    return
   }
   const waitMs = Number(job.waitMs || 0)
   if (waitMs > 0) delayMs(Math.min(waitMs, 8000))
@@ -121,40 +174,57 @@ function doFill(job) {
     delayMs(100)
   }
   if (job.password) paste(job.password)
+  printOut('ok=true')
+}
+
+function handle(req) {
+  const cmd = req.cmd || 'status'
+  const args = req.args || []
+  if (cmd === 'status') {
+    printOut(trusted() ? 'trusted=true' : 'trusted=false')
+    return
+  }
+  if (cmd === 'prompt') {
+    printOut(promptTrust() ? 'trusted=true' : 'trusted=false')
+    return
+  }
+  if (cmd === 'apps') {
+    const skip = { finder: 1, 'kunci helper': 1, osascript: 1, loginwindow: 1 }
+    const se = Application('System Events')
+    const procs = se.applicationProcesses.whose({ backgroundOnly: false })
+    const names = []
+    for (let i = 0; i < procs.length; i++) {
+      const n = String(procs[i].name())
+      if (!skip[n.toLowerCase()]) names.push(n)
+    }
+    printOut(JSON.stringify(names))
+    return
+  }
+  if (cmd === 'frontmost') {
+    const se = Application('System Events')
+    const front = se.applicationProcesses.whose({ frontmost: true })
+    printOut(front.length ? String(front[0].name()) : '')
+    return
+  }
+  if (cmd === 'fill') {
+    const path = args[0]
+    if (!path) {
+      printErr('job JSON tidak ada')
+      printOut('ok=false')
+      return
+    }
+    doFill(JSON.parse(readUtf8(path)))
+    return
+  }
+  printOut('trusted=false')
 }
 
 function run(argv) {
+  becomeSilent()
   try {
-    const req = request(argv)
-    const cmd = req.cmd || 'prompt'
-    const args = req.args || []
-    if (cmd === 'status') return printOut(trusted() ? 'trusted=true' : 'trusted=false')
-    if (cmd === 'prompt') return printOut(promptTrust() ? 'trusted=true' : 'trusted=false')
-    if (cmd === 'apps') {
-      const skip = { finder: 1, 'kunci helper': 1, osascript: 1, loginwindow: 1 }
-      const se = Application('System Events')
-      const procs = se.applicationProcesses.whose({ backgroundOnly: false })
-      const names = []
-      for (let i = 0; i < procs.length; i++) {
-        const n = String(procs[i].name())
-        if (!skip[n.toLowerCase()]) names.push(n)
-      }
-      return printOut(JSON.stringify(names))
-    }
-    if (cmd === 'frontmost') {
-      const se = Application('System Events')
-      const front = se.applicationProcesses.whose({ frontmost: true })
-      return printOut(front.length ? String(front[0].name()) : '')
-    }
-    if (cmd === 'fill') {
-      const path = args[0]
-      if (!path) throw new Error('job JSON tidak ada')
-      doFill(JSON.parse(readUtf8(path)))
-      return printOut('ok=true')
-    }
-    throw new Error('usage: status|prompt|apps|frontmost|fill')
+    handle(request(argv))
   } catch (e) {
     printErr(e && e.message ? e.message : e)
-    throw e
+    printOut('ok=false')
   }
 }

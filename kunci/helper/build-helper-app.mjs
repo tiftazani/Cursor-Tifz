@@ -78,10 +78,10 @@ async function patchPlist(appPath) {
     }
   }
   try {
-    await run('/usr/libexec/PlistBuddy', ['-c', 'Set :LSUIElement false', plist])
+    await run('/usr/libexec/PlistBuddy', ['-c', 'Set :LSUIElement true', plist])
   } catch {
     try {
-      await run('/usr/libexec/PlistBuddy', ['-c', 'Add :LSUIElement bool false', plist])
+      await run('/usr/libexec/PlistBuddy', ['-c', 'Add :LSUIElement bool true', plist])
     } catch {
       /* ignore */
     }
@@ -132,7 +132,7 @@ async function compileSwift(appPath) {
   <key>CFBundleName</key><string>Kunci Helper</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>1.4.1</string>
-  <key>LSUIElement</key><false/>
+  <key>LSUIElement</key><true/>
   <key>NSAppleEventsUsageDescription</key>
   <string>Kunci mengisi username dan password ke aplikasi yang kamu pilih.</string>
   <key>NSHighResolutionCapable</key><true/>
@@ -222,6 +222,26 @@ export async function buildKunciHelperApp() {
     path: existsSync(systemDest) ? systemDest : homeDest,
     method,
     installed,
+  }
+}
+
+export async function quitHelperProcesses() {
+  const patterns = [
+    'Kunci Helper.app/Contents/MacOS',
+    '/Applications/Kunci Helper.app',
+    `${homedir()}/Applications/Kunci Helper.app`,
+  ]
+  for (const pattern of patterns) {
+    try {
+      await run('pkill', ['-9', '-f', pattern])
+    } catch {
+      /* none running */
+    }
+  }
+  try {
+    await run('killall', ['-9', 'Kunci Helper'])
+  } catch {
+    /* none running */
   }
 }
 

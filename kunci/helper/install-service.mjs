@@ -5,8 +5,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
-import { buildKunciHelperApp } from './build-helper-app.mjs'
-import { promptAccessibility } from './mac-ax.mjs'
+import { buildKunciHelperApp, quitHelperProcesses } from './build-helper-app.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
@@ -82,11 +81,17 @@ if (platform() !== 'darwin') {
 }
 
 if (uninstall) {
+  await quitHelperProcesses()
   await runQuiet('launchctl', ['bootout', `gui/${uid}/${LABEL}`])
   console.log('Layanan Kunci dihentikan. UI 24 jam mati; hapus plist jika perlu:')
   console.log(plistPath)
   process.exit(0)
 }
+
+console.log('Menghentikan Kunci Helper yang numpuk di Dock…')
+await quitHelperProcesses()
+await runQuiet('launchctl', ['bootout', `gui/${uid}/${LABEL}`])
+await runQuiet('launchctl', ['unload', '-w', plistPath])
 
 console.log('Build produksi…')
 await run('npm', ['run', 'build'])
@@ -134,25 +139,26 @@ const plist = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>
 `
 await writeFile(plistPath, plist, { mode: 0o644 })
-await enableService()
-const healthy = await waitForHealth()
 
-console.log('\nMemasang Kunci Helper.app ke /Applications (sidebar Finder)…')
+console.log('\nMemasang Kunci Helper.app ke /Applications…')
 const helperBuild = await buildKunciHelperApp()
 if (helperBuild.ok) {
   console.log(`App: ${helperBuild.path}`)
   if (helperBuild.installed?.length) console.log(`Salinan: ${helperBuild.installed.join(', ')}`)
+} else {
+  console.log(`Kunci Helper.app belum terpasang: ${helperBuild.error}`)
+}
+
+await enableService()
+const healthy = await waitForHealth()
+
+if (helperBuild.ok) {
   console.log('Sidebar Finder "Applications" = /Applications, bukan folder Applications di Home.')
-  console.log('Kalau tidak kelihatan: Finder sudah membuka lokasi app, atau Go → Applications.')
-  await promptAccessibility().catch(() => {})
   await runQuiet('open', [
     'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility',
   ])
   await runQuiet('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'])
-  console.log('Di Accessibility centang Kunci Helper. Kalau belum ada: klik +, pilih /Applications/Kunci Helper.')
-} else {
-  console.log(`Kunci Helper.app belum terpasang: ${helperBuild.error}`)
-  console.log('Coba lagi setelah git pull. App tidak lagi butuh Xcode / swiftc.')
+  console.log('Di Accessibility centang Kunci Helper. Jangan klik app-nya di Dock — itu yang nge-spawn dialog.')
 }
 
 if (healthy) {

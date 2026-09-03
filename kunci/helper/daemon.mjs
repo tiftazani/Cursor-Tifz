@@ -17,6 +17,7 @@ import {
   promptAccessibility,
   revealHelperApp,
 } from './mac-ax.mjs'
+import { quitHelperProcesses } from './build-helper-app.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
@@ -167,6 +168,7 @@ function serveStatic(req, res) {
 
 const token = await loadToken()
 await wipeLegacyDek()
+if (platform() === 'darwin') await quitHelperProcesses()
 const server = createServer(async (req, res) => {
   cors(req, res)
   if (req.method === 'OPTIONS') {
@@ -180,7 +182,7 @@ const server = createServer(async (req, res) => {
       json(res, 200, {
         ok: true,
         platform: platform(),
-        version: '1.4.1',
+        version: '1.4.2',
         email: RECOVERY_EMAIL,
         ui: serveUi,
         accessibility: await accessibilityTrusted(),

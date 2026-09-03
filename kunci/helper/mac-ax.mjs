@@ -6,14 +6,14 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mkdir, unlink, writeFile } from 'node:fs/promises'
 
-import { helperAppBundlePath, helperBinPath, revealHelperApp } from './build-helper-app.mjs'
+import { helperAppBundlePath, helperBinPath, quitHelperProcesses, revealHelperApp } from './build-helper-app.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const TOKEN_DIR = join(homedir(), '.kunci')
 const AX_SCRIPT = join(__dirname, 'ax-fill.jxa')
 const isMac = platform() === 'darwin'
 
-export { helperBinPath, helperAppBundlePath, revealHelperApp }
+export { helperBinPath, helperAppBundlePath, quitHelperProcesses, revealHelperApp }
 
 const SKIP_APPS = new Set(['finder', 'kunci helper', 'osascript', 'loginwindow'])
 const REQUEST_PATH = join(TOKEN_DIR, 'helper-request.json')
@@ -30,17 +30,37 @@ function uniqueApps(names) {
   return apps.sort((a, b) => a.localeCompare(b))
 }
 
-function run(cmd, args, input) {
+function run(cmd, args, input, timeoutMs = 0) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args)
     const out = []
     const err = []
+    let done = false
+    const finish = (fn) => {
+      if (done) return
+      done = true
+      if (timer) clearTimeout(timer)
+      fn()
+    }
+    const timer =
+      timeoutMs > 0
+        ? setTimeout(() => {
+            try {
+              child.kill('SIGKILL')
+            } catch {
+              /* already gone */
+            }
+            finish(() => reject(new Error(`${cmd} timeout`)))
+          }, timeoutMs)
+        : null
     child.stdout.on('data', (d) => out.push(d))
     child.stderr.on('data', (d) => err.push(d))
-    child.on('error', reject)
+    child.on('error', (e) => finish(() => reject(e)))
     child.on('close', (code) => {
-      if (code === 0) resolve(Buffer.concat(out).toString('utf8'))
-      else reject(new Error(Buffer.concat(err).toString('utf8') || `${cmd} exited ${code}`))
+      finish(() => {
+        if (code === 0) resolve(Buffer.concat(out).toString('utf8'))
+        else reject(new Error(Buffer.concat(err).toString('utf8') || `${cmd} exited ${code}`))
+      })
     })
     if (input !== undefined) {
       child.stdin.write(input)
@@ -53,29 +73,22 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
-async function helperCmd(args, { throwOnError = false } = {}) {
+async function helperCmd(args, { throwOnError = false, timeoutMs = 6000 } = {}) {
   const bin = helperBinPath()
   if (!bin) return null
   await mkdir(TOKEN_DIR, { recursive: true, mode: 0o700 })
   await writeFile(REQUEST_PATH, JSON.stringify({ cmd: args[0], args: args.slice(1).map(String) }), { mode: 0o600 })
-  const attempts = [() => run(bin, args.map(String)), () => run(bin, [])]
-  let lastErr
-  for (const attempt of attempts) {
-    try {
-      return await attempt()
-    } catch (err) {
-      lastErr = err
-    }
+  try {
+    return await run(bin, [], undefined, timeoutMs)
+  } catch (err) {
+    if (throwOnError) throw err instanceof Error ? err : new Error('Kunci Helper gagal dijalankan')
+    return null
   }
-  if (throwOnError) throw lastErr instanceof Error ? lastErr : new Error('Kunci Helper gagal dijalankan')
-  return null
 }
 
 export async function accessibilityTrusted() {
   if (!isMac) return false
   try {
-    const fromApp = await helperCmd(['status'])
-    if (fromApp != null && fromApp.trim()) return fromApp.includes('trusted=true')
     const out = await run('osascript', [
       '-l',
       'JavaScript',
@@ -91,7 +104,7 @@ export async function accessibilityTrusted() {
 export async function promptAccessibility() {
   if (!isMac) return { ok: false, error: 'bukan macOS' }
   try {
-    const fromApp = await helperCmd(['prompt'])
+    const fromApp = await helperCmd(['prompt'], { timeoutMs: 15000 })
     if (fromApp != null && fromApp.trim()) {
       return { ok: true, trusted: fromApp.includes('trusted=true'), helper: 'Kunci Helper' }
     }
@@ -110,11 +123,6 @@ export async function promptAccessibility() {
 export async function listGuiApps() {
   if (!isMac) return []
   try {
-    const fromApp = await helperCmd(['apps'])
-    if (fromApp != null && fromApp.trim()) {
-      const names = JSON.parse(fromApp.trim() || '[]')
-      return uniqueApps(Array.isArray(names) ? names : [])
-    }
     const out = await run('osascript', [
       '-l',
       'JavaScript',
@@ -135,8 +143,6 @@ export async function listGuiApps() {
 export async function frontmostName() {
   if (!isMac) return null
   try {
-    const fromApp = await helperCmd(['frontmost'])
-    if (fromApp != null) return fromApp.trim() || null
     const name = (
       await run('osascript', ['-e', 'tell application "System Events" to get name of first process whose frontmost is true'])
     ).trim()
@@ -199,7 +205,7 @@ async function fillWithHelperApp(job) {
   const jobPath = join(TOKEN_DIR, `fill-${randomBytes(8).toString('hex')}.json`)
   await writeFile(jobPath, JSON.stringify(job), { mode: 0o600 })
   try {
-    const out = await helperCmd(['fill', jobPath], { throwOnError: true })
+    const out = await helperCmd(['fill', jobPath], { throwOnError: true, timeoutMs: 20000 })
     return { ok: /ok=true/.test(out || ''), method: 'kunci-helper', app: job.appName || null }
   } finally {
     await unlink(jobPath).catch(() => {})
