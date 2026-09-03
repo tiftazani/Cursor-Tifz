@@ -24,6 +24,14 @@ const SKIP_APPS = new Set([
   'universalcontrol',
 ])
 
+export function helperBinPath() {
+  const home = join(homedir(), 'Applications', 'Kunci Helper.app', 'Contents', 'MacOS', 'Kunci Helper')
+  const local = join(__dirname, 'Kunci Helper.app', 'Contents', 'MacOS', 'Kunci Helper')
+  if (existsSync(home)) return home
+  if (existsSync(local)) return local
+  return null
+}
+
 function run(cmd, args, input) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args)
@@ -47,9 +55,17 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+async function helperCmd(args) {
+  const bin = helperBinPath()
+  if (!bin) return null
+  return run(bin, args)
+}
+
 export async function accessibilityTrusted() {
   if (!isMac) return false
   try {
+    const fromApp = await helperCmd(['status'])
+    if (fromApp != null) return fromApp.includes('trusted=true')
     const out = await run('osascript', [
       '-l',
       'JavaScript',
@@ -62,9 +78,33 @@ export async function accessibilityTrusted() {
   }
 }
 
+export async function promptAccessibility() {
+  if (!isMac) return { ok: false, error: 'bukan macOS' }
+  try {
+    const fromApp = await helperCmd(['prompt'])
+    if (fromApp != null) {
+      return { ok: true, trusted: fromApp.includes('trusted=true'), helper: 'Kunci Helper' }
+    }
+    await run('osascript', [
+      '-l',
+      'JavaScript',
+      '-e',
+      'ObjC.import("ApplicationServices"); $.AXIsProcessTrustedWithOptions($({"AXTrustedCheckOptionPrompt": true}))',
+    ])
+    return { ok: true, trusted: await accessibilityTrusted(), helper: 'osascript' }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'gagal meminta izin' }
+  }
+}
+
 export async function listGuiApps() {
   if (!isMac) return []
   try {
+    const fromApp = await helperCmd(['apps'])
+    if (fromApp != null) {
+      const names = JSON.parse(fromApp.trim() || '[]')
+      return Array.isArray(names) ? names : []
+    }
     const out = await run('osascript', [
       '-l',
       'JavaScript',
@@ -87,6 +127,20 @@ export async function listGuiApps() {
     return apps.sort((a, b) => a.localeCompare(b))
   } catch {
     return []
+  }
+}
+
+export async function frontmostName() {
+  if (!isMac) return null
+  try {
+    const fromApp = await helperCmd(['frontmost'])
+    if (fromApp != null) return fromApp.trim() || null
+    const name = (
+      await run('osascript', ['-e', 'tell application "System Events" to get name of first process whose frontmost is true'])
+    ).trim()
+    return name || null
+  } catch {
+    return null
   }
 }
 
@@ -137,8 +191,35 @@ async function axFill(job) {
   }
 }
 
+async function fillWithHelperApp(job) {
+  const bin = helperBinPath()
+  if (!bin) return null
+  await mkdir(TOKEN_DIR, { recursive: true, mode: 0o700 })
+  const jobPath = join(TOKEN_DIR, `fill-${randomBytes(8).toString('hex')}.json`)
+  await writeFile(jobPath, JSON.stringify(job), { mode: 0o600 })
+  try {
+    const out = await run(bin, ['fill', jobPath])
+    return { ok: /ok=true/.test(out), method: 'kunci-helper', app: job.appName || null }
+  } finally {
+    await unlink(jobPath).catch(() => {})
+  }
+}
+
 export async function fillCredentials({ username = '', password = '', mode = 'login', appName = '', waitMs = 0 }) {
   if (!isMac) throw new Error('Isi aplikasi hanya berjalan di Mac. Buka http://127.0.0.1:8780 di Mac yang sama.')
+  const job = { username, password, mode, appName, waitMs: Math.min(waitMs, 8000) }
+  if (helperBinPath()) {
+    try {
+      const viaApp = await fillWithHelperApp(job)
+      if (viaApp?.ok) return viaApp
+    } catch (err) {
+      throw new Error(
+        `${err instanceof Error ? err.message : 'Gagal mengisi'}. Izinkan Kunci Helper di System Settings → Privacy & Security → Accessibility (bukan osascript).`,
+      )
+    }
+    throw new Error('Izinkan Kunci Helper di System Settings → Privacy & Security → Accessibility (bukan osascript).')
+  }
+
   if (waitMs > 0) await sleep(Math.min(waitMs, 8000))
   if (appName) await activateApp(appName)
 

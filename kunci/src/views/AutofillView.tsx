@@ -1,19 +1,34 @@
 import { Field, TextInput } from '../components/Field'
 import { useVault } from '../state/VaultContext'
 import { isMacDesktop } from '../lib/platform'
+import { promptHelperAccess } from '../lib/helper'
+import { useState } from 'react'
 
 export function AutofillView() {
   const { vault, updateSettings, helperOnline, helperAccessibility, fillFrontmostApp } = useVault()
+  const [axMsg, setAxMsg] = useState('')
   if (!vault) return null
   const s = vault.settings
   const mac = isMacDesktop()
+
+  async function askAccess() {
+    setAxMsg('Meminta izin…')
+    const res = await promptHelperAccess(s.helperUrl, s.helperToken)
+    setAxMsg(
+      res.ok
+        ? res.trusted
+          ? 'Kunci Helper sudah diizinkan.'
+          : 'Dialog macOS harusnya muncul. Di Accessibility centang Kunci Helper — bukan osascript.'
+        : res.error || 'Gagal meminta izin',
+    )
+  }
 
   return (
     <div className="page">
       <header className="page-head">
         <h2>Isi otomatis</h2>
         <p className="muted">
-          Website: hanya form masuk sistem. Aplikasi Mac: helper mengisi app yang kamu pilih. Sama di cloud dan di
+          Website: hanya form masuk sistem. Aplikasi Mac: Kunci Helper mengisi app yang kamu pilih. Sama di cloud dan di
           localhost.
         </p>
       </header>
@@ -21,15 +36,18 @@ export function AutofillView() {
       <div className="card">
         <h3>Website</h3>
         <p className="muted">
-          Ikon kunci dipasang di luar kotak field, bukan di dalam. Kunci mengisi dan menawar simpan hanya jika form itu
-          untuk login — bukan daftar akun, ganti password, pencarian, atau pembayaran.
+          Ikon kunci di luar kotak field. Hanya form login yang diisi/disimpan. Kartu ekstensi harus tertulis{' '}
+          <strong>Versi 1.2.1</strong> — kalau masih 1.1.3, folder yang di-load belum di-git pull.
         </p>
         <ol className="steps">
           <li>
-            Chrome / Edge / Arc → <code>chrome://extensions</code> → Load unpacked → folder <code>kunci/extension</code>
+            Di Mac: <code>cd ~/Cursor-Tifz && git pull origin cursor/kunci-password-manager-4eaf</code>
           </li>
-          <li>Buka brankas di tab Kunci, lalu buka popup ekstensi dan masukkan kata sandi induk</li>
-          <li>Di halaman login, field terisi atau klik ikon kunci di kanan luar kotak / <kbd>⌘⇧L</kbd></li>
+          <li>
+            <code>chrome://extensions</code> → klik Reload. Kalau masih 1.1.3: Remove, lalu Load unpacked ke{' '}
+            <code>~/Cursor-Tifz/kunci/extension</code>
+          </li>
+          <li>Buka brankas di tab Kunci, buka popup, masukkan kata sandi induk</li>
         </ol>
         <label className="check">
           <input
@@ -57,26 +75,30 @@ export function AutofillView() {
               Helper <strong className={helperOnline ? 'ok' : 'error'}>{helperOnline ? 'terhubung' : 'mati'}</strong>
             </div>
             <div className="status-pill">
-              Accessibility{' '}
-              <strong className={helperAccessibility ? 'ok' : 'error'}>{helperAccessibility ? 'aktif' : 'belum'}</strong>
+              Kunci Helper{' '}
+              <strong className={helperAccessibility ? 'ok' : 'error'}>{helperAccessibility ? 'diizinkan' : 'belum'}</strong>
             </div>
           </div>
           <p className="muted">
-            Helper di <code>127.0.0.1:8780</code> dipakai baik kamu membuka kunci-tifta.netlify.app maupun localhost.
-            Kunci tidak menyalin ketikan dari app lain.
+            <code>osascript</code> memang tidak muncul di daftar Accessibility. Yang harus dicentang: <strong>Kunci Helper</strong>{' '}
+            di folder Applications.
           </p>
           <ol className="steps">
             <li>
-              Sekali saja: <code>npm run install-service</code> di folder <code>kunci</code>
+              <code>cd ~/Cursor-Tifz/kunci && npm run install-service</code> — ini memasang Kunci Helper.app
             </li>
-            <li>System Settings → Privacy & Security → Accessibility → Node dan osascript</li>
-            <li>Simpan entri (tipe Aplikasi Mac atau Website), buka app tujuan, lalu isi dari Kunci</li>
+            <li>System Settings → Privacy & Security → Accessibility → centang <strong>Kunci Helper</strong></li>
+            <li>Kalau belum ada di daftar: klik +, pilih Applications → Kunci Helper</li>
           </ol>
           <div className="row-actions">
             <button type="button" className="btn btn-primary" disabled={!helperOnline} onClick={() => void fillFrontmostApp()}>
               Isi ke app yang saya klik
             </button>
+            <button type="button" className="btn" disabled={!helperOnline} onClick={() => void askAccess()}>
+              Minta izin Accessibility
+            </button>
           </div>
+          {axMsg ? <p className="muted">{axMsg}</p> : null}
           <Field label="URL helper">
             <TextInput value={s.helperUrl} onChange={(e) => void updateSettings({ helperUrl: e.target.value })} />
           </Field>

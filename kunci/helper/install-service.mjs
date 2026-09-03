@@ -5,6 +5,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
+import { buildKunciHelperApp } from './build-helper-app.mjs'
+import { promptAccessibility } from './mac-ax.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
@@ -134,6 +136,22 @@ const plist = `<?xml version="1.0" encoding="UTF-8"?>
 await writeFile(plistPath, plist, { mode: 0o644 })
 await enableService()
 const healthy = await waitForHealth()
+
+console.log('\nMemasang Kunci Helper.app (muncul di Accessibility, bukan osascript)…')
+const helperBuild = await buildKunciHelperApp()
+if (helperBuild.ok) {
+  console.log(`App: ${helperBuild.path}`)
+  await promptAccessibility().catch(() => {})
+  await runQuiet('open', [
+    'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility',
+  ])
+  await runQuiet('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'])
+  console.log('Di Accessibility, cari **Kunci Helper** — osascript memang tidak muncul di daftar itu.')
+  console.log('Kalau belum ada: klik +, pilih Applications → Kunci Helper.')
+} else {
+  console.log(`Kunci Helper.app belum terpasang: ${helperBuild.error}`)
+  console.log(`Cadangan: di Accessibility klik +, lalu pilih binary Node ini:\n  ${nodePath}`)
+}
 
 if (healthy) {
   console.log('\nKunci jalan terus di background. Terminal boleh ditutup.')

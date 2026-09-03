@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Entry } from '../types'
-import { listHelperApps } from '../lib/helper'
+import { listHelperApps, promptHelperAccess } from '../lib/helper'
 import { useVault } from '../state/VaultContext'
 import { Field } from './Field'
 
@@ -60,8 +60,23 @@ export function FillMacDialog({ entry, onClose }: { entry: Entry; onClose: () =>
               sana — website dan aplikasi desktop.
             </p>
             <p className={`status-line ${helperAccessibility ? 'ok' : 'warn-text'}`}>
-              Accessibility: {helperAccessibility ? 'aktif' : 'belum diizinkan — buka System Settings → Privacy & Security → Accessibility, centang Node dan osascript'}
+              Accessibility:{' '}
+              {helperAccessibility
+                ? 'Kunci Helper diizinkan'
+                : 'belum — osascript tidak muncul di daftar itu. Centang Kunci Helper, atau klik tombol di bawah.'}
             </p>
+            {!helperAccessibility ? (
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={() => {
+                  void promptHelperAccess(helperUrl, vault?.settings.helperToken || '')
+                }}
+              >
+                Minta izin Kunci Helper
+              </button>
+            ) : null}
             <Field label="Aplikasi yang sedang terbuka">
               <select className="input" value={appName} onChange={(e) => setAppName(e.target.value)}>
                 <option value="">Pilih aplikasi…</option>
@@ -94,7 +109,7 @@ export function FillMacDialog({ entry, onClose }: { entry: Entry; onClose: () =>
               <li>
                 Di folder <code>kunci</code>: <code>npm run install-service</code>
               </li>
-              <li>Izinkan Node dan osascript di Accessibility</li>
+              <li>Izinkan <strong>Kunci Helper</strong> di Accessibility (bukan osascript)</li>
               <li>Biarkan helper menyala, lalu buka lagi cloud atau http://127.0.0.1:8780</li>
             </ol>
             <button type="button" className="btn" onClick={onClose}>

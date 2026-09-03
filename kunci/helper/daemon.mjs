@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { createServer } from 'node:http'
-import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { existsSync, createReadStream, statSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
@@ -8,12 +7,11 @@ import { dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises'
 
-import { accessibilityTrusted, fillCredentials, listGuiApps } from './mac-ax.mjs'
+import { accessibilityTrusted, fillCredentials, frontmostName, listGuiApps, promptAccessibility, helperBinPath } from './mac-ax.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const DIST = join(ROOT, 'dist')
-const isMac = platform() === 'darwin'
 const RECOVERY_EMAIL = 'tiftazani.khara@gmail.com'
 const PORT = Number(process.env.KUNCI_PORT || 8780)
 const TOKEN_DIR = join(homedir(), '.kunci')
@@ -69,25 +67,6 @@ function readBody(req) {
 function json(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify(body))
-}
-
-function run(cmd, args, input) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args)
-    const out = []
-    const err = []
-    child.stdout.on('data', (d) => out.push(d))
-    child.stderr.on('data', (d) => err.push(d))
-    child.on('error', reject)
-    child.on('close', (code) => {
-      if (code === 0) resolve(Buffer.concat(out).toString('utf8'))
-      else reject(new Error(Buffer.concat(err).toString('utf8') || `${cmd} exited ${code}`))
-    })
-    if (input !== undefined) {
-      child.stdin.write(input)
-      child.stdin.end()
-    }
-  })
 }
 
 async function wipeLegacyDek() {
@@ -196,6 +175,8 @@ const server = createServer(async (req, res) => {
         email: RECOVERY_EMAIL,
         ui: serveUi,
         accessibility: await accessibilityTrusted(),
+        helperApp: Boolean(helperBinPath()),
+        helperAppPath: helperBinPath() || '',
       })
       return
     }
@@ -204,6 +185,7 @@ const server = createServer(async (req, res) => {
         ok: true,
         platform: platform(),
         accessibility: await accessibilityTrusted(),
+        helperApp: Boolean(helperBinPath()),
         apps: await listGuiApps(),
       })
       return
@@ -213,18 +195,16 @@ const server = createServer(async (req, res) => {
       return
     }
     if (req.method === 'GET' && url.pathname === '/frontmost') {
-      if (!isMac) {
-        json(res, 200, { app: null })
+      json(res, 200, { app: await frontmostName() })
+      return
+    }
+    if (req.method === 'POST' && url.pathname === '/accessibility/prompt') {
+      const provided = String(req.headers['x-kunci-token'] || '')
+      if (provided !== token) {
+        json(res, 401, { ok: false, error: 'Token helper salah' })
         return
       }
-      try {
-        const name = (
-          await run('osascript', ['-e', 'tell application "System Events" to get name of first process whose frontmost is true'])
-        ).trim()
-        json(res, 200, { app: name || null })
-      } catch {
-        json(res, 200, { app: null })
-      }
+      json(res, 200, await promptAccessibility())
       return
     }
     if (req.method === 'POST' && url.pathname === '/fill') {
@@ -268,7 +248,7 @@ const server = createServer(async (req, res) => {
       ok: false,
       error:
         err instanceof Error
-          ? `${err.message}. Di Mac: System Settings → Privacy & Security → Accessibility, izinkan Node dan osascript.`
+          ? `${err.message}. Di Mac: izinkan Kunci Helper di System Settings → Privacy & Security → Accessibility.`
           : 'gagal',
     })
   }

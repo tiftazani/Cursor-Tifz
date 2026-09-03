@@ -8,6 +8,8 @@ const password = document.getElementById('password')
 const search = document.getElementById('search')
 const list = document.getElementById('list')
 const error = document.getElementById('error')
+const ver = document.getElementById('ver')
+if (ver) ver.textContent = `v${chrome.runtime.getManifest().version}`
 
 async function send(msg) {
   try {

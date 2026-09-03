@@ -8,6 +8,8 @@ export interface HelperStatus {
   error?: string
   accessibility?: boolean
   ui?: boolean
+  helperApp?: boolean
+  helperAppPath?: string
 }
 
 export interface FillPayload {
@@ -86,13 +88,32 @@ export async function frontmostApp(baseUrl: string): Promise<string | null> {
 
 export async function listHelperApps(
   baseUrl: string,
-): Promise<{ apps: string[]; accessibility: boolean; platform?: string }> {
+): Promise<{ apps: string[]; accessibility: boolean; platform?: string; helperApp?: boolean }> {
   const url = helperBase(baseUrl)
   try {
     const res = await fetch(`${url}/apps`)
     if (!res.ok) return { apps: [], accessibility: false }
-    return (await res.json()) as { apps: string[]; accessibility: boolean; platform?: string }
+    return (await res.json()) as { apps: string[]; accessibility: boolean; platform?: string; helperApp?: boolean }
   } catch {
     return { apps: [], accessibility: false }
+  }
+}
+
+export async function promptHelperAccess(
+  baseUrl: string,
+  token: string,
+): Promise<{ ok: boolean; trusted?: boolean; helper?: string; error?: string }> {
+  const url = helperBase(baseUrl)
+  const auth = await resolveHelperToken(baseUrl, token)
+  try {
+    const res = await fetch(`${url}/accessibility/prompt`, {
+      method: 'POST',
+      headers: { 'X-Kunci-Token': auth },
+    })
+    const body = (await res.json().catch(() => ({}))) as { ok?: boolean; trusted?: boolean; helper?: string; error?: string }
+    if (!res.ok) return { ok: false, error: body.error || `HTTP ${res.status}` }
+    return { ok: Boolean(body.ok), trusted: body.trusted, helper: body.helper, error: body.error }
+  } catch {
+    return { ok: false, error: 'Helper Mac tidak terhubung' }
   }
 }
