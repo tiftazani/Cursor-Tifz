@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Entry } from '../types'
-import { listHelperApps, promptHelperAccess } from '../lib/helper'
+import { listHelperApps, promptHelperAccess, revealHelperApp } from '../lib/helper'
 import { useVault } from '../state/VaultContext'
 import { Field } from './Field'
 
@@ -63,19 +63,31 @@ export function FillMacDialog({ entry, onClose }: { entry: Entry; onClose: () =>
               Accessibility:{' '}
               {helperAccessibility
                 ? 'Kunci Helper diizinkan'
-                : 'belum — osascript tidak muncul di daftar itu. Centang Kunci Helper, atau klik tombol di bawah.'}
+                : 'belum — centang Kunci Helper di Accessibility. App-nya ada di /Applications, bukan osascript.'}
             </p>
             {!helperAccessibility ? (
-              <button
-                type="button"
-                className="btn"
-                disabled={busy}
-                onClick={() => {
-                  void promptHelperAccess(helperUrl, vault?.settings.helperToken || '')
-                }}
-              >
-                Minta izin Kunci Helper
-              </button>
+              <div className="row-actions">
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={busy}
+                  onClick={() => {
+                    void promptHelperAccess(helperUrl, vault?.settings.helperToken || '')
+                  }}
+                >
+                  Minta izin Kunci Helper
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={busy}
+                  onClick={() => {
+                    void revealHelperApp(helperUrl, vault?.settings.helperToken || '')
+                  }}
+                >
+                  Tampilkan di Finder
+                </button>
+              </div>
             ) : null}
             <Field label="Aplikasi yang sedang terbuka">
               <select className="input" value={appName} onChange={(e) => setAppName(e.target.value)}>
@@ -109,7 +121,7 @@ export function FillMacDialog({ entry, onClose }: { entry: Entry; onClose: () =>
               <li>
                 Di folder <code>kunci</code>: <code>npm run install-service</code>
               </li>
-              <li>Izinkan <strong>Kunci Helper</strong> di Accessibility (bukan osascript)</li>
+              <li>Izinkan <strong>Kunci Helper</strong> di Accessibility — app ada di /Applications</li>
               <li>Biarkan helper menyala, lalu buka lagi cloud atau http://127.0.0.1:8780</li>
             </ol>
             <button type="button" className="btn" onClick={onClose}>

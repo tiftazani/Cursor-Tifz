@@ -49,6 +49,8 @@ npm run install-service
 
 Buka **http://127.0.0.1:8780**. Layanan ikut nyala setiap login Mac. Terminal boleh ditutup.
 
+`install-service` juga memasang **Kunci Helper.app** ke `/Applications` (itu yang terbuka dari sidebar Finder Applications) dan `~/Applications`. Tidak butuh Xcode. Kalau app tidak kelihatan, di Finder pilih Go → Applications, atau dari Kunci: Isi otomatis → Tampilkan di Finder.
+
 Stop: `npm run uninstall-service`
 
 Localhost memakai gerbang OTP yang sama (kode ke Gmail) supaya sesi cloud bisa menulis ke blob yang sama. Helper mem-proxy `/api/*` ke URL publik. Kalau tombol kirim kode gagal dengan HTML login Netlify, site masih Private — ubah ke Public.

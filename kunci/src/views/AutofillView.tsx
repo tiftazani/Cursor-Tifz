@@ -1,11 +1,19 @@
 import { Field, TextInput } from '../components/Field'
 import { useVault } from '../state/VaultContext'
 import { isMacDesktop } from '../lib/platform'
-import { promptHelperAccess } from '../lib/helper'
+import { promptHelperAccess, revealHelperApp } from '../lib/helper'
 import { useState } from 'react'
 
 export function AutofillView() {
-  const { vault, updateSettings, helperOnline, helperAccessibility, fillFrontmostApp } = useVault()
+  const {
+    vault,
+    updateSettings,
+    helperOnline,
+    helperAccessibility,
+    helperAppInstalled,
+    helperAppPath,
+    fillFrontmostApp,
+  } = useVault()
   const [axMsg, setAxMsg] = useState('')
   if (!vault) return null
   const s = vault.settings
@@ -18,9 +26,15 @@ export function AutofillView() {
       res.ok
         ? res.trusted
           ? 'Kunci Helper sudah diizinkan.'
-          : 'Dialog macOS harusnya muncul. Di Accessibility centang Kunci Helper — bukan osascript.'
+          : 'Dialog macOS harusnya muncul. Di Accessibility centang Kunci Helper.'
         : res.error || 'Gagal meminta izin',
     )
+  }
+
+  async function showInFinder() {
+    setAxMsg('Membuka Finder…')
+    const res = await revealHelperApp(s.helperUrl, s.helperToken)
+    setAxMsg(res.ok ? `Finder membuka ${res.path}` : res.error || 'Gagal membuka Finder')
   }
 
   return (
@@ -75,24 +89,45 @@ export function AutofillView() {
               Helper <strong className={helperOnline ? 'ok' : 'error'}>{helperOnline ? 'terhubung' : 'mati'}</strong>
             </div>
             <div className="status-pill">
-              Kunci Helper{' '}
+              Kunci Helper.app{' '}
+              <strong className={helperAppInstalled ? 'ok' : 'error'}>{helperAppInstalled ? 'ada' : 'belum'}</strong>
+            </div>
+            <div className="status-pill">
+              Accessibility{' '}
               <strong className={helperAccessibility ? 'ok' : 'error'}>{helperAccessibility ? 'diizinkan' : 'belum'}</strong>
             </div>
           </div>
           <p className="muted">
-            <code>osascript</code> memang tidak muncul di daftar Accessibility. Yang harus dicentang: <strong>Kunci Helper</strong>{' '}
-            di folder Applications.
+            Sidebar Finder <strong>Applications</strong> adalah <code>/Applications</code>, bukan folder Applications di
+            Home. Kunci Helper.app dipasang ke keduanya.
           </p>
+          {helperAppInstalled && helperAppPath ? (
+            <p className="muted">
+              Sekarang ada di <code>{helperAppPath}</code>
+            </p>
+          ) : (
+            <p className="muted">
+              Belum ketemu di /Applications. Versi lama cuma nulis ke ~/Applications, dan kalau Xcode/swiftc tidak ada
+              app-nya dihapus.
+            </p>
+          )}
           <ol className="steps">
             <li>
-              <code>cd ~/Cursor-Tifz/kunci && npm run install-service</code> — ini memasang Kunci Helper.app
+              <code>cd ~/Cursor-Tifz && git pull origin cursor/kunci-password-manager-4eaf</code>
             </li>
-            <li>System Settings → Privacy & Security → Accessibility → centang <strong>Kunci Helper</strong></li>
-            <li>Kalau belum ada di daftar: klik +, pilih Applications → Kunci Helper</li>
+            <li>
+              <code>cd ~/Cursor-Tifz/kunci && npm run install-service</code> — Finder harusnya langsung membuka app-nya
+            </li>
+            <li>
+              System Settings → Privacy & Security → Accessibility → centang <strong>Kunci Helper</strong>
+            </li>
           </ol>
           <div className="row-actions">
             <button type="button" className="btn btn-primary" disabled={!helperOnline} onClick={() => void fillFrontmostApp()}>
               Isi ke app yang saya klik
+            </button>
+            <button type="button" className="btn" disabled={!helperOnline} onClick={() => void showInFinder()}>
+              Tampilkan di Finder
             </button>
             <button type="button" className="btn" disabled={!helperOnline} onClick={() => void askAccess()}>
               Minta izin Accessibility

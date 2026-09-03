@@ -33,6 +33,8 @@ interface VaultApi {
   busy: boolean
   helperOnline: boolean
   helperAccessibility: boolean
+  helperAppInstalled: boolean
+  helperAppPath: string
   backups: StoredBackup[]
   backupFolderName: string | null
   pendingRecoveryKey: string | null
@@ -95,6 +97,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false)
   const [helperOnline, setHelperOnline] = useState(false)
   const [helperAccessibility, setHelperAccessibility] = useState(false)
+  const [helperAppInstalled, setHelperAppInstalled] = useState(false)
+  const [helperAppPath, setHelperAppPath] = useState('')
   const [backups, setBackups] = useState<StoredBackup[]>([])
   const [backupFolderName, setBackupFolderName] = useState<string | null>(null)
   const [pendingRecoveryKey, setPendingRecoveryKey] = useState<string | null>(null)
@@ -767,6 +771,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       if (cancelled) return
       setHelperOnline(s.ok)
       setHelperAccessibility(Boolean(s.accessibility))
+      setHelperAppInstalled(Boolean(s.helperApp))
+      setHelperAppPath(s.helperAppPath || '')
       if (s.ok) {
         const token = await localToken(vault.settings.helperUrl)
         const current = vaultRef.current
@@ -791,6 +797,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       busy,
       helperOnline,
       helperAccessibility,
+      helperAppInstalled,
+      helperAppPath,
       backups,
       backupFolderName,
       pendingRecoveryKey,
@@ -834,6 +842,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       busy,
       helperOnline,
       helperAccessibility,
+      helperAppInstalled,
+      helperAppPath,
       backups,
       backupFolderName,
       pendingRecoveryKey,

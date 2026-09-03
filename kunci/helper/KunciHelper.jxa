@@ -1,0 +1,160 @@
+ObjC.import('Foundation')
+ObjC.import('ApplicationServices')
+ObjC.import('AppKit')
+
+function unwrap(val) {
+  try {
+    return ObjC.unwrap(val)
+  } catch (e) {
+    return String(val)
+  }
+}
+
+function printOut(text) {
+  const s = String(text)
+  try {
+    $.NSFileHandle.fileHandleWithStandardOutput.writeData($(s + '\n').dataUsingEncoding($.NSUTF8StringEncoding))
+  } catch (e) {}
+  return s
+}
+
+function printErr(text) {
+  try {
+    $.NSFileHandle.fileHandleWithStandardError.writeData($(String(text) + '\n').dataUsingEncoding($.NSUTF8StringEncoding))
+  } catch (e) {}
+}
+
+function readUtf8(path) {
+  const str = $.NSString.stringWithContentsOfFileEncodingError($(path), $.NSUTF8StringEncoding, null)
+  return unwrap(str)
+}
+
+function home() {
+  return unwrap($.NSHomeDirectory())
+}
+
+function request(argv) {
+  const known = { status: 1, prompt: 1, apps: 1, frontmost: 1, fill: 1 }
+  const args = (argv || []).map(String)
+  let start = 0
+  if (args.length && !known[args[0]]) start = 1
+  if (args.length > start && known[args[start]]) {
+    return { cmd: args[start], args: args.slice(start + 1) }
+  }
+  try {
+    const fromFile = JSON.parse(readUtf8(home() + '/.kunci/helper-request.json') || '{}')
+    if (fromFile && fromFile.cmd) return { cmd: String(fromFile.cmd), args: (fromFile.args || []).map(String) }
+  } catch (e) {}
+  return { cmd: 'prompt', args: [] }
+}
+
+function trusted() {
+  return $.AXIsProcessTrusted()
+}
+
+function promptTrust() {
+  return $.AXIsProcessTrustedWithOptions($({ AXTrustedCheckOptionPrompt: true }))
+}
+
+function delayMs(ms) {
+  delay(Math.max(0, ms) / 1000)
+}
+
+function findProcess(se, name) {
+  if (!name) return null
+  const want = String(name).toLowerCase()
+  const procs = se.applicationProcesses()
+  let fuzzy = null
+  for (let i = 0; i < procs.length; i++) {
+    const proc = procs[i]
+    const n = String(proc.name()).toLowerCase()
+    if (n === want) return proc
+    if (!fuzzy && (n.indexOf(want) !== -1 || want.indexOf(n) !== -1)) fuzzy = proc
+  }
+  return fuzzy
+}
+
+function paste(text) {
+  const pb = $.NSPasteboard.generalPasteboard
+  const previous = unwrap(pb.stringForType($.NSPasteboardTypeString)) || ''
+  pb.clearContents()
+  pb.setStringForType($(text), $.NSPasteboardTypeString)
+  delayMs(80)
+  const se = Application('System Events')
+  se.keystroke('v', { using: 'command down' })
+  delayMs(140)
+  pb.clearContents()
+  if (previous) pb.setStringForType($(previous), $.NSPasteboardTypeString)
+}
+
+function pressTab(se) {
+  try {
+    se.keyCode(48)
+  } catch (e) {
+    se.keystroke('\t')
+  }
+}
+
+function doFill(job) {
+  if (!promptTrust()) {
+    throw new Error('Kunci Helper belum diizinkan. System Settings → Privacy & Security → Accessibility → centang Kunci Helper.')
+  }
+  const waitMs = Number(job.waitMs || 0)
+  if (waitMs > 0) delayMs(Math.min(waitMs, 8000))
+  const se = Application('System Events')
+  const appName = job.appName || ''
+  let proc = appName ? findProcess(se, appName) : null
+  if (!proc) {
+    const front = se.applicationProcesses.whose({ frontmost: true })
+    proc = front.length ? front[0] : null
+  }
+  if (proc) {
+    try {
+      proc.frontmost = true
+    } catch (e) {}
+    delayMs(400)
+  }
+  const mode = job.mode || 'login'
+  if (mode === 'login' && job.username) {
+    paste(job.username)
+    pressTab(se)
+    delayMs(100)
+  }
+  if (job.password) paste(job.password)
+}
+
+function run(argv) {
+  try {
+    const req = request(argv)
+    const cmd = req.cmd || 'prompt'
+    const args = req.args || []
+    if (cmd === 'status') return printOut(trusted() ? 'trusted=true' : 'trusted=false')
+    if (cmd === 'prompt') return printOut(promptTrust() ? 'trusted=true' : 'trusted=false')
+    if (cmd === 'apps') {
+      const skip = { finder: 1, 'kunci helper': 1, osascript: 1, loginwindow: 1 }
+      const se = Application('System Events')
+      const procs = se.applicationProcesses.whose({ backgroundOnly: false })
+      const names = []
+      for (let i = 0; i < procs.length; i++) {
+        const n = String(procs[i].name())
+        if (!skip[n.toLowerCase()]) names.push(n)
+      }
+      return printOut(JSON.stringify(names))
+    }
+    if (cmd === 'frontmost') {
+      const se = Application('System Events')
+      const front = se.applicationProcesses.whose({ frontmost: true })
+      return printOut(front.length ? String(front[0].name()) : '')
+    }
+    if (cmd === 'fill') {
+      const path = args[0]
+      if (!path) throw new Error('job JSON tidak ada')
+      doFill(JSON.parse(readUtf8(path)))
+      return printOut('ok=true')
+    }
+    throw new Error('usage: status|prompt|apps|frontmost|fill')
+  } catch (e) {
+    printErr(e && e.message ? e.message : e)
+    throw e
+  }
+}

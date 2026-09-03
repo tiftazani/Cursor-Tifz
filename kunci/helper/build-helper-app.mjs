@@ -1,11 +1,12 @@
 import { spawn } from 'node:child_process'
-import { chmod, mkdir, rm, writeFile } from 'node:fs/promises'
+import { chmod, cp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const JXA = join(__dirname, 'KunciHelper.jxa')
 const SWIFT = join(__dirname, 'KunciHelper.swift')
 export const HELPER_APP_NAME = 'Kunci Helper.app'
 export const HELPER_ID = 'app.kunci.helper'
@@ -27,76 +28,212 @@ function run(cmd, args, opts = {}) {
   })
 }
 
-function plist(execName) {
-  return `<?xml version="1.0" encoding="UTF-8"?>
+export function candidateAppPaths() {
+  return [join('/Applications', HELPER_APP_NAME), join(homedir(), 'Applications', HELPER_APP_NAME)]
+}
+
+function binNames(appPath) {
+  return [join(appPath, 'Contents', 'MacOS', 'Kunci Helper'), join(appPath, 'Contents', 'MacOS', 'applet')]
+}
+
+export function helperAppBundlePath() {
+  for (const appPath of candidateAppPaths()) {
+    if (binNames(appPath).some((bin) => existsSync(bin))) return appPath
+  }
+  const local = join(__dirname, HELPER_APP_NAME)
+  if (binNames(local).some((bin) => existsSync(bin))) return local
+  return null
+}
+
+export function helperBinPath() {
+  const appPath = helperAppBundlePath()
+  if (!appPath) return null
+  return binNames(appPath).find((bin) => existsSync(bin)) || null
+}
+
+async function patchPlist(appPath) {
+  const plist = join(appPath, 'Contents', 'Info.plist')
+  if (!existsSync(plist)) return
+  try {
+    await run('/usr/libexec/PlistBuddy', ['-c', `Set :CFBundleIdentifier ${HELPER_ID}`, plist])
+  } catch {
+    try {
+      await run('/usr/libexec/PlistBuddy', ['-c', `Add :CFBundleIdentifier string ${HELPER_ID}`, plist])
+    } catch {
+      /* ignore */
+    }
+  }
+  for (const [key, value] of [
+    ['CFBundleName', 'Kunci Helper'],
+    ['CFBundleDisplayName', 'Kunci Helper'],
+  ]) {
+    try {
+      await run('/usr/libexec/PlistBuddy', ['-c', `Set :${key} ${value}`, plist])
+    } catch {
+      try {
+        await run('/usr/libexec/PlistBuddy', ['-c', `Add :${key} string ${value}`, plist])
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  try {
+    await run('/usr/libexec/PlistBuddy', ['-c', 'Set :LSUIElement false', plist])
+  } catch {
+    try {
+      await run('/usr/libexec/PlistBuddy', ['-c', 'Add :LSUIElement bool false', plist])
+    } catch {
+      /* ignore */
+    }
+  }
+  try {
+    await run('/usr/libexec/PlistBuddy', [
+      '-c',
+      'Set :NSAppleEventsUsageDescription Kunci mengisi username dan password ke aplikasi yang kamu pilih.',
+      plist,
+    ])
+  } catch {
+    try {
+      await run('/usr/libexec/PlistBuddy', [
+        '-c',
+        'Add :NSAppleEventsUsageDescription string Kunci mengisi username dan password ke aplikasi yang kamu pilih.',
+        plist,
+      ])
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+async function compileApplet(staging) {
+  if (existsSync(staging)) await rm(staging, { recursive: true, force: true })
+  await run('osacompile', ['-l', 'JavaScript', '-o', staging, JXA])
+  await patchPlist(staging)
+  try {
+    await run('codesign', ['--force', '--sign', '-', '--identifier', HELPER_ID, staging])
+  } catch {
+    /* optional */
+  }
+}
+
+async function compileSwift(appPath) {
+  const macOS = join(appPath, 'Contents', 'MacOS')
+  const bin = join(macOS, 'Kunci Helper')
+  await mkdir(macOS, { recursive: true })
+  await writeFile(
+    join(appPath, 'Contents', 'Info.plist'),
+    `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleDevelopmentRegion</key>
-  <string>id</string>
-  <key>CFBundleDisplayName</key>
-  <string>Kunci Helper</string>
-  <key>CFBundleExecutable</key>
-  <string>${execName}</string>
-  <key>CFBundleIdentifier</key>
-  <string>${HELPER_ID}</string>
-  <key>CFBundleInfoDictionaryVersion</key>
-  <string>6.0</string>
-  <key>CFBundleName</key>
-  <string>Kunci Helper</string>
-  <key>CFBundlePackageType</key>
-  <string>APPL</string>
-  <key>CFBundleShortVersionString</key>
-  <string>1.4.0</string>
-  <key>CFBundleVersion</key>
-  <string>1</string>
-  <key>LSMinimumSystemVersion</key>
-  <string>13.0</string>
-  <key>LSUIElement</key>
-  <true/>
+  <key>CFBundleDisplayName</key><string>Kunci Helper</string>
+  <key>CFBundleExecutable</key><string>Kunci Helper</string>
+  <key>CFBundleIdentifier</key><string>${HELPER_ID}</string>
+  <key>CFBundleName</key><string>Kunci Helper</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>1.4.1</string>
+  <key>LSUIElement</key><false/>
   <key>NSAppleEventsUsageDescription</key>
   <string>Kunci mengisi username dan password ke aplikasi yang kamu pilih.</string>
-  <key>NSHighResolutionCapable</key>
-  <true/>
+  <key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>
-`
+`,
+  )
+  await run('swiftc', [
+    '-O',
+    '-parse-as-library',
+    '-framework',
+    'AppKit',
+    '-framework',
+    'ApplicationServices',
+    '-o',
+    bin,
+    SWIFT,
+  ])
+  await chmod(bin, 0o755)
+  try {
+    await run('codesign', ['--force', '--sign', '-', '--identifier', HELPER_ID, appPath])
+  } catch {
+    /* optional */
+  }
 }
 
-export function helperAppPath() {
-  return join(homedir(), 'Applications', HELPER_APP_NAME)
-}
-
-export function helperBinPath(appPath = helperAppPath()) {
-  return join(appPath, 'Contents', 'MacOS', 'Kunci Helper')
+async function installCopy(staging, dest) {
+  if (existsSync(dest)) await rm(dest, { recursive: true, force: true })
+  await mkdir(dirname(dest), { recursive: true })
+  await cp(staging, dest, { recursive: true })
 }
 
 export async function buildKunciHelperApp() {
-  const dest = helperAppPath()
-  const macOS = join(dest, 'Contents', 'MacOS')
-  const bin = helperBinPath(dest)
+  const staging = join(homedir(), '.kunci', 'build-Kunci-Helper.app')
+  const homeDest = join(homedir(), 'Applications', HELPER_APP_NAME)
+  const systemDest = join('/Applications', HELPER_APP_NAME)
+  await mkdir(join(homedir(), '.kunci'), { recursive: true, mode: 0o700 })
   await mkdir(join(homedir(), 'Applications'), { recursive: true })
-  if (existsSync(dest)) await rm(dest, { recursive: true, force: true })
-  await mkdir(macOS, { recursive: true })
-  await writeFile(join(dest, 'Contents', 'Info.plist'), plist('Kunci Helper'))
+
+  let method = 'osacompile'
   try {
-    await run('swiftc', ['-O', '-parse-as-library', '-framework', 'AppKit', '-framework', 'ApplicationServices', '-o', bin, SWIFT])
-  } catch (err) {
-    await rm(dest, { recursive: true, force: true }).catch(() => {})
-    return {
-      ok: false,
-      path: dest,
-      error:
-        err instanceof Error
-          ? `${err.message}. Pasang Command Line Tools: xcode-select --install`
-          : 'swiftc gagal',
+    await compileApplet(staging)
+  } catch (osacompileErr) {
+    method = 'swiftc'
+    if (existsSync(staging)) await rm(staging, { recursive: true, force: true })
+    await mkdir(join(staging, 'Contents', 'MacOS'), { recursive: true })
+    try {
+      await compileSwift(staging)
+    } catch (swiftErr) {
+      return {
+        ok: false,
+        path: systemDest,
+        error: `Gagal membuat app (${osacompileErr instanceof Error ? osacompileErr.message : osacompileErr}; ${swiftErr instanceof Error ? swiftErr.message : swiftErr})`,
+      }
     }
   }
-  await chmod(bin, 0o755)
+
+  const installed = []
   try {
-    await run('codesign', ['--force', '--sign', '-', '--identifier', HELPER_ID, dest])
-  } catch {
-    /* ad-hoc sign optional */
+    await installCopy(staging, homeDest)
+    installed.push(homeDest)
+  } catch (err) {
+    return { ok: false, path: homeDest, error: err instanceof Error ? err.message : 'Gagal salin ke ~/Applications' }
   }
-  return { ok: true, path: dest }
+
+  try {
+    await installCopy(staging, systemDest)
+    installed.push(systemDest)
+  } catch {
+    try {
+      if (existsSync(systemDest)) await rm(systemDest, { recursive: true, force: true })
+      await symlink(homeDest, systemDest)
+      installed.push(`${systemDest} → ${homeDest}`)
+    } catch {
+      /* Finder sidebar /Applications may stay empty; homeDest still works */
+    }
+  }
+
+  try {
+    await run('open', ['-R', existsSync(systemDest) ? systemDest : homeDest])
+  } catch {
+    await run('open', [join(homedir(), 'Applications')]).catch(() => {})
+  }
+
+  return {
+    ok: true,
+    path: existsSync(systemDest) ? systemDest : homeDest,
+    method,
+    installed,
+  }
+}
+
+export async function revealHelperApp() {
+  const appPath = helperAppBundlePath()
+  if (!appPath) {
+    return { ok: false, error: 'Kunci Helper.app belum ada. Di folder kunci jalankan npm run install-service.' }
+  }
+  try {
+    await run('open', ['-R', appPath])
+    return { ok: true, path: appPath }
+  } catch (err) {
+    return { ok: false, path: appPath, error: err instanceof Error ? err.message : 'Gagal membuka Finder' }
+  }
 }

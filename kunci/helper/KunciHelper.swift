@@ -4,13 +4,14 @@ import Foundation
 
 let kVKAnsiV: CGKeyCode = 0x09
 let kVKTab: CGKeyCode = 0x30
+let knownCmds: Set<String> = ["status", "prompt", "apps", "frontmost", "fill"]
 
 @main
 struct KunciHelper {
     static func main() {
         _ = NSApplication.shared
-        let args = Array(CommandLine.arguments.dropFirst())
-        let cmd = args.first ?? "prompt"
+        let raw = Array(CommandLine.arguments.dropFirst())
+        let (cmd, rest) = requestCommand(raw)
         switch cmd {
         case "status":
             print(isTrusted() ? "trusted=true" : "trusted=false")
@@ -21,7 +22,7 @@ struct KunciHelper {
         case "frontmost":
             print(frontmostName() ?? "")
         case "fill":
-            let path = args.dropFirst().first
+            let path = rest.first
             guard let path, let job = readJob(path) else {
                 fputs("job JSON tidak ada\n", stderr)
                 exit(1)
@@ -33,6 +34,21 @@ struct KunciHelper {
             exit(2)
         }
     }
+}
+
+func requestCommand(_ args: [String]) -> (String, [String]) {
+    if let first = args.first, knownCmds.contains(first) {
+        return (first, Array(args.dropFirst()))
+    }
+    let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".kunci/helper-request.json")
+    if let data = try? Data(contentsOf: url),
+       let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+       let cmd = obj["cmd"] as? String,
+       knownCmds.contains(cmd)
+    {
+        return (cmd, obj["args"] as? [String] ?? [])
+    }
+    return ("prompt", [])
 }
 
 func isTrusted() -> Bool {

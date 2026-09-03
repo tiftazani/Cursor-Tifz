@@ -88,14 +88,39 @@ export async function frontmostApp(baseUrl: string): Promise<string | null> {
 
 export async function listHelperApps(
   baseUrl: string,
-): Promise<{ apps: string[]; accessibility: boolean; platform?: string; helperApp?: boolean }> {
+): Promise<{ apps: string[]; accessibility: boolean; platform?: string; helperApp?: boolean; helperAppPath?: string }> {
   const url = helperBase(baseUrl)
   try {
     const res = await fetch(`${url}/apps`)
     if (!res.ok) return { apps: [], accessibility: false }
-    return (await res.json()) as { apps: string[]; accessibility: boolean; platform?: string; helperApp?: boolean }
+    return (await res.json()) as {
+      apps: string[]
+      accessibility: boolean
+      platform?: string
+      helperApp?: boolean
+      helperAppPath?: string
+    }
   } catch {
     return { apps: [], accessibility: false }
+  }
+}
+
+export async function revealHelperApp(
+  baseUrl: string,
+  token: string,
+): Promise<{ ok: boolean; path?: string; error?: string }> {
+  const url = helperBase(baseUrl)
+  const auth = await resolveHelperToken(baseUrl, token)
+  try {
+    const res = await fetch(`${url}/reveal-helper`, {
+      method: 'POST',
+      headers: { 'X-Kunci-Token': auth },
+    })
+    const body = (await res.json().catch(() => ({}))) as { ok?: boolean; path?: string; error?: string }
+    if (!res.ok || !body.ok) return { ok: false, path: body.path, error: body.error || `HTTP ${res.status}` }
+    return { ok: true, path: body.path }
+  } catch {
+    return { ok: false, error: 'Helper Mac tidak terhubung' }
   }
 }
 

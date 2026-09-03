@@ -137,20 +137,22 @@ await writeFile(plistPath, plist, { mode: 0o644 })
 await enableService()
 const healthy = await waitForHealth()
 
-console.log('\nMemasang Kunci Helper.app (muncul di Accessibility, bukan osascript)…')
+console.log('\nMemasang Kunci Helper.app ke /Applications (sidebar Finder)…')
 const helperBuild = await buildKunciHelperApp()
 if (helperBuild.ok) {
   console.log(`App: ${helperBuild.path}`)
+  if (helperBuild.installed?.length) console.log(`Salinan: ${helperBuild.installed.join(', ')}`)
+  console.log('Sidebar Finder "Applications" = /Applications, bukan folder Applications di Home.')
+  console.log('Kalau tidak kelihatan: Finder sudah membuka lokasi app, atau Go → Applications.')
   await promptAccessibility().catch(() => {})
   await runQuiet('open', [
     'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility',
   ])
   await runQuiet('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'])
-  console.log('Di Accessibility, cari **Kunci Helper** — osascript memang tidak muncul di daftar itu.')
-  console.log('Kalau belum ada: klik +, pilih Applications → Kunci Helper.')
+  console.log('Di Accessibility centang Kunci Helper. Kalau belum ada: klik +, pilih /Applications/Kunci Helper.')
 } else {
   console.log(`Kunci Helper.app belum terpasang: ${helperBuild.error}`)
-  console.log(`Cadangan: di Accessibility klik +, lalu pilih binary Node ini:\n  ${nodePath}`)
+  console.log('Coba lagi setelah git pull. App tidak lagi butuh Xcode / swiftc.')
 }
 
 if (healthy) {

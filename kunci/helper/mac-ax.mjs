@@ -6,30 +6,28 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mkdir, unlink, writeFile } from 'node:fs/promises'
 
+import { helperAppBundlePath, helperBinPath, revealHelperApp } from './build-helper-app.mjs'
+
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const TOKEN_DIR = join(homedir(), '.kunci')
 const AX_SCRIPT = join(__dirname, 'ax-fill.jxa')
 const isMac = platform() === 'darwin'
 
-const SKIP_APPS = new Set([
-  'finder',
-  'dock',
-  'systemuiserver',
-  'controlcenter',
-  'notificationcenter',
-  'spotlight',
-  'windowserver',
-  'loginwindow',
-  'wallpaper',
-  'universalcontrol',
-])
+export { helperBinPath, helperAppBundlePath, revealHelperApp }
 
-export function helperBinPath() {
-  const home = join(homedir(), 'Applications', 'Kunci Helper.app', 'Contents', 'MacOS', 'Kunci Helper')
-  const local = join(__dirname, 'Kunci Helper.app', 'Contents', 'MacOS', 'Kunci Helper')
-  if (existsSync(home)) return home
-  if (existsSync(local)) return local
-  return null
+const SKIP_APPS = new Set(['finder', 'kunci helper', 'osascript', 'loginwindow'])
+const REQUEST_PATH = join(TOKEN_DIR, 'helper-request.json')
+
+function uniqueApps(names) {
+  const seen = new Set()
+  const apps = []
+  for (const name of names) {
+    const key = String(name || '').trim()
+    if (!key || SKIP_APPS.has(key.toLowerCase()) || seen.has(key.toLowerCase())) continue
+    seen.add(key.toLowerCase())
+    apps.push(key)
+  }
+  return apps.sort((a, b) => a.localeCompare(b))
 }
 
 function run(cmd, args, input) {
@@ -55,17 +53,29 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
-async function helperCmd(args) {
+async function helperCmd(args, { throwOnError = false } = {}) {
   const bin = helperBinPath()
   if (!bin) return null
-  return run(bin, args)
+  await mkdir(TOKEN_DIR, { recursive: true, mode: 0o700 })
+  await writeFile(REQUEST_PATH, JSON.stringify({ cmd: args[0], args: args.slice(1).map(String) }), { mode: 0o600 })
+  const attempts = [() => run(bin, args.map(String)), () => run(bin, [])]
+  let lastErr
+  for (const attempt of attempts) {
+    try {
+      return await attempt()
+    } catch (err) {
+      lastErr = err
+    }
+  }
+  if (throwOnError) throw lastErr instanceof Error ? lastErr : new Error('Kunci Helper gagal dijalankan')
+  return null
 }
 
 export async function accessibilityTrusted() {
   if (!isMac) return false
   try {
     const fromApp = await helperCmd(['status'])
-    if (fromApp != null) return fromApp.includes('trusted=true')
+    if (fromApp != null && fromApp.trim()) return fromApp.includes('trusted=true')
     const out = await run('osascript', [
       '-l',
       'JavaScript',
@@ -82,7 +92,7 @@ export async function promptAccessibility() {
   if (!isMac) return { ok: false, error: 'bukan macOS' }
   try {
     const fromApp = await helperCmd(['prompt'])
-    if (fromApp != null) {
+    if (fromApp != null && fromApp.trim()) {
       return { ok: true, trusted: fromApp.includes('trusted=true'), helper: 'Kunci Helper' }
     }
     await run('osascript', [
@@ -101,9 +111,9 @@ export async function listGuiApps() {
   if (!isMac) return []
   try {
     const fromApp = await helperCmd(['apps'])
-    if (fromApp != null) {
+    if (fromApp != null && fromApp.trim()) {
       const names = JSON.parse(fromApp.trim() || '[]')
-      return Array.isArray(names) ? names : []
+      return uniqueApps(Array.isArray(names) ? names : [])
     }
     const out = await run('osascript', [
       '-l',
@@ -116,15 +126,7 @@ export async function listGuiApps() {
        JSON.stringify(names);`,
     ])
     const names = JSON.parse(out.trim() || '[]')
-    const seen = new Set()
-    const apps = []
-    for (const name of names) {
-      const key = String(name || '').trim()
-      if (!key || SKIP_APPS.has(key.toLowerCase()) || seen.has(key.toLowerCase())) continue
-      seen.add(key.toLowerCase())
-      apps.push(key)
-    }
-    return apps.sort((a, b) => a.localeCompare(b))
+    return uniqueApps(Array.isArray(names) ? names : [])
   } catch {
     return []
   }
@@ -192,14 +194,13 @@ async function axFill(job) {
 }
 
 async function fillWithHelperApp(job) {
-  const bin = helperBinPath()
-  if (!bin) return null
+  if (!helperBinPath()) return null
   await mkdir(TOKEN_DIR, { recursive: true, mode: 0o700 })
   const jobPath = join(TOKEN_DIR, `fill-${randomBytes(8).toString('hex')}.json`)
   await writeFile(jobPath, JSON.stringify(job), { mode: 0o600 })
   try {
-    const out = await run(bin, ['fill', jobPath])
-    return { ok: /ok=true/.test(out), method: 'kunci-helper', app: job.appName || null }
+    const out = await helperCmd(['fill', jobPath], { throwOnError: true })
+    return { ok: /ok=true/.test(out || ''), method: 'kunci-helper', app: job.appName || null }
   } finally {
     await unlink(jobPath).catch(() => {})
   }

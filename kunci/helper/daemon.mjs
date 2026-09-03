@@ -7,7 +7,16 @@ import { dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises'
 
-import { accessibilityTrusted, fillCredentials, frontmostName, listGuiApps, promptAccessibility, helperBinPath } from './mac-ax.mjs'
+import {
+  accessibilityTrusted,
+  fillCredentials,
+  frontmostName,
+  helperAppBundlePath,
+  helperBinPath,
+  listGuiApps,
+  promptAccessibility,
+  revealHelperApp,
+} from './mac-ax.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
@@ -171,12 +180,12 @@ const server = createServer(async (req, res) => {
       json(res, 200, {
         ok: true,
         platform: platform(),
-        version: '1.4.0',
+        version: '1.4.1',
         email: RECOVERY_EMAIL,
         ui: serveUi,
         accessibility: await accessibilityTrusted(),
         helperApp: Boolean(helperBinPath()),
-        helperAppPath: helperBinPath() || '',
+        helperAppPath: helperAppBundlePath() || '',
       })
       return
     }
@@ -186,6 +195,7 @@ const server = createServer(async (req, res) => {
         platform: platform(),
         accessibility: await accessibilityTrusted(),
         helperApp: Boolean(helperBinPath()),
+        helperAppPath: helperAppBundlePath() || '',
         apps: await listGuiApps(),
       })
       return
@@ -196,6 +206,15 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/frontmost') {
       json(res, 200, { app: await frontmostName() })
+      return
+    }
+    if (req.method === 'POST' && url.pathname === '/reveal-helper') {
+      const provided = String(req.headers['x-kunci-token'] || '')
+      if (provided !== token) {
+        json(res, 401, { ok: false, error: 'Token helper salah' })
+        return
+      }
+      json(res, 200, await revealHelperApp())
       return
     }
     if (req.method === 'POST' && url.pathname === '/accessibility/prompt') {
