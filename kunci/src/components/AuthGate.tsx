@@ -69,6 +69,10 @@ export function AuthGate({ onAuthed }: { onAuthed: () => void }) {
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               autoComplete="one-time-code"
               spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-bwignore="true"
+              data-form-type="other"
             />
           </Field>
           {error ? <p className="error">{error}</p> : null}
