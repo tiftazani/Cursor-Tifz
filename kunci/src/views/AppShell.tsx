@@ -55,7 +55,7 @@ const FILTERS: { id: FilterId; label: string }[] = [
 ]
 
 export function AppShell() {
-  const { vault, lock, helperOnline, emptyTrash } = useVault()
+  const { vault, lock, helperOnline, helperAccessibility, emptyTrash } = useVault()
   const compact = useCompactLayout()
   const [view, setView] = useState<AppView>('vault')
   const [filter, setFilter] = useState<FilterId>('all')
@@ -175,8 +175,10 @@ export function AppShell() {
           </button>
         </nav>
         <div className="sidebar-foot">
-          <span className={`dot ${helperOnline ? 'on' : ''}`} />
-          {helperOnline ? 'Helper Mac' : 'Helper off'}
+          <button type="button" className="helper-chip" onClick={() => goView('autofill')} title="Pengaturan isi otomatis">
+            <span className={`dot ${helperOnline ? 'on' : ''}`} />
+            {helperOnline ? (helperAccessibility ? 'Helper Mac' : 'Helper · izinkan AX') : 'Helper off'}
+          </button>
           <button type="button" className="icon-btn" title="Kunci (⌘L)" onClick={lock}>
             <IconLock size={16} />
           </button>
@@ -259,7 +261,27 @@ export function AppShell() {
             </div>
             <ul className="entry-list">
               {filtered.length === 0 ? (
-                <li className="empty">Tidak ada entri.</li>
+                <li className="empty-hero">
+                  {query ? (
+                    <>
+                      <strong>Tidak ada yang cocok</strong>
+                      <span>Coba nama situs, username, atau tag lain.</span>
+                    </>
+                  ) : filter === 'trash' ? (
+                    <>
+                      <strong>Sampah kosong</strong>
+                      <span>Entri yang dibuang akan muncul di sini.</span>
+                    </>
+                  ) : (
+                    <>
+                      <strong>Brankas masih kosong</strong>
+                      <span>Simpan login website atau aplikasi Mac. Isi ke browser lewat ekstensi, ke app lewat helper.</span>
+                      <button type="button" className="btn btn-primary" onClick={startNew}>
+                        <IconPlus size={16} /> Entri pertama
+                      </button>
+                    </>
+                  )}
+                </li>
               ) : (
                 filtered.map((e) => (
                   <li key={e.id}>
@@ -303,7 +325,13 @@ export function AppShell() {
                 onBack={backToList}
               />
             ) : (
-              <div className="empty tall">Pilih entri atau buat yang baru.</div>
+              <div className="empty tall empty-hero">
+                <strong>Pilih entri</strong>
+                <span>Atau buat yang baru untuk menyimpan username dan password.</span>
+                <button type="button" className="btn btn-primary" onClick={startNew}>
+                  <IconPlus size={16} /> Entri baru
+                </button>
+              </div>
             )}
           </section>
           ) : null}

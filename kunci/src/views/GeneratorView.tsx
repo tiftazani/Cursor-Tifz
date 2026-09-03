@@ -33,7 +33,7 @@ export function GeneratorView() {
     <div className="page">
       <header className="page-head">
         <h2>Generator</h2>
-        <p className="muted">Buat password acak atau passphrase yang mudah diketik.</p>
+        <p className="muted">Password acak atau passphrase. Salin, atau tempel ke entri dari layar Brankas.</p>
       </header>
       <div className="gen-layout">
         <div className="card">

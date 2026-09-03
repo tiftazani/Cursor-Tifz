@@ -8,6 +8,8 @@ import { dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises'
 
+import { accessibilityTrusted, fillCredentials, listGuiApps } from './mac-ax.mjs'
+
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const DIST = join(ROOT, 'dist')
@@ -86,41 +88,6 @@ function run(cmd, args, input) {
       child.stdin.end()
     }
   })
-}
-
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms))
-}
-
-async function pbcopy(text) {
-  await run('pbcopy', [], text)
-}
-
-async function pbpaste() {
-  return run('pbpaste', [])
-}
-
-async function fillMac(username, password, mode) {
-  if (!isMac) throw new Error('Helper isi aplikasi hanya berjalan di macOS')
-  const previous = await pbpaste().catch(() => '')
-  try {
-    if (mode === 'login' && username) {
-      await pbcopy(username)
-      await sleep(80)
-      await run('osascript', ['-e', 'tell application "System Events" to keystroke "v" using command down'])
-      await sleep(140)
-      await run('osascript', ['-e', 'tell application "System Events" to keystroke tab'])
-      await sleep(80)
-    }
-    if (password) {
-      await pbcopy(password)
-      await sleep(80)
-      await run('osascript', ['-e', 'tell application "System Events" to keystroke "v" using command down'])
-    }
-  } finally {
-    await sleep(400)
-    await pbcopy(previous).catch(() => {})
-  }
 }
 
 async function wipeLegacyDek() {
@@ -222,7 +189,23 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://127.0.0.1:${PORT}`)
   try {
     if (req.method === 'GET' && url.pathname === '/health') {
-      json(res, 200, { ok: true, platform: platform(), version: '1.3.0', email: RECOVERY_EMAIL, ui: serveUi })
+      json(res, 200, {
+        ok: true,
+        platform: platform(),
+        version: '1.4.0',
+        email: RECOVERY_EMAIL,
+        ui: serveUi,
+        accessibility: await accessibilityTrusted(),
+      })
+      return
+    }
+    if (req.method === 'GET' && url.pathname === '/apps') {
+      json(res, 200, {
+        ok: true,
+        platform: platform(),
+        accessibility: await accessibilityTrusted(),
+        apps: await listGuiApps(),
+      })
       return
     }
     if (req.method === 'GET' && url.pathname === '/api/local-token') {
@@ -251,8 +234,14 @@ const server = createServer(async (req, res) => {
         return
       }
       const body = JSON.parse((await readBody(req)) || '{}')
-      await fillMac(body.username || '', body.password || '', body.mode || 'login')
-      json(res, 200, { ok: true })
+      const result = await fillCredentials({
+        username: body.username || '',
+        password: body.password || '',
+        mode: body.mode || 'login',
+        appName: body.appName || '',
+        waitMs: Number(body.waitMs || 0),
+      })
+      json(res, 200, { ok: true, method: result.method, app: result.app || null })
       return
     }
     if (
@@ -279,7 +268,7 @@ const server = createServer(async (req, res) => {
       ok: false,
       error:
         err instanceof Error
-          ? `${err.message}. Di Mac: izinkan Node di Privacy & Security → Accessibility jika ini permintaan isi app.`
+          ? `${err.message}. Di Mac: System Settings → Privacy & Security → Accessibility, izinkan Node dan osascript.`
           : 'gagal',
     })
   }

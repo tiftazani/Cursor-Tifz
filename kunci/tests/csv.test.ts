@@ -28,4 +28,8 @@ Catatan,,,
     expect(csv).toContain('name,type,url,username,password')
     expect(csv).toContain('Mail')
   })
+
+  it('skips empty rows', () => {
+    expect(entriesFromCsv('name,url,username,password\n,,,', 1)).toHaveLength(0)
+  })
 })

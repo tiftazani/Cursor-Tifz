@@ -10,8 +10,26 @@ main {
   padding: 14px;
 }
 
+.brand {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: #16332e;
+  color: #3ee0c3;
+  flex: none;
+}
+
 h1 {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 16px;
 }
 

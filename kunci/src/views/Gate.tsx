@@ -6,7 +6,7 @@ import { isStrongMaster, passwordStrength } from '../lib/strength'
 import { useVault } from '../state/VaultContext'
 
 export function SetupScreen() {
-  const { setup, busy, recoveryEmail } = useVault()
+  const { setup, busy } = useVault()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [hint, setHint] = useState('')
@@ -41,9 +41,7 @@ export function SetupScreen() {
         </div>
         <form className="stack" autoComplete="off" onSubmit={(e) => void onSubmit(e)}>
           <p className="lede">
-            Localhost dan URL publik memakai brankas terenkripsi yang sama. Server hanya menerima ciphertext. Setelah
-            brankas dibuat, simpan <strong>recovery key</strong> di luar Kunci. Reset kata sandi tidak lewat kode Gmail ke{' '}
-            {recoveryEmail}.
+            Localhost dan URL publik memakai brankas terenkripsi yang sama. Simpan recovery key di luar Kunci.
           </p>
           <IosInstallCard />
           <Field label="Kata sandi induk">

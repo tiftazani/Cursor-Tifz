@@ -9,8 +9,10 @@ import { formatDateTime, relativeTime } from '../lib/time'
 import { restoreHistoryRecord } from '../lib/history'
 import { newId } from '../lib/id'
 import { useCompactLayout } from '../lib/media'
+import { isMacDesktop } from '../lib/platform'
 import { useVault } from '../state/VaultContext'
 import { useToast } from '../components/Toast'
+import { FillMacDialog } from '../components/FillMacDialog'
 
 const TYPES: { id: EntryType; label: string }[] = [
   { id: 'login', label: 'Website' },
@@ -33,11 +35,13 @@ export function EntryPane({
   onCloseNew?: () => void
   onBack?: () => void
 }) {
-  const { saveEntry, deleteEntry, restoreEntry, purgeEntry, copySecret, sequentialCopy, fillMac, helperOnline } = useVault()
+  const { saveEntry, deleteEntry, restoreEntry, purgeEntry, copySecret, sequentialCopy } = useVault()
   const toast = useToast()
   const compact = useCompactLayout()
+  const mac = isMacDesktop()
   const [draft, setDraft] = useState(entry)
   const [saving, setSaving] = useState(false)
+  const [fillOpen, setFillOpen] = useState(false)
   const [totp, setTotp] = useState<{ code: string; remaining: number } | null>(null)
 
   useEffect(() => {
@@ -321,10 +325,13 @@ export function EntryPane({
             Salin berurutan
           </button>
         )}
-        <button type="button" className="btn mac-only" onClick={() => void fillMac(draft)} disabled={!helperOnline}>
-          <IconFill size={16} /> Isi ke app Mac
-        </button>
+        {mac && (draft.username || draft.password) ? (
+          <button type="button" className="btn" onClick={() => setFillOpen(true)}>
+            <IconFill size={16} /> Isi ke app Mac
+          </button>
+        ) : null}
       </div>
+      {fillOpen ? <FillMacDialog entry={draft} onClose={() => setFillOpen(false)} /> : null}
 
       {!isNew && draft.history.length > 0 ? (
         <section className="history-block">

@@ -7,6 +7,8 @@ function send(msg) {
   }
 }
 
+const intent = globalThis.kunciLoginIntent
+
 function setNativeValue(el, value) {
   const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
   const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set
@@ -16,16 +18,26 @@ function setNativeValue(el, value) {
 }
 
 const BIND_GEN = crypto.randomUUID()
+const iconHosts = new Map()
+
+function visibleInput(el) {
+  if (!(el instanceof HTMLInputElement) || el.disabled) return false
+  if (el.offsetParent === null && el.getClientRects().length === 0) return false
+  const style = window.getComputedStyle(el)
+  if (style.visibility === 'hidden' || style.display === 'none') return false
+  return true
+}
 
 function passwordFields() {
-  return [...document.querySelectorAll('input[type="password"]:not([disabled])')].filter((el) => el.offsetParent !== null || el.getClientRects().length)
+  return [...document.querySelectorAll('input[type="password"]')].filter(visibleInput)
+}
+
+function fieldSnap(el) {
+  return intent.fieldSnapshot(el)
 }
 
 function isUsernameInput(el) {
-  if (!(el instanceof HTMLInputElement) || el.type === 'password' || el.type === 'hidden' || el.type === 'checkbox') return false
-  const type = (el.type || 'text').toLowerCase()
-  const hint = `${el.name} ${el.id} ${el.autocomplete} ${el.placeholder} ${el.getAttribute('aria-label') || ''}`.toLowerCase()
-  return type === 'email' || type === 'text' || type === 'tel' || /user|email|login|id|account|nama/.test(hint)
+  return el instanceof HTMLInputElement && visibleInput(el) && intent.isUsernameField(fieldSnap(el))
 }
 
 function usernameFieldNear(password) {
@@ -36,9 +48,17 @@ function usernameFieldNear(password) {
   return candidates.reverse().find((el) => scope.indexOf(el) < idx) || candidates[0] || null
 }
 
+function kindAround(el) {
+  return intent.classifyAround(el).kind
+}
+
+function loginPasswordFields() {
+  return passwordFields().filter((el) => intent.shouldAutofillKind(kindAround(el)) && intent.isCurrentPasswordField(fieldSnap(el)))
+}
+
 function fill(match) {
-  const passwords = passwordFields()
-  const pw = passwords[0]
+  const passwords = loginPasswordFields()
+  const pw = passwords[0] || passwordFields().filter((el) => intent.isCurrentPasswordField(fieldSnap(el)))[0]
   if (pw && match.password) setNativeValue(pw, match.password)
   const user = pw ? usernameFieldNear(pw) : document.querySelector('input[type="email"], input[autocomplete="username"]')
   if (user && match.username) setNativeValue(user, match.username)
@@ -54,12 +74,14 @@ function isKunciPage() {
 let lastUsername = ''
 let lastPassword = ''
 let lastFilled = null
+let lastKind = 'other'
 let autofilled = false
 let autofillTried = false
 let saveBarHost = null
 let otherBarHost = null
 let saveOffer = null
 let scanTimer = 0
+let placeTimer = 0
 
 function readFormCreds(form) {
   const pw = form
@@ -68,7 +90,8 @@ function readFormCreds(form) {
   const userEl = pw ? usernameFieldNear(pw) : [...document.querySelectorAll('input')].find(isUsernameInput)
   const username = (userEl?.value || lastUsername || '').trim()
   const password = pw?.value || lastPassword || ''
-  return { username, password }
+  const kind = pw ? kindAround(pw) : form ? intent.classifyAround(form instanceof Element ? form : document.body).kind : lastKind
+  return { username, password, kind }
 }
 
 function captureFromEvent(target) {
@@ -76,23 +99,99 @@ function captureFromEvent(target) {
   const creds = readFormCreds(form)
   if (creds.username) lastUsername = creds.username
   if (creds.password) lastPassword = creds.password
+  lastKind = creds.kind
   return creds
 }
 
+function iconSvg() {
+  return `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="8" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M11 12h10m-3-3v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`
+}
+
+function placeOutside(el, host) {
+  const r = el.getBoundingClientRect()
+  const size = 28
+  const gap = 8
+  if (r.width < 2 || r.height < 2) {
+    host.style.display = 'none'
+    return
+  }
+  host.style.display = 'block'
+  let left = r.right + gap
+  let top = Math.round(r.top + (r.height - size) / 2)
+  if (left + size > window.innerWidth - 4) left = r.left - gap - size
+  if (left < 4) {
+    left = Math.min(window.innerWidth - size - 4, r.right - size)
+    top = Math.round(r.bottom + 6)
+  }
+  host.style.left = `${Math.round(left)}px`
+  host.style.top = `${Math.round(top)}px`
+}
+
+function repositionIcons() {
+  for (const [el, host] of iconHosts) {
+    if (!el.isConnected) {
+      host.remove()
+      iconHosts.delete(el)
+      continue
+    }
+    placeOutside(el, host)
+  }
+}
+
 function ensureButton(pw) {
-  if (pw.dataset.kunciBound === BIND_GEN) return
+  if (!intent.shouldAutofillKind(kindAround(pw))) {
+    const stale = iconHosts.get(pw)
+    if (stale) {
+      stale.remove()
+      iconHosts.delete(pw)
+    }
+    return
+  }
+  if (pw.dataset.kunciBound === BIND_GEN && iconHosts.get(pw)?.isConnected) {
+    placeOutside(pw, iconHosts.get(pw))
+    return
+  }
   const sibling = pw.nextElementSibling
   if (sibling?.classList?.contains('kunci-wrap')) sibling.remove()
   pw.dataset.kunciBound = BIND_GEN
-  const wrap = document.createElement('span')
-  wrap.className = 'kunci-wrap'
+  document.getElementById(`kunci-icon-${pw.dataset.kunciIconId || ''}`)?.remove()
+
+  const host = document.createElement('div')
+  const hostId = crypto.randomUUID()
+  pw.dataset.kunciIconId = hostId
+  host.id = `kunci-icon-${hostId}`
+  host.className = 'kunci-icon-host'
+  host.style.cssText =
+    'position:fixed;z-index:2147483645;width:28px;height:28px;pointer-events:auto;margin:0;padding:0;'
+  const shadow = host.attachShadow({ mode: 'closed' })
   const btn = document.createElement('button')
   btn.type = 'button'
   btn.className = 'kunci-fill-btn'
-  btn.title = 'Isi dengan Kunci'
-  btn.textContent = 'K'
-  wrap.appendChild(btn)
-  pw.insertAdjacentElement('afterend', wrap)
+  btn.title = 'Isi login dengan Kunci'
+  btn.setAttribute('aria-label', 'Isi login dengan Kunci')
+  btn.innerHTML = iconSvg()
+  const style = document.createElement('style')
+  style.textContent = `
+    :host { all: initial; }
+    button {
+      box-sizing: border-box;
+      width: 28px; height: 28px;
+      display: grid; place-items: center;
+      border-radius: 8px;
+      border: 1px solid rgba(62, 224, 195, 0.45);
+      background: #121820;
+      color: #3ee0c3;
+      cursor: pointer;
+      padding: 0;
+    }
+    button.locked { color: #f5c16c; border-color: rgba(245, 193, 108, 0.5); }
+    button:hover { filter: brightness(1.08); }
+  `
+  shadow.append(style, btn)
+  document.documentElement.appendChild(host)
+  iconHosts.set(pw, host)
+  placeOutside(pw, host)
+
   btn.addEventListener('click', async (e) => {
     e.preventDefault()
     e.stopPropagation()
@@ -112,7 +211,7 @@ function ensureButton(pw) {
     if (matches.length === 1) {
       fill(matches[0])
       lastFilled = matches[0]
-    } else showMenu(btn, matches)
+    } else showMenu(host, matches)
   })
 }
 
@@ -121,7 +220,8 @@ function showMenu(anchor, matches) {
   const menu = document.createElement('div')
   menu.className = 'kunci-menu'
   if (!matches.length) {
-    menu.innerHTML = '<div class="kunci-empty">Belum ada login untuk situs ini. Masuk seperti biasa — Kunci akan menawar simpan.</div>'
+    menu.innerHTML =
+      '<div class="kunci-empty">Belum ada login untuk situs ini. Masuk seperti biasa — Kunci akan menawar simpan.</div>'
   } else {
     for (const m of matches) {
       const item = document.createElement('button')
@@ -169,7 +269,7 @@ function barStyles() {
     .mark {
       width: 28px; height: 28px; border-radius: 8px; flex: none;
       display: grid; place-items: center;
-      background: #16332e; color: #3ee0c3; font-weight: 800;
+      background: #16332e; color: #3ee0c3;
     }
     .copy { flex: 1; min-width: 0; }
     .copy strong { display: block; font-size: 13px; }
@@ -190,7 +290,7 @@ function mountBar(existing, { title, subtitle, actions, sticky }) {
   const shadow = host.attachShadow({ mode: 'closed' })
   const wrap = document.createElement('div')
   wrap.className = 'bar'
-  wrap.innerHTML = `<div class="mark">K</div><div class="copy"><strong></strong><span></span></div>`
+  wrap.innerHTML = `<div class="mark">${iconSvg()}</div><div class="copy"><strong></strong><span></span></div>`
   wrap.querySelector('strong').textContent = title
   wrap.querySelector('span').textContent = subtitle
   for (const action of actions) {
@@ -234,7 +334,7 @@ function showSaveBar(pending) {
   })()
   saveBarHost = mountBar(saveBarHost, {
     sticky: true,
-    title: pending.action === 'update' ? 'Perbarui password di Kunci?' : 'Simpan password di Kunci?',
+    title: pending.action === 'update' ? 'Perbarui password masuk di Kunci?' : 'Simpan login ke Kunci?',
     subtitle: capture.username ? `${capture.username} · ${hostName}` : hostName,
     actions: [
       {
@@ -261,7 +361,7 @@ function showSaveBar(pending) {
         },
       },
       {
-        label: 'Jangan untuk situs ini',
+        label: 'Bukan form masuk',
         onClick: () => {
           void send({ type: 'NEVER_SAVE', url: capture.url }).then(() => hideSaveBar())
         },
@@ -283,7 +383,7 @@ function keepSaveBar() {
 
 async function maybeAutofill() {
   if (autofillTried || autofilled || isKunciPage()) return
-  const passwords = passwordFields()
+  const passwords = loginPasswordFields()
   if (!passwords.length) return
   autofillTried = true
   if (passwords.some((el) => el.value)) return
@@ -313,6 +413,7 @@ async function maybeAutofill() {
 
 async function maybeOfferSave(creds) {
   if (isKunciPage()) return
+  if (!intent.shouldOfferSaveKind(creds.kind || lastKind)) return
   const password = creds.password || lastPassword
   const username = creds.username || lastUsername
   if (!password) return
@@ -343,6 +444,7 @@ function scan() {
   keepSaveBar()
   passwordFields().forEach(ensureButton)
   if (!saveOffer) void maybeAutofill()
+  repositionIcons()
 }
 
 function wireKunciBridge() {
@@ -413,12 +515,18 @@ if (isKunciPage()) {
   )
   window.addEventListener('pagehide', () => {
     if (!lastPassword) return
+    if (!intent.shouldOfferSaveKind(lastKind)) return
     if (lastFilled && lastFilled.password === lastPassword && (lastFilled.username || '') === lastUsername) return
     void send({
       type: 'QUEUE_SAVE',
       capture: { url: location.href, username: lastUsername, password: lastPassword },
     })
   })
+  window.addEventListener('scroll', () => {
+    window.clearTimeout(placeTimer)
+    placeTimer = window.setTimeout(repositionIcons, 16)
+  }, true)
+  window.addEventListener('resize', repositionIcons)
   void restorePendingSave().finally(() => {
     scan()
     new MutationObserver(() => {
@@ -428,6 +536,7 @@ if (isKunciPage()) {
   })
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'FILL_NOW') {
+      if (!loginPasswordFields().length) return
       void send({ type: 'MATCHES', url: location.href }).then((res) => {
         if (res?.matches?.[0]) fill(res.matches[0])
       })

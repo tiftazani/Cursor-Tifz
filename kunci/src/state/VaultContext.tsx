@@ -32,6 +32,7 @@ interface VaultApi {
   hint: string
   busy: boolean
   helperOnline: boolean
+  helperAccessibility: boolean
   backups: StoredBackup[]
   backupFolderName: string | null
   pendingRecoveryKey: string | null
@@ -58,11 +59,12 @@ interface VaultApi {
   exportBackup: () => Promise<void>
   restoreBackup: (json: unknown, password: string, mode: 'replace' | 'merge') => Promise<void>
   importCsvText: (text: string) => Promise<number>
+  importPlainEntries: (entries: Entry[]) => Promise<number>
   pickBackupFolder: () => Promise<void>
   backupNow: () => Promise<void>
   restoreIdbBackup: (id: string, password: string) => Promise<void>
-  fillMac: (entry: Entry) => Promise<void>
-  fillFrontmostApp: () => Promise<void>
+  fillMac: (entry: Entry, opts?: { appName?: string; waitMs?: number }) => Promise<void>
+  fillFrontmostApp: (entry?: Entry) => Promise<void>
   copySecret: (label: string, value: string) => Promise<void>
   sequentialCopy: (entry: Entry) => Promise<void>
   destroyVault: () => Promise<void>
@@ -92,6 +94,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const [hint, setHintState] = useState('')
   const [busy, setBusy] = useState(false)
   const [helperOnline, setHelperOnline] = useState(false)
+  const [helperAccessibility, setHelperAccessibility] = useState(false)
   const [backups, setBackups] = useState<StoredBackup[]>([])
   const [backupFolderName, setBackupFolderName] = useState<string | null>(null)
   const [pendingRecoveryKey, setPendingRecoveryKey] = useState<string | null>(null)
@@ -554,18 +557,26 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     [persist, toast],
   )
 
-  const importCsvText = useCallback(
-    async (text: string) => {
+  const importPlainEntries = useCallback(
+    async (imported: Entry[]) => {
       const current = vaultRef.current
       if (!current) return 0
-      const imported = entriesFromCsv(text)
+      if (!imported.length) {
+        toast.push('Tidak ada baris username/password yang bisa diimpor', 'warn')
+        return 0
+      }
       const next = { ...current, entries: [...imported, ...current.entries] }
       setVault(next)
       await persist(next)
-      toast.push(`${imported.length} entri diimpor`)
+      toast.push(`${imported.length} entri diimpor ke brankas`)
       return imported.length
     },
     [persist, toast],
+  )
+
+  const importCsvText = useCallback(
+    async (text: string) => importPlainEntries(entriesFromCsv(text)),
+    [importPlainEntries],
   )
 
   const pickBackupFolder = useCallback(async () => {
@@ -602,41 +613,49 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   )
 
   const fillMac = useCallback(
-    async (entry: Entry) => {
+    async (entry: Entry, opts?: { appName?: string; waitMs?: number }) => {
       const current = vaultRef.current
       if (!current) return
+      const appName = (opts?.appName || entry.appName || '').trim()
       const result = await fillHelper(current.settings.helperUrl, current.settings.helperToken, {
         username: entry.username,
         password: entry.password,
         mode: entry.username && entry.password ? 'login' : 'password',
+        appName,
+        waitMs: opts?.waitMs || 0,
       })
       if (!result.ok) {
         toast.push(result.error ?? 'Gagal mengisi aplikasi Mac', 'danger')
         return
       }
       await touchEntry(entry.id)
-      toast.push('Diketik ke aplikasi di depan')
+      toast.push(result.app ? `Username/password diisi ke ${result.app}` : 'Username/password diisi ke aplikasi di depan')
     },
     [toast, touchEntry],
   )
 
-  const fillFrontmostApp = useCallback(async () => {
-    const current = vaultRef.current
-    if (!current) return
-    toast.push('Klik jendela app yang mau diisi — 2 detik…')
-    await new Promise((resolve) => window.setTimeout(resolve, 2200))
-    const app = await frontmostApp(current.settings.helperUrl)
-    if (!app) {
-      toast.push('Tidak bisa membaca app di depan. Izinkan Accessibility untuk Node.', 'warn')
-      return
-    }
-    const matches = matchAppName(current.entries, app).sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0))
-    if (!matches.length) {
-      toast.push(`Tidak ada login untuk ${app}. Simpan dulu sebagai tipe Aplikasi Mac.`, 'warn')
-      return
-    }
-    await fillMac(matches[0]!)
-  }, [fillMac, toast])
+  const fillFrontmostApp = useCallback(
+    async (entry?: Entry) => {
+      const current = vaultRef.current
+      if (!current) return
+      toast.push('Klik jendela app yang mau diisi — 4 detik…')
+      await new Promise((resolve) => window.setTimeout(resolve, 4000))
+      const app = await frontmostApp(current.settings.helperUrl)
+      if (!app) {
+        toast.push('Tidak bisa membaca app di depan. Izinkan Accessibility untuk Node dan osascript.', 'warn')
+        return
+      }
+      const chosen =
+        entry ||
+        matchAppName(current.entries, app).sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0))[0]
+      if (!chosen) {
+        toast.push(`Tidak ada login untuk ${app}. Simpan dulu sebagai tipe Aplikasi Mac.`, 'warn')
+        return
+      }
+      await fillMac(chosen, { appName: app })
+    },
+    [fillMac, toast],
+  )
 
   const copySecret = useCallback(
     async (label: string, value: string) => {
@@ -745,7 +764,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     const ping = async () => {
       const s = await pingHelper(vault.settings.helperUrl)
-      if (!cancelled) setHelperOnline(s.ok)
+      if (cancelled) return
+      setHelperOnline(s.ok)
+      setHelperAccessibility(Boolean(s.accessibility))
+      if (s.ok) {
+        const token = await localToken(vault.settings.helperUrl)
+        const current = vaultRef.current
+        if (!cancelled && token && current && token !== current.settings.helperToken) {
+          await updateSettings({ helperToken: token })
+        }
+      }
     }
     void ping()
     const id = window.setInterval(ping, 8000)
@@ -753,22 +781,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [status, vault?.settings.helperUrl, vault])
-
-  useEffect(() => {
-    if (status !== 'unlocked') return
-    let cancelled = false
-    void (async () => {
-      const current = vaultRef.current
-      if (!current) return
-      const token = await localToken(current.settings.helperUrl)
-      if (cancelled || !token || token === current.settings.helperToken) return
-      await updateSettings({ helperToken: token })
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [status, updateSettings])
+  }, [status, vault?.settings.helperUrl, vault, updateSettings])
 
   const api = useMemo<VaultApi>(
     () => ({
@@ -777,6 +790,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       hint,
       busy,
       helperOnline,
+      helperAccessibility,
       backups,
       backupFolderName,
       pendingRecoveryKey,
@@ -803,6 +817,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       exportBackup,
       restoreBackup,
       importCsvText,
+      importPlainEntries,
       pickBackupFolder,
       backupNow,
       restoreIdbBackup,
@@ -818,6 +833,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       hint,
       busy,
       helperOnline,
+      helperAccessibility,
       backups,
       backupFolderName,
       pendingRecoveryKey,
@@ -842,6 +858,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       exportBackup,
       restoreBackup,
       importCsvText,
+      importPlainEntries,
       pickBackupFolder,
       backupNow,
       restoreIdbBackup,

@@ -5,12 +5,28 @@ import { RecoveryKeyModal } from './components/RecoveryKeyModal'
 import { VaultProvider, useVault } from './state/VaultContext'
 import { LockScreen, SetupScreen } from './views/Gate'
 import { AppShell } from './views/AppShell'
+import { IconKey } from './components/Icons'
 import { isPublicHost, sessionStatus } from './lib/cloud'
+import { applyPlatformAttr } from './lib/platform'
+
+function BootScreen({ message }: { message: string }) {
+  return (
+    <div className="gate">
+      <div className="boot-card">
+        <span className="brand-mark">
+          <IconKey size={28} />
+        </span>
+        <p className="muted">{message}</p>
+      </div>
+    </div>
+  )
+}
 
 function CloudSessionGate({ children }: { children: ReactNode }) {
   const [state, setState] = useState<'load' | 'auth' | 'ok' | 'missing' | 'offline'>('load')
 
   useEffect(() => {
+    applyPlatformAttr()
     void sessionStatus()
       .then((s) => {
         if (s.signedIn) setState('ok')
@@ -20,13 +36,7 @@ function CloudSessionGate({ children }: { children: ReactNode }) {
       .catch(() => setState('offline'))
   }, [])
 
-  if (state === 'load') {
-    return (
-      <div className="gate">
-        <p className="muted">Memeriksa sesi cloud…</p>
-      </div>
-    )
-  }
+  if (state === 'load') return <BootScreen message="Memeriksa sesi cloud…" />
   if (state === 'offline') return <ApiMissingScreen reason="network" />
   if (state === 'missing') {
     if (!isPublicHost()) return <AuthGate onAuthed={() => setState('ok')} />
@@ -47,6 +57,7 @@ function ThemedApp() {
   const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   useEffect(() => {
+    applyPlatformAttr()
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     const on = () => setSystemDark(mq.matches)
     mq.addEventListener('change', on)
@@ -60,13 +71,7 @@ function ThemedApp() {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
-  if (status === 'loading') {
-    return (
-      <div className="gate">
-        <p className="muted">Membuka Kunci…</p>
-      </div>
-    )
-  }
+  if (status === 'loading') return <BootScreen message="Membuka brankas…" />
   return (
     <>
       {status === 'setup' ? <SetupScreen /> : null}

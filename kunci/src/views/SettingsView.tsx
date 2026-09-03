@@ -52,10 +52,7 @@ export function SettingsView() {
     <div className="page">
       <header className="page-head">
         <h2>Pengaturan</h2>
-        <p className="muted">
-          Kunci menyimpan ciphertext di browser ini dan menyalinnya ke Netlify Blobs. Localhost dan
-          kunci-tifta.netlify.app membuka brankas yang sama setelah sesi OTP.
-        </p>
+        <p className="muted">Keamanan brankas, tema, dan sesi cloud. Perubahan ikut tersimpan di cloud dan di perangkat ini.</p>
       </header>
 
       <IosInstallGuide />
