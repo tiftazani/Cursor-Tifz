@@ -1,3 +1,4 @@
+import './ext-api.js'
 import { decryptVault, dekToB64, isEncryptedBlob, unlockErrorMessage } from './crypto.js'
 
 const status = document.getElementById('status')

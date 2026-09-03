@@ -51,18 +51,28 @@ export function AutofillView() {
         <h3>Website</h3>
         <p className="muted">
           Ikon kunci di luar kotak field. Hanya form login yang diisi/disimpan. Kartu ekstensi harus tertulis{' '}
-          <strong>Versi 1.2.1</strong> — kalau masih 1.1.3, folder yang di-load belum di-git pull.
+          <strong>Versi 1.2.2</strong> — kalau masih 1.1.3 / 1.2.1, folder yang di-load belum di-git pull.
         </p>
         <ol className="steps">
           <li>
             Di Mac: <code>cd ~/Cursor-Tifz && git pull origin cursor/kunci-password-manager-4eaf</code>
           </li>
           <li>
-            <code>chrome://extensions</code> → klik Reload. Kalau masih 1.1.3: Remove, lalu Load unpacked ke{' '}
+            Chrome / Edge / Arc: <code>chrome://extensions</code> → Reload, atau Load unpacked ke{' '}
             <code>~/Cursor-Tifz/kunci/extension</code>
+          </li>
+          <li>
+            Safari: di folder <code>kunci</code> jalankan <code>npm run install-safari</code>. Lalu Safari → Settings →
+            Developer → Allow unsigned extensions → Add Temporary Extension… → pilih folder yang dibuka Finder. Nyalakan
+            Kunci Autofill, lalu <strong>Always Allow on Every Website</strong>.
           </li>
           <li>Buka brankas di tab Kunci, buka popup, masukkan kata sandi induk</li>
         </ol>
+        <p className="muted">
+          Safari sementara hilang saat Safari ditutup — Add Temporary Extension lagi, atau{' '}
+          <code>npm run install-safari -- --pack</code> (butuh Xcode). iPhone tidak bisa isi situs lain di Safari tanpa
+          App Store; pakai Kunci di Layar Utama + salin berurutan.
+        </p>
         <label className="check">
           <input
             type="checkbox"

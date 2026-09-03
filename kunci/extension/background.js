@@ -1,3 +1,4 @@
+import './ext-api.js'
 import {
   applyLoginCapture,
   decideLoginSave,
@@ -11,6 +12,29 @@ import {
   persistVault,
 } from './crypto.js'
 
+const session = (() => {
+  if (chrome.storage?.session) return chrome.storage.session
+  const data = Object.create(null)
+  const pick = (keys) => {
+    if (keys == null) return { ...data }
+    const names = Array.isArray(keys) ? keys : typeof keys === 'string' ? [keys] : Object.keys(keys)
+    const out = {}
+    for (const k of names) {
+      if (k in data) out[k] = data[k]
+    }
+    return out
+  }
+  return {
+    get: async (keys) => pick(keys),
+    set: async (obj) => {
+      Object.assign(data, obj)
+    },
+    remove: async (keys) => {
+      for (const k of Array.isArray(keys) ? keys : [keys]) delete data[k]
+    },
+  }
+})()
+
 const CLOUD = 'https://kunci-tifta.netlify.app'
 const KUNCI_TAB_URLS = [
   'http://127.0.0.1:8780/*',
@@ -23,7 +47,7 @@ const KUNCI_TAB_URLS = [
 ]
 
 async function sessionState() {
-  const { vault, unlocked, dekB64, cloudToken } = await chrome.storage.session.get(['vault', 'unlocked', 'dekB64', 'cloudToken'])
+  const { vault, unlocked, dekB64, cloudToken } = await session.get(['vault', 'unlocked', 'dekB64', 'cloudToken'])
   return { vault: unlocked ? vault : null, dekB64, cloudToken: cloudToken || '' }
 }
 
@@ -66,8 +90,8 @@ async function writeVault(vault, dekB64, blob) {
   const dekRaw = dekFromB64(dekB64)
   const nextBlob = await persistVault(vault, dekRaw, blob)
   await chrome.storage.local.set({ blob: nextBlob })
-  await chrome.storage.session.set({ vault, unlocked: true, dekB64 })
-  const { cloudToken } = await chrome.storage.session.get('cloudToken')
+  await session.set({ vault, unlocked: true, dekB64 })
+  const { cloudToken } = await session.get('cloudToken')
   await notifyKunciTabs(nextBlob)
   await pushCloud(nextBlob, cloudToken)
   return nextBlob
@@ -75,16 +99,16 @@ async function writeVault(vault, dekB64, blob) {
 
 async function clearPendingSave(tabId) {
   if (!tabId) return
-  const pendingSaves = (await chrome.storage.session.get('pendingSaves')).pendingSaves || {}
+  const pendingSaves = (await session.get('pendingSaves')).pendingSaves || {}
   delete pendingSaves[String(tabId)]
-  await chrome.storage.session.set({ pendingSaves })
+  await session.set({ pendingSaves })
 }
 
 async function storePending(tabId, pending) {
   if (!tabId) return
-  const pendingSaves = (await chrome.storage.session.get('pendingSaves')).pendingSaves || {}
+  const pendingSaves = (await session.get('pendingSaves')).pendingSaves || {}
   pendingSaves[String(tabId)] = pending
-  await chrome.storage.session.set({ pendingSaves })
+  await session.set({ pendingSaves })
 }
 
 async function queueSave(capture, tabId) {
@@ -115,7 +139,7 @@ async function broadcastToHttpTabs(message) {
 async function onVaultUnlocked() {
   const { vault } = await sessionState()
   const { neverHosts = [] } = await chrome.storage.local.get('neverHosts')
-  const pendingSaves = (await chrome.storage.session.get('pendingSaves')).pendingSaves || {}
+  const pendingSaves = (await session.get('pendingSaves')).pendingSaves || {}
   const next = {}
   for (const [tabId, pending] of Object.entries(pendingSaves)) {
     if (!pending?.capture || !vault) continue
@@ -124,7 +148,7 @@ async function onVaultUnlocked() {
       next[tabId] = { capture: pending.capture, action: decision.action }
     }
   }
-  await chrome.storage.session.set({ pendingSaves: next })
+  await session.set({ pendingSaves: next })
   await broadcastToHttpTabs({ type: 'VAULT_UNLOCKED' })
 }
 
@@ -166,11 +190,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'SYNC' && msg.blob) {
     return ack(sendResponse, async () => {
       await chrome.storage.local.set({ blob: msg.blob })
-      const { dekB64, unlocked } = await chrome.storage.session.get(['dekB64', 'unlocked'])
+      const { dekB64, unlocked } = await session.get(['dekB64', 'unlocked'])
       if (unlocked && dekB64) {
         try {
           const vault = await decryptWithDek(msg.blob, dekFromB64(dekB64))
-          await chrome.storage.session.set({ vault, unlocked: true, dekB64 })
+          await session.set({ vault, unlocked: true, dekB64 })
         } catch {
           /* dek mismatch after password change */
         }
@@ -178,7 +202,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     })
   }
   if (msg.type === 'CLOUD_TOKEN') {
-    return ack(sendResponse, () => chrome.storage.session.set({ cloudToken: msg.token || '' }))
+    return ack(sendResponse, () => session.set({ cloudToken: msg.token || '' }))
   }
   if (msg.type === 'TOUCH') {
     return ack(sendResponse, async () => {
@@ -191,7 +215,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     })
   }
   if (msg.type === 'LOCK') {
-    return ack(sendResponse, () => chrome.storage.session.remove(['vault', 'unlocked', 'dekB64']))
+    return ack(sendResponse, () => session.remove(['vault', 'unlocked', 'dekB64']))
   }
 
   const run = async () => {
@@ -201,7 +225,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     if (msg.type === 'UNLOCKED') {
       if (!msg.vault || !msg.dekB64) return { ok: false, error: 'Sesi tidak lengkap' }
-      await chrome.storage.session.set({ vault: msg.vault, unlocked: true, dekB64: msg.dekB64 })
+      await session.set({ vault: msg.vault, unlocked: true, dekB64: msg.dekB64 })
       await onVaultUnlocked()
       return { ok: true, count: msg.vault.entries?.length ?? 0 }
     }
@@ -209,7 +233,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const { blob } = await chrome.storage.local.get('blob')
       if (!blob) throw new Error('Belum ada brankas. Buka aplikasi Kunci dulu.')
       const { vault, dekRaw } = await decryptVault(blob, msg.password)
-      await chrome.storage.session.set({ vault, unlocked: true, dekB64: dekToB64(dekRaw) })
+      await session.set({ vault, unlocked: true, dekB64: dekToB64(dekRaw) })
       await onVaultUnlocked()
       return { ok: true, count: vault.entries?.length ?? 0 }
     }
@@ -246,7 +270,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === 'GET_PENDING_SAVE') {
       const tabId = sender.tab?.id
       if (!tabId) return { pending: null }
-      const pendingSaves = (await chrome.storage.session.get('pendingSaves')).pendingSaves || {}
+      const pendingSaves = (await session.get('pendingSaves')).pendingSaves || {}
       return { pending: pendingSaves[String(tabId)] || null }
     }
     if (msg.type === 'DISMISS_SAVE') {

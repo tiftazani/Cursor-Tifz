@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Kunci Autofill",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Isi login website (bukan field lain), dengan ikon Kunci di luar kotak, dari brankas Kunci.",
   "action": {
     "default_popup": "popup.html",
@@ -16,7 +16,7 @@
     "48": "icon48.png",
     "128": "icon128.png"
   },
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": ["storage", "activeTab", "scripting", "tabs"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js",
@@ -25,7 +25,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["login-intent.js", "content.js"],
+      "js": ["ext-api.js", "login-intent.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }

@@ -81,11 +81,14 @@ Untuk mengetes gerbang publik secara lokal: set env, lalu `npx netlify dev` di f
 Bekerja seperti Google Password Manager untuk **situs web**:
 
 1. Chrome / Edge / Arc → `chrome://extensions` → Developer mode → Load unpacked → `kunci/extension` (Reload jika sudah terpasang)
-2. Buka tab Kunci, buka brankas, lalu di popup ekstensi masukkan kata sandi induk
-3. Di halaman login, Kunci mengisi otomatis jika hanya ada satu akun (atau klik **K** / `⌘⇧L`)
-4. Setelah kamu login, bar Kunci menawar **Simpan** atau **Perbarui** ke brankas terenkripsi
+2. **Safari (Mac):** `cd kunci && npm run install-safari`. Safari → Settings → Advanced → Show features for web developers → tab Developer → Allow unsigned extensions → **Add Temporary Extension…** → pilih `~/.kunci/safari-extension`. Nyalakan Kunci Autofill, lalu **Always Allow on Every Website**. Tutup Safari = ekstensi sementara hilang; tambahkan lagi, atau `npm run install-safari -- --pack` (Xcode).
+3. Buka tab Kunci, buka brankas, lalu di popup ekstensi masukkan kata sandi induk
+4. Di halaman login, Kunci mengisi otomatis jika hanya ada satu akun (atau klik **K** / `⌘⇧L`)
+5. Setelah kamu login, bar Kunci menawar **Simpan** atau **Perbarui** ke brankas terenkripsi
 
-App desktop Mac tidak bisa diambil password-nya diam-diam (batasan macOS, bukan bug). Isi lewat helper: halaman Autofill → *Isi ke app yang saya klik*.
+iPhone: vault Kunci lewat Safari → Bagikan → Add to Home Screen. Isi situs lain di Safari iOS tidak bisa tanpa App Store.
+
+App desktop Mac tidak bisa diambil password-nya diam-diam (batasan macOS, bukan bug). Isi lewat helper: halaman Autofill → *Isi ke app yang saya klik* (termasuk jendela Safari).
 
 ## Cadangan
 
