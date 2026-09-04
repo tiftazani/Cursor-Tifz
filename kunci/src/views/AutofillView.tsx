@@ -51,7 +51,7 @@ export function AutofillView() {
         <h3>Website</h3>
         <p className="muted">
           Ikon kunci di luar kotak field. Hanya form login yang diisi/disimpan. Kartu ekstensi harus tertulis{' '}
-          <strong>Versi 1.2.2</strong> — kalau masih 1.1.3 / 1.2.1, folder yang di-load belum di-git pull.
+          <strong>Versi 1.2.3</strong> — kalau masih 1.1.3 / 1.2.1 / 1.2.2, folder yang di-load belum di-git pull.
         </p>
         <ol className="steps">
           <li>

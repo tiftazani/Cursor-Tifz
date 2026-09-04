@@ -110,21 +110,18 @@ function iconSvg() {
 function placeOutside(el, host) {
   const r = el.getBoundingClientRect()
   const size = 28
-  const gap = 8
   if (r.width < 2 || r.height < 2) {
     host.style.display = 'none'
     return
   }
   host.style.display = 'block'
-  let left = r.right + gap
-  let top = Math.round(r.top + (r.height - size) / 2)
-  if (left + size > window.innerWidth - 4) left = r.left - gap - size
-  if (left < 4) {
-    left = Math.min(window.innerWidth - size - 4, r.right - size)
-    top = Math.round(r.bottom + 6)
-  }
-  host.style.left = `${Math.round(left)}px`
-  host.style.top = `${Math.round(top)}px`
+  const pos = globalThis.kunciIconPlace?.iconPosition(
+    { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height },
+    { width: window.innerWidth, height: window.innerHeight },
+    { size },
+  ) || { left: r.right + 8, top: Math.round(r.top + (r.height - size) / 2) }
+  host.style.left = `${pos.left}px`
+  host.style.top = `${pos.top}px`
 }
 
 function repositionIcons() {
