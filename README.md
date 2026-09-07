@@ -11,6 +11,14 @@ Repo hub Tiftazani. Aplikasi tidak lagi menempati seluruh root GitHub — tiap p
 
 Kode Cuan Yuk Guys: [github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys](https://github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys)
 
+## Branch
+
+| Branch | Isi |
+| --- | --- |
+| `main` | Hub + Cuan Yuk Guys (Vercel pakai ini) |
+| `cursor/kunci-password-manager-4eaf` | Kerjaan **Kunci** yang belum masuk `main` |
+| `cursor/imo-whatsapp-analytics-eb4c` dll. | Draft Cloud Agent (IMO, WhatsApp, bot kota) |
+
 ## Jalankan di laptop
 
 ### Cuan Yuk Guys
