@@ -7,10 +7,13 @@ Repo hub Tiftazani. Aplikasi tidak lagi menempati seluruh root GitHub — tiap p
 | Folder | Isi |
 | --- | --- |
 | [`cuan-yuk-guys/`](./cuan-yuk-guys) | Website **Cuan Yuk Guys** (IHSG, reksadana, Cuan Bot) |
+| [`kunci/`](./kunci) | **Kunci** — manajer kata sandi zero-knowledge (web + URL publik HTTPS) |
 
-Kode aplikasi: [github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys](https://github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys)
+Kode Cuan Yuk Guys: [github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys](https://github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys)
 
 ## Jalankan di laptop
+
+### Cuan Yuk Guys
 
 ```bash
 git clone https://github.com/tiftazani/Cursor-Tifz.git
@@ -21,6 +24,16 @@ npm run dev
 ```
 
 Buka [http://localhost:3000](http://localhost:3000).
+
+### Kunci (password manager)
+
+```bash
+cd Cursor-Tifz/kunci
+npm install
+npm run dev
+```
+
+Buka [http://localhost:5173](http://localhost:5173). URL publik HTTPS (zero-knowledge, gerbang OTP): lihat [`kunci/README.md`](./kunci/README.md). Autofill Mac dan ekstensi juga di situ.
 
 ## Vercel (wajib sekali)
 

@@ -1,0 +1,230 @@
+ObjC.import('Foundation')
+ObjC.import('ApplicationServices')
+ObjC.import('AppKit')
+
+function becomeSilent() {
+  try {
+    const app = $.NSApplication.sharedApplication
+    app.setActivationPolicy($.NSApplicationActivationPolicyAccessory)
+  } catch (e) {}
+}
+
+function unwrap(val) {
+  try {
+    return ObjC.unwrap(val)
+  } catch (e) {
+    return String(val)
+  }
+}
+
+function printOut(text) {
+  try {
+    const s = String(text) + '\n'
+    $.NSFileHandle.fileHandleWithStandardOutput.writeData($(s).dataUsingEncoding($.NSUTF8StringEncoding))
+  } catch (e) {}
+}
+
+function printErr(text) {
+  try {
+    const s = String(text) + '\n'
+    $.NSFileHandle.fileHandleWithStandardError.writeData($(s).dataUsingEncoding($.NSUTF8StringEncoding))
+  } catch (e) {}
+}
+
+function readUtf8(path) {
+  const str = $.NSString.stringWithContentsOfFileEncodingError($(path), $.NSUTF8StringEncoding, null)
+  return unwrap(str)
+}
+
+function home() {
+  return unwrap($.NSHomeDirectory())
+}
+
+function toJsStrings(val) {
+  const out = []
+  if (val === undefined || val === null || val === false) return out
+  if (typeof val === 'string') {
+    out.push(val)
+    return out
+  }
+  try {
+    const len = Number(val.length)
+    if (!isFinite(len) || len < 0 || len > 64) return out
+    for (let i = 0; i < len; i++) {
+      try {
+        out.push(String(val[i]))
+      } catch (e) {}
+    }
+  } catch (e2) {}
+  return out
+}
+
+function processArgv() {
+  const out = []
+  try {
+    const nsArgs = $.NSProcessInfo.processInfo.arguments
+    const n = Number(nsArgs.count)
+    for (let i = 0; i < n; i++) out.push(String(nsArgs.objectAtIndex(i)))
+    if (out.length) out.shift()
+  } catch (e) {}
+  return out
+}
+
+function knownCmd(name) {
+  return name === 'status' || name === 'prompt' || name === 'apps' || name === 'frontmost' || name === 'fill'
+}
+
+function parseArgs(list) {
+  let start = 0
+  if (list.length && !knownCmd(list[0])) start = 1
+  if (list.length > start && knownCmd(list[start])) {
+    const rest = []
+    for (let i = start + 1; i < list.length; i++) rest.push(list[i])
+    return { cmd: list[start], args: rest }
+  }
+  return null
+}
+
+function requestFromFile() {
+  try {
+    const fromFile = JSON.parse(readUtf8(home() + '/.kunci/helper-request.json') || '{}')
+    if (fromFile && knownCmd(String(fromFile.cmd || ''))) {
+      return { cmd: String(fromFile.cmd), args: toJsStrings(fromFile.args) }
+    }
+  } catch (e) {}
+  return { cmd: 'status', args: [] }
+}
+
+function request(argv) {
+  return parseArgs(processArgv()) || parseArgs(toJsStrings(argv)) || requestFromFile()
+}
+
+function trusted() {
+  return $.AXIsProcessTrusted()
+}
+
+function promptTrust() {
+  return $.AXIsProcessTrustedWithOptions($({ AXTrustedCheckOptionPrompt: true }))
+}
+
+function delayMs(ms) {
+  delay(Math.max(0, ms) / 1000)
+}
+
+function findProcess(se, name) {
+  if (!name) return null
+  const want = String(name).toLowerCase()
+  const procs = se.applicationProcesses()
+  let fuzzy = null
+  for (let i = 0; i < procs.length; i++) {
+    const proc = procs[i]
+    const n = String(proc.name()).toLowerCase()
+    if (n === want) return proc
+    if (!fuzzy && (n.indexOf(want) !== -1 || want.indexOf(n) !== -1)) fuzzy = proc
+  }
+  return fuzzy
+}
+
+function paste(text) {
+  const pb = $.NSPasteboard.generalPasteboard
+  const previous = unwrap(pb.stringForType($.NSPasteboardTypeString)) || ''
+  pb.clearContents()
+  pb.setStringForType($(text), $.NSPasteboardTypeString)
+  delayMs(80)
+  const se = Application('System Events')
+  se.keystroke('v', { using: 'command down' })
+  delayMs(140)
+  pb.clearContents()
+  if (previous) pb.setStringForType($(previous), $.NSPasteboardTypeString)
+}
+
+function pressTab(se) {
+  try {
+    se.keyCode(48)
+  } catch (e) {
+    se.keystroke('\t')
+  }
+}
+
+function doFill(job) {
+  if (!promptTrust()) {
+    printErr('Kunci Helper belum diizinkan. System Settings → Privacy & Security → Accessibility → centang Kunci Helper.')
+    printOut('ok=false')
+    return
+  }
+  const waitMs = Number(job.waitMs || 0)
+  if (waitMs > 0) delayMs(Math.min(waitMs, 8000))
+  const se = Application('System Events')
+  const appName = job.appName || ''
+  let proc = appName ? findProcess(se, appName) : null
+  if (!proc) {
+    const front = se.applicationProcesses.whose({ frontmost: true })
+    proc = front.length ? front[0] : null
+  }
+  if (proc) {
+    try {
+      proc.frontmost = true
+    } catch (e) {}
+    delayMs(400)
+  }
+  const mode = job.mode || 'login'
+  if (mode === 'login' && job.username) {
+    paste(job.username)
+    pressTab(se)
+    delayMs(100)
+  }
+  if (job.password) paste(job.password)
+  printOut('ok=true')
+}
+
+function handle(req) {
+  const cmd = req.cmd || 'status'
+  const args = req.args || []
+  if (cmd === 'status') {
+    printOut(trusted() ? 'trusted=true' : 'trusted=false')
+    return
+  }
+  if (cmd === 'prompt') {
+    printOut(promptTrust() ? 'trusted=true' : 'trusted=false')
+    return
+  }
+  if (cmd === 'apps') {
+    const skip = { finder: 1, 'kunci helper': 1, osascript: 1, loginwindow: 1 }
+    const se = Application('System Events')
+    const procs = se.applicationProcesses.whose({ backgroundOnly: false })
+    const names = []
+    for (let i = 0; i < procs.length; i++) {
+      const n = String(procs[i].name())
+      if (!skip[n.toLowerCase()]) names.push(n)
+    }
+    printOut(JSON.stringify(names))
+    return
+  }
+  if (cmd === 'frontmost') {
+    const se = Application('System Events')
+    const front = se.applicationProcesses.whose({ frontmost: true })
+    printOut(front.length ? String(front[0].name()) : '')
+    return
+  }
+  if (cmd === 'fill') {
+    const path = args[0]
+    if (!path) {
+      printErr('job JSON tidak ada')
+      printOut('ok=false')
+      return
+    }
+    doFill(JSON.parse(readUtf8(path)))
+    return
+  }
+  printOut('trusted=false')
+}
+
+function run(argv) {
+  becomeSilent()
+  try {
+    handle(request(argv))
+  } catch (e) {
+    printErr(e && e.message ? e.message : e)
+    printOut('ok=false')
+  }
+}
