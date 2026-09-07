@@ -147,6 +147,22 @@ async function proxyCloud(req, res, url) {
   }
 }
 
+function missingUiPage(res) {
+  const cmd = 'cd ~/Cursor-Tifz/kunci && npm install && npm run install-service'
+  res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
+  res.end(`<!doctype html>
+<meta charset="utf-8">
+<title>Kunci</title>
+<body style="font:16px/1.45 -apple-system,sans-serif;background:#0a0d12;color:#eef3f8;padding:32px">
+<h1>Kunci belum siap</h1>
+<p>Layanan di port 8780 nyala, tapi tampilan belum di-build (<code>dist/index.html</code> tidak ada).</p>
+<p>Di Terminal Mac:</p>
+<pre style="background:#12171f;padding:12px 16px;border-radius:8px">${cmd}</pre>
+<p>Lalu buka lagi <a href="/" style="color:#3ee0c3">http://127.0.0.1:8780</a></p>
+<p style="color:#8b97a8">Atau pakai situs: <a href="https://kunci-tifta.netlify.app" style="color:#3ee0c3">kunci-tifta.netlify.app</a></p>
+</body>`)
+}
+
 function serveStatic(req, res) {
   const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname
   if (pathname.startsWith('/api/') || pathname === '/kunci-status') return false
@@ -185,6 +201,7 @@ const server = createServer(async (req, res) => {
         version: '1.4.2',
         email: RECOVERY_EMAIL,
         ui: serveUi,
+        uiBuilt: existsSync(join(DIST, 'index.html')),
         accessibility: await accessibilityTrusted(),
         helperApp: Boolean(helperBinPath()),
         helperAppPath: helperAppBundlePath() || '',
@@ -263,6 +280,15 @@ const server = createServer(async (req, res) => {
       return
     }
     if (req.method === 'GET' && serveStatic(req, res)) return
+    if (
+      req.method === 'GET' &&
+      serveUi &&
+      (url.pathname === '/' || url.pathname === '/index.html') &&
+      !existsSync(join(DIST, 'index.html'))
+    ) {
+      missingUiPage(res)
+      return
+    }
     json(res, 404, { ok: false, error: 'not found' })
   } catch (err) {
     json(res, 500, {
@@ -276,5 +302,9 @@ const server = createServer(async (req, res) => {
 })
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Kunci layanan http://127.0.0.1:${PORT}${serveUi ? ' (UI + API)' : ' (API)'}`)
+  const hasUi = existsSync(join(DIST, 'index.html'))
+  console.log(`Kunci layanan http://127.0.0.1:${PORT}${serveUi && hasUi ? ' (UI + API)' : ' (API)'}`)
+  if (serveUi && !hasUi) {
+    console.log('Tampilan belum ada. Di folder kunci jalankan: npm install && npm run install-service')
+  }
 })
