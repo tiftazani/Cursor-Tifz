@@ -26,6 +26,13 @@ export const metadata: Metadata = {
   },
   description:
     "Cuan Yuk Guys. Desk privat rekomendasi harian saham IHSG dan reksadana pasar uang, saham, serta obligasi — data faktual, skor kuantitatif, tanpa noise.",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "32x32" },
+    ],
+    apple: [{ url: "/apple-icon.png" }],
+  },
 };
 
 export default function RootLayout({
