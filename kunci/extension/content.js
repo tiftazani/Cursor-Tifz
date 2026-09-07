@@ -17,7 +17,7 @@ function setNativeValue(el, value) {
   el.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
-const BIND_GEN = crypto.randomUUID()
+const BIND_GEN = globalThis.kunciNewId()
 const iconHosts = new Map()
 
 function visibleInput(el) {
@@ -154,7 +154,7 @@ function ensureButton(pw) {
   document.getElementById(`kunci-icon-${pw.dataset.kunciIconId || ''}`)?.remove()
 
   const host = document.createElement('div')
-  const hostId = crypto.randomUUID()
+  const hostId = globalThis.kunciNewId()
   pw.dataset.kunciIconId = hostId
   host.id = `kunci-icon-${hostId}`
   host.className = 'kunci-icon-host'

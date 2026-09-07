@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Kunci Autofill",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Isi login website (bukan field lain), dengan ikon Kunci di luar kotak, dari brankas Kunci.",
   "action": {
     "default_popup": "popup.html",
