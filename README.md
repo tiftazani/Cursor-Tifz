@@ -1,6 +1,6 @@
-# Cursor-Tifz
+# tifz-apps (GitHub: Cursor-Tifz)
 
-Repo hub Tiftazani. Aplikasi tidak lagi menempati seluruh root GitHub — tiap project punya foldernya sendiri.
+Folder Mac: `~/tifz-apps`. Hub app pribadi — tiap project punya foldernya sendiri.
 
 ## Folder project
 
@@ -16,8 +16,8 @@ Kode Cuan Yuk Guys: [github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys](h
 | Branch | Isi |
 | --- | --- |
 | `main` | Hub + Cuan Yuk Guys (Vercel pakai ini) |
-| `cursor/kunci-password-manager-4eaf` | Kerjaan **Kunci** yang belum masuk `main` |
-| `cursor/imo-whatsapp-analytics-eb4c` dll. | Draft Cloud Agent (IMO, WhatsApp, bot kota) |
+| `kunci` | Kerjaan **Kunci** (di GitHub masih `cursor/kunci-password-manager-4eaf`, Cloud jangan diubah) |
+| `cursor/imo-whatsapp-analytics-eb4c` dll. | Draft Cloud Agent (IMO, WhatsApp, bot kota) — nama Cloud biarkan |
 
 ## Jalankan di laptop
 
