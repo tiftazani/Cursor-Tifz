@@ -954,9 +954,14 @@ html:not([data-platform='mac']) .mac-only {
 .dash-hero {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 24px;
   padding: 8px 4px 4px;
+}
+
+.dash-hero > div {
+  min-width: 0;
+  flex: 1;
 }
 
 .dash-kicker {
