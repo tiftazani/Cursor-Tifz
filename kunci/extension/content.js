@@ -7,7 +7,51 @@ function send(msg) {
   }
 }
 
-const intent = globalThis.kunciLoginIntent
+function newId() {
+  if (typeof globalThis.kunciNewId === 'function') {
+    try {
+      return globalThis.kunciNewId()
+    } catch {
+      /* HTTP / isolated world */
+    }
+  }
+  try {
+    const c = globalThis.crypto
+    if (typeof c?.randomUUID === 'function') return c.randomUUID()
+    if (typeof c?.getRandomValues === 'function') {
+      const bytes = new Uint8Array(16)
+      c.getRandomValues(bytes)
+      bytes[6] = (bytes[6] & 0x0f) | 0x40
+      bytes[8] = (bytes[8] & 0x3f) | 0x80
+      const hex = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+    }
+  } catch {
+    /* ignore */
+  }
+  return `k${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`
+}
+
+const intent = globalThis.kunciLoginIntent || {
+  fieldSnapshot() {
+    return { tag: 'input', type: '', name: '', id: '', autocomplete: '', placeholder: '', ariaLabel: '' }
+  },
+  isUsernameField() {
+    return false
+  },
+  isCurrentPasswordField(field) {
+    return (field?.type || '') === 'password'
+  },
+  classifyAround() {
+    return { kind: 'other' }
+  },
+  shouldAutofillKind() {
+    return false
+  },
+  shouldOfferSaveKind() {
+    return false
+  },
+}
 
 function setNativeValue(el, value) {
   const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
@@ -17,7 +61,7 @@ function setNativeValue(el, value) {
   el.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
-const BIND_GEN = globalThis.kunciNewId()
+const BIND_GEN = newId()
 const iconHosts = new Map()
 
 function visibleInput(el) {
@@ -33,7 +77,11 @@ function passwordFields() {
 }
 
 function fieldSnap(el) {
-  return intent.fieldSnapshot(el)
+  try {
+    return intent.fieldSnapshot(el)
+  } catch {
+    return { tag: 'input', type: el?.type || '', name: '', id: '', autocomplete: '', placeholder: '', ariaLabel: '' }
+  }
 }
 
 function isUsernameInput(el) {
@@ -49,7 +97,11 @@ function usernameFieldNear(password) {
 }
 
 function kindAround(el) {
-  return intent.classifyAround(el).kind
+  try {
+    return intent.classifyAround(el).kind
+  } catch {
+    return 'other'
+  }
 }
 
 function loginPasswordFields() {
@@ -154,7 +206,7 @@ function ensureButton(pw) {
   document.getElementById(`kunci-icon-${pw.dataset.kunciIconId || ''}`)?.remove()
 
   const host = document.createElement('div')
-  const hostId = globalThis.kunciNewId()
+  const hostId = newId()
   pw.dataset.kunciIconId = hostId
   host.id = `kunci-icon-${hostId}`
   host.className = 'kunci-icon-host'
@@ -437,11 +489,15 @@ async function restorePendingSave() {
 }
 
 function scan() {
-  if (isKunciPage()) return
-  keepSaveBar()
-  passwordFields().forEach(ensureButton)
-  if (!saveOffer) void maybeAutofill()
-  repositionIcons()
+  try {
+    if (isKunciPage()) return
+    keepSaveBar()
+    passwordFields().forEach(ensureButton)
+    if (!saveOffer) void maybeAutofill()
+    repositionIcons()
+  } catch {
+    /* jangan spam chrome://extensions Errors */
+  }
 }
 
 function wireKunciBridge() {
