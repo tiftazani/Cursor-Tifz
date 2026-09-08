@@ -16,6 +16,14 @@ function glyph({ size = 18, ...props }: IconProps) {
   }
 }
 
+export function IconHome(props: IconProps) {
+  return (
+    <svg {...glyph(props)}>
+      <path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z" />
+    </svg>
+  )
+}
+
 export function IconKey(props: IconProps) {
   return (
     <svg {...glyph(props)}>

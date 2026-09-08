@@ -13,6 +13,7 @@ import {
 } from '../lib/crypto'
 import { vaultDb, pushIdbBackup } from '../db/idb'
 import { withCredentialHistory } from '../lib/history'
+import { mergeEntriesInto } from '../lib/duplicates'
 import { entriesFromCsv } from '../lib/csv'
 import { copyText, scheduleClipboardClear, sequentialCopy as runSequential } from '../lib/clipboard'
 import { fillHelper, frontmostApp, pingHelper } from '../lib/helper'
@@ -50,6 +51,7 @@ interface VaultApi {
   logoutPublic: () => Promise<void>
   lock: () => void
   saveEntry: (entry: Entry, isNew?: boolean) => Promise<void>
+  mergeEntries: (keepId: string, dropIds: string[]) => Promise<void>
   deleteEntry: (id: string) => Promise<void>
   restoreEntry: (id: string) => Promise<void>
   purgeEntry: (id: string) => Promise<void>
@@ -329,6 +331,31 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         entries = current.entries.map((e) => (e.id === saved.id ? saved : e))
       }
       const next = { ...current, entries }
+      setVault(next)
+      await persist(next)
+    },
+    [persist],
+  )
+
+  const mergeEntries = useCallback(
+    async (keepId: string, dropIds: string[]) => {
+      const current = vaultRef.current
+      if (!current) return
+      const uniqueDrop = [...new Set(dropIds.filter((id) => id && id !== keepId))]
+      if (!uniqueDrop.length) return
+      const keep = current.entries.find((e) => e.id === keepId)
+      if (!keep) throw new Error('Entri yang disimpan tidak ada')
+      const others = uniqueDrop
+        .map((id) => current.entries.find((e) => e.id === id))
+        .filter((e): e is Entry => Boolean(e))
+      if (!others.length) return
+      const merged = mergeEntriesInto(keep, others)
+      const dropSet = new Set(others.map((e) => e.id))
+      const next: Vault = {
+        ...current,
+        entries: current.entries.map((e) => (e.id === merged.id ? merged : e)).filter((e) => !dropSet.has(e.id)),
+        trash: [...others.map((e) => ({ ...e, updatedAt: Date.now() })), ...current.trash],
+      }
       setVault(next)
       await persist(next)
     },
@@ -814,6 +841,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       logoutPublic,
       lock,
       saveEntry,
+      mergeEntries,
       deleteEntry,
       restoreEntry,
       purgeEntry,
@@ -857,6 +885,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       logoutPublic,
       lock,
       saveEntry,
+      mergeEntries,
       deleteEntry,
       restoreEntry,
       purgeEntry,

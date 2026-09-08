@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { AppView, Entry, FilterId } from '../types'
 import {
   IconApp,
@@ -6,6 +6,7 @@ import {
   IconDownload,
   IconFill,
   IconGlobe,
+  IconHome,
   IconKey,
   IconLock,
   IconMore,
@@ -18,11 +19,24 @@ import {
   IconSpark,
   IconStar,
 } from '../components/Icons'
+import { VSplit } from '../components/VSplit'
 import { searchEntries } from '../lib/search'
 import { faviconUrl, letterAvatar } from '../lib/favicon'
 import { useCompactLayout } from '../lib/media'
+import { hostFromUrl } from '../lib/match'
+import { findDuplicateClusters } from '../lib/duplicates'
+import {
+  LIST_MAX,
+  LIST_MIN,
+  SIDEBAR_MAX,
+  SIDEBAR_MIN,
+  loadSplit,
+  saveSplit,
+  type SplitWidths,
+} from '../lib/split'
 import { blankEntry, useVault } from '../state/VaultContext'
 import { EntryPane } from './EntryPane'
+import { DashboardView } from './DashboardView'
 import { GeneratorView } from './GeneratorView'
 import { HealthView } from './HealthView'
 import { HistoryView } from './HistoryView'
@@ -32,6 +46,7 @@ import { SettingsView } from './SettingsView'
 import { QuickFind } from './QuickFind'
 
 const NAV: { id: AppView; label: string; icon: typeof IconKey }[] = [
+  { id: 'home', label: 'Ringkasan', icon: IconHome },
   { id: 'vault', label: 'Brankas', icon: IconKey },
   { id: 'generator', label: 'Generator', icon: IconSpark },
   { id: 'health', label: 'Kesehatan', icon: IconShield },
@@ -57,7 +72,7 @@ const FILTERS: { id: FilterId; label: string }[] = [
 export function AppShell() {
   const { vault, lock, helperOnline, helperAccessibility, emptyTrash } = useVault()
   const compact = useCompactLayout()
-  const [view, setView] = useState<AppView>('vault')
+  const [view, setView] = useState<AppView>('home')
   const [filter, setFilter] = useState<FilterId>('all')
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -65,6 +80,11 @@ export function AppShell() {
   const [findOpen, setFindOpen] = useState(false)
   const [mobileDetail, setMobileDetail] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
+  const [split, setSplit] = useState<SplitWidths>(() => loadSplit())
+
+  useEffect(() => {
+    saveSplit(split)
+  }, [split])
 
   const source = useMemo(
     () => (filter === 'trash' ? (vault?.trash ?? []) : (vault?.entries ?? [])),
@@ -77,7 +97,8 @@ export function AppShell() {
     return searchEntries(list, query).sort((a, b) => b.updatedAt - a.updatedAt)
   }, [source, filter, query])
 
-  const selected = draft ?? filtered.find((e) => e.id === selectedId) ?? (!compact ? filtered[0] : null)
+  const selected = draft ?? filtered.find((e) => e.id === selectedId) ?? null
+  const dupeCount = useMemo(() => findDuplicateClusters(vault?.entries ?? []).length, [vault?.entries])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -131,14 +152,24 @@ export function AppShell() {
 
   const shellClass = [
     'shell',
-    view === 'vault' ? 'shell-vault' : '',
+    view === 'vault' ? 'shell-vault' : 'shell-page',
     view === 'vault' && mobileDetail ? 'mobile-detail' : '',
   ]
     .filter(Boolean)
     .join(' ')
 
   return (
-    <div className={shellClass}>
+    <div
+      className={shellClass}
+      style={
+        compact
+          ? undefined
+          : ({
+              '--sidebar': `${split.sidebar}px`,
+              '--list': `${split.list}px`,
+            } as CSSProperties)
+      }
+    >
       <aside className="sidebar">
         <div className="brand brand-side">
           <span className="brand-mark sm">
@@ -162,6 +193,7 @@ export function AppShell() {
               >
                 <Icon size={compact ? 22 : 18} />
                 <span>{item.label}</span>
+                {item.id === 'home' && dupeCount > 0 ? <b className="nav-badge">{dupeCount}</b> : null}
               </button>
             )
           })}
@@ -209,6 +241,16 @@ export function AppShell() {
           </div>
         ) : null}
       </aside>
+
+      {compact ? null : (
+        <VSplit
+          value={split.sidebar}
+          min={SIDEBAR_MIN}
+          max={SIDEBAR_MAX}
+          label="Lebar menu"
+          onChange={(sidebar) => setSplit((s) => ({ ...s, sidebar }))}
+        />
+      )}
 
       {view === 'vault' ? (
         <>
@@ -299,7 +341,7 @@ export function AppShell() {
                         <strong>
                           {e.favorite ? <IconStar size={12} /> : null} {e.name}
                         </strong>
-                        <em>{e.username || e.url || e.appName || e.type}</em>
+                        <em>{entryListHint(e)}</em>
                       </span>
                     </button>
                   </li>
@@ -313,6 +355,15 @@ export function AppShell() {
             ) : null}
           </section>
           ) : null}
+          {compact ? null : (
+            <VSplit
+              value={split.list}
+              min={LIST_MIN}
+              max={LIST_MAX}
+              label="Lebar daftar"
+              onChange={(list) => setSplit((s) => ({ ...s, list }))}
+            />
+          )}
           {!compact || mobileDetail ? (
           <section className="detail-col">
             {selected ? (
@@ -338,6 +389,14 @@ export function AppShell() {
         </>
       ) : (
         <section className="main-col">
+          {view === 'home' ? (
+            <DashboardView
+              onOpenVault={() => goView('vault')}
+              onOpenEntry={openEntry}
+              onGenerate={() => goView('generator')}
+              onHealth={() => goView('health')}
+            />
+          ) : null}
           {view === 'generator' ? <GeneratorView /> : null}
           {view === 'health' ? <HealthView onOpen={openEntry} /> : null}
           {view === 'history' ? <HistoryView onOpen={openEntry} /> : null}
@@ -365,6 +424,17 @@ export function AppShell() {
       ) : null}
     </div>
   )
+}
+
+function entryListHint(entry: Entry): string {
+  const host = hostFromUrl(entry.url || entry.urls[0] || entry.name)
+  if (host) return host
+  if (entry.appName) return entry.appName
+  if (entry.type === 'login') return 'Website'
+  if (entry.type === 'app') return 'Aplikasi'
+  if (entry.type === 'note') return 'Catatan'
+  if (entry.type === 'totp') return 'OTP'
+  return 'Password'
 }
 
 function EntryGlyph({ entry }: { entry: Entry }) {

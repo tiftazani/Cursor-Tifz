@@ -494,17 +494,16 @@ select.input:focus {
   inset: 0;
   height: auto;
   max-height: none;
-  display: grid;
-  grid-template-areas: 'nav main';
-  grid-template-columns: var(--sidebar) minmax(0, 1fr);
-  grid-template-rows: 1fr;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
   padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
   overflow: hidden;
 }
 
-.shell-vault {
-  grid-template-areas: 'nav list detail';
-  grid-template-columns: var(--sidebar) var(--list) minmax(0, 1fr);
+.shell-vault,
+.shell-page {
+  display: flex;
 }
 
 .mobile-top {
@@ -513,19 +512,20 @@ select.input:focus {
 }
 
 .sidebar {
-  grid-area: nav;
+  flex: 0 0 var(--sidebar);
+  width: var(--sidebar);
+  max-width: var(--sidebar);
 }
 
 .list-col {
-  grid-area: list;
+  flex: 0 0 var(--list);
+  width: var(--list);
+  max-width: var(--list);
 }
 
-.detail-col {
-  grid-area: detail;
-}
-
+.detail-col,
 .main-col {
-  grid-area: main;
+  flex: 1 1 auto;
 }
 
 .shell > * {
@@ -533,9 +533,50 @@ select.input:focus {
   min-height: 0;
 }
 
+.vsplit {
+  flex: 0 0 6px;
+  width: 6px;
+  position: relative;
+  z-index: 5;
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+}
+
+.vsplit::before {
+  content: '';
+  position: absolute;
+  inset: 0 -3px;
+}
+
+.vsplit::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: var(--line);
+}
+
+.vsplit:hover::after,
+.vsplit:focus-visible::after {
+  width: 2px;
+  background: var(--accent);
+}
+
+html[data-resizing='1'] {
+  cursor: col-resize;
+  user-select: none;
+}
+
+html[data-resizing='1'] * {
+  cursor: col-resize !important;
+}
+
 .sidebar {
   background: var(--bg-2);
-  border-right: 1px solid var(--line);
+  border-right: 0;
   display: flex;
   flex-direction: column;
   padding: 4px 8px 10px;
@@ -572,6 +613,21 @@ select.input:focus {
   background: var(--accent-dim);
   color: var(--text);
   font-weight: 600;
+}
+
+.nav-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: var(--warn);
+  color: #1a1408;
+  font-size: 0.68rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  line-height: 1;
 }
 
 .sidebar-foot {
@@ -687,7 +743,7 @@ html:not([data-platform='mac']) .mac-only {
 }
 
 .list-col {
-  border-right: 1px solid var(--line);
+  border-right: 0;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -888,6 +944,199 @@ html:not([data-platform='mac']) .mac-only {
 
 .page-head .muted {
   line-height: 1.5;
+}
+
+.page.dash {
+  max-width: 1080px;
+  gap: 20px;
+}
+
+.dash-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 8px 4px 4px;
+}
+
+.dash-kicker {
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.dash-hero h2 {
+  font-size: 1.55rem;
+  max-width: 22ch;
+}
+
+.dash-hero .muted {
+  max-width: 46ch;
+  margin-top: 8px;
+}
+
+.score-ring {
+  width: 128px;
+  height: 128px;
+  flex: none;
+}
+
+.score-num {
+  fill: var(--text);
+  font-size: 28px;
+  font-weight: 700;
+  font-family: var(--font);
+}
+
+.score-sub {
+  fill: var(--muted);
+  font-size: 11px;
+  font-family: var(--font);
+}
+
+.dash-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dash-stat {
+  text-align: left;
+  gap: 4px;
+  padding: 16px 18px;
+  cursor: default;
+}
+
+button.dash-stat {
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+}
+
+.dash-stat strong {
+  font-size: 1.7rem;
+  letter-spacing: -0.04em;
+}
+
+.dash-stat span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.dash-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dash-bar-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) 32px;
+  gap: 10px;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.dash-bar-row i {
+  display: block;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.dash-bar-row b {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent);
+}
+
+.dash-bar-row em {
+  font-style: normal;
+  color: var(--muted);
+  text-align: right;
+}
+
+.dash-recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-recent li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.dash-recent .linkish {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dupe-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dupe-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg);
+}
+
+.dupe-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.dupe-members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dupe-members em {
+  display: block;
+  font-style: normal;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.dash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .pane-head,
@@ -1252,15 +1501,23 @@ html:not([data-platform='mac']) .mac-only {
 
 @media (max-width: 1100px) {
   .shell,
-  .shell-vault {
+  .shell-vault,
+  .shell-page {
     display: flex;
     flex-direction: column;
-    grid-template-areas: none;
-    grid-template-columns: none;
-    grid-template-rows: none;
     padding: 0;
     width: 100%;
     min-height: 0;
+  }
+
+  .vsplit {
+    display: none !important;
+  }
+
+  .sidebar,
+  .list-col {
+    width: auto;
+    max-width: none;
   }
 
   /* Never stack list + detail. CSS is the source of truth even if JS compact lags. */
@@ -1403,8 +1660,26 @@ html:not([data-platform='mac']) .mac-only {
 
   .gen-layout,
   .stat-grid,
-  .custom-field {
+  .custom-field,
+  .dash-stats,
+  .dash-grid {
     grid-template-columns: 1fr;
+  }
+
+  .dash-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .nav-badge {
+    position: absolute;
+    top: 4px;
+    right: calc(50% - 22px);
+    margin: 0;
+  }
+
+  .nav-item {
+    position: relative;
   }
 
   .page {

@@ -115,6 +115,7 @@ export type FilterId =
   | 'trash'
 
 export type AppView =
+  | 'home'
   | 'vault'
   | 'generator'
   | 'health'
