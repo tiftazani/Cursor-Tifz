@@ -148,7 +148,7 @@ async function proxyCloud(req, res, url) {
 }
 
 function missingUiPage(res) {
-  const cmd = 'cd ~/Cursor-Tifz/kunci && npm install && npm run install-service'
+  const cmd = 'cd ~/tifz-apps/kunci && npm install && npm run install-service'
   res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
   res.end(`<!doctype html>
 <meta charset="utf-8">

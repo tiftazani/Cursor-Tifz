@@ -42,7 +42,7 @@ Autofill aplikasi Mac tetap butuh helper lokal (`npm run install-service`) di la
 ## Jalankan 24 jam di Mac (tanpa terminal)
 
 ```bash
-cd ~/Cursor-Tifz/kunci
+cd ~/tifz-apps/kunci
 npm install
 npm run install-service
 ```

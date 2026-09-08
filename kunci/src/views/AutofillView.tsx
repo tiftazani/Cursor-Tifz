@@ -56,15 +56,15 @@ export function AutofillView() {
         </p>
         <ol className="steps">
           <li>
-            Di Mac: <code>cd ~/Cursor-Tifz && git pull origin cursor/kunci-password-manager-4eaf</code>
+            Di Mac: <code>cd ~/tifz-apps && git pull origin cursor/kunci-password-manager-4eaf</code>
           </li>
           <li>
-            Cek file: buka <code>~/Cursor-Tifz/kunci/extension/manifest.json</code> — baris version harus{' '}
+            Cek file: buka <code>~/tifz-apps/kunci/extension/manifest.json</code> — baris version harus{' '}
             <code>1.2.6</code>
           </li>
           <li>
             Chrome / Edge / Arc: <code>chrome://extensions</code> → <strong>Remove</strong> Kunci Autofill, lalu Load
-            unpacked ke <code>~/Cursor-Tifz/kunci/extension</code> (bukan folder Cursor app)
+            unpacked ke <code>~/tifz-apps/kunci/extension</code> (bukan folder app Cursor)
           </li>
           <li>
             Safari: di folder <code>kunci</code> jalankan <code>npm run install-safari</code>. Lalu Safari → Settings →
@@ -133,10 +133,10 @@ export function AutofillView() {
           </p>
           <ol className="steps">
             <li>
-              <code>cd ~/Cursor-Tifz && git pull origin cursor/kunci-password-manager-4eaf</code>
+              <code>cd ~/tifz-apps && git pull origin cursor/kunci-password-manager-4eaf</code>
             </li>
             <li>
-              <code>cd ~/Cursor-Tifz/kunci && npm run install-service</code> — Finder harusnya langsung membuka app-nya
+              <code>cd ~/tifz-apps/kunci && npm run install-service</code> — Finder harusnya langsung membuka app-nya
             </li>
             <li>
               System Settings → Privacy & Security → Accessibility → centang <strong>Kunci Helper</strong>

@@ -24,8 +24,8 @@ Kode Cuan Yuk Guys: [github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys](h
 ### Cuan Yuk Guys
 
 ```bash
-git clone https://github.com/tiftazani/Cursor-Tifz.git
-cd Cursor-Tifz/cuan-yuk-guys
+git clone https://github.com/tiftazani/Cursor-Tifz.git ~/tifz-apps
+cd ~/tifz-apps/cuan-yuk-guys
 cp .env.example .env.local
 npm install
 npm run dev
@@ -36,7 +36,7 @@ Buka [http://localhost:3000](http://localhost:3000).
 ### Kunci (password manager)
 
 ```bash
-cd Cursor-Tifz/kunci
+cd ~/tifz-apps/kunci
 npm install
 npm run dev
 ```
