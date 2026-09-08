@@ -38,7 +38,7 @@ Chrome yang masih 1.2.4 artinya file di folder ini belum di-update. Path-nya bol
 
 Di Terminal:
 
-cd ~/tifz-apps
+cd ~/Cursor-Tifz
 git fetch origin
 git checkout ${BRANCH}
 git pull origin ${BRANCH}

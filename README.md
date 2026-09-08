@@ -1,6 +1,6 @@
-# tifz-apps (GitHub: Cursor-Tifz)
+# Cursor-Tifz
 
-Folder Mac: `~/tifz-apps`. Hub app pribadi — tiap project punya foldernya sendiri.
+Folder Mac: `~/Cursor-Tifz`. Hub app pribadi — tiap project punya foldernya sendiri.
 
 ## Folder project
 
@@ -24,8 +24,8 @@ Kode Cuan Yuk Guys: [github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys](h
 ### Cuan Yuk Guys
 
 ```bash
-git clone https://github.com/tiftazani/Cursor-Tifz.git ~/tifz-apps
-cd ~/tifz-apps/cuan-yuk-guys
+git clone https://github.com/tiftazani/Cursor-Tifz.git
+cd ~/Cursor-Tifz/cuan-yuk-guys
 cp .env.example .env.local
 npm install
 npm run dev
@@ -36,7 +36,7 @@ Buka [http://localhost:3000](http://localhost:3000).
 ### Kunci (password manager)
 
 ```bash
-cd ~/tifz-apps/kunci
+cd ~/Cursor-Tifz/kunci
 npm install
 npm run dev
 ```
