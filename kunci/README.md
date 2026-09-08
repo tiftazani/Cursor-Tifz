@@ -39,6 +39,21 @@ Localhost (`http://127.0.0.1:8780`) dan URL publik memakai **satu blob terenkrip
 
 Autofill aplikasi Mac tetap butuh helper lokal (`npm run install-service`) di laptop — browser di internet tidak bisa mengetik ke app desktop.
 
+## Chrome masih 1.2.4
+
+Kartu `chrome://extensions` baca `kunci/extension/manifest.json` di disk. Path `~/tifz-apps/kunci/extension` bisa sudah benar, tapi isinya lama kalau Git masih di `main` atau belum pull branch Kunci.
+
+```bash
+cd ~/tifz-apps
+git fetch origin
+git checkout cursor/kunci-password-manager-4eaf
+git pull origin cursor/kunci-password-manager-4eaf
+cd kunci
+npm run extension-status
+```
+
+Kalau `manifest` sudah `1.2.6`: Remove ekstensi, Load unpacked lagi ke folder itu, lalu Errors → Clear all. Tombol Reload tidak mengganti file Git.
+
 ## Jalankan 24 jam di Mac (tanpa terminal)
 
 ```bash
