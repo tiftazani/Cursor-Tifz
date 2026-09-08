@@ -1,4 +1,4 @@
-const CACHE = 'kunci-shell-v1'
+const CACHE = 'kunci-shell-v2'
 
 function isApi(url) {
   return url.pathname.startsWith('/api/') || url.pathname === '/kunci-status'

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createServer } from 'node:http'
 import { randomBytes } from 'node:crypto'
-import { existsSync, createReadStream, statSync } from 'node:fs'
+import { existsSync, createReadStream, statSync, readFileSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
 import { dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -163,16 +163,56 @@ function missingUiPage(res) {
 </body>`)
 }
 
+function distMissingRingkasan() {
+  const htmlPath = join(DIST, 'index.html')
+  const srcDash = join(ROOT, 'src', 'views', 'DashboardView.tsx')
+  if (!existsSync(htmlPath) || !existsSync(srcDash)) return false
+  try {
+    const html = readFileSync(htmlPath, 'utf8')
+    const match = html.match(/src="(\/?assets\/index-[^"]+\.js)"/)
+    if (!match) return true
+    const jsPath = join(DIST, match[1].replace(/^\//, ''))
+    if (!existsSync(jsPath)) return true
+    const js = readFileSync(jsPath, 'utf8')
+    return !js.includes('Ringkasan') && !js.includes('Keadaan akun')
+  } catch {
+    return false
+  }
+}
+
+function staleUiPage(res) {
+  const cmd = 'cd ~/tifz-apps && git fetch origin && git checkout cursor/kunci-password-manager-4eaf && git pull origin cursor/kunci-password-manager-4eaf && cd kunci && npm install && npm run install-service'
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
+  res.end(`<!doctype html>
+<meta charset="utf-8">
+<title>Kunci</title>
+<body style="font:16px/1.45 -apple-system,sans-serif;background:#0a0d12;color:#eef3f8;padding:32px">
+<h1>Tampilan localhost masih yang lama</h1>
+<p>Helper di port 8780 nyala, tapi file <code>dist/</code> belum di-build ulang. Git pull saja tidak mengganti halaman ini.</p>
+<p>Di Terminal Mac, paste ini:</p>
+<pre style="background:#12171f;padding:12px 16px;border-radius:8px;white-space:pre-wrap">${cmd}</pre>
+<p>Lalu hard-refresh <a href="/" style="color:#3ee0c3">http://127.0.0.1:8780</a>. Sidebar harus tertulis <strong>Ringkasan · 1.3</strong>, bukan daftar password di depan.</p>
+</body>`)
+}
+
 function serveStatic(req, res) {
   const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname
   if (pathname.startsWith('/api/') || pathname === '/kunci-status') return false
   if (!serveUi || !existsSync(DIST)) return false
   let path = new URL(req.url || '/', 'http://127.0.0.1').pathname
   if (path === '/') path = '/index.html'
+  if ((path === '/' || path === '/index.html') && distMissingRingkasan()) {
+    staleUiPage(res)
+    return true
+  }
   const file = join(DIST, path)
   if (!file.startsWith(DIST)) return false
   if (!existsSync(file) || statSync(file).isDirectory()) {
     const fallback = join(DIST, 'index.html')
+    if (distMissingRingkasan()) {
+      staleUiPage(res)
+      return true
+    }
     res.writeHead(200, { 'Content-Type': MIME['.html'] })
     createReadStream(fallback).pipe(res)
     return true
@@ -202,6 +242,7 @@ const server = createServer(async (req, res) => {
         email: RECOVERY_EMAIL,
         ui: serveUi,
         uiBuilt: existsSync(join(DIST, 'index.html')),
+        uiRevision: distMissingRingkasan() ? 'stale' : '1.3',
         accessibility: await accessibilityTrusted(),
         helperApp: Boolean(helperBinPath()),
         helperAppPath: helperAppBundlePath() || '',

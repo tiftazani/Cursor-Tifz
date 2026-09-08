@@ -177,7 +177,7 @@ export function AppShell() {
           </span>
           <div>
             <strong>Kunci</strong>
-            <span className="muted">Satu brankas</span>
+            <span className="muted">Ringkasan · 1.3</span>
           </div>
         </div>
         <nav>
