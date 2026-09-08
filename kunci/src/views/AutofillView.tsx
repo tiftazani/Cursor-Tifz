@@ -13,11 +13,18 @@ export function AutofillView() {
     helperAppInstalled,
     helperAppPath,
     fillFrontmostApp,
+    helperRepoRoot,
+    helperKunciRoot,
+    helperExtensionDir,
   } = useVault()
   const [axMsg, setAxMsg] = useState('')
   if (!vault) return null
   const s = vault.settings
   const mac = isMacDesktop()
+  const repo = helperRepoRoot || '/Users/tiftazani/Cursor-Tifz'
+  const kunciDir = helperKunciRoot || `${repo}/kunci`
+  const extensionDir = helperExtensionDir || `${kunciDir}/extension`
+  const fromHelper = Boolean(helperRepoRoot)
 
   async function askAccess() {
     setAxMsg('Meminta izin…')
@@ -50,25 +57,24 @@ export function AutofillView() {
       <div className="card">
         <h3>Website</h3>
         <p className="muted">
-          Ikon kunci di luar kotak field. Hanya form login yang diisi/disimpan. Kartu ekstensi harus tertulis{' '}
-          <strong>Versi 1.2.6</strong>. Path folder boleh sudah benar, tapi isinya masih 1.2.4 kalau Git masih di{' '}
-          <code>main</code> atau belum <code>git checkout</code> branch Kunci.
+          Kartu ekstensi harus tertulis <strong>Versi 1.2.6</strong>. Path di bawah
+          {fromHelper ? ' diambil dari helper Mac (folder yang benar-benar ada).' : ' fallback ke clone Cursor-Tifz — bukan tifz-apps.'}
         </p>
         <ol className="steps">
           <li>
             Di Terminal:{' '}
             <code>
-              cd ~/Cursor-Tifz && git fetch origin && git checkout cursor/kunci-password-manager-4eaf && git pull origin
+              cd {repo} && git fetch origin && git checkout cursor/kunci-password-manager-4eaf && git pull origin
               cursor/kunci-password-manager-4eaf
             </code>
           </li>
           <li>
-            Cek: <code>grep version ~/Cursor-Tifz/kunci/extension/manifest.json</code> harus <code>1.2.6</code>. Atau{' '}
-            <code>cd ~/Cursor-Tifz/kunci && npm run extension-status</code>
+            Cek: <code>grep version {extensionDir}/manifest.json</code> harus <code>1.2.6</code>. Atau{' '}
+            <code>cd {kunciDir} && npm run extension-status</code>
           </li>
           <li>
             Chrome / Edge / Arc: <code>chrome://extensions</code> → <strong>Remove</strong> Kunci Autofill, lalu Load
-            unpacked ke <code>~/Cursor-Tifz/kunci/extension</code> (bukan folder app Cursor)
+            unpacked ke <code>{extensionDir}</code> (bukan folder app Cursor)
           </li>
           <li>
             Safari: di folder <code>kunci</code> jalankan <code>npm run install-safari</code>. Lalu Safari → Settings →
@@ -138,11 +144,11 @@ export function AutofillView() {
           <ol className="steps">
             <li>
               <code>
-                cd ~/Cursor-Tifz && git fetch origin && git checkout cursor/kunci-password-manager-4eaf && git pull
+                cd {repo} && git fetch origin && git checkout cursor/kunci-password-manager-4eaf && git pull
               </code>
             </li>
             <li>
-              <code>cd ~/Cursor-Tifz/kunci && npm run install-service</code> — Finder harusnya langsung membuka app-nya
+              <code>cd {kunciDir} && npm run install-service</code> — Finder harusnya langsung membuka app-nya
             </li>
             <li>
               System Settings → Privacy & Security → Accessibility → centang <strong>Kunci Helper</strong>

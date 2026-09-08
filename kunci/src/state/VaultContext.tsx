@@ -37,6 +37,9 @@ interface VaultApi {
   helperAccessibility: boolean
   helperAppInstalled: boolean
   helperAppPath: string
+  helperRepoRoot: string
+  helperKunciRoot: string
+  helperExtensionDir: string
   backups: StoredBackup[]
   backupFolderName: string | null
   pendingRecoveryKey: string | null
@@ -102,6 +105,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const [helperAccessibility, setHelperAccessibility] = useState(false)
   const [helperAppInstalled, setHelperAppInstalled] = useState(false)
   const [helperAppPath, setHelperAppPath] = useState('')
+  const [helperRepoRoot, setHelperRepoRoot] = useState('')
+  const [helperKunciRoot, setHelperKunciRoot] = useState('')
+  const [helperExtensionDir, setHelperExtensionDir] = useState('')
   const [backups, setBackups] = useState<StoredBackup[]>([])
   const [backupFolderName, setBackupFolderName] = useState<string | null>(null)
   const [pendingRecoveryKey, setPendingRecoveryKey] = useState<string | null>(null)
@@ -813,6 +819,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       setHelperAccessibility(Boolean(s.accessibility))
       setHelperAppInstalled(Boolean(s.helperApp))
       setHelperAppPath(s.helperAppPath || '')
+      setHelperRepoRoot(s.repoRoot || '')
+      setHelperKunciRoot(s.kunciRoot || '')
+      setHelperExtensionDir(s.extensionDir || '')
       if (s.ok) {
         const token = await localToken(vault.settings.helperUrl)
         const current = vaultRef.current
@@ -839,6 +848,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       helperAccessibility,
       helperAppInstalled,
       helperAppPath,
+      helperRepoRoot,
+      helperKunciRoot,
+      helperExtensionDir,
       backups,
       backupFolderName,
       pendingRecoveryKey,
@@ -885,6 +897,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       helperAccessibility,
       helperAppInstalled,
       helperAppPath,
+      helperRepoRoot,
+      helperKunciRoot,
+      helperExtensionDir,
       backups,
       backupFolderName,
       pendingRecoveryKey,

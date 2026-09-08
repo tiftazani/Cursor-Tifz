@@ -41,10 +41,10 @@ Autofill aplikasi Mac tetap butuh helper lokal (`npm run install-service`) di la
 
 ## Chrome masih 1.2.4
 
-Kartu `chrome://extensions` baca `kunci/extension/manifest.json` di disk. Path `~/Cursor-Tifz/kunci/extension` bisa sudah benar, tapi isinya lama kalau Git masih di `main` atau belum pull branch Kunci.
+Kartu `chrome://extensions` baca `kunci/extension/manifest.json` di disk. Di Mac folder clone-nya `/Users/tiftazani/Cursor-Tifz` — bukan `tifz-apps`.
 
 ```bash
-cd ~/Cursor-Tifz
+cd /Users/tiftazani/Cursor-Tifz
 git fetch origin
 git checkout cursor/kunci-password-manager-4eaf
 git pull origin cursor/kunci-password-manager-4eaf
@@ -57,7 +57,7 @@ Kalau `manifest` sudah `1.2.6`: Remove ekstensi, Load unpacked lagi ke folder it
 ## Jalankan 24 jam di Mac (tanpa terminal)
 
 ```bash
-cd ~/Cursor-Tifz/kunci
+cd /Users/tiftazani/Cursor-Tifz/kunci
 npm install
 npm run install-service
 ```

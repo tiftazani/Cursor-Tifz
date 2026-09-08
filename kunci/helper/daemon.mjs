@@ -3,8 +3,7 @@ import { createServer } from 'node:http'
 import { randomBytes } from 'node:crypto'
 import { existsSync, createReadStream, statSync, readFileSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
-import { dirname, extname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { extname, join } from 'node:path'
 import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises'
 
 import {
@@ -18,9 +17,9 @@ import {
   revealHelperApp,
 } from './mac-ax.mjs'
 import { quitHelperProcesses } from './build-helper-app.mjs'
+import { KUNCI_ROOT, refreshCommands } from './repo-paths.mjs'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const ROOT = join(__dirname, '..')
+const ROOT = KUNCI_ROOT
 const DIST = join(ROOT, 'dist')
 const RECOVERY_EMAIL = 'tiftazani.khara@gmail.com'
 const PORT = Number(process.env.KUNCI_PORT || 8780)
@@ -148,7 +147,7 @@ async function proxyCloud(req, res, url) {
 }
 
 function missingUiPage(res) {
-  const cmd = 'cd ~/Cursor-Tifz/kunci && npm install && npm run install-service'
+  const cmd = refreshCommands().install
   res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
   res.end(`<!doctype html>
 <meta charset="utf-8">
@@ -181,7 +180,8 @@ function distMissingRingkasan() {
 }
 
 function staleUiPage(res) {
-  const cmd = 'cd ~/Cursor-Tifz && git fetch origin && git checkout cursor/kunci-password-manager-4eaf && git pull origin cursor/kunci-password-manager-4eaf && cd kunci && npm install && npm run install-service'
+  const { pull, install } = refreshCommands()
+  const cmd = `${pull} && ${install}`
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
   res.end(`<!doctype html>
 <meta charset="utf-8">
@@ -189,7 +189,7 @@ function staleUiPage(res) {
 <body style="font:16px/1.45 -apple-system,sans-serif;background:#0a0d12;color:#eef3f8;padding:32px">
 <h1>Tampilan localhost masih yang lama</h1>
 <p>Helper di port 8780 nyala, tapi file <code>dist/</code> belum di-build ulang. Git pull saja tidak mengganti halaman ini.</p>
-<p>Di Terminal Mac, paste ini:</p>
+<p>Di Terminal Mac, paste ini (path dari folder yang benar-benar ada di disk, bukan <code>tifz-apps</code>):</p>
 <pre style="background:#12171f;padding:12px 16px;border-radius:8px;white-space:pre-wrap">${cmd}</pre>
 <p>Lalu hard-refresh <a href="/" style="color:#3ee0c3">http://127.0.0.1:8780</a>. Sidebar harus tertulis <strong>Ringkasan · 1.3</strong>, bukan daftar password di depan.</p>
 </body>`)
@@ -246,6 +246,7 @@ const server = createServer(async (req, res) => {
         accessibility: await accessibilityTrusted(),
         helperApp: Boolean(helperBinPath()),
         helperAppPath: helperAppBundlePath() || '',
+        ...refreshCommands(),
       })
       return
     }

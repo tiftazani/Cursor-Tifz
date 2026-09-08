@@ -10,6 +10,9 @@ export interface HelperStatus {
   ui?: boolean
   helperApp?: boolean
   helperAppPath?: string
+  repoRoot?: string
+  kunciRoot?: string
+  extensionDir?: string
 }
 
 export interface FillPayload {
