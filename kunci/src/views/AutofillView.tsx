@@ -51,15 +51,20 @@ export function AutofillView() {
         <h3>Website</h3>
         <p className="muted">
           Ikon kunci di luar kotak field. Hanya form login yang diisi/disimpan. Kartu ekstensi harus tertulis{' '}
-          <strong>Versi 1.2.5</strong> — kalau masih lebih lama, folder yang di-load belum di-git pull.
+          <strong>Versi 1.2.6</strong>. Kalau masih 1.2.4, Chrome belum memuat folder hasil git pull — tombol Reload
+          saja tidak cukup.
         </p>
         <ol className="steps">
           <li>
             Di Mac: <code>cd ~/Cursor-Tifz && git pull origin cursor/kunci-password-manager-4eaf</code>
           </li>
           <li>
-            Chrome / Edge / Arc: <code>chrome://extensions</code> → Reload, atau Load unpacked ke{' '}
-            <code>~/Cursor-Tifz/kunci/extension</code>
+            Cek file: buka <code>~/Cursor-Tifz/kunci/extension/manifest.json</code> — baris version harus{' '}
+            <code>1.2.6</code>
+          </li>
+          <li>
+            Chrome / Edge / Arc: <code>chrome://extensions</code> → <strong>Remove</strong> Kunci Autofill, lalu Load
+            unpacked ke <code>~/Cursor-Tifz/kunci/extension</code> (bukan folder Cursor app)
           </li>
           <li>
             Safari: di folder <code>kunci</code> jalankan <code>npm run install-safari</code>. Lalu Safari → Settings →
