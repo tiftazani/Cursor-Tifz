@@ -26,6 +26,7 @@ import { localToken } from '../lib/recovery-api'
 import { cloudGetVault, cloudPutVault, emailRecoveryKey, isPublicHost, logoutSession } from '../lib/cloud'
 import { resolveAutoLockSeconds } from '../lib/autolock'
 import { matchAppName } from '../lib/capture'
+import { isPreviewUi, previewVault } from '../lib/preview-vault'
 
 interface VaultApi {
   status: 'loading' | 'setup' | 'locked' | 'unlocked'
@@ -126,6 +127,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    if (isPreviewUi()) {
+      const demo = previewVault()
+      vaultRef.current = demo
+      setVault(demo)
+      setStatus('unlocked')
+      return
+    }
     let cancelled = false
     void (async () => {
       try {
@@ -158,6 +166,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const persist = useCallback(async (next: Vault, reason: 'auto' | 'manual' | 'hourly' | 'daily' | 'none' = 'auto') => {
+    if (isPreviewUi()) {
+      vaultRef.current = next
+      setVault(next)
+      return
+    }
     const key = keyRef.current
     const blob = blobRef.current
     if (!key || !blob) throw new Error('Brankas terkunci')

@@ -8,6 +8,7 @@ import { AppShell } from './views/AppShell'
 import { IconKey } from './components/Icons'
 import { isPublicHost, sessionStatus } from './lib/cloud'
 import { applyPlatformAttr } from './lib/platform'
+import { isPreviewUi } from './lib/preview-vault'
 
 function BootScreen({ message }: { message: string }) {
   return (
@@ -89,13 +90,20 @@ function ThemedApp() {
 }
 
 export default function App() {
+  const preview = isPreviewUi()
   return (
     <ToastProvider>
-      <CloudSessionGate>
+      {preview ? (
         <VaultProvider>
           <ThemedApp />
         </VaultProvider>
-      </CloudSessionGate>
+      ) : (
+        <CloudSessionGate>
+          <VaultProvider>
+            <ThemedApp />
+          </VaultProvider>
+        </CloudSessionGate>
+      )}
     </ToastProvider>
   )
 }
