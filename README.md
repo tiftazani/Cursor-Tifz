@@ -43,6 +43,17 @@ npm run dev
 
 Buka [http://localhost:5173](http://localhost:5173). URL publik HTTPS (zero-knowledge, gerbang OTP): lihat [`kunci/README.md`](./kunci/README.md). Autofill Mac dan ekstensi juga di situ.
 
+Clone `--single-branch` tidak punya `origin/cursor/...`. Ambil branch Kunci pakai `FETCH_HEAD`, bukan `git checkout origin/branch`:
+
+```bash
+cd /Users/tiftazani/Cursor-Tifz && \
+git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && \
+git fetch origin cursor/kunci-password-manager-4eaf && \
+git checkout -B cursor/kunci-password-manager-4eaf FETCH_HEAD && \
+test -f kunci/src/views/DashboardView.tsx && \
+cd kunci && npm install && npm run install-service
+```
+
 ## Vercel (wajib sekali)
 
 Situs publik `https://cuan-tif.vercel.app` tetap memakai branch **main**. Karena app sekarang ada di folder, atur Root Directory:

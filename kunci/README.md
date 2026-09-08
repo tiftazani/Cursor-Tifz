@@ -43,13 +43,20 @@ Autofill aplikasi Mac tetap butuh helper lokal (`npm run install-service`) di la
 
 Kartu `chrome://extensions` baca `kunci/extension/manifest.json` di disk. Di Mac folder clone-nya `/Users/tiftazani/Cursor-Tifz` — bukan `tifz-apps`.
 
+Kalau git bilang `origin/cursor/kunci-password-manager-4eaf is not a commit`: clone-nya `--single-branch`, jadi ref `origin/branch` memang tidak ada. Fetch tetap nulis commit ke `FETCH_HEAD`. **Jangan** `git checkout origin/cursor/...`. **Jangan** `npm run install-service` kalau git gagal — itu yang nge-build tree lama (`index-CBhIFzle.js`).
+
+Paste **satu blok**, pakai `&&` (bukan `;`):
+
 ```bash
-cd /Users/tiftazani/Cursor-Tifz
-git fetch origin cursor/kunci-password-manager-4eaf
-git checkout -B cursor/kunci-password-manager-4eaf FETCH_HEAD
-cd kunci
-npm run extension-status
+cd /Users/tiftazani/Cursor-Tifz && \
+git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && \
+git fetch origin cursor/kunci-password-manager-4eaf && \
+git checkout -B cursor/kunci-password-manager-4eaf FETCH_HEAD && \
+test -f kunci/src/views/DashboardView.tsx && \
+cd kunci && npm install && npm run install-service
 ```
+
+`git branch --show-current` harus `cursor/kunci-password-manager-4eaf`. Sidebar localhost: **Ringkasan · 1.3**.
 
 Kalau `manifest` sudah `1.2.6`: Remove ekstensi, Load unpacked lagi ke folder itu, lalu Errors → Clear all. Tombol Reload tidak mengganti file Git.
 

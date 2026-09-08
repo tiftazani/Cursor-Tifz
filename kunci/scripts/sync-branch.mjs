@@ -15,6 +15,7 @@ function gitOut(args) {
 }
 
 console.log(`Repo: ${REPO_ROOT}`)
+run(['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*'])
 run(['fetch', 'origin', KUNCI_BRANCH])
 run(['checkout', '-B', KUNCI_BRANCH, 'FETCH_HEAD'])
 

@@ -25,6 +25,7 @@ export function AutofillView() {
   const kunciDir = helperKunciRoot || `${repo}/kunci`
   const extensionDir = helperExtensionDir || `${kunciDir}/extension`
   const fromHelper = Boolean(helperRepoRoot)
+  const ambilBranch = `cd ${repo} && git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch origin cursor/kunci-password-manager-4eaf && git checkout -B cursor/kunci-password-manager-4eaf FETCH_HEAD && test -f kunci/src/views/DashboardView.tsx`
 
   async function askAccess() {
     setAxMsg('Meminta izin…')
@@ -63,10 +64,7 @@ export function AutofillView() {
         <ol className="steps">
           <li>
             Di Terminal:{' '}
-            <code>
-              cd {repo} && git fetch origin cursor/kunci-password-manager-4eaf && git checkout -B
-              cursor/kunci-password-manager-4eaf FETCH_HEAD
-            </code>
+            <code>{ambilBranch}</code>
           </li>
           <li>
             Cek: <code>grep version {extensionDir}/manifest.json</code> harus <code>1.2.6</code>. Atau{' '}
@@ -143,10 +141,7 @@ export function AutofillView() {
           </p>
           <ol className="steps">
             <li>
-              <code>
-                cd {repo} && git fetch origin cursor/kunci-password-manager-4eaf && git checkout -B
-                cursor/kunci-password-manager-4eaf FETCH_HEAD
-              </code>
+              <code>{ambilBranch}</code>
             </li>
             <li>
               <code>cd {kunciDir} && npm run install-service</code> — Finder harusnya langsung membuka app-nya

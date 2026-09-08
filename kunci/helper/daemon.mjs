@@ -189,7 +189,8 @@ function staleUiPage(res) {
 <body style="font:16px/1.45 -apple-system,sans-serif;background:#0a0d12;color:#eef3f8;padding:32px">
 <h1>Tampilan localhost masih yang lama</h1>
 <p>Helper di port 8780 nyala, tapi file <code>dist/</code> belum di-build ulang. Git pull saja tidak mengganti halaman ini.</p>
-<p>Di Terminal Mac, paste ini (path dari folder yang benar-benar ada di disk, bukan <code>tifz-apps</code>):</p>
+<p>Kalau git bilang <code>origin/cursor/... is not a commit</code>: jangan checkout <code>origin/branch</code>. Clone single-branch cuma nulis commit ke <code>FETCH_HEAD</code>. Paste blok di bawah — pakai <code>&amp;&amp;</code>, jangan <code>;</code> supaya npm tidak jalan setelah git gagal.</p>
+<p>Di Terminal Mac:</p>
 <pre style="background:#12171f;padding:12px 16px;border-radius:8px;white-space:pre-wrap">${cmd}</pre>
 <p>Lalu hard-refresh <a href="/" style="color:#3ee0c3">http://127.0.0.1:8780</a>. Sidebar harus tertulis <strong>Ringkasan · 1.3</strong>, bukan daftar password di depan.</p>
 </body>`)
