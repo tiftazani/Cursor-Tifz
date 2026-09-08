@@ -45,12 +45,13 @@ Kartu `chrome://extensions` baca `kunci/extension/manifest.json` di disk. Di Mac
 
 Kalau git bilang `origin/cursor/kunci-password-manager-4eaf is not a commit`: clone-nya `--single-branch`, jadi ref `origin/branch` memang tidak ada. Fetch tetap nulis commit ke `FETCH_HEAD`. **Jangan** `git checkout origin/cursor/...`. **Jangan** `npm run install-service` kalau git gagal — itu yang nge-build tree lama (`index-CBhIFzle.js`).
 
-Paste **satu blok**, pakai `&&` (bukan `;`):
+Paste **satu blok**, pakai `&&` (bukan `;`). Kalau git bilang local changes would be overwritten: stash dulu (baris di bawah sudah).
 
 ```bash
 cd /Users/tiftazani/Cursor-Tifz && \
 git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && \
 git fetch origin cursor/kunci-password-manager-4eaf && \
+(test -z "$(git status --porcelain)" || git stash push -u -m "sebelum kunci branch") && \
 git checkout -B cursor/kunci-password-manager-4eaf FETCH_HEAD && \
 test -f kunci/src/views/DashboardView.tsx && \
 cd kunci && npm install && npm run install-service

@@ -17,6 +17,10 @@ function gitOut(args) {
 console.log(`Repo: ${REPO_ROOT}`)
 run(['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*'])
 run(['fetch', 'origin', KUNCI_BRANCH])
+if (gitOut(['status', '--porcelain'])) {
+  console.log('Working tree kotor — stash dulu. Lihat: git stash list')
+  run(['stash', 'push', '-u', '-m', 'sebelum kunci branch'])
+}
 run(['checkout', '-B', KUNCI_BRANCH, 'FETCH_HEAD'])
 
 const dash = join(KUNCI_ROOT, 'src', 'views', 'DashboardView.tsx')

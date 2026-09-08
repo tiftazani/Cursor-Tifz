@@ -25,7 +25,7 @@ export function AutofillView() {
   const kunciDir = helperKunciRoot || `${repo}/kunci`
   const extensionDir = helperExtensionDir || `${kunciDir}/extension`
   const fromHelper = Boolean(helperRepoRoot)
-  const ambilBranch = `cd ${repo} && git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch origin cursor/kunci-password-manager-4eaf && git checkout -B cursor/kunci-password-manager-4eaf FETCH_HEAD && test -f kunci/src/views/DashboardView.tsx`
+  const ambilBranch = `cd ${repo} && git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch origin cursor/kunci-password-manager-4eaf && (test -z "$(git status --porcelain)" || git stash push -u -m "sebelum kunci branch") && git checkout -B cursor/kunci-password-manager-4eaf FETCH_HEAD && test -f kunci/src/views/DashboardView.tsx`
 
   async function askAccess() {
     setAxMsg('Meminta izin…')

@@ -19,6 +19,12 @@ echo "Repo: $PWD"
 # Buka fetch supaya origin/branch ada untuk lain kali. Checkout tetap pakai FETCH_HEAD.
 git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 git fetch origin "$BRANCH"
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "Working tree kotor — stash dulu (git stash list). Jangan pop kecuali lo butuh edit itu."
+  git stash push -u -m "sebelum kunci branch"
+fi
+
 git checkout -B "$BRANCH" FETCH_HEAD
 
 if [[ ! -f kunci/src/views/DashboardView.tsx ]]; then

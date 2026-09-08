@@ -15,7 +15,7 @@ export function refreshCommands() {
     repoRoot: REPO_ROOT,
     kunciRoot: KUNCI_ROOT,
     extensionDir: EXTENSION_DIR,
-    pull: `cd ${REPO_ROOT} && git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch origin ${KUNCI_BRANCH} && git checkout -B ${KUNCI_BRANCH} FETCH_HEAD && test -f kunci/src/views/DashboardView.tsx`,
+    pull: `cd ${REPO_ROOT} && git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch origin ${KUNCI_BRANCH} && (test -z "$(git status --porcelain)" || git stash push -u -m "sebelum kunci branch") && git checkout -B ${KUNCI_BRANCH} FETCH_HEAD && test -f kunci/src/views/DashboardView.tsx`,
     install: `cd ${KUNCI_ROOT} && npm install && npm run install-service`,
   }
 }

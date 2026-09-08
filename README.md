@@ -49,6 +49,7 @@ Clone `--single-branch` tidak punya `origin/cursor/...`. Ambil branch Kunci paka
 cd /Users/tiftazani/Cursor-Tifz && \
 git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && \
 git fetch origin cursor/kunci-password-manager-4eaf && \
+(test -z "$(git status --porcelain)" || git stash push -u -m "sebelum kunci branch") && \
 git checkout -B cursor/kunci-password-manager-4eaf FETCH_HEAD && \
 test -f kunci/src/views/DashboardView.tsx && \
 cd kunci && npm install && npm run install-service

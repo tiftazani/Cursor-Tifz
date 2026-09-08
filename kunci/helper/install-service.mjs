@@ -82,7 +82,7 @@ if (platform() !== 'darwin') {
 
 if (!existsSync(join(ROOT, 'src', 'views', 'DashboardView.tsx'))) {
   console.error('Ini tree lama (belum ada Ringkasan). Jangan rebuild helper dari sini.')
-  console.error('Di folder clone: git fetch origin cursor/kunci-password-manager-4eaf && git checkout -B cursor/kunci-password-manager-4eaf FETCH_HEAD')
+  console.error('Di folder clone: git stash push -u -m "sebelum kunci branch"; git fetch origin cursor/kunci-password-manager-4eaf && git checkout -B cursor/kunci-password-manager-4eaf FETCH_HEAD')
   console.error('Jangan git checkout origin/cursor/... — clone single-branch tidak punya ref itu.')
   process.exit(1)
 }
