@@ -15,7 +15,7 @@ export function refreshCommands() {
     repoRoot: REPO_ROOT,
     kunciRoot: KUNCI_ROOT,
     extensionDir: EXTENSION_DIR,
-    pull: `cd ${REPO_ROOT} && git fetch origin && git checkout ${KUNCI_BRANCH} && git pull origin ${KUNCI_BRANCH}`,
+    pull: `cd ${REPO_ROOT} && git fetch origin && git checkout -B ${KUNCI_BRANCH} origin/${KUNCI_BRANCH}`,
     install: `cd ${KUNCI_ROOT} && npm install && npm run install-service`,
   }
 }

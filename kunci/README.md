@@ -46,8 +46,7 @@ Kartu `chrome://extensions` baca `kunci/extension/manifest.json` di disk. Di Mac
 ```bash
 cd /Users/tiftazani/Cursor-Tifz
 git fetch origin
-git checkout cursor/kunci-password-manager-4eaf
-git pull origin cursor/kunci-password-manager-4eaf
+git checkout -B cursor/kunci-password-manager-4eaf origin/cursor/kunci-password-manager-4eaf
 cd kunci
 npm run extension-status
 ```
