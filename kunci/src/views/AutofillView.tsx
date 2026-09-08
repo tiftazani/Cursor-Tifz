@@ -51,16 +51,20 @@ export function AutofillView() {
         <h3>Website</h3>
         <p className="muted">
           Ikon kunci di luar kotak field. Hanya form login yang diisi/disimpan. Kartu ekstensi harus tertulis{' '}
-          <strong>Versi 1.2.6</strong>. Kalau masih 1.2.4, Chrome belum memuat folder hasil git pull — tombol Reload
-          saja tidak cukup.
+          <strong>Versi 1.2.6</strong>. Path folder boleh sudah benar, tapi isinya masih 1.2.4 kalau Git masih di{' '}
+          <code>main</code> atau belum <code>git checkout</code> branch Kunci.
         </p>
         <ol className="steps">
           <li>
-            Di Mac: <code>cd ~/tifz-apps && git pull origin cursor/kunci-password-manager-4eaf</code>
+            Di Terminal:{' '}
+            <code>
+              cd ~/tifz-apps && git fetch origin && git checkout cursor/kunci-password-manager-4eaf && git pull origin
+              cursor/kunci-password-manager-4eaf
+            </code>
           </li>
           <li>
-            Cek file: buka <code>~/tifz-apps/kunci/extension/manifest.json</code> — baris version harus{' '}
-            <code>1.2.6</code>
+            Cek: <code>grep version ~/tifz-apps/kunci/extension/manifest.json</code> harus <code>1.2.6</code>. Atau{' '}
+            <code>cd ~/tifz-apps/kunci && npm run extension-status</code>
           </li>
           <li>
             Chrome / Edge / Arc: <code>chrome://extensions</code> → <strong>Remove</strong> Kunci Autofill, lalu Load
@@ -133,7 +137,9 @@ export function AutofillView() {
           </p>
           <ol className="steps">
             <li>
-              <code>cd ~/tifz-apps && git pull origin cursor/kunci-password-manager-4eaf</code>
+              <code>
+                cd ~/tifz-apps && git fetch origin && git checkout cursor/kunci-password-manager-4eaf && git pull
+              </code>
             </li>
             <li>
               <code>cd ~/tifz-apps/kunci && npm run install-service</code> — Finder harusnya langsung membuka app-nya
