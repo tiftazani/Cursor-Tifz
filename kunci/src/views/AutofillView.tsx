@@ -64,8 +64,8 @@ export function AutofillView() {
           <li>
             Di Terminal:{' '}
             <code>
-              cd {repo} && git fetch origin && git checkout -B cursor/kunci-password-manager-4eaf
-              origin/cursor/kunci-password-manager-4eaf
+              cd {repo} && git fetch origin cursor/kunci-password-manager-4eaf && git checkout -B
+              cursor/kunci-password-manager-4eaf FETCH_HEAD
             </code>
           </li>
           <li>
@@ -144,8 +144,8 @@ export function AutofillView() {
           <ol className="steps">
             <li>
               <code>
-                cd {repo} && git fetch origin && git checkout -B cursor/kunci-password-manager-4eaf
-                origin/cursor/kunci-password-manager-4eaf
+                cd {repo} && git fetch origin cursor/kunci-password-manager-4eaf && git checkout -B
+                cursor/kunci-password-manager-4eaf FETCH_HEAD
               </code>
             </li>
             <li>

@@ -18,6 +18,8 @@
     "install-service": "node helper/install-service.mjs",
     "uninstall-service": "node helper/install-service.mjs --uninstall",
     "install-safari": "node helper/install-safari-extension.mjs",
+    "sync-branch": "node scripts/sync-branch.mjs",
+    "refresh-local": "node scripts/sync-branch.mjs && node helper/install-service.mjs",
     "extension-status": "node scripts/extension-status.mjs",
     "netlify:dev": "npx netlify dev"
   },
