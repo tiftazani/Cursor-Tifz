@@ -77,6 +77,19 @@ export function decideLoginSave(entries, capture, neverHosts = []) {
   return { action: 'create' }
 }
 
+function newEntryId() {
+  try {
+    if (typeof globalThis.kunciNewId === 'function') return globalThis.kunciNewId()
+  } catch {
+    /* ignore */
+  }
+  try {
+    return crypto.randomUUID()
+  } catch {
+    return `k${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`
+  }
+}
+
 export function applyLoginCapture(entries, capture, now = Date.now()) {
   const decision = decideLoginSave(entries, capture)
   if (decision.action === 'skip') return { entries, changed: 'skip', decision }
@@ -87,7 +100,7 @@ export function applyLoginCapture(entries, capture, now = Date.now()) {
     if (!prev) return { entries, changed: 'skip', decision }
     const history =
       (prev.password || '') !== capture.password || (prev.username || '') !== username
-        ? [{ id: crypto.randomUUID(), username: prev.username, password: prev.password, changedAt: now }, ...(prev.history || [])].slice(0, 50)
+        ? [{ id: newEntryId(), username: prev.username, password: prev.password, changedAt: now }, ...(prev.history || [])].slice(0, 50)
         : prev.history || []
     const saved = {
       ...prev,
@@ -107,7 +120,7 @@ export function applyLoginCapture(entries, capture, now = Date.now()) {
     }
   }
   const created = {
-    id: crypto.randomUUID(),
+    id: newEntryId(),
     type: 'login',
     name: loginTitleFromUrl(capture.url),
     username: username || undefined,

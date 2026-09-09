@@ -58,7 +58,7 @@ export function AutofillView() {
       <div className="card">
         <h3>Website</h3>
         <p className="muted">
-          Kartu ekstensi harus tertulis <strong>Versi 1.2.7</strong>. Path di bawah
+          Kartu ekstensi harus tertulis <strong>Versi 1.2.8</strong>. Path di bawah
           {fromHelper ? ' diambil dari helper Mac (folder yang benar-benar ada).' : ' fallback ke clone Cursor-Tifz — bukan tifz-apps.'}
         </p>
         <ol className="steps">
@@ -67,7 +67,7 @@ export function AutofillView() {
             <code>{ambilBranch}</code>
           </li>
           <li>
-            Cek: <code>grep version {extensionDir}/manifest.json</code> harus <code>1.2.7</code>. Atau{' '}
+            Cek: <code>grep version {extensionDir}/manifest.json</code> harus <code>1.2.8</code>. Atau{' '}
             <code>cd {kunciDir} && npm run extension-status</code>
           </li>
           <li>

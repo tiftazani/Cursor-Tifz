@@ -17,7 +17,13 @@ function newId() {
   }
   try {
     const c = globalThis.crypto
-    if (typeof c?.randomUUID === 'function') return c.randomUUID()
+    if (typeof c?.randomUUID === 'function') {
+      try {
+        return c.randomUUID()
+      } catch {
+        /* insecure context */
+      }
+    }
     if (typeof c?.getRandomValues === 'function') {
       const bytes = new Uint8Array(16)
       c.getRandomValues(bytes)
@@ -589,18 +595,30 @@ async function restorePendingSave() {
 
 function hookNavigation() {
   const fire = () => window.setTimeout(() => void checkAttempt(), 50)
-  const wrap = (type) => {
-    const orig = history[type]
-    if (typeof orig !== 'function') return
-    history[type] = function hookedNav(...args) {
-      const ret = orig.apply(this, args)
-      fire()
-      return ret
+  try {
+    window.addEventListener('popstate', fire)
+    window.addEventListener('hashchange', fire)
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.navigation?.addEventListener?.('navigate', fire)
+  } catch {
+    /* ignore */
+  }
+  for (const type of ['pushState', 'replaceState']) {
+    try {
+      const orig = history[type]
+      if (typeof orig !== 'function') continue
+      history[type] = function hookedNav(...args) {
+        const ret = orig.apply(this, args)
+        fire()
+        return ret
+      }
+    } catch {
+      /* some sites freeze History */
     }
   }
-  wrap('pushState')
-  wrap('replaceState')
-  window.addEventListener('popstate', fire)
 }
 
 function scan() {
@@ -701,31 +719,37 @@ if (isKunciPage()) {
   hookNavigation()
   void restorePendingSave().finally(() => {
     scan()
+    const root = document.documentElement
+    if (!root) return
     new MutationObserver(() => {
       window.clearTimeout(scanTimer)
       scanTimer = window.setTimeout(() => {
         scan()
         if (attempt) void checkAttempt()
       }, 250)
-    }).observe(document.documentElement, { childList: true, subtree: true })
+    }).observe(root, { childList: true, subtree: true })
   })
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.type === 'FILL_NOW') {
-      if (!loginPasswordFields().length) return
-      void send({ type: 'MATCHES', url: location.href }).then((res) => {
-        if (res?.matches?.[0]) fill(res.matches[0])
-      })
-    }
-    if (msg.type === 'FILL_ENTRY') fill(msg.entry)
-    if (msg.type === 'SHOW_PENDING_SAVE' && msg.pending) {
-      const submitted = msg.pending.capture?.submittedUrl || msg.pending.capture?.url || location.href
-      if (outcomeFromDom(submitted, 2000) === 'success') showSaveBar(msg.pending)
-    }
-    if (msg.type === 'VAULT_UNLOCKED') {
-      autofillTried = false
-      document.querySelectorAll('.kunci-fill-btn.locked').forEach((btn) => btn.classList.remove('locked'))
-      void restorePendingSave()
-      void maybeAutofill()
-    }
-  })
+  try {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg.type === 'FILL_NOW') {
+        if (!loginPasswordFields().length) return
+        void send({ type: 'MATCHES', url: location.href }).then((res) => {
+          if (res?.matches?.[0]) fill(res.matches[0])
+        })
+      }
+      if (msg.type === 'FILL_ENTRY') fill(msg.entry)
+      if (msg.type === 'SHOW_PENDING_SAVE' && msg.pending) {
+        const submitted = msg.pending.capture?.submittedUrl || msg.pending.capture?.url || location.href
+        if (outcomeFromDom(submitted, 2000) === 'success') showSaveBar(msg.pending)
+      }
+      if (msg.type === 'VAULT_UNLOCKED') {
+        autofillTried = false
+        document.querySelectorAll('.kunci-fill-btn.locked').forEach((btn) => btn.classList.remove('locked'))
+        void restorePendingSave()
+        void maybeAutofill()
+      }
+    })
+  } catch {
+    /* extension context invalidated */
+  }
 }
