@@ -13,6 +13,8 @@ export interface HelperStatus {
   repoRoot?: string
   kunciRoot?: string
   extensionDir?: string
+  extensionVersion?: string
+  extensionStamp?: string
 }
 
 export interface FillPayload {

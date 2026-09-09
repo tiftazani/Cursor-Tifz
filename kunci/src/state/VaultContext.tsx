@@ -40,6 +40,7 @@ interface VaultApi {
   helperRepoRoot: string
   helperKunciRoot: string
   helperExtensionDir: string
+  helperExtensionVersion: string
   backups: StoredBackup[]
   backupFolderName: string | null
   pendingRecoveryKey: string | null
@@ -108,6 +109,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const [helperRepoRoot, setHelperRepoRoot] = useState('')
   const [helperKunciRoot, setHelperKunciRoot] = useState('')
   const [helperExtensionDir, setHelperExtensionDir] = useState('')
+  const [helperExtensionVersion, setHelperExtensionVersion] = useState('')
   const [backups, setBackups] = useState<StoredBackup[]>([])
   const [backupFolderName, setBackupFolderName] = useState<string | null>(null)
   const [pendingRecoveryKey, setPendingRecoveryKey] = useState<string | null>(null)
@@ -822,6 +824,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       setHelperRepoRoot(s.repoRoot || '')
       setHelperKunciRoot(s.kunciRoot || '')
       setHelperExtensionDir(s.extensionDir || '')
+      setHelperExtensionVersion(s.extensionVersion || '')
       if (s.ok) {
         const token = await localToken(vault.settings.helperUrl)
         const current = vaultRef.current
@@ -851,6 +854,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       helperRepoRoot,
       helperKunciRoot,
       helperExtensionDir,
+      helperExtensionVersion,
       backups,
       backupFolderName,
       pendingRecoveryKey,
@@ -900,6 +904,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       helperRepoRoot,
       helperKunciRoot,
       helperExtensionDir,
+      helperExtensionVersion,
       backups,
       backupFolderName,
       pendingRecoveryKey,

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { execSync } from 'node:child_process'
 import { EXTENSION_DIR, KUNCI_BRANCH, KUNCI_ROOT, REPO_ROOT, refreshCommands } from '../helper/repo-paths.mjs'
 
-const NEED = '1.2.8'
+const NEED = '1.2.9'
 const manifestPath = join(EXTENSION_DIR, 'manifest.json')
 
 function git(args) {
@@ -47,4 +47,4 @@ ${EXTENSION_DIR}
   process.exit(1)
 }
 
-console.log('\nFile sudah 1.2.8. Di Chrome: Remove, Load unpacked ke folder di atas, Clear all di Errors.')
+console.log('\nFile sudah 1.2.9. Chrome unpacked di folder ini di-reload helper (http://127.0.0.1:8780). Clear all di Errors kalau badge masih nyala.')

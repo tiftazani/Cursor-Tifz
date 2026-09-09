@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { buildKunciHelperApp, quitHelperProcesses } from './build-helper-app.mjs'
+import { EXTENSION_DIR, extensionOnDisk } from './repo-paths.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
@@ -169,9 +170,13 @@ if (helperBuild.ok) {
 }
 
 if (healthy) {
+  const ext = extensionOnDisk()
   console.log('\nKunci jalan terus di background. Terminal boleh ditutup.')
   console.log('Buka: http://127.0.0.1:8780')
   console.log('Ikut nyala lagi setiap login Mac.')
+  console.log(`Ekstensi unpacked: ${EXTENSION_DIR}`)
+  console.log(`Versi di disk: ${ext.extensionVersion || '(tidak kebaca)'}`)
+  console.log('Chrome/Edge yang Load unpacked ke folder itu akan reload sendiri setelah file berubah. Jangan Remove lagi kecuali kartu masih versi lama.')
 } else {
   console.log('\nPlist sudah dipasang, tapi http://127.0.0.1:8780 belum merespons.')
   console.log('Cek log: ~/Library/Logs/kunci.err.log')

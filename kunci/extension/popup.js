@@ -31,6 +31,7 @@ function nextPaint() {
 }
 
 async function refresh() {
+  void send({ type: 'SYNC_EXTENSION' })
   const s = await send({ type: 'STATUS' })
   if (!s) {
     unlock.hidden = false

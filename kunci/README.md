@@ -59,7 +59,7 @@ cd kunci && npm install && npm run install-service
 
 `git branch --show-current` harus `cursor/kunci-password-manager-4eaf`. Sidebar localhost: **Ringkasan · 1.3**.
 
-Kalau `manifest` sudah `1.2.8`: Remove ekstensi, Load unpacked lagi ke folder itu, lalu Errors → Clear all. Tombol Reload tidak mengganti file Git.
+Kalau `manifest` sudah `1.2.9`: Load unpacked ke `kunci/extension` **sekali**. Helper di `127.0.0.1:8780` akan menyuruh Chrome reload sendiri setelah git pull / `npm run install-service`. Errors → Clear all kalau badge lama masih nempel.
 
 Ekstensi hanya menawar simpan username/password **setelah login website terlihat berhasil**. Login gagal (form masih ada, kata sandi salah) tidak ditulis ke brankas.
 

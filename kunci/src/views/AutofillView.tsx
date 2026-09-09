@@ -16,6 +16,7 @@ export function AutofillView() {
     helperRepoRoot,
     helperKunciRoot,
     helperExtensionDir,
+    helperExtensionVersion,
   } = useVault()
   const [axMsg, setAxMsg] = useState('')
   if (!vault) return null
@@ -58,21 +59,20 @@ export function AutofillView() {
       <div className="card">
         <h3>Website</h3>
         <p className="muted">
-          Kartu ekstensi harus tertulis <strong>Versi 1.2.8</strong>. Path di bawah
-          {fromHelper ? ' diambil dari helper Mac (folder yang benar-benar ada).' : ' fallback ke clone Cursor-Tifz — bukan tifz-apps.'}
+          Folder ekstensi: <code>{extensionDir}</code>
+          {fromHelper ? ' (dari helper Mac).' : ' — fallback clone Cursor-Tifz, bukan tifz-apps.'}{' '}
+          Load unpacked ke folder itu <strong>sekali</strong>. Setelah itu, kalau aplikasi/helper di-update (git pull
+          atau <code>npm run install-service</code>), Chrome reload sendiri. Kartu harus {helperExtensionVersion || '1.2.9'}
+          — bukan 1.2.6.
         </p>
         <ol className="steps">
           <li>
             Di Terminal:{' '}
-            <code>{ambilBranch}</code>
+            <code>{ambilBranch} && cd kunci && npm install && npm run install-service</code>
           </li>
           <li>
-            Cek: <code>grep version {extensionDir}/manifest.json</code> harus <code>1.2.8</code>. Atau{' '}
-            <code>cd {kunciDir} && npm run extension-status</code>
-          </li>
-          <li>
-            Chrome / Edge / Arc: <code>chrome://extensions</code> → <strong>Remove</strong> Kunci Autofill, lalu Load
-            unpacked ke <code>{extensionDir}</code> (bukan folder app Cursor)
+            Pertama kali saja: <code>chrome://extensions</code> → Load unpacked ke <code>{extensionDir}</code> (bukan
+            folder app Cursor). Jangan Remove tiap ada update.
           </li>
           <li>
             Safari: di folder <code>kunci</code> jalankan <code>npm run install-safari</code>. Lalu Safari → Settings →

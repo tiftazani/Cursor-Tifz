@@ -642,6 +642,7 @@ function wireKunciBridge() {
     }
   }
   sendToken()
+  void send({ type: 'SYNC_EXTENSION' })
   window.addEventListener('storage', sendToken)
   window.addEventListener('message', (event) => {
     if (event.source !== window) return

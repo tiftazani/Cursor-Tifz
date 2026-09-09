@@ -2,7 +2,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { KUNCI_BRANCH, KUNCI_ROOT, REPO_ROOT } from '../helper/repo-paths.mjs'
+import { EXTENSION_DIR, KUNCI_BRANCH, KUNCI_ROOT, REPO_ROOT, extensionOnDisk } from '../helper/repo-paths.mjs'
 
 function run(args) {
   const result = spawnSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8', stdio: 'inherit' })
@@ -31,4 +31,6 @@ if (!existsSync(dash)) {
 
 console.log(`Branch: ${gitOut(['rev-parse', '--abbrev-ref', 'HEAD'])}`)
 console.log(`Commit: ${gitOut(['rev-parse', '--short', 'HEAD'])}`)
-console.log('File Ringkasan sudah ada. Lanjut npm run install-service')
+const ext = extensionOnDisk()
+console.log(`Ekstensi: ${EXTENSION_DIR} (${ext.extensionVersion})`)
+console.log('File Ringkasan sudah ada. Lanjut npm run install-service — Chrome unpacked akan reload sendiri.')

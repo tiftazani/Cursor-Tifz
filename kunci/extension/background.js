@@ -222,6 +222,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   const run = async () => {
+    if (msg.type === 'SYNC_EXTENSION') {
+      await syncUnpackedExtension()
+      return { ok: true }
+    }
     if (msg.type === 'GET_BLOB') {
       const { blob } = await chrome.storage.local.get('blob')
       return { blob: blob || null }
@@ -330,6 +334,62 @@ chrome.commands.onCommand.addListener(async (command) => {
   if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'FILL_NOW' }).catch(() => undefined)
 })
 
+const HELPER_HEALTH = ['http://127.0.0.1:8780/health', 'http://localhost:8780/health']
+const STAMP_KEY = 'kunciExtensionStamp'
+
+async function helperExtensionState() {
+  for (const url of HELPER_HEALTH) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' })
+      if (!res.ok) continue
+      const body = await res.json()
+      if (body?.extensionStamp) return body
+    } catch {
+      /* helper off */
+    }
+  }
+  return null
+}
+
+async function syncUnpackedExtension() {
+  try {
+    const remote = await helperExtensionState()
+    if (!remote?.extensionStamp) return
+    const stored = await chrome.storage.local.get(STAMP_KEY)
+    const prev = stored[STAMP_KEY]
+    if (prev === remote.extensionStamp) return
+    await chrome.storage.local.set({ [STAMP_KEY]: remote.extensionStamp })
+    if (!prev) return
+    chrome.runtime.reload()
+  } catch {
+    /* ignore */
+  }
+}
+
+function startExtensionSync() {
+  void syncUnpackedExtension()
+  try {
+    chrome.alarms?.create('kunci-ext-sync', { periodInMinutes: 0.5 })
+  } catch {
+    /* no alarms API */
+  }
+}
+
+try {
+  chrome.alarms?.onAlarm?.addListener((alarm) => {
+    if (alarm.name === 'kunci-ext-sync') void syncUnpackedExtension()
+  })
+} catch {
+  /* ignore */
+}
+
+chrome.runtime.onStartup.addListener(() => {
+  startExtensionSync()
+})
+
 chrome.runtime.onInstalled.addListener(() => {
+  startExtensionSync()
   void injectContentScripts()
 })
+
+startExtensionSync()

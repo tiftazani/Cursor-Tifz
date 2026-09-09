@@ -239,7 +239,7 @@ const server = createServer(async (req, res) => {
       json(res, 200, {
         ok: true,
         platform: platform(),
-        version: '1.4.2',
+        version: '1.4.3',
         email: RECOVERY_EMAIL,
         ui: serveUi,
         uiBuilt: existsSync(join(DIST, 'index.html')),
