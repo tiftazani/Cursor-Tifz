@@ -58,7 +58,7 @@ export function AutofillView() {
       <div className="card">
         <h3>Website</h3>
         <p className="muted">
-          Kartu ekstensi harus tertulis <strong>Versi 1.2.6</strong>. Path di bawah
+          Kartu ekstensi harus tertulis <strong>Versi 1.2.7</strong>. Path di bawah
           {fromHelper ? ' diambil dari helper Mac (folder yang benar-benar ada).' : ' fallback ke clone Cursor-Tifz — bukan tifz-apps.'}
         </p>
         <ol className="steps">
@@ -67,7 +67,7 @@ export function AutofillView() {
             <code>{ambilBranch}</code>
           </li>
           <li>
-            Cek: <code>grep version {extensionDir}/manifest.json</code> harus <code>1.2.6</code>. Atau{' '}
+            Cek: <code>grep version {extensionDir}/manifest.json</code> harus <code>1.2.7</code>. Atau{' '}
             <code>cd {kunciDir} && npm run extension-status</code>
           </li>
           <li>
@@ -100,7 +100,7 @@ export function AutofillView() {
             checked={s.offerSaveWeb !== false}
             onChange={(e) => void updateSettings({ offerSaveWeb: e.target.checked })}
           />
-          Tawarkan simpan setelah login berhasil
+          Tawarkan simpan hanya setelah login website berhasil. Login gagal tidak disimpan.
         </label>
       </div>
 
@@ -122,7 +122,8 @@ export function AutofillView() {
           </div>
           <p className="muted">
             Sidebar Finder <strong>Applications</strong> adalah <code>/Applications</code>, bukan folder Applications di
-            Home. Kunci Helper.app dipasang ke keduanya.
+            Home. Kunci Helper.app dipasang ke keduanya. Helper hanya mengisi login yang sudah ada di brankas — tidak
+            merekam ketikan, jadi tidak menyimpan username/password dari app Mac yang gagal masuk.
           </p>
           {helperAppInstalled && helperAppPath ? (
             <p className="muted">

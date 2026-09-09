@@ -160,7 +160,10 @@ async function injectContentScripts() {
         if (!tab.id) return
         try {
           await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ['content.css'] })
-          await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['login-intent.js', 'content.js'] })
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['ext-api.js', 'login-intent.js', 'login-outcome.js', 'icon-place.js', 'content.js'],
+          })
         } catch {
           /* chrome://, PDF, or no host access */
         }

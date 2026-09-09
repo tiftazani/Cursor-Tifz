@@ -59,7 +59,9 @@ cd kunci && npm install && npm run install-service
 
 `git branch --show-current` harus `cursor/kunci-password-manager-4eaf`. Sidebar localhost: **Ringkasan · 1.3**.
 
-Kalau `manifest` sudah `1.2.6`: Remove ekstensi, Load unpacked lagi ke folder itu, lalu Errors → Clear all. Tombol Reload tidak mengganti file Git.
+Kalau `manifest` sudah `1.2.7`: Remove ekstensi, Load unpacked lagi ke folder itu, lalu Errors → Clear all. Tombol Reload tidak mengganti file Git.
+
+Ekstensi hanya menawar simpan username/password **setelah login website terlihat berhasil**. Login gagal (form masih ada, kata sandi salah) tidak ditulis ke brankas.
 
 ## Jalankan 24 jam di Mac (tanpa terminal)
 

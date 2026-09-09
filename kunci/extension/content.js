@@ -32,6 +32,12 @@ function newId() {
   return `k${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`
 }
 
+const outcome = globalThis.kunciLoginOutcome || {
+  inferLoginOutcome() {
+    return 'unknown'
+  },
+}
+
 const intent = globalThis.kunciLoginIntent || {
   fieldSnapshot() {
     return { tag: 'input', type: '', name: '', id: '', autocomplete: '', placeholder: '', ariaLabel: '' }
@@ -134,6 +140,8 @@ let otherBarHost = null
 let saveOffer = null
 let scanTimer = 0
 let placeTimer = 0
+let attempt = null
+const ATTEMPT_CHECKS = [400, 1000, 2000, 4000, 7000]
 
 function readFormCreds(form) {
   const pw = form
@@ -460,6 +468,76 @@ async function maybeAutofill() {
   })
 }
 
+function outcomeFromDom(submittedUrl, elapsedMs) {
+  const passwords = loginPasswordFields()
+  const passwordFieldVisible = passwords.length > 0
+  const loginFormVisible = passwords.some((el) => intent.shouldOfferSaveKind(kindAround(el)))
+  const passwordFieldInvalid = passwords.some((el) => el.getAttribute('aria-invalid') === 'true')
+  let pageText = ''
+  try {
+    pageText = (document.body?.innerText || '').slice(0, 6000)
+  } catch {
+    /* ignore */
+  }
+  return outcome.inferLoginOutcome({
+    submittedUrl,
+    currentUrl: location.href,
+    passwordFieldVisible,
+    loginFormVisible,
+    passwordFieldInvalid,
+    pageText,
+    elapsedMs,
+  })
+}
+
+function clearAttempt(dismiss) {
+  if (attempt?.timers) {
+    for (const id of attempt.timers) window.clearTimeout(id)
+  }
+  attempt = null
+  if (dismiss) void send({ type: 'DISMISS_SAVE' })
+}
+
+function beginAttempt(creds) {
+  if (isKunciPage()) return
+  if (!intent.shouldOfferSaveKind(creds.kind || lastKind)) return
+  const password = creds.password || lastPassword
+  const username = creds.username || lastUsername
+  if (!password) return
+  if (lastFilled && lastFilled.password === password && (lastFilled.username || '') === username) return
+  clearAttempt(false)
+  hideSaveBar()
+  attempt = {
+    username,
+    password,
+    url: location.href,
+    kind: creds.kind || lastKind,
+    startedAt: Date.now(),
+    timers: [],
+  }
+  for (const ms of ATTEMPT_CHECKS) {
+    attempt.timers.push(window.setTimeout(() => void checkAttempt(), ms))
+  }
+}
+
+async function checkAttempt() {
+  if (!attempt) return
+  const elapsed = Date.now() - attempt.startedAt
+  const result = outcomeFromDom(attempt.url, elapsed)
+  if (result === 'success') {
+    const creds = { username: attempt.username, password: attempt.password, kind: attempt.kind, url: location.href }
+    clearAttempt(false)
+    await maybeOfferSave(creds)
+    return
+  }
+  if (result === 'failure') {
+    clearAttempt(true)
+    hideSaveBar()
+    return
+  }
+  if (elapsed >= ATTEMPT_CHECKS[ATTEMPT_CHECKS.length - 1]) clearAttempt(false)
+}
+
 async function maybeOfferSave(creds) {
   if (isKunciPage()) return
   if (!intent.shouldOfferSaveKind(creds.kind || lastKind)) return
@@ -467,7 +545,12 @@ async function maybeOfferSave(creds) {
   const username = creds.username || lastUsername
   if (!password) return
   if (lastFilled && lastFilled.password === password && (lastFilled.username || '') === username) return
-  const capture = { url: location.href, username, password }
+  const capture = {
+    url: creds.url || location.href,
+    username,
+    password,
+    submittedUrl: creds.submittedUrl || creds.url || location.href,
+  }
   const offer = await send({ type: 'OFFER_SAVE', capture })
   if (offer?.locked) {
     showOtherBar({
@@ -481,11 +564,43 @@ async function maybeOfferSave(creds) {
   showSaveBar({ capture, action: offer.action })
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
 async function restorePendingSave() {
   const res = await send({ type: 'GET_PENDING_SAVE' })
   if (!res?.pending?.capture) return
+  await sleep(400)
+  const submitted = res.pending.capture.submittedUrl || res.pending.capture.url || location.href
+  if (typeof outcome.sameSiteHost === 'function' && !outcome.sameSiteHost(submitted, location.href)) {
+    void send({ type: 'DISMISS_SAVE' })
+    return
+  }
+  const result = outcomeFromDom(submitted, 2000)
+  if (result === 'failure') {
+    void send({ type: 'DISMISS_SAVE' })
+    return
+  }
+  if (result !== 'success') return
   const st = await send({ type: 'STATUS' })
   if (st?.unlocked) showSaveBar(res.pending)
+}
+
+function hookNavigation() {
+  const fire = () => window.setTimeout(() => void checkAttempt(), 50)
+  const wrap = (type) => {
+    const orig = history[type]
+    if (typeof orig !== 'function') return
+    history[type] = function hookedNav(...args) {
+      const ret = orig.apply(this, args)
+      fire()
+      return ret
+    }
+  }
+  wrap('pushState')
+  wrap('replaceState')
+  window.addEventListener('popstate', fire)
 }
 
 function scan() {
@@ -552,7 +667,7 @@ if (isKunciPage()) {
     'submit',
     (e) => {
       const creds = captureFromEvent(e.target)
-      void maybeOfferSave(creds)
+      beginAttempt(creds)
     },
     true,
   )
@@ -562,17 +677,20 @@ if (isKunciPage()) {
       const t = e.target instanceof Element ? e.target.closest('button, input[type="submit"]') : null
       if (!t) return
       const creds = captureFromEvent(t)
-      if (creds.password) void maybeOfferSave(creds)
+      if (creds.password) beginAttempt(creds)
     },
     true,
   )
   window.addEventListener('pagehide', () => {
-    if (!lastPassword) return
-    if (!intent.shouldOfferSaveKind(lastKind)) return
-    if (lastFilled && lastFilled.password === lastPassword && (lastFilled.username || '') === lastUsername) return
+    if (!attempt?.password) return
     void send({
       type: 'QUEUE_SAVE',
-      capture: { url: location.href, username: lastUsername, password: lastPassword },
+      capture: {
+        url: attempt.url,
+        username: attempt.username,
+        password: attempt.password,
+        submittedUrl: attempt.url,
+      },
     })
   })
   window.addEventListener('scroll', () => {
@@ -580,11 +698,15 @@ if (isKunciPage()) {
     placeTimer = window.setTimeout(repositionIcons, 16)
   }, true)
   window.addEventListener('resize', repositionIcons)
+  hookNavigation()
   void restorePendingSave().finally(() => {
     scan()
     new MutationObserver(() => {
       window.clearTimeout(scanTimer)
-      scanTimer = window.setTimeout(scan, 250)
+      scanTimer = window.setTimeout(() => {
+        scan()
+        if (attempt) void checkAttempt()
+      }, 250)
     }).observe(document.documentElement, { childList: true, subtree: true })
   })
   chrome.runtime.onMessage.addListener((msg) => {
@@ -595,7 +717,10 @@ if (isKunciPage()) {
       })
     }
     if (msg.type === 'FILL_ENTRY') fill(msg.entry)
-    if (msg.type === 'SHOW_PENDING_SAVE' && msg.pending) showSaveBar(msg.pending)
+    if (msg.type === 'SHOW_PENDING_SAVE' && msg.pending) {
+      const submitted = msg.pending.capture?.submittedUrl || msg.pending.capture?.url || location.href
+      if (outcomeFromDom(submitted, 2000) === 'success') showSaveBar(msg.pending)
+    }
     if (msg.type === 'VAULT_UNLOCKED') {
       autofillTried = false
       document.querySelectorAll('.kunci-fill-btn.locked').forEach((btn) => btn.classList.remove('locked'))

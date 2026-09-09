@@ -115,7 +115,7 @@ export function SettingsView() {
             checked={s.offerSaveWeb !== false}
             onChange={(e) => void updateSettings({ offerSaveWeb: e.target.checked })}
           />{' '}
-          Tawarkan simpan password website setelah login
+          Tawarkan simpan password website hanya setelah login berhasil. Gagal masuk tidak ditulis ke brankas.
         </label>
         <Field label="Tema">
           <select
