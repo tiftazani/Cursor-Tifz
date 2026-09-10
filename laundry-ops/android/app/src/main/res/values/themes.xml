@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.Cuciin" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/navy</item>
+        <item name="android:navigationBarColor">@color/navy</item>
+        <item name="android:windowBackground">@color/foam</item>
+    </style>
+</resources>
