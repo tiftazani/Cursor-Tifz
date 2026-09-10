@@ -63,7 +63,7 @@ const MODULES = [
 ];
 
 const state = {
-  role: "kasir",
+  role: "owner",
   screen: "login",
   history: [],
   loggedIn: false,
@@ -449,9 +449,11 @@ function screenLogin() {
     <h1>Cuciin</h1>
     <p class="lede">Owner: ${state.ownerName}. Kasir/SPV daftar per cabang.</p>
     ${authTabs("login")}
+    <p class="hint">Akun awal belum punya kata sandi. Kolom itu boleh kosong.</p>
+    <button class="btn primary" data-go="home">Masuk tanpa kata sandi</button>
     <label class="form"><span>Email</span><input value="${state.role === "owner" ? state.ownerEmail : "rina@cuciin.id"}" /></label>
-    <label class="form"><span>Password</span><input type="password" value="••••••••" /></label>
-    <button class="btn primary" data-go="home">Masuk</button>
+    <label class="form"><span>Kata sandi — boleh dikosongkan</span><input type="password" value="" placeholder="boleh kosong" /></label>
+    <button class="btn ghost" data-go="home">Masuk</button>
   </div>`;
 }
 
