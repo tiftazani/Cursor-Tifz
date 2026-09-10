@@ -4,7 +4,7 @@ Owner: **Tiftazani Khara**. Android Kotlin (`com.tiftazani.laundryops`) + mockup
 
 ## Android
 
-Folder: [`android/`](./android). Versi sekarang **1.3.0**. Changelog: [`android/CHANGELOG.md`](./android/CHANGELOG.md).
+Folder: [`android/`](./android). Versi sekarang **1.4.0**. Changelog: [`android/CHANGELOG.md`](./android/CHANGELOG.md).
 
 **Unduh APK debug:** [https://cuan-tif.vercel.app/cuciin/cuciin.apk](https://cuan-tif.vercel.app/cuciin/cuciin.apk)
 

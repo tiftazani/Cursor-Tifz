@@ -1,61 +1,97 @@
 package com.tiftazani.laundryops.ui.components
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tiftazani.laundryops.data.LaundryStatus
 import com.tiftazani.laundryops.data.PayStatus
+import com.tiftazani.laundryops.ui.rememberUi
 import com.tiftazani.laundryops.ui.theme.Amber
+import com.tiftazani.laundryops.ui.theme.Card
+import com.tiftazani.laundryops.ui.theme.Coral
 import com.tiftazani.laundryops.ui.theme.Foam
+import com.tiftazani.laundryops.ui.theme.Gold
 import com.tiftazani.laundryops.ui.theme.Green
+import com.tiftazani.laundryops.ui.theme.Ink
+import com.tiftazani.laundryops.ui.theme.Line
 import com.tiftazani.laundryops.ui.theme.Muted
-import com.tiftazani.laundryops.ui.theme.Navy
-import com.tiftazani.laundryops.ui.theme.Pink
+import com.tiftazani.laundryops.ui.theme.Teal
+import com.tiftazani.laundryops.ui.theme.TealDeep
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CuciinTopBar(title: String, subtitle: String? = null, onBack: (() -> Unit)? = null) {
-    TopAppBar(
-        title = {
-            Column {
-                if (subtitle != null) Text(subtitle, fontSize = 12.sp, color = Muted)
-                Text(title)
+fun ScreenHeader(title: String, subtitle: String? = null, onBack: (() -> Unit)? = null, actions: @Composable RowScope.() -> Unit = {}) {
+    val ui = rememberUi()
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (onBack != null) {
+            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali", tint = Ink)
             }
-        },
-        navigationIcon = {
-            if (onBack != null) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
-                }
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = ui.titleSp, fontWeight = FontWeight.Black, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitle != null) {
+                Text(subtitle, color = Muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = Foam, titleContentColor = Navy),
-    )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, content = actions)
+    }
 }
 
 @Composable
 fun Chip(text: String, color: Color) {
-    Surface(shape = RoundedCornerShape(50), color = color.copy(alpha = 0.16f)) {
-        Text(text, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), color = color, fontSize = 11.sp)
+    Surface(shape = RoundedCornerShape(50), color = color.copy(alpha = 0.14f)) {
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            color = color,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
     }
 }
 
@@ -67,37 +103,71 @@ fun PayChip(status: PayStatus) {
 @Composable
 fun LaundryChip(status: LaundryStatus) {
     val c = when (status) {
-        LaundryStatus.Masuk -> Amber
-        LaundryStatus.Progress -> Color(0xFF6366F1)
+        LaundryStatus.Masuk -> Gold
+        LaundryStatus.Progress -> Teal
         LaundryStatus.Selesai -> Green
     }
     Chip(status.label, c)
 }
 
 @Composable
+fun ChipRow(content: @Composable RowScope.() -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        content = content,
+    )
+}
+
+@Composable
+fun SelectChip(selected: Boolean, label: String, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label, fontSize = 13.sp, maxLines = 1) },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = Teal,
+            selectedLabelColor = Color.White,
+            containerColor = Card,
+            labelColor = Ink,
+        ),
+        border = FilterChipDefaults.filterChipBorder(enabled = true, selected = selected, borderColor = Line, selectedBorderColor = Teal),
+    )
+}
+
+@Composable
 fun PeriodRow(selected: String, onPick: (String) -> Unit) {
-    val items = listOf("hari" to "Harian", "minggu" to "Mingguan", "bulan" to "Bulanan", "tahun" to "Tahunan")
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        items.forEach { (id, label) ->
-            FilterChip(selected = selected == id, onClick = { onPick(id) }, label = { Text(label, fontSize = 12.sp) })
+    ChipRow {
+        listOf("hari" to "Hari", "minggu" to "Minggu", "bulan" to "Bulan", "tahun" to "Tahun").forEach { (id, label) ->
+            SelectChip(selected == id, label) { onPick(id) }
         }
     }
 }
 
 @Composable
 fun Hero(title: String, value: String, pills: List<String>) {
-    Column(
+    val ui = rememberUi()
+    Box(
         Modifier
             .fillMaxWidth()
-            .background(Navy, RoundedCornerShape(24.dp))
-            .padding(18.dp),
+            .clip(RoundedCornerShape(ui.radius))
+            .background(Brush.linearGradient(listOf(TealDeep, Teal))),
     ) {
-        Text(title, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
-        Text(value, color = Color.White, fontSize = 26.sp)
-        Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            pills.forEach {
-                Surface(shape = RoundedCornerShape(50), color = Color.White.copy(alpha = 0.16f)) {
-                    Text(it, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), color = Color.White, fontSize = 11.sp)
+        Canvas(Modifier.matchParentSize()) {
+            drawCircle(Color.White.copy(alpha = 0.08f), radius = size.minDimension * 0.55f, center = Offset(size.width * 0.92f, size.height * 0.1f))
+            drawCircle(Color.White.copy(alpha = 0.06f), radius = size.minDimension * 0.4f, center = Offset(size.width * 0.05f, size.height * 1.05f))
+        }
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 18.dp)) {
+            Text(title.uppercase(), color = Color.White.copy(alpha = 0.72f), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
+            Text(value, color = Color.White, fontSize = ui.heroSp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (pills.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                ChipRow {
+                    pills.forEach {
+                        Surface(shape = RoundedCornerShape(50), color = Color.White.copy(alpha = 0.14f)) {
+                            Text(it, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = Color.White, fontSize = 12.sp)
+                        }
+                    }
                 }
             }
         }
@@ -105,8 +175,88 @@ fun Hero(title: String, value: String, pills: List<String>) {
 }
 
 @Composable
-fun CardBlock(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = Color.White, shadowElevation = 1.dp) {
-        Column(Modifier.padding(14.dp), content = { content() })
+fun CardBlock(modifier: Modifier = Modifier, accent: Color? = null, content: @Composable ColumnScope.() -> Unit) {
+    val ui = rememberUi()
+    Surface(
+        modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(ui.radius - 4.dp),
+        color = Card,
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Line.copy(alpha = 0.9f)),
+    ) {
+        Row {
+            if (accent != null) {
+                Box(Modifier.width(5.dp).background(accent))
+            }
+            Column(Modifier.padding(16.dp).weight(1f, fill = true), content = content)
+        }
+    }
+}
+
+@Composable
+fun EmptyHint(title: String, body: String) {
+    CardBlock {
+        Text(title, fontWeight = FontWeight.Bold, color = Ink)
+        Text(body, color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+@Composable
+fun PrimaryBtn(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    val ui = rememberUi()
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.fillMaxWidth().height(52.dp),
+        shape = RoundedCornerShape(ui.radius - 8.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Teal, contentColor = Color.White),
+        contentPadding = PaddingValues(horizontal = 16.dp),
+    ) { Text(text, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+}
+
+@Composable
+fun GhostBtn(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    val ui = rememberUi()
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.fillMaxWidth().height(48.dp),
+        shape = RoundedCornerShape(ui.radius - 8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Line),
+    ) { Text(text, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+}
+
+@Composable
+fun DangerBtn(text: String, onClick: () -> Unit) {
+    TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Text(text, color = Coral, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun SectionLabel(text: String) {
+    Text(
+        text.uppercase(),
+        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+        color = Teal,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 1.sp,
+    )
+}
+
+@Composable
+fun ListDivider() {
+    HorizontalDivider(color = Line.copy(alpha = 0.6f), thickness = 1.dp)
+}
+
+@Composable
+fun AvatarMark(text: String, tint: Color = Teal) {
+    Box(
+        Modifier.size(42.dp).clip(CircleShape).background(tint.copy(alpha = 0.16f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text.take(1).uppercase(), color = tint, fontWeight = FontWeight.Black)
     }
 }

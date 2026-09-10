@@ -1,6 +1,6 @@
 # Cuciin Android
 
-Package `com.tiftazani.laundryops`. Versi sekarang **1.3.0**.
+Package `com.tiftazani.laundryops`. Versi sekarang **1.4.0**.
 
 Database toko ada di server: `https://cuan-tif.vercel.app/api/cuciin`. HP kasir/owner nge-share dokumen yang sama. Cache JSON tetap di HP kalau lagi offline.
 
