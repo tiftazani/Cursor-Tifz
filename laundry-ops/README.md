@@ -2,14 +2,18 @@
 
 Spek v1 ada di rencana agent. **Android / APK belum dibangun.** Sekarang mockup HTML.
 
-## Website simulasi (permanen)
+## Website simulasi (publik, awet)
 
-Mockup di-host di Vercel yang sama dengan repo ini — URL-nya nempel, bukan tunnel Cloudflare.
+Buka ini di Mac — nggak perlu `localhost`, nggak perlu Cloudflare tunnel:
 
-- **Preview branch ini:** [https://cuan-git-cursor-laundry-ops-mockup-5516-tiftazanis-projects.vercel.app/cuciin/](https://cuan-git-cursor-laundry-ops-mockup-5516-tiftazanis-projects.vercel.app/cuciin/)
-- **Production** (setelah merge ke `main`): [https://cuan-tif.vercel.app/cuciin/](https://cuan-tif.vercel.app/cuciin/)
+**[https://raw.githack.com/tiftazani/Cursor-Tifz/cursor/laundry-ops-mockup-5516/laundry-ops/mockup/index.html](https://raw.githack.com/tiftazani/Cursor-Tifz/cursor/laundry-ops-mockup-5516/laundry-ops/mockup/index.html)**
 
-Sumber UI: `laundry-ops/mockup/`. File yang ke-serve: `cuan-yuk-guys/public/cuciin/` (di-copy pas `npm run build`).
+Cadangan (CDN GitHub): [jsDelivr](https://cdn.jsdelivr.net/gh/tiftazani/Cursor-Tifz@cursor/laundry-ops-mockup-5516/laundry-ops/mockup/index.html)
+
+Setelah PR merge ke `main`, URL tetap di Vercel production: [https://cuan-tif.vercel.app/cuciin/](https://cuan-tif.vercel.app/cuciin/)  
+(Preview Vercel branch ini ke-kunci SSO, jangan pakai itu dari Mac.)
+
+Sumber UI: `laundry-ops/mockup/`. Copy ke `cuan-yuk-guys/public/cuciin/` pas build.
 
 ## Jalanin di laptop
 
@@ -18,7 +22,7 @@ cd laundry-ops/mockup
 ./start.sh
 ```
 
-Lalu buka [http://127.0.0.1:4173](http://127.0.0.1:4173) — pakai `127.0.0.1`, bukan `localhost`.
+Lalu [http://127.0.0.1:4173](http://127.0.0.1:4173).
 
 ## Yang belum
 
