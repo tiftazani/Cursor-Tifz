@@ -683,8 +683,23 @@ body.film .stage { padding: 0; }
 }
 .methods button.on { border-color: var(--teal); background: var(--mint-soft); color: var(--teal-deep); }
 .card.warn { border: 1px solid #fbd38d; background: var(--amber-bg); }
+.card.hang { outline: 1px solid #f9a8d4; }
 .due { color: var(--amber) !important; font-weight: 700; }
-.row-actions { display: flex; gap: 8px; margin-top: 10px; }
-.row-actions .btn { margin-top: 0; padding: 10px; }
+.row-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.row-actions .btn { margin-top: 0; padding: 10px; flex: 1; min-width: 0; }
 .segment.tight { margin-bottom: 12px; }
+.segment.tight.wrap { flex-wrap: wrap; }
+.segment.tight.wrap button { flex: 0 1 auto; padding: 8px 10px; }
 .btn.primary.small, .btn.danger { font-size: 13px; }
+.chip.masuk { background: var(--amber-bg); color: var(--amber); }
+.chip.progress { background: var(--blue-bg); color: var(--blue); }
+.chip.selesai { background: var(--green-bg); color: var(--green); }
+.meta a { color: var(--teal-deep); font-weight: 700; }
+.wa-sent-banner {
+  background: #dcf8c6;
+  color: #075e54;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 12px;
+  text-align: center;
+}

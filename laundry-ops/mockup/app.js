@@ -9,13 +9,10 @@ const ICONS = {
   more: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/></svg>`,
 };
 
-const PIPE = [
-  { id: "diterima", label: "Diterima", next: "dicuci" },
-  { id: "dicuci", label: "Dicuci", next: "curing" },
-  { id: "curing", label: "Curing", next: "dilipat" },
-  { id: "dilipat", label: "Dilipat", next: "siap" },
-  { id: "siap", label: "Siap ambil", next: "diambil" },
-  { id: "diambil", label: "Diambil", next: null },
+const LAUNDRY = [
+  { id: "masuk", label: "Laundry Masuk", next: "progress" },
+  { id: "progress", label: "Laundry In Progress", next: "selesai" },
+  { id: "selesai", label: "Laundry Selesai", next: null },
 ];
 
 const SVC_ICON = {
@@ -38,6 +35,11 @@ const SERVICES = [
   { id: "parfum", name: "Parfum uk 100", desc: "Retail 100ml, potong stok", unit: "pcs", price: 15000, dropOut: false, retail: true },
 ];
 
+const BRANCHES = [
+  { id: "melati", code: "MEL", name: "Cuciin Melati", location: "Jl. Melati 12, Bandung", maps: "https://maps.google.com/?q=-6.9175,107.6191", mapsLabel: "-6.9175, 107.6191" },
+  { id: "cibaduyut", code: "CIB", name: "Cuciin Cibaduyut", location: "Jl. Cibaduyut Raya 88, Bandung", maps: "https://maps.google.com/?q=-6.9590,107.5920", mapsLabel: "-6.9590, 107.5920" },
+];
+
 const CUSTOMERS = [
   { id: "c1", name: "Siti Rahma", address: "Jl. Melati 12, Bandung", phone: "0812-3301-8890", initials: "SR", due: 0 },
   { id: "c2", name: "Budi Santoso", address: "Komplek Cempaka Blok B2", phone: "0857-1120-4455", initials: "BS", due: 34000 },
@@ -45,22 +47,25 @@ const CUSTOMERS = [
 ];
 
 const MODULES = [
-  { id: "dashboard", label: "Dashboard / antrian" },
+  { id: "dashboard", label: "Antrian" },
   { id: "pelanggan", label: "Pelanggan" },
-  { id: "transaksi", label: "Nota baru" },
+  { id: "transaksi", label: "Nota" },
+  { id: "wa", label: "WA nota" },
   { id: "layanan", label: "Layanan" },
-  { id: "inventory", label: "Inventory" },
+  { id: "inventory", label: "Stok" },
   { id: "kas", label: "Tutup kas" },
+  { id: "cabang", label: "Cabang" },
   { id: "user", label: "User" },
   { id: "role", label: "Role & akses" },
-  { id: "profil", label: "Profil usaha" },
-  { id: "laporan", label: "Laporan" },
+  { id: "audit", label: "Audit trail" },
+  { id: "laporan", label: "Analytics" },
+  { id: "profil", label: "Profil" },
 ];
 
 const state = {
   role: "kasir",
   screen: "login",
-  authTab: "login",
+  history: [],
   loggedIn: false,
   customer: CUSTOMERS[0],
   cart: [],
@@ -75,52 +80,72 @@ const state = {
   payTarget: null,
   extraPay: 0,
   userFilter: "pengajuan",
+  ownerName: "Tiftazani Khara",
   ownerEmail: "tiftazani.khara@gmail.com",
   reportPeriod: "minggu",
-  queueFilter: "aktif",
-  activeQueueId: "CU-2401-0042",
+  viewBranch: "melati",
+  viewKasir: "all",
+  queueFilter: "gantung",
+  waList: "pending",
+  stockPeriod: "7hari",
+  stockEditKind: "tambah",
+  activeQueueId: "MEL-2409-0042",
   searchQ: "",
+  actor: "Rina",
   roles: [
     { name: "Owner", modules: MODULES.map((m) => m.id), owner: true },
-    { name: "Kasir", modules: ["dashboard", "pelanggan", "transaksi", "inventory", "kas"] },
+    { name: "Kasir", modules: ["dashboard", "pelanggan", "transaksi", "wa", "inventory", "kas"] },
     { name: "Supervisor", modules: ["dashboard", "inventory"] },
     { name: "Operator Mesin", modules: ["dashboard"] },
   ],
   users: [
-    { name: "Tiftazani", role: "Owner", status: "approved" },
-    { name: "Rina", role: "Kasir", status: "approved" },
-    { name: "Andi", role: "Supervisor", status: "approved" },
-    { name: "Fajar Putra", role: "Kasir", status: "pending" },
-    { name: "Mira", role: "Operator Mesin", status: "pending" },
+    { name: "Tiftazani Khara", role: "Owner", status: "approved", branches: ["melati", "cibaduyut"] },
+    { name: "Rina", role: "Kasir", status: "approved", branches: ["melati"] },
+    { name: "Dedi", role: "Kasir", status: "approved", branches: ["melati"] },
+    { name: "Andi", role: "Supervisor", status: "approved", branches: ["melati"] },
+    { name: "Salsa", role: "Kasir", status: "approved", branches: ["cibaduyut"] },
+    { name: "Yoga", role: "Supervisor", status: "approved", branches: ["cibaduyut"] },
+    { name: "Fajar Putra", role: "Kasir", status: "pending", branches: ["melati"] },
   ],
   products: [
-    { name: "Sabun", stock: 24, in: 10, out: 4, min: 8 },
-    { name: "Softener", stock: 18, in: 8, out: 3, min: 6 },
-    { name: "Parfum uk 100", stock: 9, in: 5, out: 2, min: 5 },
+    { name: "Sabun", stock: 24, min: 8 },
+    { name: "Softener", stock: 18, min: 6 },
+    { name: "Parfum uk 100", stock: 9, min: 5 },
+  ],
+  stockMoves: [
+    { at: "03 Sep 08.40", product: "Sabun", kind: "tambah", qty: 20, by: "Rina", branch: "melati", note: "Manual restock" },
+    { at: "05 Sep 11.02", product: "Sabun", kind: "jual", qty: -2, by: "Rina", branch: "melati", nota: "MEL-2409-0038" },
+    { at: "08 Sep 09.15", product: "Softener", kind: "update", qty: 18, by: "Dedi", branch: "melati", note: "Hitung ulang rak" },
+    { at: "09 Sep 16.20", product: "Parfum uk 100", kind: "kurang", qty: -1, by: "Rina", branch: "melati", note: "Rusak" },
+    { at: "10 Sep 09.22", product: "Sabun", kind: "jual", qty: -1, by: "Rina", branch: "melati", nota: "MEL-2409-0042" },
   ],
   queue: [
-    { id: "CU-2401-0042", customer: "Siti Rahma", phone: "0812-3301-8890", items: "Curing DO 3 kg", total: 30000, paid: 30000, pay: "lunas", pipe: "dicuci", dropOut: true, promise: "Hari ini 17.00", late: false },
-    { id: "CU-2401-0041", customer: "Budi Santoso", phone: "0857-1120-4455", items: "Cuci 5 kg", total: 54000, paid: 20000, pay: "dp", pipe: "siap", dropOut: false, promise: "Kemarin 16.00", late: true },
-    { id: "CU-2401-0040", customer: "Dewi Lestari", phone: "0813-7788-2210", items: "Curing DO Lipat 2 kg", total: 28000, paid: 0, pay: "belum", pipe: "diterima", dropOut: true, promise: "Hari ini 18.00", late: false },
+    { id: "MEL-2409-0042", branch: "melati", kasir: "Rina", customer: "Siti Rahma", phone: "0812-3301-8890", items: "Curing DO 3 kg + Sabun 1", total: 38000, paid: 38000, pay: "lunas", laundry: "progress", dropOut: true, promise: "Hari ini 17.00", createdAt: "10 Sep 2026, 09.12", pickupAt: "10 Sep 2026, 17.00", waSent: false, photos: [{ name: "nota-siti.jpg" }], late: false },
+    { id: "MEL-2409-0041", branch: "melati", kasir: "Dedi", customer: "Budi Santoso", phone: "0857-1120-4455", items: "Cuci 5 kg", total: 54000, paid: 20000, pay: "belum", laundry: "selesai", dropOut: false, promise: "Kemarin 16.00", createdAt: "09 Sep 2026, 14.03", pickupAt: "09 Sep 2026, 16.00", waSent: true, waAt: "09 Sep 2026, 14.08", photos: [], late: true },
+    { id: "MEL-2409-0040", branch: "melati", kasir: "Rina", customer: "Dewi Lestari", phone: "0813-7788-2210", items: "Curing DO Lipat 2 kg", total: 28000, paid: 0, pay: "belum", laundry: "masuk", dropOut: true, promise: "Hari ini 18.00", createdAt: "10 Sep 2026, 08.41", pickupAt: "10 Sep 2026, 18.00", waSent: false, photos: [], late: false },
+    { id: "CIB-2409-0018", branch: "cibaduyut", kasir: "Salsa", customer: "Agus Wijaya", phone: "0812-9000-1122", items: "Cuci 4 kg", total: 28000, paid: 28000, pay: "lunas", laundry: "selesai", dropOut: false, promise: "Hari ini 15.00", createdAt: "10 Sep 2026, 07.55", pickupAt: "10 Sep 2026, 15.00", waSent: true, waAt: "10 Sep 2026, 08.01", photos: [{ name: "bukti-transfer.jpg" }], late: false },
   ],
-  orders: [
-    { id: "CU-2401-0041", customer: "Budi Santoso", total: 54000, paid: 20000, dropOut: false },
-    { id: "CU-2401-0040", customer: "Dewi Lestari", total: 28000, paid: 0, dropOut: true },
+  audit: [
+    { at: "10 Sep 09.22", user: "Rina", branch: "melati", action: "Nota MEL-2409-0042 disimpan · Tunai lunas", nota: "MEL-2409-0042" },
+    { at: "10 Sep 09.22", user: "Rina", branch: "melati", action: "Stok Sabun −1 (jual via nota)", nota: "MEL-2409-0042" },
+    { at: "10 Sep 08.41", user: "Rina", branch: "melati", action: "Nota MEL-2409-0040 masuk · Belum lunas", nota: "MEL-2409-0040" },
+    { at: "10 Sep 08.01", user: "Salsa", branch: "cibaduyut", action: "WA nota CIB-2409-0018 terkirim", nota: "CIB-2409-0018" },
+    { at: "09 Sep 16.40", user: "Dedi", branch: "melati", action: "Laundry MEL-2409-0041 → Selesai, bayar masih Belum lunas", nota: "MEL-2409-0041" },
   ],
 };
 
 const TABS = {
   owner: [
     { id: "home", label: "Antrian", icon: "home" },
-    { id: "kasir", label: "Nota", icon: "kasir" },
+    { id: "analytics", label: "Data", icon: "kasir" },
     { id: "customers", label: "Pelanggan", icon: "people" },
     { id: "inventory", label: "Stok", icon: "box" },
-    { id: "more", label: "Lainnya", icon: "more" },
+    { id: "more", label: "Modul", icon: "more" },
   ],
   kasir: [
     { id: "home", label: "Antrian", icon: "home" },
     { id: "kasir", label: "Nota", icon: "kasir" },
-    { id: "customers", label: "Pelanggan", icon: "people" },
+    { id: "wa-outbox", label: "WA", icon: "people" },
     { id: "inventory", label: "Stok", icon: "box" },
   ],
   supervisor: [{ id: "home", label: "Antrian", icon: "home" }],
@@ -129,31 +154,55 @@ const TABS = {
 const JUMPS = [
   { id: "login", label: "Login" },
   { id: "register", label: "Daftar" },
-  { id: "pending", label: "Nunggu approve" },
   { id: "home", label: "Antrian" },
   { id: "kasir", label: "Nota baru" },
-  { id: "bayar", label: "Bayar" },
-  { id: "nota", label: "WA nota" },
+  { id: "nota", label: "Kirim nota" },
+  { id: "wa-outbox", label: "WA pending" },
+  { id: "wa-archive", label: "WA archive" },
   { id: "queue-detail", label: "Detail antrian" },
-  { id: "wa-ready", label: "WA siap ambil" },
-  { id: "tutup-kas", label: "Tutup kas" },
-  { id: "customers", label: "Pelanggan" },
-  { id: "orders", label: "Cari nota" },
-  { id: "users", label: "User / pengajuan" },
-  { id: "roles", label: "Role" },
-  { id: "inventory", label: "Inventory" },
-  { id: "layanan", label: "Layanan" },
-  { id: "laporan", label: "Laporan Owner" },
+  { id: "branches", label: "Cabang" },
+  { id: "analytics", label: "Analytics Owner" },
+  { id: "inventory", label: "Stok" },
+  { id: "stok-history", label: "Mutasi stok" },
+  { id: "audit", label: "Audit trail" },
+  { id: "modules", label: "Modul" },
 ];
 
-function pipeMeta(id) {
-  return PIPE.find((p) => p.id === id) || PIPE[0];
+function branchOf(id) {
+  return BRANCHES.find((b) => b.id === (id || state.viewBranch)) || BRANCHES[0];
 }
 
-function payStatus(paid, total) {
-  if (paid <= 0) return { id: "belum", label: "Belum lunas" };
-  if (paid < total) return { id: "dp", label: "DP" };
-  return { id: "lunas", label: "Lunas" };
+function currentBranch() {
+  if (state.role === "owner") return branchOf(state.viewBranch);
+  if (state.role === "kasir") return branchOf(state.actor === "Salsa" ? "cibaduyut" : "melati");
+  return branchOf("melati");
+}
+
+function currentActor() {
+  if (state.role === "owner") return state.ownerName;
+  if (state.role === "supervisor") return "Andi";
+  return state.actor;
+}
+
+function laundryMeta(id) {
+  return LAUNDRY.find((p) => p.id === id) || LAUNDRY[0];
+}
+
+function hanging(o) {
+  return o.laundry !== "selesai" || o.pay !== "lunas";
+}
+
+function payChip(o) {
+  return o.pay === "lunas" ? { id: "lunas", label: "Lunas" } : { id: "belum", label: "Belum lunas" };
+}
+
+function visibleQueue() {
+  const b = currentBranch().id;
+  let rows = state.queue;
+  if (state.role !== "owner") rows = rows.filter((q) => q.branch === b);
+  else if (state.viewBranch !== "all") rows = rows.filter((q) => q.branch === state.viewBranch);
+  if (state.role === "owner" && state.viewKasir !== "all") rows = rows.filter((q) => q.kasir === state.viewKasir);
+  return rows;
 }
 
 function cartTotal() {
@@ -170,34 +219,71 @@ function methodLabel() {
   return { tunai: "Tunai", qris: "QRIS", transfer: "Transfer" }[state.payMethod] || "Tunai";
 }
 
-function notaText() {
-  const c = state.customer;
-  const st = payStatus(state.paid, cartTotal() || 30000);
-  const lines = (state.cart.length ? state.cart : [{ name: "Curing DO", qty: 3, unit: "kg", price: 10000 }])
-    .map((i) => `• ${i.name} ${i.qty} ${i.unit} x ${Rp(i.price)} = ${Rp(i.qty * i.price)}`)
-    .join("\n");
-  const total = cartTotal() || 30000;
-  return `Cuciin — Nota laundry
-${c.name}
-${c.address}
-WA ${c.phone}
+function nextNotaId(branchId) {
+  const b = branchOf(branchId);
+  const n = state.queue.filter((q) => q.branch === b.id).length + 43;
+  return `${b.code}-2409-${String(n).padStart(4, "0")}`;
+}
+
+function pushAudit(action, nota) {
+  state.audit.unshift({
+    at: "10 Sep 09.41",
+    user: currentActor(),
+    branch: currentBranch().id,
+    action,
+    nota: nota || "",
+  });
+}
+
+function notaText(order) {
+  const o = order || {
+    id: nextNotaId(currentBranch().id),
+    customer: state.customer.name,
+    phone: state.customer.phone,
+    address: state.customer.address,
+    items: (state.cart.length ? state.cart : [{ name: "Curing DO", qty: 3, unit: "kg", price: 10000 }])
+      .map((i) => `${i.name} ${i.qty} ${i.unit}`)
+      .join(", "),
+    total: cartTotal() || 30000,
+    paid: state.paid,
+    pay: state.paid >= (cartTotal() || 30000) ? "lunas" : "belum",
+    promise: state.promise,
+    pickupAt: state.promise,
+    createdAt: "10 Sep 2026, 09.41",
+    kasir: currentActor(),
+    branch: currentBranch().id,
+  };
+  const b = branchOf(o.branch);
+  const lines = o.items;
+  const pay = o.pay === "lunas" ? "Lunas" : "Belum lunas";
+  return `Cuciin — Nota ${o.id}
+Cabang  ${b.name}
+Lokasi  ${b.location}
+Maps    ${b.mapsLabel}
+Kasir   ${o.kasir}
+Waktu   ${o.createdAt}
+
+${o.customer}
+${o.address || ""}
+WA ${o.phone}
 
 ${lines}
 
-Total    ${Rp(total)}
-Dibayar  ${Rp(state.paid)}
-Sisa     ${Rp(Math.max(total - state.paid, 0))}
-Bayar    ${methodLabel()} · ${st.label}
-Janji    ${state.promise}${state.cart.some((i) => i.dropOut) ? "\nDrop Out — tidak perlu nunggu" : ""}`;
+Total     ${Rp(o.total)}
+Dibayar   ${Rp(o.paid)}
+Bayar     ${pay}
+Laundry   ${laundryMeta(o.laundry || "masuk").label}
+Selesai / pickup  ${o.pickupAt || o.promise}`;
 }
 
 function siapText(order) {
   const o = order || activeQueue();
+  const b = branchOf(o.branch);
   return `Cuciin — cucian siap diambil
-Hai ${o.customer}, cucian ${o.id} sudah siap.
+Hai ${o.customer}, nota ${o.id} sudah ${laundryMeta(o.laundry).label}.
 ${o.items}
-Ambil di Cuciin, Jl. Laundry Raya 1.
-Janji ${o.promise}.`;
+Ambil di ${b.name}, ${b.location}.
+Pickup ${o.pickupAt}.`;
 }
 
 function personInitials(name) {
@@ -205,17 +291,30 @@ function personInitials(name) {
 }
 
 function activeQueue() {
-  return state.queue.find((q) => q.id === state.activeQueueId) || state.queue[0];
+  return state.queue.find((q) => q.id === state.activeQueueId) || visibleQueue()[0] || state.queue[0];
 }
 
 function registerRoles() {
   return state.roles.filter((r) => !r.owner);
 }
 
-function go(screen) {
+function go(screen, opts = {}) {
+  if (!opts.replace && state.screen !== screen) state.history.push(state.screen);
+  if (opts.reset) state.history = [];
   state.screen = screen;
   state.loggedIn = !AUTH.includes(screen);
   render();
+}
+
+function goBack() {
+  const prev = state.history.pop();
+  if (prev) {
+    state.screen = prev;
+    state.loggedIn = !AUTH.includes(prev);
+    render();
+    return;
+  }
+  go(state.loggedIn ? "home" : "login", { replace: true });
 }
 
 function syncUrl() {
@@ -260,16 +359,17 @@ function navAllowed(id) {
   if (AUTH.includes(id)) return true;
   if (state.role === "owner") return true;
   if (state.role === "kasir") {
-    return ["home", "kasir", "customers", "customer-form", "pick-customer", "bayar", "nota", "wa-chat", "wa-ready", "orders", "pelunasan", "inventory", "stok-masuk", "tutup-kas", "queue-detail"].includes(id);
+    return ["home", "kasir", "customers", "customer-form", "bayar", "nota", "wa-chat", "wa-ready", "wa-outbox", "wa-archive", "orders", "pelunasan", "inventory", "stok-masuk", "stok-edit", "stok-history", "tutup-kas", "queue-detail", "audit"].includes(id);
   }
   if (state.role === "supervisor") {
-    return ["home", "queue-detail", "wa-ready", "inventory"].includes(id);
+    return ["home", "queue-detail", "wa-ready", "inventory", "stok-history"].includes(id);
   }
   return false;
 }
 
 function backBtn(to) {
-  return `<button class="icon-btn" data-go="${to}" aria-label="Kembali">←</button>`;
+  if (to) return `<button class="icon-btn" data-go="${to}" aria-label="Kembali">←</button>`;
+  return `<button class="icon-btn" data-back aria-label="Kembali">←</button>`;
 }
 
 function chipStatus(id, label) {
@@ -296,29 +396,49 @@ function authTabs(active) {
 }
 
 function stepper(current) {
-  return `<div class="steps">${PIPE.map((p) => {
-    const idx = PIPE.findIndex((x) => x.id === current);
-    const i = PIPE.findIndex((x) => x.id === p.id);
+  return `<div class="steps">${LAUNDRY.map((p) => {
+    const idx = LAUNDRY.findIndex((x) => x.id === current);
+    const i = LAUNDRY.findIndex((x) => x.id === p.id);
     const cls = i < idx ? "done" : i === idx ? "on" : "";
     return `<span class="${cls}">${p.label}</span>`;
   }).join("")}</div>`;
 }
 
+function branchPicker() {
+  if (state.role !== "owner") return "";
+  return `<div class="segment tight wrap">
+    <button class="${state.viewBranch === "all" ? "on" : ""}" data-branch="all">Semua cabang</button>
+    ${BRANCHES.map((b) => `<button class="${state.viewBranch === b.id ? "on" : ""}" data-branch="${b.id}">${b.name.replace("Cuciin ", "")}</button>`).join("")}
+  </div>`;
+}
+
+function kasirPicker() {
+  if (state.role !== "owner") return "";
+  const kasirs = state.users.filter((u) => u.role === "Kasir" && u.status === "approved" && (state.viewBranch === "all" || u.branches.includes(state.viewBranch)));
+  return `<div class="segment tight wrap">
+    <button class="${state.viewKasir === "all" ? "on" : ""}" data-kasir="all">Semua kasir</button>
+    ${kasirs.map((k) => `<button class="${state.viewKasir === k.name ? "on" : ""}" data-kasir="${k.name}">${k.name}</button>`).join("")}
+  </div>`;
+}
+
 function queueCard(o) {
-  const pay = payStatus(o.paid, o.total);
-  const pipe = pipeMeta(o.pipe);
-  return `<button class="card tap" data-open-queue="${o.id}">
+  const pay = payChip(o);
+  const hang = hanging(o);
+  const b = branchOf(o.branch);
+  return `<button class="card tap ${hang ? "hang" : ""}" data-open-queue="${o.id}">
     <div class="row">
       <div class="grow">
         <div class="name">${o.id} · ${o.customer}</div>
-        <div class="meta">${o.items} · janji ${o.promise}</div>
+        <div class="meta">${b.name.replace("Cuciin ", "")} · ${o.kasir} · ${o.items}</div>
+        <div class="meta">Pickup ${o.pickupAt}</div>
       </div>
     </div>
     <div class="chip-row">
       ${chipStatus(pay.id, pay.label)}
-      ${chipStatus("pipe", pipe.label)}
+      ${chipStatus(o.laundry, laundryMeta(o.laundry).label)}
+      ${hang ? '<span class="chip belum">Menggantung</span>' : '<span class="chip lunas">Selesai keduanya</span>'}
       ${o.dropOut ? '<span class="chip do">Drop Out</span>' : ""}
-      ${o.late ? '<span class="chip belum">Telat</span>' : ""}
+      ${o.waSent ? '<span class="chip pipe">WA terkirim</span>' : '<span class="chip belum">WA pending</span>'}
     </div>
   </button>`;
 }
@@ -327,7 +447,7 @@ function screenLogin() {
   return `<div class="login">
     <div class="mark">Ci</div>
     <h1>Cuciin</h1>
-    <p class="lede">Kasir dan SPV daftar dulu. Owner yang nyalain akses.</p>
+    <p class="lede">Owner: ${state.ownerName}. Kasir/SPV daftar per cabang.</p>
     ${authTabs("login")}
     <label class="form"><span>Email</span><input value="${state.role === "owner" ? state.ownerEmail : "rina@cuciin.id"}" /></label>
     <label class="form"><span>Password</span><input type="password" value="••••••••" /></label>
@@ -338,17 +458,19 @@ function screenLogin() {
 function screenRegister() {
   const roles = registerRoles();
   return `<div class="login">
+    ${backBtn("login")}
     <div class="mark">Ci</div>
     <h1>Daftar</h1>
-    <p class="lede">Pilih role. Kalau Owner bikin role baru, muncul di sini juga.</p>
+    <p class="lede">Pilih role + cabang. Owner yang approve.</p>
     ${authTabs("register")}
     <label class="form"><span>Nama</span><input value="Fajar Putra" /></label>
     <label class="form"><span>Email</span><input value="fajar@cuciin.id" /></label>
     <label class="form"><span>Password</span><input type="password" value="••••••••" /></label>
     <label class="form"><span>Daftar sebagai</span>
-      <select id="reg-role">
-        ${roles.map((r) => `<option ${r.name === "Kasir" ? "selected" : ""}>${r.name}</option>`).join("")}
-      </select>
+      <select id="reg-role">${roles.map((r) => `<option ${r.name === "Kasir" ? "selected" : ""}>${r.name}</option>`).join("")}</select>
+    </label>
+    <label class="form"><span>Cabang laundry</span>
+      <select id="reg-branch">${BRANCHES.map((b) => `<option value="${b.id}">${b.name}</option>`).join("")}</select>
     </label>
     <button class="btn primary" data-register>Kirim pendaftaran</button>
   </div>`;
@@ -356,85 +478,91 @@ function screenRegister() {
 
 function screenPending() {
   return `<div class="login">
+    ${backBtn("login")}
     <div class="mark">Ci</div>
     <h1>Nunggu Owner</h1>
-    <p class="lede">Akun Kasir lo sudah masuk. Belum bisa buka antrian atau kasir sebelum Tiftazani setujui.</p>
-    <div class="card"><div class="name">Fajar Putra</div><div class="meta">Kasir · menunggu persetujuan</div></div>
+    <p class="lede">Belum bisa buka antrian sebelum ${state.ownerName} setujui.</p>
+    <div class="card"><div class="name">Fajar Putra</div><div class="meta">Kasir · ${branchOf("melati").name}</div></div>
     <button class="btn ghost" data-go="login">Kembali ke masuk</button>
   </div>`;
 }
 
 function screenRejected() {
   return `<div class="login">
+    ${backBtn("login")}
     <h1>Ditolak</h1>
-    <p class="lede">Owner belum kasih akses. Hubungi Tiftazani.</p>
+    <p class="lede">Hubungi ${state.ownerName}.</p>
     <button class="btn primary" data-go="login">Ke halaman masuk</button>
   </div>`;
 }
 
 function screenHome() {
   const pending = state.users.filter((u) => u.status === "pending").length;
-  const aktif = state.queue.filter((q) => q.pipe !== "diambil");
-  const doCount = aktif.filter((q) => q.dropOut).length;
-  const late = aktif.filter((q) => q.late).length;
+  const all = visibleQueue();
+  const gantung = all.filter(hanging);
+  const done = all.filter((q) => !hanging(q));
+  const list = state.queueFilter === "selesai" ? done : state.queueFilter === "do" ? all.filter((q) => q.dropOut) : gantung;
+  const waPend = all.filter((q) => !q.waSent).length;
+  const b = currentBranch();
 
   if (state.role === "supervisor") {
-    const list = state.queueFilter === "do" ? aktif.filter((q) => q.dropOut) : aktif;
     return `<div class="screen has-fab">
-      <div class="top"><div><p class="sub">Supervisor · lantai</p><h1>Antrian</h1></div></div>
+      <div class="top">${backBtn()}<div><p class="sub">SPV · ${b.name}</p><h1>Antrian</h1></div></div>
+      <p class="meta" style="margin-bottom:10px">${b.location}</p>
       <div class="stats">
-        <div class="stat"><div class="k">Drop Out</div><div class="v">${doCount}</div></div>
-        <div class="stat"><div class="k">Telat janji</div><div class="v">${late}</div></div>
-        <div class="stat"><div class="k">Stok out</div><div class="v">9</div></div>
+        <div class="stat"><div class="k">Gantung</div><div class="v">${gantung.length}</div></div>
+        <div class="stat"><div class="k">Selesai</div><div class="v">${done.length}</div></div>
+        <div class="stat"><div class="k">Stok</div><div class="v">${state.products.length}</div></div>
       </div>
       <div class="segment tight">
-        <button class="${state.queueFilter === "aktif" ? "on" : ""}" data-qfilter="aktif">Aktif</button>
-        <button class="${state.queueFilter === "do" ? "on" : ""}" data-qfilter="do">Drop Out</button>
+        <button class="${state.queueFilter === "gantung" ? "on" : ""}" data-qfilter="gantung">Menggantung</button>
+        <button class="${state.queueFilter === "selesai" ? "on" : ""}" data-qfilter="selesai">Selesai</button>
       </div>
-      ${list.map(queueCard).join("")}
+      ${list.map(queueCard).join("") || `<p class="empty">Kosong</p>`}
     </div>`;
   }
 
   return `<div class="screen has-fab">
-    <div class="top">
-      <div>
-        <p class="sub">Halo, ${state.role === "owner" ? "Tiftazani" : "Rina"}</p>
-        <h1>Antrian</h1>
-      </div>
-    </div>
+    <div class="top">${backBtn()}<div>
+      <p class="sub">${state.role === "owner" ? state.ownerName : currentActor() + " · " + b.name}</p>
+      <h1>Antrian</h1>
+    </div></div>
+    ${branchPicker()}
+    ${kasirPicker()}
     ${
       state.role === "owner"
-        ? `<button class="card tap" data-go="laporan"><div class="name">Laporan mingguan & bulanan</div><div class="meta">Export Excel atau PDF</div></button>`
+        ? `<button class="card tap" data-go="analytics"><div class="name">Analytics keuangan</div><div class="meta">Harian · mingguan · bulanan · tahunan per cabang & kasir</div></button>`
         : ""
     }
-    ${
-      state.role === "owner" && pending
-        ? `<button class="card tap warn" data-go="users"><div class="name">${pending} pengajuan akun</div><div class="meta">Setujui Kasir / SPV / role baru</div></button>`
-        : ""
-    }
+    ${state.role === "owner" && pending ? `<button class="card tap warn" data-go="users"><div class="name">${pending} pengajuan akun</div><div class="meta">Kasir / SPV per cabang</div></button>` : ""}
     ${
       state.role !== "supervisor"
         ? `<div class="hero">
-            <div class="k">Omzet hari ini</div>
-            <div class="v">${Rp(1284000)}</div>
+            <div class="k">${state.role === "owner" ? "Gabungan kasir di cabang ini" : "Shift " + currentActor()}</div>
+            <div class="v">${Rp(state.viewBranch === "cibaduyut" ? 28000 : 1284000)}</div>
             <div class="hero-row">
-              <span class="pill">${aktif.length} antrian</span>
-              <span class="pill">${doCount} Drop Out</span>
-              <span class="pill">${late} telat</span>
+              <span class="pill">${gantung.length} menggantung</span>
+              <span class="pill">${waPend} WA pending</span>
+              <span class="pill">${done.length} beres</span>
             </div>
           </div>`
         : ""
     }
-    <div class="section-label">Hari ini <span>geser status, bukan nambah nota</span></div>
-    ${aktif.map(queueCard).join("")}
-    ${state.role === "kasir" || state.role === "owner" ? `<button class="btn ghost" data-go="tutup-kas">Tutup kas shift ini</button>` : ""}
+    <div class="segment tight">
+      <button class="${state.queueFilter === "gantung" ? "on" : ""}" data-qfilter="gantung">Menggantung</button>
+      <button class="${state.queueFilter === "selesai" ? "on" : ""}" data-qfilter="selesai">Selesai</button>
+      <button class="${state.queueFilter === "do" ? "on" : ""}" data-qfilter="do">Drop Out</button>
+    </div>
+    <p class="section-label">Gantung = laundry atau bayar belum beres</p>
+    ${list.map(queueCard).join("") || `<p class="empty">Tidak ada nota di filter ini</p>`}
+    ${state.role === "kasir" || state.role === "owner" ? `<button class="btn ghost" data-go="tutup-kas">Tutup kas</button>` : ""}
     ${state.role !== "supervisor" ? `<button class="fab" data-go="kasir">+ Nota baru</button>` : ""}
   </div>`;
 }
 
 function screenCustomers() {
   return `<div class="screen">
-    <div class="top"><div><p class="sub">Nama · alamat · HP</p><h1>Pelanggan</h1></div></div>
+    <div class="top">${backBtn()}<div><p class="sub">${currentBranch().name}</p><h1>Pelanggan</h1></div></div>
     <input class="search" placeholder="Cari nama atau HP" />
     ${CUSTOMERS.map((c) => `
       <button class="card tap" data-pick-customer="${c.id}" data-go="kasir">
@@ -454,7 +582,7 @@ function screenCustomers() {
 
 function screenCustomerForm() {
   return `<div class="screen">
-    <div class="top">${backBtn("customers")}<h1>Pelanggan baru</h1><span></span></div>
+    <div class="top">${backBtn()}<h1>Pelanggan baru</h1><span></span></div>
     <label class="form"><span>Nama</span><input placeholder="Nama lengkap" /></label>
     <label class="form"><span>Alamat</span><textarea rows="2" placeholder="Alamat"></textarea></label>
     <label class="form"><span>No. HP / WhatsApp</span><input placeholder="08xxxxxxxxxx" /></label>
@@ -464,8 +592,9 @@ function screenCustomerForm() {
 
 function screenKasir() {
   const c = state.customer;
+  const b = currentBranch();
   return `<div class="screen">
-    <div class="top"><div><p class="sub">Satu nota, satu jalur</p><h1>Nota baru</h1></div></div>
+    <div class="top">${backBtn()}<div><p class="sub">${b.name} · ID berikutnya ${nextNotaId(b.id)}</p><h1>Nota baru</h1></div></div>
     <button class="card tap" data-go="customers">
       <div class="row">
         <div class="avatar">${c.initials}</div>
@@ -477,10 +606,8 @@ function screenKasir() {
         <span class="meta">ganti</span>
       </div>
     </button>
-    <div class="section-label">Layanan kami <span>ikon per jenis</span></div>
-    <div class="grid-svc">
-      ${SERVICES.map(svcTile).join("")}
-    </div>
+    <div class="section-label">Layanan <span>retail otomatis potong stok</span></div>
+    <div class="grid-svc">${SERVICES.map(svcTile).join("")}</div>
     <div class="cart dock">
       ${
         state.cart.length
@@ -496,65 +623,112 @@ function screenKasir() {
 function screenBayar() {
   const total = cartTotal() || 85000;
   const paid = state.paid;
-  const st = payStatus(paid, total);
+  const lunas = paid >= total;
   const sisa = Math.max(total - paid, 0);
   return `<div class="screen">
-    <div class="top">${backBtn("kasir")}<h1>Janji & bayar</h1><span></span></div>
+    <div class="top">${backBtn()}<h1>Janji & bayar</h1><span></span></div>
     <div class="pay-box">
       <p class="sub">Total nota</p>
       <div class="total">${Rp(total)}</div>
-      ${chipStatus(st.id, st.label)}
+      ${chipStatus(lunas ? "lunas" : "belum", lunas ? "Lunas" : "Belum lunas")}
     </div>
-    <label class="form"><span>Janji selesai</span><input value="${state.promise}" /></label>
+    <label class="form"><span>Kapan selesai / bisa pickup</span><input id="promise-input" value="${state.promise}" /></label>
     <p class="section-label">Metode</p>
     <div class="methods">
       ${["tunai", "qris", "transfer"].map((m) => `<button class="${state.payMethod === m ? "on" : ""}" data-method="${m}">${{ tunai: "Tunai", qris: "QRIS", transfer: "Transfer" }[m]}</button>`).join("")}
     </div>
     <label class="form"><span>Dibayar sekarang</span><input id="paid-input" inputmode="numeric" value="${paid}" /></label>
     <div class="pay-quick">
-      <button data-paid="0">0</button>
-      <button data-paid="${Math.round(total / 2)}">DP setengah</button>
+      <button data-paid="0">0 · Belum lunas</button>
       <button data-paid="${total}">Lunas</button>
     </div>
     <p class="sisa">Sisa tagihan <b>${Rp(sisa)}</b></p>
-    <button class="btn primary" data-go="nota">Simpan & WA nota</button>
+    <button class="btn primary" data-go="nota">Simpan nota</button>
   </div>`;
+}
+
+function exportNota(kind, order) {
+  const text = notaText(order);
+  if (kind === "text") {
+    navigator.clipboard?.writeText(text);
+    showToast("Teks nota tersalin");
+    return;
+  }
+  if (kind === "xlsx") {
+    const o = order || activeQueue();
+    const b = branchOf(o.branch);
+    const csv = `ID,Cabang,Waktu,Kasir,Pelanggan,HP,Item,Total,Dibayar,Status bayar,Status laundry,Pickup\n${o.id},${b.name},${o.createdAt},${o.kasir},${o.customer},${o.phone},"${o.items}",${o.total},${o.paid},${payChip(o).label},${laundryMeta(o.laundry).label},${o.pickupAt}\n`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+    a.download = `${o.id}.csv`;
+    a.click();
+    showToast("Excel (CSV) terunduh");
+    return;
+  }
+  const w = window.open("", "_blank");
+  if (w) {
+    w.document.write(`<html><head><title>${order?.id || "Nota"}</title></head><body style="font-family:sans-serif;padding:24px;white-space:pre-wrap">${text}\n\nPrint → Save as PDF</body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
+  showToast("PDF: Print / Save as PDF");
 }
 
 function screenNota() {
   const c = state.customer;
+  const draft = {
+    id: nextNotaId(currentBranch().id),
+    branch: currentBranch().id,
+    kasir: currentActor(),
+    customer: c.name,
+    phone: c.phone,
+    address: c.address,
+    items: (state.cart.length ? state.cart : [{ name: "Curing DO", qty: 3, unit: "kg", price: 10000 }]).map((i) => `${i.name} ${i.qty} ${i.unit}`).join(", "),
+    total: cartTotal() || 30000,
+    paid: state.paid,
+    pay: state.paid >= (cartTotal() || 30000) ? "lunas" : "belum",
+    laundry: "masuk",
+    promise: state.promise,
+    pickupAt: state.promise,
+    createdAt: "10 Sep 2026, 09.41",
+  };
   return `<div class="screen">
-    <div class="top">${backBtn("bayar")}<h1>Kirim nota</h1><span></span></div>
-    <p class="meta" style="margin-bottom:10px">WhatsApp ke ${c.phone}</p>
-    <div class="nota">${notaText()}</div>
-    <button class="btn wa" data-wa="nota">Kirim WhatsApp</button>
-    <button class="btn ghost" data-go="home">Masuk antrian, WA nanti</button>
+    <div class="top">${backBtn()}<h1>Nota ${draft.id}</h1><span></span></div>
+    <p class="meta" style="margin-bottom:8px">${currentBranch().name} · ${draft.kasir} · ${draft.createdAt}</p>
+    <div class="nota">${notaText(draft)}</div>
+    <div class="row-actions">
+      <button class="btn ghost" data-nota-export="text">Teks</button>
+      <button class="btn ghost" data-nota-export="xlsx">Excel</button>
+      <button class="btn ghost" data-nota-export="pdf">PDF</button>
+    </div>
+    <button class="btn wa" data-save-nota="send">Simpan & kirim WA</button>
+    <button class="btn ghost" data-save-nota="later">Simpan, WA nanti</button>
   </div>`;
 }
 
 function waScreen(kind) {
-  const c = kind === "siap" ? { name: activeQueue().customer, phone: activeQueue().phone, initials: personInitials(activeQueue().customer) } : state.customer;
-  const body = kind === "siap" ? siapText() : notaText();
-  const back = kind === "siap" ? "queue-detail" : "nota";
-  const doneGo = kind === "siap" ? "home" : "home";
+  const o = kind === "siap" ? activeQueue() : activeQueue();
+  const c = { name: o.customer, phone: o.phone, initials: personInitials(o.customer) };
+  const body = kind === "siap" ? siapText(o) : notaText(o);
   return `<div class="screen" style="padding:0">
     <div class="wa-app">
       <div class="wa-head">
-        ${backBtn(back)}
+        ${backBtn()}
         <div class="avatar">${c.initials || "WA"}</div>
         <div class="grow">
           <div class="name">${c.name}</div>
-          <div class="meta">${c.phone} · WhatsApp</div>
+          <div class="meta">${c.phone} · ${o.id}</div>
         </div>
       </div>
-      ${state.waSent ? `<div class="wa-sent-banner">${kind === "siap" ? "Siap ambil terkirim" : "Nota terkirim"} · ${c.phone}</div>` : ""}
+      ${state.waSent ? `<div class="wa-sent-banner">${kind === "siap" ? "Siap ambil terkirim" : "Nota terkirim"} · masuk archive</div>` : ""}
       <div class="wa-thread">
         <div class="wa-bubble">${body}<div class="wa-time">${state.waSent ? "09.41 ✓✓" : "draft"}</div></div>
       </div>
       ${
         state.waSent
-          ? `<button class="btn primary" style="margin:0 12px 16px;width:auto" data-go="${doneGo}">${kind === "siap" ? "Kembali ke antrian" : "Lanjut ke antrian"}</button>`
-          : `<div class="wa-composer"><p class="hint">${kind === "siap" ? "Siap diambil" : "Nota"} siap dikirim</p>
+          ? `<button class="btn primary" style="margin:0 12px 16px;width:auto" data-go="wa-archive">Lihat archive WA</button>`
+          : `<div class="wa-composer"><p class="hint">Kirim dari HP · list pending tetap ada sampai terkirim</p>
               <button class="wa-send" data-wa-send aria-label="Kirim">➤</button></div>`
       }
     </div>
@@ -568,59 +742,118 @@ function screenWaReady() {
   return waScreen("siap");
 }
 
+function screenWaOutbox() {
+  const pending = visibleQueue().filter((q) => !q.waSent);
+  return `<div class="screen">
+    <div class="top">${backBtn()}<div><p class="sub">Belum dikirim</p><h1>WA pending</h1></div></div>
+    <div class="segment tight">
+      <button class="on" data-go="wa-outbox">Pending</button>
+      <button data-go="wa-archive">Archive</button>
+    </div>
+    <p class="meta" style="margin-bottom:10px">List ini tetap ada selama belum dikirim. Setelah kirim, pindah ke archive.</p>
+    ${
+      pending.map((o) => `<div class="card">
+        <div class="name">${o.id} · ${o.customer}</div>
+        <div class="meta">${o.phone} · ${o.createdAt}</div>
+        <div class="row-actions">
+          <button class="btn wa" data-open-queue="${o.id}" data-wa="nota">Kirim sekarang</button>
+        </div>
+      </div>`).join("") || `<p class="empty">Semua nota sudah dikirim WA</p>`
+    }
+  </div>`;
+}
+
+function screenWaArchive() {
+  const sent = visibleQueue().filter((q) => q.waSent);
+  return `<div class="screen">
+    <div class="top">${backBtn()}<div><p class="sub">Sudah dikirim, tetap bisa dibuka</p><h1>WA archive</h1></div></div>
+    <div class="segment tight">
+      <button data-go="wa-outbox">Pending</button>
+      <button class="on" data-go="wa-archive">Archive</button>
+    </div>
+    ${
+      sent.map((o) => `<button class="card tap" data-open-queue="${o.id}">
+        <div class="name">${o.id} · ${o.customer}</div>
+        <div class="meta">Terkirim ${o.waAt} · ${o.phone}</div>
+      </button>`).join("") || `<p class="empty">Archive kosong</p>`
+    }
+  </div>`;
+}
+
 function screenQueueDetail() {
   const o = activeQueue();
-  const pipe = pipeMeta(o.pipe);
-  const pay = payStatus(o.paid, o.total);
+  const pay = payChip(o);
+  const hang = hanging(o);
+  const b = branchOf(o.branch);
+  const next = laundryMeta(o.laundry).next;
   return `<div class="screen">
-    <div class="top">${backBtn("home")}<h1>${o.id}</h1><span></span></div>
+    <div class="top">${backBtn()}<h1>${o.id}</h1><span></span></div>
     <div class="card">
       <div class="name">${o.customer}</div>
-      <div class="meta">${o.phone}</div>
+      <div class="meta">${o.phone} · kasir ${o.kasir}</div>
+      <div class="meta">${b.name} · ${b.location}</div>
+      <div class="meta"><a href="${b.maps}" target="_blank" rel="noopener">Maps ${b.mapsLabel}</a></div>
       <div class="meta">${o.items}</div>
-      <div class="chip-row">${chipStatus(pay.id, pay.label)} ${o.dropOut ? '<span class="chip do">Drop Out</span>' : ""}</div>
-      <div class="meta">Janji ${o.promise}</div>
+      <div class="meta">Dibuat ${o.createdAt}</div>
+      <div class="meta">Pickup ${o.pickupAt}</div>
+      <div class="chip-row">${chipStatus(pay.id, pay.label)} ${chipStatus(o.laundry, laundryMeta(o.laundry).label)} ${hang ? '<span class="chip belum">Menggantung</span>' : '<span class="chip lunas">Beres</span>'}</div>
     </div>
-    <p class="section-label">Progres cucian</p>
-    ${stepper(o.pipe)}
+    <p class="section-label">Status laundry</p>
+    ${stepper(o.laundry)}
     ${
-      o.pipe === "diambil"
-        ? `<p class="empty">Sudah diambil.</p>`
-        : o.pipe === "siap"
-          ? `<button class="btn wa" data-wa="siap">WA siap diambil</button>
-             <button class="btn primary" data-mark-taken>Tandai sudah diambil</button>`
-          : `<button class="btn primary" data-advance-pipe>Lanjut: ${pipeMeta(pipe.next).label}</button>`
+      o.laundry !== "selesai" && state.role !== "owner"
+        ? `<button class="btn primary" data-advance-pipe>Lanjut: ${laundryMeta(next).label}</button>`
+        : ""
     }
+    ${
+      o.pay !== "lunas" && state.role !== "supervisor"
+        ? `<button class="btn ghost" data-open-order="${o.id}">Tandai lunas / pelunasan</button>`
+        : ""
+    }
+    <p class="section-label">Bukti di HP <span>bukan cloud</span></p>
+    ${(o.photos || []).map((p) => `<div class="card"><div class="name">📷 ${p.name}</div><div class="meta">Lokal handphone kasir</div></div>`).join("") || `<p class="meta">Belum ada foto/dokumen</p>`}
+    ${
+      state.role !== "supervisor"
+        ? `<label class="form"><span>Upload bukti (tersimpan di HP)</span><input type="file" accept="image/*,.pdf" id="bukti-file" /></label>`
+        : ""
+    }
+    <div class="row-actions">
+      <button class="btn ghost" data-nota-export="text">Teks</button>
+      <button class="btn ghost" data-nota-export="xlsx">Excel</button>
+      <button class="btn ghost" data-nota-export="pdf">PDF</button>
+    </div>
+    ${!o.waSent ? `<button class="btn wa" data-wa="nota">Kirim WA nota</button>` : `<button class="btn ghost" data-go="wa-archive">Sudah di archive WA</button>`}
+    ${o.laundry === "selesai" ? `<button class="btn wa" data-wa="siap">WA siap diambil</button>` : ""}
   </div>`;
 }
 
 function screenOrders() {
   const q = state.searchQ.toLowerCase();
-  const rows = state.queue.filter((o) => !q || o.id.toLowerCase().includes(q) || o.customer.toLowerCase().includes(q) || o.phone.includes(q));
+  const rows = visibleQueue().filter((o) => !q || o.id.toLowerCase().includes(q) || o.customer.toLowerCase().includes(q) || o.phone.includes(q));
   return `<div class="screen">
-    <div class="top"><div><p class="sub">Nomor · nama · HP</p><h1>Cari nota</h1></div></div>
-    <input class="search" id="nota-search" placeholder="CU-2401… atau nama" value="${state.searchQ}" />
+    <div class="top">${backBtn()}<div><p class="sub">ID beda per cabang</p><h1>Cari nota</h1></div></div>
+    <input class="search" id="nota-search" placeholder="MEL-2409… atau nama" value="${state.searchQ}" />
     ${rows.map(queueCard).join("") || `<p class="empty">Tidak ketemu</p>`}
   </div>`;
 }
 
 function screenPelunasan() {
-  const o = state.payTarget || state.orders[0];
+  const o = state.payTarget || visibleQueue().find((x) => x.pay !== "lunas") || activeQueue();
   const sisa = o.total - o.paid;
   return `<div class="screen">
-    <div class="top">${backBtn("orders")}<h1>Pelunasan</h1><span></span></div>
+    <div class="top">${backBtn()}<h1>Pelunasan</h1><span></span></div>
     <div class="card">
       <div class="name">${o.id} · ${o.customer}</div>
       <p class="sisa">Sisa tagihan <b>${Rp(sisa)}</b></p>
     </div>
     <label class="form"><span>Bayar tambahan</span><input value="${sisa}" /></label>
-    <button class="btn wa" data-toast="Update sisa dikirim WA" data-go="orders">Bayar & kirim WA</button>
+    <button class="btn primary" data-mark-lunas="${o.id}">Tandai lunas</button>
   </div>`;
 }
 
 function screenLayanan() {
   return `<div class="screen">
-    <div class="top"><div><p class="sub">Tambah / hapus</p><h1>Layanan</h1></div></div>
+    <div class="top">${backBtn()}<div><p class="sub">Modul layanan</p><h1>Layanan</h1></div></div>
       ${SERVICES.map((s) => {
         const ico = SVC_ICON[s.id] || SVC_ICON.cuci;
         return `<button class="card tap" data-go="layanan-form">
@@ -628,7 +861,6 @@ function screenLayanan() {
           <div class="svc-ico" style="background:${ico.bg}">${ico.svg}</div>
           <div class="grow">
             <div class="name">${s.name} ${s.dropOut ? '<span class="chip do">Drop Out</span>' : ""}</div>
-            <div class="meta">${s.desc}</div>
             <div class="meta">${Rp(s.price)} / ${s.unit === "kg" ? "kiloan" : "satuan"}</div>
           </div>
         </div>
@@ -640,7 +872,7 @@ function screenLayanan() {
 
 function screenLayananForm() {
   return `<div class="screen">
-    <div class="top">${backBtn("layanan")}<h1>Layanan</h1><span></span></div>
+    <div class="top">${backBtn()}<h1>Layanan</h1><span></span></div>
     <label class="form"><span>Nama</span><input value="Curing DO Lipat" /></label>
     <label class="form"><span>Keterangan</span><textarea rows="2">Drop Out + dilipat rapi</textarea></label>
     <label class="form"><span>Tarif (Rp)</span><input value="12000" /></label>
@@ -654,39 +886,67 @@ function screenLayananForm() {
 }
 
 function screenInventory() {
-  const totalIn = state.products.reduce((s, p) => s + p.in, 0);
-  const totalOut = state.products.reduce((s, p) => s + p.out, 0);
+  const moves = state.stockMoves.filter((m) => state.role === "owner" || m.branch === currentBranch().id);
+  const periodLabel = { hari: "Hari ini", "7hari": "7 hari", bulan: "Bulan ini" }[state.stockPeriod] || "7 hari";
   return `<div class="screen">
-    <div class="top"><div><p class="sub">Retail</p><h1>Stok</h1></div></div>
-    <div class="stats">
-      <div class="stat"><div class="k">Masuk</div><div class="v">${totalIn}</div></div>
-      <div class="stat"><div class="k">Keluar</div><div class="v">${totalOut}</div></div>
-      <div class="stat"><div class="k">Item</div><div class="v">${state.products.length}</div></div>
+    <div class="top">${backBtn()}<div><p class="sub">Track per periode</p><h1>Stok</h1></div></div>
+    <div class="segment tight">
+      <button class="${state.stockPeriod === "hari" ? "on" : ""}" data-speriod="hari">Harian</button>
+      <button class="${state.stockPeriod === "7hari" ? "on" : ""}" data-speriod="7hari">7 hari</button>
+      <button class="${state.stockPeriod === "bulan" ? "on" : ""}" data-speriod="bulan">Bulanan</button>
     </div>
-    ${state.products.map((p) => `
-      <div class="card">
+    ${state.products.map((p) => {
+      const rel = moves.filter((m) => m.product === p.name);
+      const jual = rel.filter((m) => m.kind === "jual").reduce((s, m) => s + m.qty, 0);
+      const manual = rel.filter((m) => m.kind !== "jual").reduce((s, m) => s + (typeof m.qty === "number" && m.kind !== "update" ? m.qty : 0), 0);
+      return `<div class="card">
         <div class="name">${p.name} ${p.stock <= p.min ? '<span class="chip belum">Rendah</span>' : ""}</div>
-        <div class="meta">Sisa ${p.stock} · masuk ${p.in} · keluar ${p.out}</div>
-      </div>`).join("")}
-    ${state.role !== "supervisor" ? `<button class="fab" data-go="stok-masuk">+ Stok masuk</button>` : ""}
+        <div class="meta">Sisa ${p.stock} · ${periodLabel}</div>
+        <div class="meta">Jual via nota ${jual} · edit manual ${manual > 0 ? "+" + manual : manual}</div>
+      </div>`;
+    }).join("")}
+    <button class="btn ghost" data-go="stok-history">Lihat mutasi tanggal</button>
+    ${state.role !== "supervisor" ? `<button class="fab" data-go="stok-edit">Ubah stok</button>` : ""}
   </div>`;
 }
 
 function screenStokMasuk() {
+  return screenStokEdit();
+}
+
+function screenStokEdit() {
   return `<div class="screen">
-    <div class="top">${backBtn("inventory")}<h1>Stok masuk</h1><span></span></div>
+    <div class="top">${backBtn()}<h1>Ubah stok</h1><span></span></div>
+    <p class="meta" style="margin-bottom:10px">Bisa berkurang otomatis pas pelanggan beli retail, atau kasir edit manual.</p>
     <label class="form"><span>Produk</span>
-      <select><option>Sabun</option><option>Softener</option><option>Parfum uk 100</option></select>
+      <select id="stok-produk">${state.products.map((p) => `<option>${p.name}</option>`).join("")}</select>
     </label>
-    <label class="form"><span>Jumlah</span><input value="12" /></label>
-    <button class="btn primary" data-toast="Stok masuk tercatat" data-go="inventory">Simpan</button>
+    <div class="segment tight">
+      <button class="${state.stockEditKind === "tambah" ? "on" : ""}" data-skind="tambah">Tambah</button>
+      <button class="${state.stockEditKind === "kurang" ? "on" : ""}" data-skind="kurang">Kurang</button>
+      <button class="${state.stockEditKind === "update" ? "on" : ""}" data-skind="update">Update</button>
+    </div>
+    <label class="form"><span>Jumlah</span><input id="stok-qty" value="12" /></label>
+    <button class="btn primary" data-save-stok>Simpan mutasi</button>
+  </div>`;
+}
+
+function screenStokHistory() {
+  const rows = state.stockMoves.filter((m) => state.role === "owner" || m.branch === currentBranch().id);
+  return `<div class="screen">
+    <div class="top">${backBtn()}<div><p class="sub">Perubahan per tanggal</p><h1>Mutasi stok</h1></div></div>
+    ${rows.map((m) => `<div class="card">
+      <div class="name">${m.product} · ${m.kind} ${m.kind === "update" ? "→ " + m.qty : m.qty}</div>
+      <div class="meta">${m.at} · ${m.by} · ${branchOf(m.branch).name}</div>
+      <div class="meta">${m.nota ? "Nota " + m.nota : m.note || "Manual"}</div>
+    </div>`).join("")}
   </div>`;
 }
 
 function screenUsers() {
   const list = state.users.filter((u) => (state.userFilter === "pengajuan" ? u.status === "pending" : u.status === "approved"));
   return `<div class="screen">
-    <div class="top"><div><p class="sub">Owner yang nyalain</p><h1>User</h1></div></div>
+    <div class="top">${backBtn()}<div><p class="sub">1 cabang: ≥1 kasir + SPV</p><h1>User</h1></div></div>
     <div class="segment tight">
       <button class="${state.userFilter === "pengajuan" ? "on" : ""}" data-ufilter="pengajuan">Pengajuan</button>
       <button class="${state.userFilter === "aktif" ? "on" : ""}" data-ufilter="aktif">Aktif</button>
@@ -694,7 +954,7 @@ function screenUsers() {
     ${list.map((u) => `
       <div class="card">
         <div class="name">${u.name}</div>
-        <div class="meta">${u.role} · ${u.status}</div>
+        <div class="meta">${u.role} · ${(u.branches || []).map((id) => branchOf(id).name.replace("Cuciin ", "")).join(", ")}</div>
         ${u.status === "pending" ? `<div class="row-actions">
           <button class="btn primary" data-approve="${u.name}">Setujui</button>
           <button class="btn danger" data-reject="${u.name}">Tolak</button>
@@ -705,7 +965,7 @@ function screenUsers() {
 
 function screenRoles() {
   return `<div class="screen">
-    <div class="top"><div><p class="sub">Role baru ikut dropdown Daftar</p><h1>Role</h1></div></div>
+    <div class="top">${backBtn()}<div><p class="sub">Modular per modul</p><h1>Role</h1></div></div>
     ${state.roles.map((r) => `
       <div class="card">
         <div class="name">${r.name} ${r.owner ? '<span class="chip pipe">bukan daftar publik</span>' : ""}</div>
@@ -720,66 +980,134 @@ function screenRoles() {
   </div>`;
 }
 
+function screenBranches() {
+  return `<div class="screen">
+    <div class="top">${backBtn()}<div><p class="sub">Database cabang</p><h1>Laundry</h1></div></div>
+    ${BRANCHES.map((b) => {
+      const kasir = state.users.filter((u) => u.role === "Kasir" && u.status === "approved" && u.branches.includes(b.id));
+      const spv = state.users.filter((u) => u.role === "Supervisor" && u.status === "approved" && u.branches.includes(b.id));
+      return `<div class="card">
+        <div class="name">${b.name}</div>
+        <div class="meta">${b.location}</div>
+        <div class="meta"><a href="${b.maps}" target="_blank" rel="noopener">Maps ${b.mapsLabel}</a></div>
+        <div class="meta">Kasir: ${kasir.map((k) => k.name).join(", ") || "—"}</div>
+        <div class="meta">SPV: ${spv.map((k) => k.name).join(", ") || "—"}</div>
+        <div class="meta">Kode nota ${b.code}-… (beda dari cabang lain)</div>
+      </div>`;
+    }).join("")}
+    <button class="fab" data-go="branch-form">+ Cabang</button>
+  </div>`;
+}
+
+function screenBranchForm() {
+  return `<div class="screen">
+    <div class="top">${backBtn()}<h1>Cabang baru</h1><span></span></div>
+    <label class="form"><span>Nama laundry</span><input placeholder="Cuciin …" /></label>
+    <label class="form"><span>Lokasi</span><textarea rows="2" placeholder="Alamat cabang"></textarea></label>
+    <label class="form"><span>Titik Google Maps</span><input placeholder="-6.91, 107.61" /></label>
+    <button class="btn primary" data-toast="Cabang tersimpan (mock)" data-go="branches">Simpan</button>
+  </div>`;
+}
+
 function screenProfil() {
   return `<div class="screen">
-    <div class="top">${backBtn("more")}<h1>Profil usaha</h1><span></span></div>
-    <label class="form"><span>Nama laundry</span><input value="Cuciin" /></label>
-    <label class="form"><span>Alamat</span><textarea rows="2">Jl. Laundry Raya 1, Bandung</textarea></label>
+    <div class="top">${backBtn()}<h1>Profil usaha</h1><span></span></div>
+    <label class="form"><span>Owner</span><input value="${state.ownerName}" /></label>
     <label class="form"><span>Email Owner</span><input id="owner-email" value="${state.ownerEmail}" /></label>
-    <p class="meta" style="margin-bottom:12px">Bisa diubah. Default awal: tiftazani.khara@gmail.com</p>
+    <p class="meta" style="margin-bottom:12px">Cabang dikelola di modul Laundry, bukan di sini.</p>
     <button class="btn ghost" data-toast="Permintaan hapus akun (syarat Play)">Hapus akun saya</button>
     <button class="btn primary" data-save-profil>Simpan</button>
   </div>`;
 }
 
 function reportData() {
-  return state.reportPeriod === "minggu"
-    ? { label: "Minggu ini · 4–10 Sep", omzet: 3210000, nota: 18, dropOut: 12, piutang: 54000, bars: [40, 55, 35, 70, 90, 60, 78] }
-    : { label: "September 2026", omzet: 12840000, nota: 86, dropOut: 48, piutang: 186000, bars: [30, 45, 50, 62, 80, 70, 88, 75] };
+  const period = {
+    hari: { label: "Hari ini · 10 Sep 2026", omzet: 1284000, nota: 4, gantung: 2, bars: [20, 40, 35, 70, 90, 55, 78] },
+    minggu: { label: "Minggu ini · 4–10 Sep", omzet: 3210000, nota: 18, gantung: 5, bars: [40, 55, 35, 70, 90, 60, 78] },
+    bulan: { label: "September 2026", omzet: 12840000, nota: 86, gantung: 11, bars: [30, 45, 50, 62, 80, 70, 88] },
+    tahun: { label: "2026", omzet: 86400000, nota: 640, gantung: 18, bars: [22, 40, 48, 55, 70, 80, 90] },
+  }[state.reportPeriod];
+  const bMul = state.viewBranch === "cibaduyut" ? 0.22 : state.viewBranch === "all" ? 1 : 0.78;
+  const kMul = state.viewKasir === "Dedi" ? 0.35 : state.viewKasir === "Salsa" ? 0.22 : state.viewKasir === "Rina" ? 0.43 : 1;
+  const mul = bMul * (state.viewKasir === "all" ? 1 : kMul);
+  return {
+    ...period,
+    omzet: Math.round(period.omzet * mul),
+    nota: Math.max(1, Math.round(period.nota * mul)),
+    gantung: Math.round(period.gantung * (state.viewBranch === "all" ? 1 : 0.7)),
+  };
 }
 
-function screenLaporan() {
+function screenAnalytics() {
   const r = reportData();
+  const perKasir = state.users.filter((u) => u.role === "Kasir" && u.status === "approved" && (state.viewBranch === "all" || u.branches.includes(state.viewBranch)));
   return `<div class="screen">
-    <div class="top">${backBtn("more")}<h1>Laporan</h1><span></span></div>
-    <div class="segment tight">
-      <button class="${state.reportPeriod === "minggu" ? "on" : ""}" data-rperiod="minggu">Mingguan</button>
-      <button class="${state.reportPeriod === "bulan" ? "on" : ""}" data-rperiod="bulan">Bulanan</button>
+    <div class="top">${backBtn()}<div><p class="sub">Owner · ${state.ownerName}</p><h1>Analytics</h1></div></div>
+    <div class="segment tight wrap">
+      ${["hari", "minggu", "bulan", "tahun"].map((p) => `<button class="${state.reportPeriod === p ? "on" : ""}" data-rperiod="${p}">${{ hari: "Harian", minggu: "Mingguan", bulan: "Bulanan", tahun: "Tahunan" }[p]}</button>`).join("")}
     </div>
-    <p class="meta" style="margin-bottom:10px">${r.label} · ${state.ownerEmail}</p>
+    ${branchPicker()}
+    ${kasirPicker()}
+    <p class="meta" style="margin-bottom:10px">${r.label} · data = gabungan kasir di cabang</p>
     <div class="hero">
       <div class="k">Omzet</div>
       <div class="v">${Rp(r.omzet)}</div>
       <div class="hero-row">
         <span class="pill">${r.nota} nota</span>
-        <span class="pill">${r.dropOut} Drop Out</span>
-        <span class="pill">Piutang ${Rp(r.piutang)}</span>
+        <span class="pill">${r.gantung} menggantung</span>
       </div>
     </div>
     <div class="card">
-      <div class="name">Tren</div>
+      <div class="name">Tren periode</div>
       <div class="bars">${r.bars.map((h) => `<i style="height:${h}%"></i>`).join("")}</div>
     </div>
-    <div class="card">
-      <div class="cart-item"><span>Cuci</span><b>${Rp(Math.round(r.omzet * 0.32))}</b></div>
-      <div class="cart-item"><span>Curing / DO</span><b>${Rp(Math.round(r.omzet * 0.48))}</b></div>
-      <div class="cart-item"><span>Retail</span><b>${Rp(Math.round(r.omzet * 0.2))}</b></div>
-    </div>
+    <p class="section-label">Pecah per kasir</p>
+    ${perKasir.map((k, i) => `<div class="card">
+      <div class="name">${k.name}</div>
+      <div class="meta">${(k.branches || []).map((id) => branchOf(id).name.replace("Cuciin ", "")).join(", ")}</div>
+      <div class="cart-item"><span>Omzet kasir ini</span><b>${Rp(Math.round(r.omzet * [0.48, 0.32, 0.2][i] || r.omzet * 0.2))}</b></div>
+    </div>`).join("")}
     <button class="btn primary" data-export="xlsx">Export Excel</button>
     <button class="btn ghost" data-export="pdf">Export PDF</button>
   </div>`;
 }
 
+function screenLaporan() {
+  return screenAnalytics();
+}
+
+function screenAudit() {
+  const rows = state.audit.filter((a) => state.role === "owner" || a.branch === currentBranch().id);
+  return `<div class="screen">
+    <div class="top">${backBtn()}<div><p class="sub">Semua transaksi</p><h1>Audit trail</h1></div></div>
+    ${rows.map((a) => `<button class="card tap" ${a.nota ? `data-open-queue="${a.nota}"` : ""}>
+      <div class="name">${a.action}</div>
+      <div class="meta">${a.at} · ${a.user} · ${branchOf(a.branch).name}</div>
+      ${a.nota ? `<div class="meta">${a.nota}</div>` : ""}
+    </button>`).join("")}
+  </div>`;
+}
+
+function screenModules() {
+  return `<div class="screen">
+    <div class="top">${backBtn()}<div><p class="sub">Bisa diubah per modul</p><h1>Modul</h1></div></div>
+    ${MODULES.map((m) => {
+      const go = { dashboard: "home", pelanggan: "customers", transaksi: "kasir", wa: "wa-outbox", layanan: "layanan", inventory: "inventory", kas: "tutup-kas", cabang: "branches", user: "users", role: "roles", audit: "audit", laporan: "analytics", profil: "profil" }[m.id];
+      return `<button class="card tap" data-go="${go}"><div class="name">${m.label}</div><div class="meta">modul ${m.id}</div></button>`;
+    }).join("")}
+  </div>`;
+}
+
 function screenTutupKas() {
   return `<div class="screen">
-    <div class="top">${backBtn("home")}<h1>Tutup kas</h1><span></span></div>
-    <p class="meta" style="margin-bottom:12px">Shift Rina · 10 Sep 2026</p>
+    <div class="top">${backBtn()}<h1>Tutup kas</h1><span></span></div>
+    <p class="meta" style="margin-bottom:12px">${currentActor()} · ${currentBranch().name} · 10 Sep 2026</p>
     <div class="card">
       <div class="cart-item"><span>Modal awal</span><b>${Rp(300000)}</b></div>
       <div class="cart-item"><span>Tunai sistem</span><b>${Rp(420000)}</b></div>
       <div class="cart-item"><span>QRIS</span><b>${Rp(185000)}</b></div>
       <div class="cart-item"><span>Transfer</span><b>${Rp(90000)}</b></div>
-      <div class="cart-item"><span>Piutang / DP</span><b>${Rp(54000)}</b></div>
+      <div class="cart-item"><span>Piutang menggantung</span><b>${Rp(54000)}</b></div>
     </div>
     <label class="form"><span>Tunai di laci (hitung)</span><input value="420000" /></label>
     <p class="sisa">Selisih <b>Rp 0</b></p>
@@ -789,15 +1117,20 @@ function screenTutupKas() {
 
 function screenMore() {
   return `<div class="screen">
-    <div class="top"><div><p class="sub">Owner</p><h1>Lainnya</h1></div></div>
+    <div class="top">${backBtn()}<div><p class="sub">Owner</p><h1>Modul</h1></div></div>
     <div class="menu-list">
-      <button data-go="laporan">Laporan (Excel / PDF) <span>›</span></button>
+      <button data-go="analytics">Analytics keuangan <span>›</span></button>
+      <button data-go="branches">Cabang laundry <span>›</span></button>
+      <button data-go="wa-outbox">WA pending <span>›</span></button>
+      <button data-go="wa-archive">WA archive <span>›</span></button>
+      <button data-go="audit">Audit trail <span>›</span></button>
       <button data-go="orders">Cari nota <span>›</span></button>
       <button data-go="tutup-kas">Tutup kas <span>›</span></button>
       <button data-go="layanan">Layanan <span>›</span></button>
       <button data-go="users">User & pengajuan <span>›</span></button>
       <button data-go="roles">Role & akses <span>›</span></button>
-      <button data-go="profil">Profil & hapus akun <span>›</span></button>
+      <button data-go="modules">Peta modul <span>›</span></button>
+      <button data-go="profil">Profil <span>›</span></button>
       <button data-go="login">Keluar <span>›</span></button>
     </div>
   </div>`;
@@ -816,6 +1149,8 @@ const SCREENS = {
   nota: screenNota,
   "wa-chat": screenWaChat,
   "wa-ready": screenWaReady,
+  "wa-outbox": screenWaOutbox,
+  "wa-archive": screenWaArchive,
   "queue-detail": screenQueueDetail,
   orders: screenOrders,
   pelunasan: screenPelunasan,
@@ -823,10 +1158,17 @@ const SCREENS = {
   "layanan-form": screenLayananForm,
   inventory: screenInventory,
   "stok-masuk": screenStokMasuk,
+  "stok-edit": screenStokEdit,
+  "stok-history": screenStokHistory,
   users: screenUsers,
   roles: screenRoles,
+  branches: screenBranches,
+  "branch-form": screenBranchForm,
   profil: screenProfil,
   laporan: screenLaporan,
+  analytics: screenAnalytics,
+  audit: screenAudit,
+  modules: screenModules,
   "tutup-kas": screenTutupKas,
   more: screenMore,
 };
@@ -837,9 +1179,9 @@ function qtySheet() {
   return `<div class="sheet-bg" data-close-sheet>
     <div class="sheet" data-stop>
       <div class="grab"></div>
-      ${(SVC_ICON[s.id] ? `<div class="svc-ico" style="background:${SVC_ICON[s.id].bg};margin:0 auto 8px">${SVC_ICON[s.id].svg}</div>` : "")}
+      ${SVC_ICON[s.id] ? `<div class="svc-ico" style="background:${SVC_ICON[s.id].bg};margin:0 auto 8px">${SVC_ICON[s.id].svg}</div>` : ""}
       <h2>${s.name}</h2>
-      <p class="meta">${s.desc} · ${Rp(s.price)} / ${s.unit}</p>
+      <p class="meta">${s.desc} · ${Rp(s.price)} / ${s.unit}${s.retail ? " · potong stok" : ""}</p>
       <div class="qty-row">
         <button data-qty="-1">−</button>
         <strong>${state.qtyDraft} ${s.unit}</strong>
@@ -855,14 +1197,14 @@ function renderTabbar() {
   const hide =
     !state.loggedIn ||
     AUTH.includes(state.screen) ||
-    ["bayar", "nota", "customer-form", "layanan-form", "pelunasan", "stok-masuk", "profil", "wa-chat", "wa-ready", "queue-detail", "tutup-kas", "laporan"].includes(state.screen);
+    ["bayar", "nota", "customer-form", "layanan-form", "pelunasan", "stok-masuk", "stok-edit", "stok-history", "profil", "wa-chat", "wa-ready", "queue-detail", "tutup-kas", "laporan", "analytics", "audit", "branches", "branch-form", "modules", "wa-archive"].includes(state.screen);
   bar.hidden = hide;
   if (hide) {
     bar.innerHTML = "";
     return;
   }
   const tabs = TABS[state.role] || TABS.kasir;
-  const active = tabs.some((t) => t.id === state.screen) ? state.screen : "";
+  const active = tabs.some((t) => t.id === state.screen) ? state.screen : state.screen === "wa-outbox" ? "wa-outbox" : "";
   bar.innerHTML = tabs
     .map((t) => `<button class="${t.id === active ? "on" : ""}" data-go="${t.id}">${ICONS[t.icon]}${t.label}</button>`)
     .join("");
@@ -883,12 +1225,58 @@ function render() {
   syncUrl();
 }
 
+function saveCurrentNota(sendWa) {
+  const b = currentBranch();
+  const id = nextNotaId(b.id);
+  const total = cartTotal() || 30000;
+  const paid = state.paid;
+  const items = state.cart.length ? state.cart : [{ ...SERVICES[2], qty: 3 }];
+  if (!state.queue.some((q) => q.id === id)) {
+    state.queue.unshift({
+      id,
+      branch: b.id,
+      kasir: currentActor(),
+      customer: state.customer.name,
+      phone: state.customer.phone,
+      items: items.map((i) => `${i.name} ${i.qty}${i.unit}`).join(", "),
+      total,
+      paid,
+      pay: paid >= total ? "lunas" : "belum",
+      laundry: "masuk",
+      dropOut: items.some((i) => i.dropOut),
+      promise: state.promise,
+      pickupAt: state.promise,
+      createdAt: "10 Sep 2026, 09.41",
+      waSent: false,
+      photos: [],
+      late: false,
+    });
+    items.filter((i) => i.retail).forEach((i) => {
+      const p = state.products.find((x) => x.name === i.name);
+      if (p) p.stock = Math.max(0, p.stock - i.qty);
+      state.stockMoves.unshift({ at: "10 Sep 09.41", product: i.name, kind: "jual", qty: -i.qty, by: currentActor(), branch: b.id, nota: id });
+    });
+    pushAudit(`Nota ${id} disimpan · ${paid >= total ? "Lunas" : "Belum lunas"}`, id);
+  }
+  state.activeQueueId = id;
+  if (sendWa) {
+    state.waKind = "nota";
+    state.waSent = false;
+    go("wa-chat");
+  } else {
+    showToast("Masuk list WA pending");
+    go("wa-outbox");
+  }
+}
+
 document.getElementById("role-switch").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-role]");
   if (!btn) return;
   state.role = btn.dataset.role;
+  state.actor = btn.dataset.role === "kasir" ? "Rina" : state.actor;
   [...document.getElementById("role-switch").children].forEach((b) => b.classList.toggle("on", b === btn));
   if (state.loggedIn) {
+    state.history = [];
     state.screen = "home";
     state.sheet = null;
   }
@@ -896,6 +1284,11 @@ document.getElementById("role-switch").addEventListener("click", (e) => {
 });
 
 document.body.addEventListener("click", (e) => {
+  if (e.target.closest("[data-back]")) {
+    goBack();
+    return;
+  }
+
   const jump = e.target.closest("[data-jump]");
   if (jump) {
     const id = jump.dataset.jump;
@@ -903,20 +1296,20 @@ document.body.addEventListener("click", (e) => {
       showToast("Role ini nggak punya modul itu");
       return;
     }
-    state.screen = id;
-    state.loggedIn = !AUTH.includes(id);
-    render();
+    go(id);
     return;
   }
 
   if (e.target.closest("[data-register]")) {
     const sel = document.getElementById("reg-role");
+    const br = document.getElementById("reg-branch");
     const roleName = sel ? sel.value : "Kasir";
-    if (!state.users.some((u) => u.name === "Fajar Putra" && u.status === "pending")) {
-      state.users.push({ name: "Fajar Putra", role: roleName, status: "pending" });
-    } else {
-      state.users.find((u) => u.name === "Fajar Putra").role = roleName;
-    }
+    const branch = br ? br.value : "melati";
+    const u = state.users.find((x) => x.name === "Fajar Putra");
+    if (u) {
+      u.role = roleName;
+      u.branches = [branch];
+    } else state.users.push({ name: "Fajar Putra", role: roleName, status: "pending", branches: [branch] });
     go("pending");
     return;
   }
@@ -924,9 +1317,7 @@ document.body.addEventListener("click", (e) => {
   if (e.target.closest("[data-add-role]")) {
     const input = document.getElementById("new-role-name");
     const name = (input && input.value.trim()) || "Setrika";
-    if (!state.roles.some((r) => r.name === name)) {
-      state.roles.push({ name, modules: ["dashboard"] });
-    }
+    if (!state.roles.some((r) => r.name === name)) state.roles.push({ name, modules: ["dashboard"] });
     showToast(`Role ${name} muncul di form Daftar`);
     return;
   }
@@ -934,6 +1325,31 @@ document.body.addEventListener("click", (e) => {
   const rp = e.target.closest("[data-rperiod]");
   if (rp) {
     state.reportPeriod = rp.dataset.rperiod;
+    render();
+    return;
+  }
+  const br = e.target.closest("[data-branch]");
+  if (br) {
+    state.viewBranch = br.dataset.branch;
+    state.viewKasir = "all";
+    render();
+    return;
+  }
+  const kk = e.target.closest("[data-kasir]");
+  if (kk) {
+    state.viewKasir = kk.dataset.kasir;
+    render();
+    return;
+  }
+  const sp = e.target.closest("[data-speriod]");
+  if (sp) {
+    state.stockPeriod = sp.dataset.speriod;
+    render();
+    return;
+  }
+  const sk = e.target.closest("[data-skind]");
+  if (sk) {
+    state.stockEditKind = sk.dataset.skind;
     render();
     return;
   }
@@ -946,22 +1362,53 @@ document.body.addEventListener("click", (e) => {
     return;
   }
 
+  if (e.target.closest("[data-save-stok]")) {
+    const name = document.getElementById("stok-produk")?.value || "Sabun";
+    const qty = Number(document.getElementById("stok-qty")?.value || 0);
+    const p = state.products.find((x) => x.name === name);
+    const kind = state.stockEditKind;
+    let delta = qty;
+    if (p) {
+      if (kind === "tambah") p.stock += qty;
+      if (kind === "kurang") {
+        p.stock = Math.max(0, p.stock - qty);
+        delta = -qty;
+      }
+      if (kind === "update") p.stock = qty;
+    }
+    state.stockMoves.unshift({ at: "10 Sep 09.41", product: name, kind, qty: kind === "update" ? qty : delta, by: currentActor(), branch: currentBranch().id, note: "Edit manual kasir" });
+    pushAudit(`Stok ${name} ${kind} ${qty}`, "");
+    showToast("Mutasi stok tercatat");
+    go("stok-history");
+    return;
+  }
+
+  const nexp = e.target.closest("[data-nota-export]");
+  if (nexp) {
+    exportNota(nexp.dataset.notaExport, ["nota"].includes(state.screen) ? null : activeQueue());
+    return;
+  }
+
+  const saveN = e.target.closest("[data-save-nota]");
+  if (saveN) {
+    saveCurrentNota(saveN.dataset.saveNota === "send");
+    return;
+  }
+
   const exp = e.target.closest("[data-export]");
   if (exp) {
     const r = reportData();
-    const period = state.reportPeriod;
     if (exp.dataset.export === "xlsx") {
-      const csv = `Laporan Cuciin,${r.label}\nOwner,${state.ownerEmail}\nOmzet,${r.omzet}\nNota,${r.nota}\nDrop Out,${r.dropOut}\nPiutang,${r.piutang}\n`;
+      const csv = `Analytics Cuciin,${r.label}\nOwner,${state.ownerName}\nCabang,${state.viewBranch}\nKasir,${state.viewKasir}\nOmzet,${r.omzet}\nNota,${r.nota}\n`;
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
-      a.download = `laporan-cuciin-${period}.csv`;
+      a.download = `analytics-cuciin.csv`;
       a.click();
       showToast("Excel (CSV) terunduh");
     } else {
-      const html = `<html><head><title>Laporan Cuciin</title></head><body style="font-family:sans-serif;padding:24px"><h1>Cuciin</h1><p>${r.label}<br>${state.ownerEmail}</p><p>Omzet ${Rp(r.omzet)}</p><p>Nota ${r.nota} · Drop Out ${r.dropOut}</p><p>Piutang ${Rp(r.piutang)}</p><p>Print → Save as PDF</p></body></html>`;
       const w = window.open("", "_blank");
       if (w) {
-        w.document.write(html);
+        w.document.write(`<html><body style="font-family:sans-serif;padding:24px"><h1>Cuciin</h1><p>${state.ownerName}<br>${r.label}</p><p>Omzet ${Rp(r.omzet)}</p><p>Print → Save as PDF</p></body></html>`);
         w.document.close();
         w.focus();
         w.print();
@@ -1009,15 +1456,23 @@ document.body.addEventListener("click", (e) => {
   const openQ = e.target.closest("[data-open-queue]");
   if (openQ) {
     state.activeQueueId = openQ.dataset.openQueue;
+    const wa = e.target.closest("[data-wa]");
+    if (wa) {
+      state.waKind = wa.dataset.wa || "nota";
+      state.waSent = false;
+      go(state.waKind === "siap" ? "wa-ready" : "wa-chat");
+      return;
+    }
     go("queue-detail");
     return;
   }
 
   if (e.target.closest("[data-advance-pipe]")) {
     const o = activeQueue();
-    const next = pipeMeta(o.pipe).next;
-    if (next) o.pipe = next;
-    if (next === "siap") {
+    const next = laundryMeta(o.laundry).next;
+    if (next) o.laundry = next;
+    pushAudit(`${o.id} → ${laundryMeta(o.laundry).label}`, o.id);
+    if (next === "selesai") {
       state.waKind = "siap";
       state.waSent = false;
       go("wa-ready");
@@ -1027,10 +1482,16 @@ document.body.addEventListener("click", (e) => {
     return;
   }
 
-  if (e.target.closest("[data-mark-taken]")) {
-    activeQueue().pipe = "diambil";
-    showToast("Sudah diambil");
-    go("home");
+  const lunasBtn = e.target.closest("[data-mark-lunas]");
+  if (lunasBtn) {
+    const o = state.queue.find((x) => x.id === lunasBtn.dataset.markLunas);
+    if (o) {
+      o.paid = o.total;
+      o.pay = "lunas";
+      pushAudit(`${o.id} ditandai Lunas`, o.id);
+    }
+    showToast("Status bayar: Lunas");
+    go("queue-detail");
     return;
   }
 
@@ -1044,6 +1505,7 @@ document.body.addEventListener("click", (e) => {
       state.cart = [];
       state.paid = 0;
       state.waSent = false;
+      state.history = [];
     }
     if ((id === "bayar" || id === "nota") && !state.cart.length) {
       state.cart = [{ ...SERVICES[2], qty: 3 }];
@@ -1092,9 +1554,10 @@ document.body.addEventListener("click", (e) => {
   }
   const order = e.target.closest("[data-open-order]");
   if (order) {
-    const o = state.orders.find((x) => x.id === order.dataset.openOrder);
+    const o = state.queue.find((x) => x.id === order.dataset.openOrder);
     state.payTarget = o;
-    if (o.paid >= o.total) {
+    state.activeQueueId = o.id;
+    if (o.pay === "lunas") {
       showToast("Nota ini sudah lunas");
       return;
     }
@@ -1110,26 +1573,11 @@ document.body.addEventListener("click", (e) => {
   }
   const waSend = e.target.closest("[data-wa-send]");
   if (waSend) {
+    const o = activeQueue();
+    o.waSent = true;
+    o.waAt = "10 Sep 2026, 09.41";
     state.waSent = true;
-    if (state.waKind === "nota" && state.cart.length) {
-      const id = "CU-2401-0043";
-      if (!state.queue.some((q) => q.id === id)) {
-        state.queue.unshift({
-          id,
-          customer: state.customer.name,
-          phone: state.customer.phone,
-          items: state.cart.map((i) => `${i.name} ${i.qty}${i.unit}`).join(", "),
-          total: cartTotal(),
-          paid: state.paid,
-          pay: payStatus(state.paid, cartTotal()).id,
-          pipe: "diterima",
-          dropOut: state.cart.some((i) => i.dropOut),
-          promise: state.promise,
-          late: false,
-        });
-        state.activeQueueId = id;
-      }
-    }
+    pushAudit(`WA ${state.waKind === "siap" ? "siap ambil" : "nota"} ${o.id} terkirim → archive`, o.id);
     render();
     return;
   }
@@ -1146,16 +1594,22 @@ document.body.addEventListener("input", (e) => {
   if (e.target.id === "paid-input") {
     state.paid = Number(String(e.target.value).replace(/\D/g, "")) || 0;
     const total = cartTotal() || 85000;
-    const st = payStatus(state.paid, total);
+    const lunas = state.paid >= total;
     const sisa = Math.max(total - state.paid, 0);
     document.querySelector(".pay-box .chip")?.replaceWith(
-      Object.assign(document.createElement("span"), { className: `chip ${st.id}`, textContent: st.label })
+      Object.assign(document.createElement("span"), { className: `chip ${lunas ? "lunas" : "belum"}`, textContent: lunas ? "Lunas" : "Belum lunas" })
     );
     const sisaEl = document.querySelector(".sisa");
     if (sisaEl) sisaEl.innerHTML = `Sisa tagihan <b>${Rp(sisa)}</b>`;
   }
-  if (e.target.id === "nota-search") {
-    state.searchQ = e.target.value;
+  if (e.target.id === "promise-input") state.promise = e.target.value;
+  if (e.target.id === "nota-search") state.searchQ = e.target.value;
+  if (e.target.id === "bukti-file" && e.target.files?.[0]) {
+    const o = activeQueue();
+    o.photos = o.photos || [];
+    o.photos.push({ name: e.target.files[0].name });
+    pushAudit(`Bukti ${e.target.files[0].name} disimpan di HP (bukan cloud)`, o.id);
+    showToast("Tersimpan di HP, bukan cloud");
   }
 });
 

@@ -2,18 +2,22 @@
 
 Spek v1 ada di rencana agent. **Android / APK belum dibangun.** Sekarang mockup HTML.
 
-## Website simulasi (publik, awet)
+Owner: **Tiftazani Khara**. App per cabang (nama, lokasi, Maps). Data cabang = gabungan kasir. SPV tetap antrian + stok.
 
-Buka ini di Mac — nggak perlu `localhost`, nggak perlu Cloudflare tunnel:
+## Website simulasi
 
-**[https://raw.githack.com/tiftazani/Cursor-Tifz/cursor/laundry-ops-mockup-5516/laundry-ops/mockup/index.html](https://raw.githack.com/tiftazani/Cursor-Tifz/cursor/laundry-ops-mockup-5516/laundry-ops/mockup/index.html)**
-
-Cadangan (CDN GitHub): [jsDelivr](https://cdn.jsdelivr.net/gh/tiftazani/Cursor-Tifz@cursor/laundry-ops-mockup-5516/laundry-ops/mockup/index.html)
-
-Setelah PR merge ke `main`, URL tetap di Vercel production: [https://cuan-tif.vercel.app/cuciin/](https://cuan-tif.vercel.app/cuciin/)  
-(Preview Vercel branch ini ke-kunci SSO, jangan pakai itu dari Mac.)
+**[https://cuan-tif.vercel.app/cuciin](https://cuan-tif.vercel.app/cuciin)**
 
 Sumber UI: `laundry-ops/mockup/`. Copy ke `cuan-yuk-guys/public/cuciin/` pas build.
+
+## Mockup v1.1
+
+- Status ganda: Laundry Masuk / In Progress / Selesai + Belum lunas / Lunas. Menggantung sampai keduanya beres.
+- WA pending list sampai dikirim, lalu archive (tetap bisa dibuka).
+- Owner analytics harian–tahunan, pecah per cabang & kasir.
+- Stok: mutasi per tanggal, auto potong pas jual retail, edit manual kasir.
+- Audit trail. Nota: teks / PDF / Excel, ID unik per cabang, pickup time, bukti foto di HP (bukan cloud).
+- Tombol back di tiap layar.
 
 ## Jalanin di laptop
 
@@ -23,9 +27,3 @@ cd laundry-ops/mockup
 ```
 
 Lalu [http://127.0.0.1:4173](http://127.0.0.1:4173).
-
-## Yang belum
-
-- Project Android (Compose)
-- Firebase Auth + Firestore + App Check
-- Privacy Policy & Play Console
