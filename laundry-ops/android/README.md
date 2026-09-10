@@ -1,6 +1,24 @@
 # Cuciin Android
 
-Package `com.tiftazani.laundryops`. Versi sekarang **1.1.0**.
+Package `com.tiftazani.laundryops`. Versi sekarang **1.2.0**.
+
+## Unduh APK
+
+**[https://cuan-tif.vercel.app/cuciin/cuciin.apk](https://cuan-tif.vercel.app/cuciin/cuciin.apk)**
+
+Atau langsung: [raw GitHub](https://raw.githubusercontent.com/tiftazani/Cursor-Tifz/main/cuan-yuk-guys/public/cuciin/cuciin.apk)
+
+applicationId debug: `com.tiftazani.laundryops.debug`.
+
+Data **nyimpan di HP**. Bukan demo angka. Antrian awal kosong — tambah stok & pelanggan, lalu buat nota.
+
+Kalau folder `Cursor-Tifz` sudah ada, jangan clone lagi:
+
+```bash
+cd ~/Cursor-Tifz
+git checkout main
+git pull origin main
+```
 
 ## Unduh APK
 

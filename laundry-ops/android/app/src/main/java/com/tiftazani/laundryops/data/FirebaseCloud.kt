@@ -65,6 +65,7 @@ object FirebaseCloud {
                         }
                         CuciinStore.session.value = Session(role, name, email.trim(), branches.first())
                         CuciinStore.viewBranch.value = if (role == Role.Owner) "all" else branches.first()
+                        CuciinStore.bumpPublic()
                         pullAll()
                         ui { onDone(true, false, "ok") }
                     }
@@ -75,7 +76,7 @@ object FirebaseCloud {
 
     fun register(name: String, email: String, password: String, role: Role, branchId: String, onDone: (String) -> Unit) {
         if (!enabled) {
-            CuciinStore.register(name, email, role, branchId)
+            CuciinStore.register(name, email, role, branchId, password)
             ui { onDone("pending-local") }
             return
         }
@@ -92,7 +93,7 @@ object FirebaseCloud {
                 )
                 FirebaseFirestore.getInstance().collection("users").document(uid).set(data)
                     .addOnSuccessListener {
-                        CuciinStore.register(name, email, role, branchId)
+                        CuciinStore.register(name, email, role, branchId, password)
                         ui { onDone("pending") }
                     }
                     .addOnFailureListener { e -> ui { onDone(e.message ?: "gagal tulis user") } }
@@ -163,8 +164,10 @@ object FirebaseCloud {
         "total" to total,
         "paid" to paid,
         "pay" to pay.name,
+        "payMethod" to payMethod.name,
         "laundry" to laundry.name,
         "createdAt" to createdAt,
+        "createdAtMs" to createdAtMs,
         "pickupAt" to pickupAt,
         "waSent" to waSent,
         "waAt" to waAt,
@@ -190,11 +193,17 @@ object FirebaseCloud {
                 else -> LaundryStatus.Masuk
             },
             createdAt = getString("createdAt") ?: "",
+            createdAtMs = getLong("createdAtMs") ?: 0L,
             pickupAt = getString("pickupAt") ?: "",
             waSent = getBoolean("waSent") ?: false,
             waAt = getString("waAt"),
             photos = (get("photos") as? List<*>)?.mapNotNull { it as? String }?.toMutableList() ?: mutableListOf(),
             dropOut = getBoolean("dropOut") ?: false,
+            payMethod = when (getString("payMethod")) {
+                "Qris" -> PayMethod.Qris
+                "Transfer" -> PayMethod.Transfer
+                else -> PayMethod.Tunai
+            },
         )
     }
 }

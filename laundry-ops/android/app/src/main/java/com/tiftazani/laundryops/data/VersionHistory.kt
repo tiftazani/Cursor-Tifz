@@ -12,10 +12,21 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.1.0"
-    val currentCode: Int = 2
+    val currentName: String = "1.2.0"
+    val currentCode: Int = 3
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.2.0",
+            code = 3,
+            date = "10 Sep 2026",
+            notes = listOf(
+                "Bukan demo: data tersimpan di HP (JSON). Tutup app, nota/stok/audit tetap ada.",
+                "Waktu nota, ID per cabang, analytics, tutup kas dihitung dari transaksi nyata.",
+                "Pelanggan & cabang bisa ditambah. Foto disalin ke folder app. PDF/CSV file beneran.",
+                "Antrian awal kosong. Isi stok & pelanggan, lalu buat nota.",
+            ),
+        ),
         AppRelease(
             name = "1.1.0",
             code = 2,
