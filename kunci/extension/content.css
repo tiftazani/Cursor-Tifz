@@ -1,0 +1,46 @@
+.kunci-icon-host {
+  position: fixed !important;
+  z-index: 2147483645 !important;
+  width: 28px !important;
+  height: 28px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  pointer-events: auto !important;
+}
+
+.kunci-menu {
+  position: absolute;
+  z-index: 2147483647;
+  min-width: 220px;
+  background: #10151d;
+  color: #e8eef6;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.kunci-menu button {
+  display: block;
+  width: 100%;
+  height: auto;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.kunci-menu button:hover {
+  background: #161d27;
+}
+
+.kunci-empty {
+  padding: 8px 10px;
+  color: #8b97a8;
+}

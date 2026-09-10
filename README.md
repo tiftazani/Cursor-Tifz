@@ -1,26 +1,59 @@
 # Cursor-Tifz
 
-Repo hub Tiftazani. Aplikasi tidak lagi menempati seluruh root GitHub — tiap project punya foldernya sendiri.
+Folder Mac: `/Users/tiftazani/Cursor-Tifz`. Hub app pribadi — tiap project punya foldernya sendiri.
 
 ## Folder project
 
 | Folder | Isi |
 | --- | --- |
 | [`cuan-yuk-guys/`](./cuan-yuk-guys) | Website **Cuan Yuk Guys** (IHSG, reksadana, Cuan Bot) |
+| [`kunci/`](./kunci) | **Kunci** — manajer kata sandi zero-knowledge (web + URL publik HTTPS) |
 
-Kode aplikasi: [github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys](https://github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys)
+Kode Cuan Yuk Guys: [github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys](https://github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys)
+
+## Branch
+
+| Branch | Isi |
+| --- | --- |
+| `main` | Hub + Cuan Yuk Guys (Vercel pakai ini) |
+| `kunci` | Kerjaan **Kunci** (di GitHub masih `cursor/kunci-password-manager-4eaf`, Cloud jangan diubah) |
+| `cursor/imo-whatsapp-analytics-eb4c` dll. | Draft Cloud Agent (IMO, WhatsApp, bot kota) — nama Cloud biarkan |
 
 ## Jalankan di laptop
 
+### Cuan Yuk Guys
+
 ```bash
 git clone https://github.com/tiftazani/Cursor-Tifz.git
-cd Cursor-Tifz/cuan-yuk-guys
+cd /Users/tiftazani/Cursor-Tifz/cuan-yuk-guys
 cp .env.example .env.local
 npm install
 npm run dev
 ```
 
 Buka [http://localhost:3000](http://localhost:3000).
+
+### Kunci (password manager)
+
+```bash
+cd /Users/tiftazani/Cursor-Tifz/kunci
+npm install
+npm run dev
+```
+
+Buka [http://localhost:5173](http://localhost:5173). URL publik HTTPS (zero-knowledge, gerbang OTP): lihat [`kunci/README.md`](./kunci/README.md). Autofill Mac dan ekstensi juga di situ.
+
+Clone `--single-branch` tidak punya `origin/cursor/...`. Ambil branch Kunci pakai `FETCH_HEAD`, bukan `git checkout origin/branch`:
+
+```bash
+cd /Users/tiftazani/Cursor-Tifz && \
+git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && \
+git fetch origin cursor/kunci-password-manager-4eaf && \
+(test -z "$(git status --porcelain)" || git stash push -u -m "sebelum kunci branch") && \
+git checkout -B cursor/kunci-password-manager-4eaf FETCH_HEAD && \
+test -f kunci/src/views/DashboardView.tsx && \
+cd kunci && npm install && npm run install-service
+```
 
 ## Vercel (wajib sekali)
 

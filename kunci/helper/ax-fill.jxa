@@ -1,0 +1,123 @@
+ObjC.import('Foundation')
+ObjC.import('ApplicationServices')
+
+function readJob(path) {
+  const str = $.NSString.stringWithContentsOfFileEncodingError($(path), $.NSUTF8StringEncoding, null)
+  return JSON.parse(ObjC.unwrap(str))
+}
+
+function trusted() {
+  return $.AXIsProcessTrusted()
+}
+
+function findProcess(se, name) {
+  if (!name) return null
+  const want = String(name).toLowerCase()
+  const procs = se.applicationProcesses()
+  let fuzzy = null
+  for (let i = 0; i < procs.length; i++) {
+    const proc = procs[i]
+    const n = String(proc.name()).toLowerCase()
+    if (n === want) return proc
+    if (!fuzzy && (n.indexOf(want) !== -1 || want.indexOf(n) !== -1)) fuzzy = proc
+  }
+  return fuzzy
+}
+
+function roleOf(el) {
+  try {
+    return String(el.role())
+  } catch (e) {
+    return ''
+  }
+}
+
+function hintOf(el) {
+  const parts = []
+  try {
+    parts.push(String(el.name()))
+  } catch (e) {}
+  try {
+    parts.push(String(el.description()))
+  } catch (e) {}
+  try {
+    parts.push(String(el.placeholderValue()))
+  } catch (e) {}
+  return parts.join(' ').toLowerCase()
+}
+
+function collect(root, acc, depth) {
+  if (depth > 16 || acc.secure.length + acc.text.length > 24) return
+  let kids
+  try {
+    kids = root.uiElements()
+  } catch (e) {
+    return
+  }
+  if (!kids) return
+  for (let i = 0; i < kids.length; i++) {
+    const el = kids[i]
+    const role = roleOf(el)
+    const hint = hintOf(el)
+    if (role === 'AXSecureTextField') acc.secure.push(el)
+    else if ((role === 'AXTextField' || role === 'AXComboBox') && !/search|cari|filter|find/.test(hint)) acc.text.push(el)
+    collect(el, acc, depth + 1)
+  }
+}
+
+function setValue(el, value) {
+  try {
+    el.value = value
+    return true
+  } catch (e) {
+    try {
+      el.focused = true
+    } catch (err) {}
+    return false
+  }
+}
+
+function run(argv) {
+  const job = readJob(argv[0])
+  const username = job.username || ''
+  const password = job.password || ''
+  const appName = job.appName || ''
+  const mode = job.mode || 'login'
+  const waitMs = Number(job.waitMs || 0)
+  if (waitMs > 0) delay(waitMs / 1000)
+  if (!trusted()) {
+    return JSON.stringify({ ok: false, error: 'accessibility', needKeystroke: false })
+  }
+  const se = Application('System Events')
+  let proc = appName ? findProcess(se, appName) : null
+  if (!proc) {
+    const front = se.applicationProcesses.whose({ frontmost: true })
+    proc = front.length ? front[0] : null
+  }
+  if (!proc) return JSON.stringify({ ok: false, error: 'no-app', needKeystroke: false })
+  try {
+    proc.frontmost = true
+  } catch (e) {}
+  delay(0.45)
+  const acc = { text: [], secure: [] }
+  let windows = []
+  try {
+    windows = proc.windows()
+  } catch (e) {
+    windows = []
+  }
+  for (let w = 0; w < Math.min(windows.length, 5); w++) collect(windows[w], acc, 0)
+  let userOk = false
+  let passOk = false
+  if (mode === 'login' && username && acc.text.length) userOk = setValue(acc.text[0], username)
+  if (password && acc.secure.length) passOk = setValue(acc.secure[acc.secure.length - 1], password)
+  else if (password && !username && acc.text.length) passOk = setValue(acc.text[0], password)
+  const axOk = (mode === 'login' && username ? userOk : true) && (password ? passOk : true) && (userOk || passOk)
+  return JSON.stringify({
+    ok: axOk,
+    method: 'ax',
+    needKeystroke: !axOk,
+    app: String(proc.name()),
+    fields: { text: acc.text.length, secure: acc.secure.length },
+  })
+}

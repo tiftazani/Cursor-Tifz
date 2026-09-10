@@ -9,8 +9,8 @@ Situs publik: [cuan-tif.vercel.app](https://cuan-tif.vercel.app/)
 ## Menjalankan di laptop
 
 ```bash
-git clone https://github.com/tiftazani/Cursor-Tifz.git
-cd Cursor-Tifz/cuan-yuk-guys
+git clone https://github.com/tiftazani/Cursor-Tifz.git /Users/tiftazani/Cursor-Tifz
+cd /Users/tiftazani/Cursor-Tifz/cuan-yuk-guys
 cp .env.example .env.local
 npm install
 npm run dev
