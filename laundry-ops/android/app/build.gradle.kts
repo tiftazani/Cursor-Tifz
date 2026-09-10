@@ -13,9 +13,11 @@ android {
         applicationId = "com.tiftazani.laundryops"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "CUCIIN_CLOUD_URL", "\"https://cuan-tif.vercel.app/api/cuciin\"")
+        buildConfigField("String", "CUCIIN_CLOUD_KEY", "\"cuciin-48c12bb800fa8770e5a7e96d3eb00f0ff2d6ab7c8eaff4bb\"")
     }
     buildTypes {
         release {

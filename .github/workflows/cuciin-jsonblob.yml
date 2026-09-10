@@ -1,0 +1,52 @@
+name: Cuciin jsonblob id
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/cuciin-jsonblob.yml"
+
+jobs:
+  blob:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create jsonblob if missing
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re, subprocess, tempfile
+          p = Path("cuan-yuk-guys/lib/cuciin-cloud.ts")
+          t = p.read_text()
+          m = re.search(r'\?\? "([^"]*)"', t)
+          current = m.group(1) if m else ""
+          if current:
+              print("already", current)
+              raise SystemExit(0)
+          hdr = tempfile.NamedTemporaryFile(delete=False)
+          hdr.close()
+          subprocess.run([
+              "curl", "-sS", "-D", hdr.name, "-o", "/tmp/blob.json", "-X", "POST",
+              "https://jsonblob.com/api/jsonBlob",
+              "-H", "Content-Type: application/json",
+              "-H", "Accept: application/json",
+              "-d", '{"updatedAt":0,"staff":[],"notas":[]}',
+          ], check=False)
+          text = Path(hdr.name).read_text(errors="ignore")
+          print(text[:800])
+          ident = ""
+          for line in text.splitlines():
+              if line.lower().startswith("x-jsonblob:"):
+                  ident = line.split(":", 1)[1].strip()
+          if not ident:
+              print("create failed")
+              raise SystemExit(0)
+          p.write_text(t.replace('?? ""', f'?? "{ident}"', 1))
+          print("wrote", ident)
+          PY
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Store Cuciin jsonblob id for shared server DB.
+          file_pattern: cuan-yuk-guys/lib/cuciin-cloud.ts

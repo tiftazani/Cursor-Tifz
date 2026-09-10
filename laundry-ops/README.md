@@ -4,11 +4,11 @@ Owner: **Tiftazani Khara**. Android Kotlin (`com.tiftazani.laundryops`) + mockup
 
 ## Android
 
-Folder: [`android/`](./android). Versi sekarang **1.2.0**. Changelog: [`android/CHANGELOG.md`](./android/CHANGELOG.md).
+Folder: [`android/`](./android). Versi sekarang **1.3.0**. Changelog: [`android/CHANGELOG.md`](./android/CHANGELOG.md).
 
 **Unduh APK debug:** [https://cuan-tif.vercel.app/cuciin/cuciin.apk](https://cuan-tif.vercel.app/cuciin/cuciin.apk)
 
-Data tersimpan di HP. Bukan mock angka. Antrian awal kosong.
+Database toko di server — HP kasir/owner nge-share. Cache tetap di HP.
 
 Kalau repo sudah di-clone:
 
@@ -27,7 +27,7 @@ cd Cursor-Tifz/laundry-ops/android
 ./gradlew assembleDebug
 ```
 
-Masuk cepat di login: Owner / Kasir / SPV (data lokal). Firebase nyala kalau `app/google-services.json` ada.
+Masuk cepat di login: Owner / Kasir / SPV. Database server nyala lewat API; Firebase nyala kalau `app/google-services.json` ada.
 
 Permission: INTERNET saja. Bukti foto disimpan di HP. WA lewat intent `wa.me`.
 

@@ -200,4 +200,5 @@ data class Snapshot(
     val viewBranch: String = "all",
     val viewKasir: String = "all",
     val reportPeriod: String = "hari",
+    val updatedAt: Long = 0,
 )

@@ -8,10 +8,10 @@ import java.util.concurrent.Executors
 
 object LocalJson {
     private const val TAG = "CuciinDisk"
-    private val json = Json {
+    val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
-        prettyPrint = true
+        prettyPrint = false
     }
     private val io = Executors.newSingleThreadExecutor()
     private lateinit var file: File
