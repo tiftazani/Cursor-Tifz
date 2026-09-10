@@ -28,7 +28,82 @@ const empty: Store = {
 };
 
 function unauthorized() {
-  return NextResponse.json({ error: "unauthorized" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json(
+    {
+      ok: false,
+      error: "unauthorized",
+      pesan: "API Cuciin hidup. Data toko cuma dibuka dari app, bukan dari address bar. Butuh header X-Cuciin-Key.",
+    },
+    { status: 401, headers: { "Cache-Control": "no-store" } },
+  );
+}
+
+function wantsBrowser(req: Request) {
+  const accept = req.headers.get("accept") ?? "";
+  const dest = req.headers.get("sec-fetch-dest") ?? "";
+  return dest === "document" || dest === "iframe" || accept.includes("text/html");
+}
+
+function countsOf(data: Store) {
+  const n = (k: string) => (Array.isArray(data[k]) ? (data[k] as unknown[]).length : 0);
+  return {
+    branches: n("branches"),
+    staff: n("staff"),
+    customers: n("customers"),
+    notas: n("notas"),
+    products: n("products"),
+  };
+}
+
+function publicStatus(data: Store) {
+  return {
+    ok: true,
+    service: "cuciin",
+    hidup: true,
+    pesan: "Database server Cuciin hidup. Isi toko (nota, pelanggan) cuma dari app Android.",
+    updatedAt: Number(data.updatedAt ?? 0),
+    counts: countsOf(data),
+  };
+}
+
+function statusHtml(data: Store) {
+  const c = countsOf(data);
+  const html = `<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cuciin — database server</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, sans-serif; background: #0f2744; color: #e8eef6; margin: 0; padding: 32px; }
+    main { max-width: 36rem; }
+    h1 { font-size: 1.6rem; margin: 0 0 8px; }
+    p { line-height: 1.5; color: #c5d0dc; }
+    .ok { color: #7ddea0; font-weight: 700; }
+    ul { padding-left: 1.2rem; color: #c5d0dc; }
+    code { background: #17375e; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="ok">Database hidup</p>
+    <h1>Cuciin</h1>
+    <p>Ini API server, bukan halaman error. Browser nggak bawa key, jadi data toko nggak ditampilkan di sini. App Android yang baca/tulis nota.</p>
+    <ul>
+      <li>Cabang: ${c.branches}</li>
+      <li>Staff: ${c.staff}</li>
+      <li>Pelanggan: ${c.customers}</li>
+      <li>Nota: ${c.notas}</li>
+      <li>Produk: ${c.products}</li>
+    </ul>
+    <p>Unduh app: <a href="/cuciin/cuciin.apk" style="color:#8ec5ff">cuciin.apk</a> · mockup <a href="/cuciin" style="color:#8ec5ff">/cuciin</a></p>
+  </main>
+</body>
+</html>`;
+  return new NextResponse(html, {
+    status: 200,
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+  });
 }
 
 function ok(data: unknown) {
@@ -108,7 +183,11 @@ async function save(data: Store) {
 }
 
 export async function GET(req: Request) {
-  if (keyOf(req) !== CUCIIN_CLOUD_KEY) return unauthorized();
+  if (keyOf(req) !== CUCIIN_CLOUD_KEY) {
+    const data = await load();
+    if (wantsBrowser(req)) return statusHtml(data);
+    return ok(publicStatus(data));
+  }
   const data = await load();
   return ok(data);
 }
