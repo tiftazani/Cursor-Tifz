@@ -1,0 +1,9 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "audit",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "at", "order": "ASCENDING" }]
+    }
+  ]
+}

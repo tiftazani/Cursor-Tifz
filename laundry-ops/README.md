@@ -1,29 +1,29 @@
 # Cuciin — operasional laundry
 
-Spek v1 ada di rencana agent. **Android / APK belum dibangun.** Sekarang mockup HTML.
+Owner: **Tiftazani Khara**. Android Kotlin (`com.tiftazani.laundryops`) + mockup HTML.
 
-Owner: **Tiftazani Khara**. App per cabang (nama, lokasi, Maps). Data cabang = gabungan kasir. SPV tetap antrian + stok.
+## Android
 
-## Website simulasi
+Folder: [`android/`](./android). Versi sekarang **1.1.0**. Changelog: [`android/CHANGELOG.md`](./android/CHANGELOG.md).
+
+**Unduh APK debug:** [https://cuan-tif.vercel.app/cuciin/cuciin.apk](https://cuan-tif.vercel.app/cuciin/cuciin.apk)
+
+```bash
+cd ~
+git clone https://github.com/tiftazani/Cursor-Tifz.git
+cd Cursor-Tifz/laundry-ops/android
+./gradlew assembleDebug
+```
+
+Masuk cepat di login: Owner / Kasir / SPV (data lokal). Firebase nyala kalau `app/google-services.json` ada.
+
+Permission: INTERNET saja. Bukti foto disimpan di HP. WA lewat intent `wa.me`.
+
+## Mockup web
 
 **[https://cuan-tif.vercel.app/cuciin](https://cuan-tif.vercel.app/cuciin)**
-
-Sumber UI: `laundry-ops/mockup/`. Copy ke `cuan-yuk-guys/public/cuciin/` pas build.
-
-## Mockup v1.1
-
-- Status ganda: Laundry Masuk / In Progress / Selesai + Belum lunas / Lunas. Menggantung sampai keduanya beres.
-- WA pending list sampai dikirim, lalu archive (tetap bisa dibuka).
-- Owner analytics harian–tahunan, pecah per cabang & kasir.
-- Stok: mutasi per tanggal, auto potong pas jual retail, edit manual kasir.
-- Audit trail. Nota: teks / PDF / Excel, ID unik per cabang, pickup time, bukti foto di HP (bukan cloud).
-- Tombol back di tiap layar.
-
-## Jalanin di laptop
 
 ```bash
 cd laundry-ops/mockup
 ./start.sh
 ```
-
-Lalu [http://127.0.0.1:4173](http://127.0.0.1:4173).

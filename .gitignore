@@ -13,3 +13,8 @@ next-env.d.ts
 !.env.example
 npm-debug.log*
 .pnpm-debug.log*
+.gradle/
+**/local.properties
+**/*.jks
+**/*.keystore
+**/google-services.json

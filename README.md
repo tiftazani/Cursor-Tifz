@@ -7,7 +7,7 @@ Repo hub Tiftazani. Aplikasi tidak lagi menempati seluruh root GitHub — tiap p
 | Folder | Isi |
 | --- | --- |
 | [`cuan-yuk-guys/`](./cuan-yuk-guys) | Website **Cuan Yuk Guys** (IHSG, reksadana, Cuan Bot) |
-| [`laundry-ops/`](./laundry-ops) | **Cuciin** — operasional laundry per cabang. Mockup: [cuan-tif.vercel.app/cuciin](https://cuan-tif.vercel.app/cuciin) |
+| [`laundry-ops/`](./laundry-ops) | **Cuciin** — Android 1.0.0 + mockup [cuan-tif.vercel.app/cuciin](https://cuan-tif.vercel.app/cuciin) |
 
 Kode aplikasi: [github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys](https://github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys)
 
