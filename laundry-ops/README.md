@@ -2,29 +2,23 @@
 
 Spek v1 ada di rencana agent. **Android / APK belum dibangun.** Sekarang mockup HTML.
 
-## Buka mockup
+## Website simulasi (permanen)
 
-`localhost:4173` di **Macbook lo** cuma hidup kalau server-nya juga jalan **di Mac yang sama**. Server di Cloud Agent nggak kelihatan dari laptop.
+Mockup di-host di Vercel yang sama dengan repo ini — URL-nya nempel, bukan tunnel Cloudflare.
 
-### Di Mac (paling gampang)
+- **Preview branch ini:** [https://cuan-git-cursor-laundry-ops-mockup-5516-tiftazanis-projects.vercel.app/cuciin/](https://cuan-git-cursor-laundry-ops-mockup-5516-tiftazanis-projects.vercel.app/cuciin/)
+- **Production** (setelah merge ke `main`): [https://cuan-tif.vercel.app/cuciin/](https://cuan-tif.vercel.app/cuciin/)
+
+Sumber UI: `laundry-ops/mockup/`. File yang ke-serve: `cuan-yuk-guys/public/cuciin/` (di-copy pas `npm run build`).
+
+## Jalanin di laptop
 
 ```bash
 cd laundry-ops/mockup
-chmod +x start.sh
 ./start.sh
 ```
 
-Lalu Safari/Chrome: [http://127.0.0.1:4173](http://127.0.0.1:4173) — pakai `127.0.0.1`, bukan `localhost` (kadang nembak IPv6 terus refused).
-
-Atau double-click `index.html`.
-
-### Preview dari GitHub (tanpa ngejalanin apa-apa)
-
-Setelah branch `cursor/laundry-ops-mockup-5516` ke-push:
-
-[https://cdn.jsdelivr.net/gh/tiftazani/Cursor-Tifz@cursor/laundry-ops-mockup-5516/laundry-ops/mockup/index.html](https://cdn.jsdelivr.net/gh/tiftazani/Cursor-Tifz@cursor/laundry-ops-mockup-5516/laundry-ops/mockup/index.html)
-
-Kalau CSS/JS belum ke-update, tambah `?t=2` di URL (cache jsDelivr).
+Lalu buka [http://127.0.0.1:4173](http://127.0.0.1:4173) — pakai `127.0.0.1`, bukan `localhost`.
 
 ## Yang belum
 
