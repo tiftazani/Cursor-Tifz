@@ -519,3 +519,97 @@ label.form input, label.form textarea, label.form select {
   .studio-panel { position: static; }
   .stage { padding-top: 8px; }
 }
+
+body.film {
+  background: #071614;
+}
+body.film .studio {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 0;
+  min-height: 100vh;
+}
+body.film .studio-panel { display: none; }
+body.film .stage { padding: 0; }
+
+.wa-app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  background: #ece5dd;
+  margin: -4px -18px -18px;
+  padding: 0;
+}
+.wa-head {
+  background: #075e54;
+  color: #fff;
+  padding: 12px 14px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.wa-head .icon-btn {
+  background: rgba(255,255,255,0.16);
+  color: #fff;
+  box-shadow: none;
+}
+.wa-head .avatar { background: #128c7e; color: #fff; }
+.wa-head .name { color: #fff; }
+.wa-head .meta { color: rgba(255,255,255,0.75); }
+.wa-thread {
+  flex: 1;
+  padding: 14px 12px 12px;
+}
+.wa-bubble {
+  background: #dcf8c6;
+  border-radius: 8px 0 8px 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  max-width: 92%;
+  margin-left: auto;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.08);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.wa-time {
+  text-align: right;
+  font-size: 10px;
+  color: #667781;
+  margin-top: 4px;
+}
+.wa-composer {
+  background: #f0f0f0;
+  padding: 8px 10px 14px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.wa-composer .hint {
+  flex: 1;
+  background: #fff;
+  border-radius: 22px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0;
+}
+.wa-send {
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  background: #25d366;
+  color: #fff;
+  font-weight: 800;
+  font-size: 18px;
+  flex: 0 0 auto;
+}
+.wa-sent-banner {
+  background: #dcf8c6;
+  color: #075e54;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px;
+}

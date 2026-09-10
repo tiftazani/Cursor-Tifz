@@ -52,6 +52,7 @@ const state = {
   ],
   payTarget: null,
   extraPay: 0,
+  waSent: false,
   layananEdit: null,
   stockInProduct: "Sabun",
   products: [
@@ -105,6 +106,7 @@ const JUMPS = [
   { id: "users", label: "User" },
   { id: "roles", label: "Role" },
   { id: "profil", label: "Profil usaha" },
+  { id: "wa-chat", label: "WhatsApp" },
 ];
 
 function initials(name) {
@@ -157,6 +159,7 @@ function syncUrl() {
   const u = new URL(location.href);
   u.searchParams.set("role", state.role);
   u.searchParams.set("screen", state.screen);
+  if (document.body.classList.contains("film")) u.searchParams.set("film", "1");
   history.replaceState(null, "", u.pathname + u.search);
 }
 
@@ -170,6 +173,7 @@ function applyUrl() {
       b.classList.toggle("on", b.dataset.role === role)
     );
   }
+  if (u.searchParams.get("film") === "1") document.body.classList.add("film");
   if (screen && SCREENS[screen]) {
     state.screen = screen;
     state.loggedIn = screen !== "login";
@@ -359,6 +363,36 @@ function screenNota() {
   </div>`;
 }
 
+function screenWaChat() {
+  const c = state.customer;
+  return `<div class="screen" style="padding:0">
+    <div class="wa-app">
+      <div class="wa-head">
+        ${backBtn("nota")}
+        <div class="avatar">${c.initials}</div>
+        <div class="grow">
+          <div class="name">${c.name}</div>
+          <div class="meta">${c.phone} · WhatsApp</div>
+        </div>
+      </div>
+      ${state.waSent ? `<div class="wa-sent-banner">Nota terkirim ke ${c.phone}</div>` : ""}
+      <div class="wa-thread">
+        <div class="wa-bubble">${notaText()}
+          <div class="wa-time">${state.waSent ? "09.41 ✓✓" : "draft"}</div>
+        </div>
+      </div>
+      ${
+        state.waSent
+          ? `<button class="btn primary" style="margin:0 12px 16px;width:auto" data-go="orders">Selesai</button>`
+          : `<div class="wa-composer">
+              <p class="hint">Nota siap dikirim</p>
+              <button class="wa-send" data-wa-send aria-label="Kirim">➤</button>
+            </div>`
+      }
+    </div>
+  </div>`;
+}
+
 function screenOrders() {
   return `<div class="screen">
     <div class="top"><div><p class="sub">Riwayat</p><h1>Nota</h1></div></div>
@@ -528,6 +562,7 @@ const SCREENS = {
   roles: screenRoles,
   profil: screenProfil,
   more: screenMore,
+  "wa-chat": screenWaChat,
 };
 
 function qtySheet() {
@@ -551,7 +586,7 @@ function qtySheet() {
 
 function renderTabbar() {
   const bar = document.getElementById("tabbar");
-  const hide = !state.loggedIn || ["login", "bayar", "nota", "customer-form", "layanan-form", "pelunasan", "stok-masuk", "profil"].includes(state.screen);
+  const hide = !state.loggedIn || ["login", "bayar", "nota", "customer-form", "layanan-form", "pelunasan", "stok-masuk", "profil", "wa-chat"].includes(state.screen);
   bar.hidden = hide;
   if (hide) {
     bar.innerHTML = "";
@@ -695,9 +730,15 @@ document.body.addEventListener("click", (e) => {
 
   const wa = e.target.closest("[data-wa]");
   if (wa) {
-    const text = encodeURIComponent(notaText());
-    window.open(`https://wa.me/${wa.dataset.wa}?text=${text}`, "_blank");
-    showToast("WhatsApp kebuka — kasir tap Kirim");
+    state.waSent = false;
+    go("wa-chat");
+    return;
+  }
+
+  const waSend = e.target.closest("[data-wa-send]");
+  if (waSend) {
+    state.waSent = true;
+    render();
     return;
   }
 
