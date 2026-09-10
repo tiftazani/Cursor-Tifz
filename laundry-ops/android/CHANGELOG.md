@@ -2,6 +2,15 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.1.0 — 10 Sep 2026 (versionCode 2)
+
+Firebase Auth + Firestore, tetap jalan lokal tanpa `google-services.json`.
+
+- Plugin Google Services cuma applied kalau `app/google-services.json` ada
+- Login/daftar: coba Firebase dulu, fallback akun demo lokal
+- Nota, status laundry/bayar, WA, bukti, stok, approve user, audit di-push ke Firestore
+- APK debug di `https://cuan-tif.vercel.app/cuciin/cuciin.apk`
+
 ## 1.0.0 — 10 Sep 2026 (versionCode 1)
 
 Rilis pertama APK.

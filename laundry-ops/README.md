@@ -4,17 +4,18 @@ Owner: **Tiftazani Khara**. Android Kotlin (`com.tiftazani.laundryops`) + mockup
 
 ## Android
 
-Folder: [`android/`](./android). Versi sekarang **1.0.0** (lihat [`android/CHANGELOG.md`](./android/CHANGELOG.md)). Riwayat yang sama muncul di app: **Riwayat versi**.
+Folder: [`android/`](./android). Versi sekarang **1.1.0**. Changelog: [`android/CHANGELOG.md`](./android/CHANGELOG.md).
+
+**Unduh APK debug:** [https://cuan-tif.vercel.app/cuciin/cuciin.apk](https://cuan-tif.vercel.app/cuciin/cuciin.apk)
 
 ```bash
-cd laundry-ops/android
-# sdk.dir di local.properties, atau ANDROID_HOME
+cd ~
+git clone https://github.com/tiftazani/Cursor-Tifz.git
+cd Cursor-Tifz/laundry-ops/android
 ./gradlew assembleDebug
 ```
 
-APK: `android/app/build/outputs/apk/debug/app-debug.apk` (applicationId `com.tiftazani.laundryops.debug`).
-
-Masuk cepat di login: Owner / Kasir / SPV (data lokal, Firebase belum diikat).
+Masuk cepat di login: Owner / Kasir / SPV (data lokal). Firebase nyala kalau `app/google-services.json` ada.
 
 Permission: INTERNET saja. Bukti foto disimpan di HP. WA lewat intent `wa.me`.
 

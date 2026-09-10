@@ -83,6 +83,8 @@ object CuciinStore {
         revision.intValue++
     }
 
+    fun bumpPublic() = bump()
+
     fun branch(id: String = session.value?.branchId ?: viewBranch.value): Branch =
         branches.first { it.id == id || (id == "all" && it.id == "melati") }.let {
             if (id == "all") it else branches.first { b -> b.id == id }
@@ -132,8 +134,11 @@ object CuciinStore {
     fun approve(name: String, ok: Boolean) {
         val i = staff.indexOfFirst { it.name == name }
         if (i >= 0) staff[i] = staff[i].copy(approved = ok)
-        audit.add(0, AuditRow("10 Sep 09.50", ownerName, "melati", "${if (ok) "Setujui" else "Tolak"} $name", null))
+        val row = AuditRow("10 Sep 09.50", ownerName, "melati", "${if (ok) "Setujui" else "Tolak"} $name", null)
+        audit.add(0, row)
         bump()
+        FirebaseCloud.pushApprove(name, ok)
+        FirebaseCloud.pushAudit(row)
     }
 
     fun nextNotaId(branchId: String): String {
@@ -173,7 +178,10 @@ object CuciinStore {
             products.find { it.name == line.service.name }?.let { it.stock = (it.stock - line.qty.toInt()).coerceAtLeast(0) }
             stockMoves.add(0, StockMove("10 Sep 09.41", line.service.name, StockKind.Jual, -line.qty.toInt(), s.name, s.branchId, "Jual via nota", nota.id))
         }
-        audit.add(0, AuditRow("10 Sep 09.41", s.name, s.branchId, "Nota ${nota.id} disimpan · ${nota.pay.label}", nota.id))
+        val row = AuditRow("10 Sep 09.41", s.name, s.branchId, "Nota ${nota.id} disimpan · ${nota.pay.label}", nota.id)
+        audit.add(0, row)
+        FirebaseCloud.pushNota(nota)
+        FirebaseCloud.pushAudit(row)
         if (sendWa) markWaSent(nota.id)
         return nota
     }
@@ -183,28 +191,40 @@ object CuciinStore {
         n.waSent = true
         n.waAt = "10 Sep 2026, 09.41"
         bump()
-        audit.add(0, AuditRow("10 Sep 09.41", session.value?.name ?: "—", n.branchId, "WA nota ${n.id} terkirim → archive", n.id))
+        val row = AuditRow("10 Sep 09.41", session.value?.name ?: "—", n.branchId, "WA nota ${n.id} terkirim → archive", n.id)
+        audit.add(0, row)
+        FirebaseCloud.pushNota(n)
+        FirebaseCloud.pushAudit(row)
     }
 
     fun advanceLaundry(id: String) {
         val n = notas.find { it.id == id } ?: return
         n.laundry.next?.let { n.laundry = it }
         bump()
-        audit.add(0, AuditRow("10 Sep 09.41", session.value?.name ?: "—", n.branchId, "${n.id} → ${n.laundry.label}", n.id))
+        val row = AuditRow("10 Sep 09.41", session.value?.name ?: "—", n.branchId, "${n.id} → ${n.laundry.label}", n.id)
+        audit.add(0, row)
+        FirebaseCloud.pushNota(n)
+        FirebaseCloud.pushAudit(row)
     }
 
     fun markLunas(id: String) {
         val n = notas.find { it.id == id } ?: return
         n.pay = PayStatus.Lunas
         bump()
-        audit.add(0, AuditRow("10 Sep 09.41", session.value?.name ?: "—", n.branchId, "${n.id} ditandai Lunas", n.id))
+        val row = AuditRow("10 Sep 09.41", session.value?.name ?: "—", n.branchId, "${n.id} ditandai Lunas", n.id)
+        audit.add(0, row)
+        FirebaseCloud.pushNota(n)
+        FirebaseCloud.pushAudit(row)
     }
 
     fun addLocalProof(id: String, fileName: String) {
         val n = notas.find { it.id == id } ?: return
         n.photos.add(fileName)
         bump()
-        audit.add(0, AuditRow("10 Sep 09.41", session.value?.name ?: "—", n.branchId, "Bukti $fileName disimpan di HP (bukan cloud)", n.id))
+        val row = AuditRow("10 Sep 09.41", session.value?.name ?: "—", n.branchId, "Bukti $fileName disimpan di HP (bukan cloud)", n.id)
+        audit.add(0, row)
+        FirebaseCloud.pushNota(n)
+        FirebaseCloud.pushAudit(row)
     }
 
     fun editStock(product: String, kind: StockKind, qty: Int) {
@@ -217,8 +237,10 @@ object CuciinStore {
             StockKind.Jual -> -qty
         }
         stockMoves.add(0, StockMove("10 Sep 09.41", product, kind, if (kind == StockKind.Update) qty else delta, s.name, s.branchId, "Edit manual kasir"))
-        audit.add(0, AuditRow("10 Sep 09.41", s.name, s.branchId, "Stok $product ${kind.label} $qty", null))
+        val row = AuditRow("10 Sep 09.41", s.name, s.branchId, "Stok $product ${kind.label} $qty", null)
+        audit.add(0, row)
         bump()
+        FirebaseCloud.pushAudit(row)
     }
 
     fun notaText(n: Nota): String {

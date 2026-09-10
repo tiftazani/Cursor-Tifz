@@ -12,10 +12,21 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.0.0"
-    val currentCode: Int = 1
+    val currentName: String = "1.1.0"
+    val currentCode: Int = 2
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.1.0",
+            code = 2,
+            date = "10 Sep 2026",
+            notes = listOf(
+                "Firebase Auth + Firestore: nyala otomatis kalau google-services.json ada.",
+                "Tanpa file itu, app tetap jalan full fitur pakai data lokal di HP.",
+                "Nota, WA terkirim, lunas, stok, approve user, audit ikut ke-push ke cloud.",
+                "APK debug bisa diunduh dari halaman Cuciin di web.",
+            ),
+        ),
         AppRelease(
             name = "1.0.0",
             code = 1,

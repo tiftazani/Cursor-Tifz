@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PointOfSale
 import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.NavigationBar
@@ -61,6 +63,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.tiftazani.laundryops.BuildConfig
 import com.tiftazani.laundryops.data.CuciinStore
+import com.tiftazani.laundryops.data.FirebaseCloud
 import com.tiftazani.laundryops.data.Customer
 import com.tiftazani.laundryops.data.CartLine
 import com.tiftazani.laundryops.data.LaundryStatus
@@ -145,26 +148,60 @@ fun CuciinRoot() {
 private fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
     var email by remember { mutableStateOf("rina@cuciin.id") }
     var pass by remember { mutableStateOf("********") }
+    var busy by remember { mutableStateOf(false) }
+    fun goHome() {
+        nav.navigate("home") { popUpTo("login") { inclusive = true } }
+    }
+    fun localLogin() {
+        if (store.login(email)) goHome()
+        else if (store.pendingName.value != null) nav.navigate("pending")
+        else toast("Email tidak ketemu. Coba demo di bawah.")
+    }
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
         Text("Cuciin", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = Navy)
-        Text("Owner: ${store.ownerName}", color = Muted, modifier = Modifier.padding(bottom = 20.dp))
+        Text("Owner: ${store.ownerName}", color = Muted)
+        Text(
+            if (FirebaseCloud.enabled) "Firebase nyala" else "Mode lokal — taruh google-services.json buat cloud",
+            color = Muted,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(bottom = 20.dp),
+        )
         OutlinedTextField(email, { email = it }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(pass, { pass = it }, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
         Button(
             onClick = {
-                if (store.login(email)) nav.navigate("home") { popUpTo("login") { inclusive = true } }
-                else if (store.pendingName.value != null) nav.navigate("pending")
-                else toast("Email tidak ketemu. Coba demo di bawah.")
+                if (busy) return@Button
+                if (!FirebaseCloud.enabled) {
+                    localLogin()
+                    return@Button
+                }
+                busy = true
+                FirebaseCloud.signIn(email, pass) { ok, pending, msg ->
+                    busy = false
+                    when {
+                        ok -> goHome()
+                        pending -> nav.navigate("pending")
+                        else -> {
+                            if (store.login(email)) goHome()
+                            else if (store.pendingName.value != null) nav.navigate("pending")
+                            else toast(msg)
+                        }
+                    }
+                }
             },
+            enabled = !busy,
             modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
             shape = RoundedCornerShape(16.dp),
-        ) { Text("Masuk") }
+        ) {
+            if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = androidx.compose.ui.graphics.Color.White)
+            else Text("Masuk")
+        }
         TextButton(onClick = { nav.navigate("register") }) { Text("Daftar Kasir / SPV") }
-        Text("Masuk cepat (mock, belum Firebase)", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
+        Text("Masuk cepat (data lokal di HP)", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton({ store.demoLogin(Role.Owner); nav.navigate("home") { popUpTo("login") { inclusive = true } } }) { Text("Owner") }
-            OutlinedButton({ store.demoLogin(Role.Kasir); nav.navigate("home") { popUpTo("login") { inclusive = true } } }) { Text("Kasir") }
-            OutlinedButton({ store.demoLogin(Role.Supervisor); nav.navigate("home") { popUpTo("login") { inclusive = true } } }) { Text("SPV") }
+            OutlinedButton({ store.demoLogin(Role.Owner); goHome() }) { Text("Owner") }
+            OutlinedButton({ store.demoLogin(Role.Kasir); goHome() }) { Text("Kasir") }
+            OutlinedButton({ store.demoLogin(Role.Supervisor); goHome() }) { Text("SPV") }
         }
         TextButton(onClick = { nav.navigate("versions") }) { Text("Riwayat versi ${BuildConfig.VERSION_NAME}") }
     }
@@ -174,13 +211,16 @@ private fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
 private fun RegisterScreen(nav: NavHostController, toast: (String) -> Unit) {
     var name by remember { mutableStateOf("Fajar Putra") }
     var email by remember { mutableStateOf("fajar@cuciin.id") }
+    var pass by remember { mutableStateOf("cuciin123") }
     var role by remember { mutableStateOf(Role.Kasir) }
     var branch by remember { mutableStateOf("melati") }
+    var busy by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         CuciinTopBar("Daftar", "Nunggu approve Owner", onBack = { nav.popBackStack() })
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(name, { name = it }, label = { Text("Nama") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(email, { email = it }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(pass, { pass = it }, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(role == Role.Kasir, { role = Role.Kasir }, label = { Text("Kasir") })
                 FilterChip(role == Role.Supervisor, { role = Role.Supervisor }, label = { Text("SPV") })
@@ -191,10 +231,18 @@ private fun RegisterScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
             Button(
-                onClick = { store.register(name, email, role, branch); nav.navigate("pending") },
+                onClick = {
+                    if (busy) return@Button
+                    busy = true
+                    FirebaseCloud.register(name, email, pass, role, branch) {
+                        busy = false
+                        nav.navigate("pending")
+                    }
+                },
+                enabled = !busy,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-            ) { Text("Kirim pendaftaran") }
+            ) { Text(if (busy) "Mengirim…" else "Kirim pendaftaran") }
         }
     }
 }
@@ -641,6 +689,7 @@ private fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
             Text("Owner: ${store.ownerName}", fontWeight = FontWeight.Bold)
             Text(store.ownerEmail, color = Muted)
             Text("Versi ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", color = Muted)
+            Text(if (FirebaseCloud.enabled) "Cloud: Firebase Auth + Firestore" else "Cloud: off (data di HP)", color = Muted, fontSize = 12.sp)
             OutlinedButton({ nav.navigate("versions") }, Modifier.fillMaxWidth()) { Text("Riwayat versi") }
             OutlinedButton({ toast("Permintaan hapus akun (syarat Play)") }, Modifier.fillMaxWidth()) { Text("Hapus akun saya") }
         }

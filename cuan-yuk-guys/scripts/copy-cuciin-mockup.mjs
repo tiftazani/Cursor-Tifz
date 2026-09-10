@@ -23,4 +23,10 @@ html = html.replace('href="styles.css"', 'href="/cuciin/styles.css"');
 html = html.replace('src="app.js"', 'src="/cuciin/app.js"');
 writeFileSync(join(dest, "index.html"), html);
 
+const apkSrc = join(repoRoot, "laundry-ops", "releases", "cuciin-debug.apk");
+if (existsSync(apkSrc)) {
+  cpSync(apkSrc, join(dest, "cuciin.apk"));
+  console.log("copy-cuciin-mockup: cuciin.apk ikut disalin");
+}
+
 console.log("copy-cuciin-mockup: public/cuciin siap");

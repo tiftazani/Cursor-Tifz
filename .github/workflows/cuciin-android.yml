@@ -1,0 +1,30 @@
+name: Cuciin Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "laundry-ops/android/**"
+      - ".github/workflows/cuciin-android.yml"
+  pull_request:
+    paths:
+      - "laundry-ops/android/**"
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Assemble debug APK
+        working-directory: laundry-ops/android
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cuciin-debug-apk
+          path: laundry-ops/android/app/build/outputs/apk/debug/*.apk

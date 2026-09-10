@@ -58,7 +58,20 @@ h1, h2, h3, p { margin: 0; }
   font-weight: 700;
 }
 .studio-panel h1 { font-size: 40px; letter-spacing: -0.04em; margin: 8px 0 10px; }
-.lede { color: var(--muted); line-height: 1.5; margin-bottom: 28px; }
+.lede { color: var(--muted); line-height: 1.5; margin-bottom: 16px; }
+.apk-dl {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 24px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: var(--navy);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+}
+.apk-dl:hover { background: #2a2460; }
 .field span { display: block; font-size: 12px; font-weight: 700; margin-bottom: 8px; color: var(--muted); }
 .segment {
   display: flex;
