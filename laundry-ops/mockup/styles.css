@@ -156,6 +156,7 @@ h1, h2, h3, p { margin: 0; }
 #app::-webkit-scrollbar { width: 0; }
 
 .screen { padding: 4px 18px 18px; animation: rise 0.28s ease; }
+.screen.has-fab { padding-bottom: 92px; }
 @keyframes rise {
   from { transform: translateY(10px); }
   to { transform: none; }
@@ -605,11 +606,57 @@ body.film .stage { padding: 0; }
   font-size: 18px;
   flex: 0 0 auto;
 }
-.wa-sent-banner {
-  background: #dcf8c6;
-  color: #075e54;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 8px;
+.auth-tabs {
+  display: flex;
+  background: #fff;
+  border-radius: 14px;
+  padding: 4px;
+  margin-bottom: 16px;
 }
+.auth-tabs button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 10px;
+  border-radius: 10px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.auth-tabs button.on { background: var(--teal); color: #fff; }
+.steps {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  margin: 0 0 14px;
+  padding-bottom: 4px;
+}
+.steps span {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.steps span.done { background: var(--mint-soft); color: var(--teal-deep); }
+.steps span.on { background: var(--teal); color: #fff; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip.pipe { background: var(--foam); color: var(--teal-deep); }
+.methods { display: flex; gap: 8px; margin-bottom: 12px; }
+.methods button {
+  flex: 1;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px 6px;
+  font-weight: 700;
+  font-size: 12px;
+}
+.methods button.on { border-color: var(--teal); background: var(--mint-soft); color: var(--teal-deep); }
+.card.warn { border: 1px solid #fbd38d; background: var(--amber-bg); }
+.due { color: var(--amber) !important; font-weight: 700; }
+.row-actions { display: flex; gap: 8px; margin-top: 10px; }
+.row-actions .btn { margin-top: 0; padding: 10px; }
+.segment.tight { margin-bottom: 12px; }
+.btn.primary.small, .btn.danger { font-size: 13px; }

@@ -6,7 +6,6 @@ const OUT = process.env.VIDEO_DIR || "/tmp/cuciin-video";
 const CHROME = process.env.CHROME_PATH || "/usr/bin/google-chrome";
 
 mkdirSync(OUT, { recursive: true });
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
@@ -23,50 +22,60 @@ async function main() {
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
 
-  await page.goto(`${BASE}/?film=1&role=kasir&screen=login`, { waitUntil: "networkidle" });
-  await sleep(1400);
+  await page.goto(`${BASE}/?film=1&role=kasir&screen=register`, { waitUntil: "networkidle" });
+  await sleep(1600);
+  await page.selectOption("#reg-role", "Operator Mesin");
+  await sleep(900);
+  await page.selectOption("#reg-role", "Kasir");
+  await sleep(700);
+  await page.click("[data-register]");
+  await sleep(2000);
 
+  await page.click('button[data-go="login"]');
+  await sleep(1000);
   await page.click('button.btn.primary[data-go="home"]');
-  await sleep(1800);
+  await sleep(2000);
 
-  await page.click('[data-pick-customer="c1"]');
-  await sleep(1400);
-
-  await page.click('[data-open-qty="cuci"]');
-  await sleep(800);
-  await page.click('[data-qty="1"]');
-  await sleep(500);
-  await page.click("[data-add-cart]");
-  await sleep(900);
-
+  await page.click('button[data-go="kasir"]');
+  await sleep(1200);
   await page.click('[data-open-qty="do"]');
-  await sleep(800);
-  await page.click("[data-add-cart]");
-  await sleep(900);
-
-  await page.click('[data-open-qty="sabun"]');
   await sleep(700);
   await page.click("[data-add-cart]");
+  await sleep(900);
+  await page.click('button[data-go="bayar"]');
+  await sleep(1400);
+  await page.click('[data-method="qris"]');
+  await sleep(700);
+  await page.click("button[data-paid]:has-text('Lunas')");
+  await sleep(1200);
+  await page.click('button[data-go="nota"]');
+  await sleep(1800);
+  await page.click("button[data-wa]");
+  await sleep(1600);
+  await page.click("button[data-wa-send]");
+  await sleep(1800);
+  await page.click('button[data-go="home"]');
+  await sleep(1600);
+
+  await page.click('[data-open-queue="CU-2401-0041"]');
+  await sleep(1600);
+  await page.click("button[data-wa='siap']");
+  await sleep(1600);
+  await page.click("button[data-wa-send]");
+  await sleep(1800);
+  await page.click('button[data-go="home"]');
   await sleep(1200);
 
-  await page.click('button[data-go="bayar"]');
+  await page.click('button[data-go="tutup-kas"]');
+  await sleep(2200);
+  await page.click('button[data-go="home"]');
   await sleep(1600);
-  await page.click("button[data-paid]:has-text('Lunas')");
-  await sleep(1800);
-  await page.click('button[data-go="nota"]');
-  await sleep(2200);
-
-  await page.click("button[data-wa]");
-  await sleep(2200);
-  await page.click("button[data-wa-send]");
-  await sleep(3600);
 
   const video = page.video();
   await page.close();
-  const webm = await video.path();
+  console.log(await video.path());
   await context.close();
   await browser.close();
-  console.log(webm);
 }
 
 main().catch((err) => {

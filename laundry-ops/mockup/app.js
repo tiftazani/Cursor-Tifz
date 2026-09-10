@@ -1,4 +1,5 @@
 const Rp = (n) => "Rp " + Math.round(n).toLocaleString("id-ID");
+const AUTH = ["login", "register", "pending", "rejected"];
 
 const ICONS = {
   home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-7H10v7H5a1 1 0 0 1-1-1z"/></svg>`,
@@ -7,6 +8,15 @@ const ICONS = {
   box: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8 12 4l9 4-9 4-9-4z"/><path d="M3 8v8l9 4 9-4V8"/></svg>`,
   more: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/></svg>`,
 };
+
+const PIPE = [
+  { id: "diterima", label: "Diterima", next: "dicuci" },
+  { id: "dicuci", label: "Dicuci", next: "curing" },
+  { id: "curing", label: "Curing", next: "dilipat" },
+  { id: "dilipat", label: "Dilipat", next: "siap" },
+  { id: "siap", label: "Siap ambil", next: "diambil" },
+  { id: "diambil", label: "Diambil", next: null },
+];
 
 const SERVICES = [
   { id: "cuci", name: "Cuci", desc: "Cuci reguler, kering di tempat", unit: "kg", price: 7000, dropOut: false, retail: false },
@@ -19,102 +29,111 @@ const SERVICES = [
 ];
 
 const CUSTOMERS = [
-  { id: "c1", name: "Siti Rahma", address: "Jl. Melati 12, Bandung", phone: "0812-3301-8890", initials: "SR" },
-  { id: "c2", name: "Budi Santoso", address: "Komplek Cempaka Blok B2", phone: "0857-1120-4455", initials: "BS" },
-  { id: "c3", name: "Dewi Lestari", address: "Jl. Anggrek No. 8", phone: "0813-7788-2210", initials: "DL" },
+  { id: "c1", name: "Siti Rahma", address: "Jl. Melati 12, Bandung", phone: "0812-3301-8890", initials: "SR", due: 0 },
+  { id: "c2", name: "Budi Santoso", address: "Komplek Cempaka Blok B2", phone: "0857-1120-4455", initials: "BS", due: 34000 },
+  { id: "c3", name: "Dewi Lestari", address: "Jl. Anggrek No. 8", phone: "0813-7788-2210", initials: "DL", due: 28000 },
 ];
 
 const MODULES = [
-  { id: "dashboard", label: "Dashboard" },
+  { id: "dashboard", label: "Dashboard / antrian" },
   { id: "pelanggan", label: "Pelanggan" },
-  { id: "transaksi", label: "Transaksi" },
+  { id: "transaksi", label: "Nota baru" },
   { id: "layanan", label: "Layanan" },
   { id: "inventory", label: "Inventory" },
+  { id: "kas", label: "Tutup kas" },
   { id: "user", label: "User" },
   { id: "role", label: "Role & akses" },
   { id: "profil", label: "Profil usaha" },
 ];
 
 const state = {
-  role: "owner",
+  role: "kasir",
   screen: "login",
+  authTab: "login",
   loggedIn: false,
   customer: CUSTOMERS[0],
   cart: [],
   sheet: null,
   qtyDraft: 1,
   paid: 0,
+  payMethod: "tunai",
+  promise: "Hari ini, 17.00",
   toast: "",
-  orders: [
-    { id: "N-1042", customer: "Siti Rahma", total: 85000, paid: 85000, status: "lunas", dropOut: true },
-    { id: "N-1041", customer: "Budi Santoso", total: 54000, paid: 20000, status: "dp", dropOut: false },
-    { id: "N-1040", customer: "Dewi Lestari", total: 28000, paid: 0, status: "belum", dropOut: true },
-  ],
+  waSent: false,
+  waKind: "nota",
   payTarget: null,
   extraPay: 0,
-  waSent: false,
-  layananEdit: null,
-  stockInProduct: "Sabun",
-  products: [
-    { name: "Sabun", stock: 24, in: 10, out: 4 },
-    { name: "Softener", stock: 18, in: 8, out: 3 },
-    { name: "Parfum uk 100", stock: 9, in: 5, out: 2 },
-  ],
+  userFilter: "pengajuan",
+  queueFilter: "aktif",
+  activeQueueId: "CU-2401-0042",
+  searchQ: "",
   roles: [
-    { name: "Owner", modules: MODULES.map((m) => m.id) },
-    { name: "Kasir", modules: ["dashboard", "pelanggan", "transaksi", "inventory"] },
-    { name: "Supervisor", modules: ["dashboard"] },
+    { name: "Owner", modules: MODULES.map((m) => m.id), owner: true },
+    { name: "Kasir", modules: ["dashboard", "pelanggan", "transaksi", "inventory", "kas"] },
+    { name: "Supervisor", modules: ["dashboard", "inventory"] },
+    { name: "Operator Mesin", modules: ["dashboard"] },
   ],
   users: [
-    { name: "Tiftazani", role: "Owner" },
-    { name: "Rina", role: "Kasir" },
-    { name: "Andi", role: "Supervisor" },
+    { name: "Tiftazani", role: "Owner", status: "approved" },
+    { name: "Rina", role: "Kasir", status: "approved" },
+    { name: "Andi", role: "Supervisor", status: "approved" },
+    { name: "Fajar Putra", role: "Kasir", status: "pending" },
+    { name: "Mira", role: "Operator Mesin", status: "pending" },
+  ],
+  products: [
+    { name: "Sabun", stock: 24, in: 10, out: 4, min: 8 },
+    { name: "Softener", stock: 18, in: 8, out: 3, min: 6 },
+    { name: "Parfum uk 100", stock: 9, in: 5, out: 2, min: 5 },
+  ],
+  queue: [
+    { id: "CU-2401-0042", customer: "Siti Rahma", phone: "0812-3301-8890", items: "Curing DO 3 kg", total: 30000, paid: 30000, pay: "lunas", pipe: "dicuci", dropOut: true, promise: "Hari ini 17.00", late: false },
+    { id: "CU-2401-0041", customer: "Budi Santoso", phone: "0857-1120-4455", items: "Cuci 5 kg", total: 54000, paid: 20000, pay: "dp", pipe: "siap", dropOut: false, promise: "Kemarin 16.00", late: true },
+    { id: "CU-2401-0040", customer: "Dewi Lestari", phone: "0813-7788-2210", items: "Curing DO Lipat 2 kg", total: 28000, paid: 0, pay: "belum", pipe: "diterima", dropOut: true, promise: "Hari ini 18.00", late: false },
+  ],
+  orders: [
+    { id: "CU-2401-0041", customer: "Budi Santoso", total: 54000, paid: 20000, dropOut: false },
+    { id: "CU-2401-0040", customer: "Dewi Lestari", total: 28000, paid: 0, dropOut: true },
   ],
 };
 
 const TABS = {
   owner: [
-    { id: "home", label: "Beranda", icon: "home" },
-    { id: "kasir", label: "Kasir", icon: "kasir" },
+    { id: "home", label: "Antrian", icon: "home" },
+    { id: "kasir", label: "Nota", icon: "kasir" },
     { id: "customers", label: "Pelanggan", icon: "people" },
     { id: "inventory", label: "Stok", icon: "box" },
     { id: "more", label: "Lainnya", icon: "more" },
   ],
   kasir: [
-    { id: "home", label: "Beranda", icon: "home" },
-    { id: "kasir", label: "Kasir", icon: "kasir" },
+    { id: "home", label: "Antrian", icon: "home" },
+    { id: "kasir", label: "Nota", icon: "kasir" },
     { id: "customers", label: "Pelanggan", icon: "people" },
     { id: "inventory", label: "Stok", icon: "box" },
   ],
-  supervisor: [{ id: "home", label: "Beranda", icon: "home" }],
+  supervisor: [{ id: "home", label: "Antrian", icon: "home" }],
 };
 
 const JUMPS = [
   { id: "login", label: "Login" },
-  { id: "home", label: "Dashboard" },
-  { id: "customers", label: "Pelanggan" },
-  { id: "customer-form", label: "Form pelanggan" },
-  { id: "kasir", label: "Kasir" },
+  { id: "register", label: "Daftar" },
+  { id: "pending", label: "Nunggu approve" },
+  { id: "home", label: "Antrian" },
+  { id: "kasir", label: "Nota baru" },
   { id: "bayar", label: "Bayar" },
-  { id: "nota", label: "Nota + WA" },
-  { id: "orders", label: "Daftar nota" },
-  { id: "pelunasan", label: "Pelunasan" },
-  { id: "layanan", label: "Layanan" },
-  { id: "layanan-form", label: "Form layanan" },
-  { id: "inventory", label: "Inventory" },
-  { id: "stok-masuk", label: "Stok masuk" },
-  { id: "users", label: "User" },
+  { id: "nota", label: "WA nota" },
+  { id: "queue-detail", label: "Detail antrian" },
+  { id: "wa-ready", label: "WA siap ambil" },
+  { id: "tutup-kas", label: "Tutup kas" },
+  { id: "customers", label: "Pelanggan" },
+  { id: "orders", label: "Cari nota" },
+  { id: "users", label: "User / pengajuan" },
   { id: "roles", label: "Role" },
-  { id: "profil", label: "Profil usaha" },
-  { id: "wa-chat", label: "WhatsApp" },
+  { id: "inventory", label: "Inventory" },
+  { id: "layanan", label: "Layanan" },
 ];
 
-function initials(name) {
-  return name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
-}
-
-function cartTotal() {
-  return state.cart.reduce((s, i) => s + i.qty * i.price, 0);
+function pipeMeta(id) {
+  return PIPE.find((p) => p.id === id) || PIPE[0];
 }
 
 function payStatus(paid, total) {
@@ -123,18 +142,27 @@ function payStatus(paid, total) {
   return { id: "lunas", label: "Lunas" };
 }
 
+function cartTotal() {
+  return state.cart.reduce((s, i) => s + i.qty * i.price, 0);
+}
+
 function waNumber(phone) {
   const d = phone.replace(/\D/g, "");
   if (d.startsWith("0")) return "62" + d.slice(1);
   return d;
 }
 
+function methodLabel() {
+  return { tunai: "Tunai", qris: "QRIS", transfer: "Transfer" }[state.payMethod] || "Tunai";
+}
+
 function notaText() {
   const c = state.customer;
-  const st = payStatus(state.paid, cartTotal());
-  const lines = state.cart
+  const st = payStatus(state.paid, cartTotal() || 30000);
+  const lines = (state.cart.length ? state.cart : [{ name: "Curing DO", qty: 3, unit: "kg", price: 10000 }])
     .map((i) => `• ${i.name} ${i.qty} ${i.unit} x ${Rp(i.price)} = ${Rp(i.qty * i.price)}`)
     .join("\n");
+  const total = cartTotal() || 30000;
   return `Cuciin — Nota laundry
 ${c.name}
 ${c.address}
@@ -142,16 +170,37 @@ WA ${c.phone}
 
 ${lines}
 
-Total   ${Rp(cartTotal())}
-Dibayar ${Rp(state.paid)}
-Sisa    ${Rp(Math.max(cartTotal() - state.paid, 0))}
-Status  ${st.label}${state.cart.some((i) => i.dropOut) ? "\nDrop Out — tidak perlu nunggu" : ""}`;
+Total    ${Rp(total)}
+Dibayar  ${Rp(state.paid)}
+Sisa     ${Rp(Math.max(total - state.paid, 0))}
+Bayar    ${methodLabel()} · ${st.label}
+Janji    ${state.promise}${state.cart.some((i) => i.dropOut) ? "\nDrop Out — tidak perlu nunggu" : ""}`;
+}
+
+function siapText(order) {
+  const o = order || activeQueue();
+  return `Cuciin — cucian siap diambil
+Hai ${o.customer}, cucian ${o.id} sudah siap.
+${o.items}
+Ambil di Cuciin, Jl. Laundry Raya 1.
+Janji ${o.promise}.`;
+}
+
+function personInitials(name) {
+  return name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function activeQueue() {
+  return state.queue.find((q) => q.id === state.activeQueueId) || state.queue[0];
+}
+
+function registerRoles() {
+  return state.roles.filter((r) => !r.owner);
 }
 
 function go(screen) {
   state.screen = screen;
-  if (screen !== "login") state.loggedIn = true;
-  if (screen === "login") state.loggedIn = false;
+  state.loggedIn = !AUTH.includes(screen);
   render();
 }
 
@@ -176,11 +225,11 @@ function applyUrl() {
   if (u.searchParams.get("film") === "1") document.body.classList.add("film");
   if (screen && SCREENS[screen]) {
     state.screen = screen;
-    state.loggedIn = screen !== "login";
+    state.loggedIn = !AUTH.includes(screen);
   }
-  if ((state.screen === "bayar" || state.screen === "nota") && !state.cart.length) {
+  if (["bayar", "nota", "wa-chat"].includes(state.screen) && !state.cart.length) {
     state.cart = [{ ...SERVICES[2], qty: 3 }];
-    state.paid = state.screen === "nota" ? 15000 : 0;
+    state.paid = state.screen === "bayar" ? 0 : 30000;
   }
 }
 
@@ -194,11 +243,14 @@ function showToast(msg) {
 }
 
 function navAllowed(id) {
-  const tabs = TABS[state.role].map((t) => t.id);
-  if (tabs.includes(id)) return true;
+  if (AUTH.includes(id)) return true;
   if (state.role === "owner") return true;
-  if (state.role === "kasir" && ["customer-form", "bayar", "nota", "orders", "pelunasan", "stok-masuk"].includes(id)) return true;
-  if (state.role === "supervisor") return id === "home";
+  if (state.role === "kasir") {
+    return ["home", "kasir", "customers", "customer-form", "pick-customer", "bayar", "nota", "wa-chat", "wa-ready", "orders", "pelunasan", "inventory", "stok-masuk", "tutup-kas", "queue-detail"].includes(id);
+  }
+  if (state.role === "supervisor") {
+    return ["home", "queue-detail", "wa-ready", "inventory"].includes(id);
+  }
   return false;
 }
 
@@ -210,45 +262,149 @@ function chipStatus(id, label) {
   return `<span class="chip ${id}">${label}</span>`;
 }
 
+function authTabs(active) {
+  return `<div class="auth-tabs">
+    <button class="${active === "login" ? "on" : ""}" data-go="login">Masuk</button>
+    <button class="${active === "register" ? "on" : ""}" data-go="register">Daftar</button>
+  </div>`;
+}
+
+function stepper(current) {
+  return `<div class="steps">${PIPE.map((p) => {
+    const idx = PIPE.findIndex((x) => x.id === current);
+    const i = PIPE.findIndex((x) => x.id === p.id);
+    const cls = i < idx ? "done" : i === idx ? "on" : "";
+    return `<span class="${cls}">${p.label}</span>`;
+  }).join("")}</div>`;
+}
+
+function queueCard(o) {
+  const pay = payStatus(o.paid, o.total);
+  const pipe = pipeMeta(o.pipe);
+  return `<button class="card tap" data-open-queue="${o.id}">
+    <div class="row">
+      <div class="grow">
+        <div class="name">${o.id} · ${o.customer}</div>
+        <div class="meta">${o.items} · janji ${o.promise}</div>
+      </div>
+    </div>
+    <div class="chip-row">
+      ${chipStatus(pay.id, pay.label)}
+      ${chipStatus("pipe", pipe.label)}
+      ${o.dropOut ? '<span class="chip do">Drop Out</span>' : ""}
+      ${o.late ? '<span class="chip belum">Telat</span>' : ""}
+    </div>
+  </button>`;
+}
+
 function screenLogin() {
   return `<div class="login">
     <div class="mark">Ci</div>
     <h1>Cuciin</h1>
-    <p class="lede">Masuk sesuai akun. Menu menyesuaikan role lo.</p>
-    <label class="form"><span>Email</span><input value="owner@cuciin.id" /></label>
+    <p class="lede">Kasir dan SPV daftar dulu. Owner yang nyalain akses.</p>
+    ${authTabs("login")}
+    <label class="form"><span>Email</span><input value="rina@cuciin.id" /></label>
     <label class="form"><span>Password</span><input type="password" value="••••••••" /></label>
     <button class="btn primary" data-go="home">Masuk</button>
   </div>`;
 }
 
+function screenRegister() {
+  const roles = registerRoles();
+  return `<div class="login">
+    <div class="mark">Ci</div>
+    <h1>Daftar</h1>
+    <p class="lede">Pilih role. Kalau Owner bikin role baru, muncul di sini juga.</p>
+    ${authTabs("register")}
+    <label class="form"><span>Nama</span><input value="Fajar Putra" /></label>
+    <label class="form"><span>Email</span><input value="fajar@cuciin.id" /></label>
+    <label class="form"><span>Password</span><input type="password" value="••••••••" /></label>
+    <label class="form"><span>Daftar sebagai</span>
+      <select id="reg-role">
+        ${roles.map((r) => `<option ${r.name === "Kasir" ? "selected" : ""}>${r.name}</option>`).join("")}
+      </select>
+    </label>
+    <button class="btn primary" data-register>Kirim pendaftaran</button>
+  </div>`;
+}
+
+function screenPending() {
+  return `<div class="login">
+    <div class="mark">Ci</div>
+    <h1>Nunggu Owner</h1>
+    <p class="lede">Akun Kasir lo sudah masuk. Belum bisa buka antrian atau kasir sebelum Tiftazani setujui.</p>
+    <div class="card"><div class="name">Fajar Putra</div><div class="meta">Kasir · menunggu persetujuan</div></div>
+    <button class="btn ghost" data-go="login">Kembali ke masuk</button>
+  </div>`;
+}
+
+function screenRejected() {
+  return `<div class="login">
+    <h1>Ditolak</h1>
+    <p class="lede">Owner belum kasih akses. Hubungi Tiftazani.</p>
+    <button class="btn primary" data-go="login">Ke halaman masuk</button>
+  </div>`;
+}
+
 function screenHome() {
+  const pending = state.users.filter((u) => u.status === "pending").length;
+  const aktif = state.queue.filter((q) => q.pipe !== "diambil");
+  const doCount = aktif.filter((q) => q.dropOut).length;
+  const late = aktif.filter((q) => q.late).length;
+
   if (state.role === "supervisor") {
-    return `<div class="screen">
-      <div class="top"><div><p class="sub">Hari ini · Supervisor</p><h1>Drop Out</h1></div></div>
-      <div class="stats big">
-        <div class="stat"><div class="k">Jumlah Drop Out</div><div class="v">12</div><p class="meta">Nota yang dikerjain penjaga, pelanggan tidak nunggu</p></div>
-        <div class="stat"><div class="k">Stok masuk</div><div class="v">23</div><p class="meta">Sabun, softener, parfum</p></div>
-        <div class="stat"><div class="k">Stok keluar</div><div class="v">9</div><p class="meta">Terjual dari kasir hari ini</p></div>
+    const list = state.queueFilter === "do" ? aktif.filter((q) => q.dropOut) : aktif;
+    return `<div class="screen has-fab">
+      <div class="top"><div><p class="sub">Supervisor · lantai</p><h1>Antrian</h1></div></div>
+      <div class="stats">
+        <div class="stat"><div class="k">Drop Out</div><div class="v">${doCount}</div></div>
+        <div class="stat"><div class="k">Telat janji</div><div class="v">${late}</div></div>
+        <div class="stat"><div class="k">Stok out</div><div class="v">9</div></div>
       </div>
+      <div class="segment tight">
+        <button class="${state.queueFilter === "aktif" ? "on" : ""}" data-qfilter="aktif">Aktif</button>
+        <button class="${state.queueFilter === "do" ? "on" : ""}" data-qfilter="do">Drop Out</button>
+      </div>
+      ${list.map(queueCard).join("")}
     </div>`;
   }
-  return `<div class="screen">
+
+  return `<div class="screen has-fab">
     <div class="top">
       <div>
         <p class="sub">Halo, ${state.role === "owner" ? "Tiftazani" : "Rina"}</p>
-        <h1>Beranda</h1>
+        <h1>Antrian</h1>
       </div>
     </div>
-    <div class="hero">
-      <div class="k">Omzet hari ini</div>
-      <div class="v">${Rp(1284000)}</div>
-      <div class="hero-row">
-        <span class="pill">18 nota</span>
-        <span class="pill">12 Drop Out</span>
-        <span class="pill">4 masih DP</span>
-      </div>
-    </div>
-    <div class="section-label">Pelanggan <span>nama · alamat · HP</span></div>
+    ${
+      state.role === "owner" && pending
+        ? `<button class="card tap warn" data-go="users"><div class="name">${pending} pengajuan akun</div><div class="meta">Setujui Kasir / SPV / role baru</div></button>`
+        : ""
+    }
+    ${
+      state.role !== "supervisor"
+        ? `<div class="hero">
+            <div class="k">Omzet hari ini</div>
+            <div class="v">${Rp(1284000)}</div>
+            <div class="hero-row">
+              <span class="pill">${aktif.length} antrian</span>
+              <span class="pill">${doCount} Drop Out</span>
+              <span class="pill">${late} telat</span>
+            </div>
+          </div>`
+        : ""
+    }
+    <div class="section-label">Hari ini <span>geser status, bukan nambah nota</span></div>
+    ${aktif.map(queueCard).join("")}
+    ${state.role === "kasir" || state.role === "owner" ? `<button class="btn ghost" data-go="tutup-kas">Tutup kas shift ini</button>` : ""}
+    ${state.role !== "supervisor" ? `<button class="fab" data-go="kasir">+ Nota baru</button>` : ""}
+  </div>`;
+}
+
+function screenCustomers() {
+  return `<div class="screen">
+    <div class="top"><div><p class="sub">Nama · alamat · HP</p><h1>Pelanggan</h1></div></div>
+    <input class="search" placeholder="Cari nama atau HP" />
     ${CUSTOMERS.map((c) => `
       <button class="card tap" data-pick-customer="${c.id}" data-go="kasir">
         <div class="row">
@@ -257,27 +413,10 @@ function screenHome() {
             <div class="name">${c.name}</div>
             <div class="meta">${c.address}</div>
             <div class="meta">${c.phone}</div>
+            ${c.due ? `<div class="meta due">Sisa tagihan ${Rp(c.due)}</div>` : `<div class="meta">Lunas</div>`}
           </div>
         </div>
       </button>`).join("")}
-  </div>`;
-}
-
-function screenCustomers() {
-  return `<div class="screen">
-    <div class="top"><div><p class="sub">Master data</p><h1>Pelanggan</h1></div></div>
-    <input class="search" placeholder="Cari nama atau HP" />
-    ${CUSTOMERS.map((c) => `
-      <div class="card">
-        <div class="row">
-          <div class="avatar">${c.initials}</div>
-          <div class="grow">
-            <div class="name">${c.name}</div>
-            <div class="meta">${c.address}</div>
-            <div class="meta">${c.phone} · WhatsApp ke nomor ini</div>
-          </div>
-        </div>
-      </div>`).join("")}
     <button class="fab" data-go="customer-form">+ Pelanggan</button>
   </div>`;
 }
@@ -286,7 +425,7 @@ function screenCustomerForm() {
   return `<div class="screen">
     <div class="top">${backBtn("customers")}<h1>Pelanggan baru</h1><span></span></div>
     <label class="form"><span>Nama</span><input placeholder="Nama lengkap" /></label>
-    <label class="form"><span>Alamat</span><textarea rows="2" placeholder="Alamat antar/jemput"></textarea></label>
+    <label class="form"><span>Alamat</span><textarea rows="2" placeholder="Alamat"></textarea></label>
     <label class="form"><span>No. HP / WhatsApp</span><input placeholder="08xxxxxxxxxx" /></label>
     <button class="btn primary" data-toast="Pelanggan tersimpan" data-go="customers">Simpan</button>
   </div>`;
@@ -295,7 +434,7 @@ function screenCustomerForm() {
 function screenKasir() {
   const c = state.customer;
   return `<div class="screen">
-    <div class="top"><div><p class="sub">Nota baru</p><h1>Kasir</h1></div></div>
+    <div class="top"><div><p class="sub">Satu nota, satu jalur</p><h1>Nota baru</h1></div></div>
     <button class="card tap" data-go="customers">
       <div class="row">
         <div class="avatar">${c.initials}</div>
@@ -313,7 +452,7 @@ function screenKasir() {
         <button class="svc" data-open-qty="${s.id}">
           <div class="t">${s.name}</div>
           <div class="d">${s.desc}</div>
-          <div class="p">${Rp(s.price)} / ${s.unit} ${s.dropOut ? '<span class="chip do">Drop Out</span>' : ""}</div>
+          <div class="p">${Rp(s.price)} / ${s.unit} ${s.dropOut ? '<span class="chip do">DO</span>' : ""}</div>
         </button>`).join("")}
     </div>
     <div class="cart dock">
@@ -321,8 +460,8 @@ function screenKasir() {
         state.cart.length
           ? state.cart.map((i) => `<div class="cart-item"><span>${i.name} · ${i.qty} ${i.unit}</span><b>${Rp(i.qty * i.price)}</b></div>`).join("") +
             `<div class="cart-item"><span>Total</span><b>${Rp(cartTotal())}</b></div>
-             <button class="btn primary" data-go="bayar">Lanjut bayar</button>`
-          : `<p class="empty" style="padding:8px">Tap layanan. Qty kg atau pcs sesuai tarif.</p>`
+             <button class="btn primary" data-go="bayar">Lanjut: janji & bayar</button>`
+          : `<p class="empty" style="padding:8px">Tap layanan. Qty sesuai tarif kg atau pcs.</p>`
       }
     </div>
   </div>`;
@@ -334,107 +473,128 @@ function screenBayar() {
   const st = payStatus(paid, total);
   const sisa = Math.max(total - paid, 0);
   return `<div class="screen">
-    <div class="top">${backBtn("kasir")}<h1>Bayar</h1><span></span></div>
+    <div class="top">${backBtn("kasir")}<h1>Janji & bayar</h1><span></span></div>
     <div class="pay-box">
       <p class="sub">Total nota</p>
       <div class="total">${Rp(total)}</div>
       ${chipStatus(st.id, st.label)}
     </div>
+    <label class="form"><span>Janji selesai</span><input value="${state.promise}" /></label>
+    <p class="section-label">Metode</p>
+    <div class="methods">
+      ${["tunai", "qris", "transfer"].map((m) => `<button class="${state.payMethod === m ? "on" : ""}" data-method="${m}">${{ tunai: "Tunai", qris: "QRIS", transfer: "Transfer" }[m]}</button>`).join("")}
+    </div>
     <label class="form"><span>Dibayar sekarang</span><input id="paid-input" inputmode="numeric" value="${paid}" /></label>
     <div class="pay-quick">
       <button data-paid="0">0</button>
-      <button data-paid="${Math.round(total / 2)}">Setengah</button>
+      <button data-paid="${Math.round(total / 2)}">DP setengah</button>
       <button data-paid="${total}">Lunas</button>
     </div>
-    <p class="sisa">Sisa tagihan <b>${Rp(sisa)}</b> · ${st.id === "dp" ? "uang muka, pelunasan nanti" : st.id === "belum" ? "belum ada bayaran" : "sudah nutup"}</p>
-    <button class="btn primary" data-go="nota">Simpan nota</button>
+    <p class="sisa">Sisa tagihan <b>${Rp(sisa)}</b></p>
+    <button class="btn primary" data-go="nota">Simpan & WA nota</button>
   </div>`;
 }
 
 function screenNota() {
   const c = state.customer;
-  const wa = waNumber(c.phone);
   return `<div class="screen">
     <div class="top">${backBtn("bayar")}<h1>Kirim nota</h1><span></span></div>
-    <p class="meta" style="margin-bottom:10px">WhatsApp ke ${c.phone} · wa.me/${wa}</p>
+    <p class="meta" style="margin-bottom:10px">WhatsApp ke ${c.phone}</p>
     <div class="nota">${notaText()}</div>
-    <button class="btn wa" data-wa="${wa}">Kirim WhatsApp</button>
-    <button class="btn ghost" data-go="orders">Simpan, kirim nanti</button>
+    <button class="btn wa" data-wa="nota">Kirim WhatsApp</button>
+    <button class="btn ghost" data-go="home">Masuk antrian, WA nanti</button>
   </div>`;
 }
 
-function screenWaChat() {
-  const c = state.customer;
+function waScreen(kind) {
+  const c = kind === "siap" ? { name: activeQueue().customer, phone: activeQueue().phone, initials: personInitials(activeQueue().customer) } : state.customer;
+  const body = kind === "siap" ? siapText() : notaText();
+  const back = kind === "siap" ? "queue-detail" : "nota";
+  const doneGo = kind === "siap" ? "home" : "home";
   return `<div class="screen" style="padding:0">
     <div class="wa-app">
       <div class="wa-head">
-        ${backBtn("nota")}
-        <div class="avatar">${c.initials}</div>
+        ${backBtn(back)}
+        <div class="avatar">${c.initials || "WA"}</div>
         <div class="grow">
           <div class="name">${c.name}</div>
           <div class="meta">${c.phone} · WhatsApp</div>
         </div>
       </div>
-      ${state.waSent ? `<div class="wa-sent-banner">Nota terkirim ke ${c.phone}</div>` : ""}
+      ${state.waSent ? `<div class="wa-sent-banner">${kind === "siap" ? "Siap ambil terkirim" : "Nota terkirim"} · ${c.phone}</div>` : ""}
       <div class="wa-thread">
-        <div class="wa-bubble">${notaText()}
-          <div class="wa-time">${state.waSent ? "09.41 ✓✓" : "draft"}</div>
-        </div>
+        <div class="wa-bubble">${body}<div class="wa-time">${state.waSent ? "09.41 ✓✓" : "draft"}</div></div>
       </div>
       ${
         state.waSent
-          ? `<button class="btn primary" style="margin:0 12px 16px;width:auto" data-go="orders">Selesai</button>`
-          : `<div class="wa-composer">
-              <p class="hint">Nota siap dikirim</p>
-              <button class="wa-send" data-wa-send aria-label="Kirim">➤</button>
-            </div>`
+          ? `<button class="btn primary" style="margin:0 12px 16px;width:auto" data-go="${doneGo}">${kind === "siap" ? "Kembali ke antrian" : "Lanjut ke antrian"}</button>`
+          : `<div class="wa-composer"><p class="hint">${kind === "siap" ? "Siap diambil" : "Nota"} siap dikirim</p>
+              <button class="wa-send" data-wa-send aria-label="Kirim">➤</button></div>`
       }
     </div>
   </div>`;
 }
 
-function screenOrders() {
+function screenWaChat() {
+  return waScreen("nota");
+}
+function screenWaReady() {
+  return waScreen("siap");
+}
+
+function screenQueueDetail() {
+  const o = activeQueue();
+  const pipe = pipeMeta(o.pipe);
+  const pay = payStatus(o.paid, o.total);
   return `<div class="screen">
-    <div class="top"><div><p class="sub">Riwayat</p><h1>Nota</h1></div></div>
-    ${state.orders.map((o) => {
-      const sisa = Math.max(o.total - o.paid, 0);
-      const st = payStatus(o.paid, o.total);
-      return `<button class="card tap" data-open-order="${o.id}">
-        <div class="row">
-          <div class="grow">
-            <div class="name">${o.id} · ${o.customer}</div>
-            <div class="meta">${Rp(o.total)} · dibayar ${Rp(o.paid)}${sisa ? " · sisa " + Rp(sisa) : ""}</div>
-          </div>
-          ${chipStatus(st.id, st.label)}
-          ${o.dropOut ? '<span class="chip do">DO</span>' : ""}
-        </div>
-      </button>`;
-    }).join("")}
+    <div class="top">${backBtn("home")}<h1>${o.id}</h1><span></span></div>
+    <div class="card">
+      <div class="name">${o.customer}</div>
+      <div class="meta">${o.phone}</div>
+      <div class="meta">${o.items}</div>
+      <div class="chip-row">${chipStatus(pay.id, pay.label)} ${o.dropOut ? '<span class="chip do">Drop Out</span>' : ""}</div>
+      <div class="meta">Janji ${o.promise}</div>
+    </div>
+    <p class="section-label">Progres cucian</p>
+    ${stepper(o.pipe)}
+    ${
+      o.pipe === "diambil"
+        ? `<p class="empty">Sudah diambil.</p>`
+        : o.pipe === "siap"
+          ? `<button class="btn wa" data-wa="siap">WA siap diambil</button>
+             <button class="btn primary" data-mark-taken>Tandai sudah diambil</button>`
+          : `<button class="btn primary" data-advance-pipe>Lanjut: ${pipeMeta(pipe.next).label}</button>`
+    }
+  </div>`;
+}
+
+function screenOrders() {
+  const q = state.searchQ.toLowerCase();
+  const rows = state.queue.filter((o) => !q || o.id.toLowerCase().includes(q) || o.customer.toLowerCase().includes(q) || o.phone.includes(q));
+  return `<div class="screen">
+    <div class="top"><div><p class="sub">Nomor · nama · HP</p><h1>Cari nota</h1></div></div>
+    <input class="search" id="nota-search" placeholder="CU-2401… atau nama" value="${state.searchQ}" />
+    ${rows.map(queueCard).join("") || `<p class="empty">Tidak ketemu</p>`}
   </div>`;
 }
 
 function screenPelunasan() {
-  const o = state.payTarget || state.orders[1];
+  const o = state.payTarget || state.orders[0];
   const sisa = o.total - o.paid;
-  const extra = state.extraPay || sisa;
-  const after = Math.min(o.paid + extra, o.total);
-  const st = payStatus(after, o.total);
   return `<div class="screen">
     <div class="top">${backBtn("orders")}<h1>Pelunasan</h1><span></span></div>
     <div class="card">
       <div class="name">${o.id} · ${o.customer}</div>
-      <div class="meta">Total ${Rp(o.total)} · sudah DP ${Rp(o.paid)}</div>
       <p class="sisa">Sisa tagihan <b>${Rp(sisa)}</b></p>
     </div>
-    <label class="form"><span>Bayar tambahan</span><input value="${extra}" /></label>
-    <p>${chipStatus(st.id, st.label)} setelah ini</p>
-    <button class="btn wa" data-toast="Nota update dikirim ke WhatsApp pelanggan" data-go="orders">Bayar & kirim WA</button>
+    <label class="form"><span>Bayar tambahan</span><input value="${sisa}" /></label>
+    <button class="btn wa" data-toast="Update sisa dikirim WA" data-go="orders">Bayar & kirim WA</button>
   </div>`;
 }
 
 function screenLayanan() {
   return `<div class="screen">
-    <div class="top"><div><p class="sub">Bisa tambah / hapus</p><h1>Layanan</h1></div></div>
+    <div class="top"><div><p class="sub">Tambah / hapus</p><h1>Layanan</h1></div></div>
     ${SERVICES.map((s) => `
       <button class="card tap" data-go="layanan-form">
         <div class="name">${s.name} ${s.dropOut ? '<span class="chip do">Drop Out</span>' : ""}</div>
@@ -449,13 +609,10 @@ function screenLayananForm() {
   return `<div class="screen">
     <div class="top">${backBtn("layanan")}<h1>Layanan</h1><span></span></div>
     <label class="form"><span>Nama</span><input value="Curing DO Lipat" /></label>
-    <label class="form"><span>Keterangan</span><textarea rows="2">Drop Out + dilipat rapi, pelanggan tidak nunggu</textarea></label>
+    <label class="form"><span>Keterangan</span><textarea rows="2">Drop Out + dilipat rapi</textarea></label>
     <label class="form"><span>Tarif (Rp)</span><input value="12000" /></label>
     <label class="form"><span>Hitung sebagai</span>
       <select><option>Kiloan (kg)</option><option>Satuan (pcs)</option></select>
-    </label>
-    <label class="form"><span>Jenis</span>
-      <select><option>Jasa laundry</option><option>Produk retail (potong stok)</option></select>
     </label>
     <div class="toggle">Drop Out<button class="switch on" type="button" data-toggle-switch><i></i></button></div>
     <button class="btn primary" data-toast="Layanan tersimpan" data-go="layanan">Simpan</button>
@@ -467,7 +624,7 @@ function screenInventory() {
   const totalIn = state.products.reduce((s, p) => s + p.in, 0);
   const totalOut = state.products.reduce((s, p) => s + p.out, 0);
   return `<div class="screen">
-    <div class="top"><div><p class="sub">Sabun · softener · parfum</p><h1>Stok</h1></div></div>
+    <div class="top"><div><p class="sub">Retail</p><h1>Stok</h1></div></div>
     <div class="stats">
       <div class="stat"><div class="k">Masuk</div><div class="v">${totalIn}</div></div>
       <div class="stat"><div class="k">Keluar</div><div class="v">${totalOut}</div></div>
@@ -475,10 +632,10 @@ function screenInventory() {
     </div>
     ${state.products.map((p) => `
       <div class="card">
-        <div class="name">${p.name}</div>
+        <div class="name">${p.name} ${p.stock <= p.min ? '<span class="chip belum">Rendah</span>' : ""}</div>
         <div class="meta">Sisa ${p.stock} · masuk ${p.in} · keluar ${p.out}</div>
       </div>`).join("")}
-    <button class="fab" data-go="stok-masuk">+ Stok masuk</button>
+    ${state.role !== "supervisor" ? `<button class="fab" data-go="stok-masuk">+ Stok masuk</button>` : ""}
   </div>`;
 }
 
@@ -489,33 +646,43 @@ function screenStokMasuk() {
       <select><option>Sabun</option><option>Softener</option><option>Parfum uk 100</option></select>
     </label>
     <label class="form"><span>Jumlah</span><input value="12" /></label>
-    <label class="form"><span>Catatan</span><input placeholder="Pembelian / bonus" /></label>
     <button class="btn primary" data-toast="Stok masuk tercatat" data-go="inventory">Simpan</button>
   </div>`;
 }
 
 function screenUsers() {
+  const list = state.users.filter((u) => (state.userFilter === "pengajuan" ? u.status === "pending" : u.status === "approved"));
   return `<div class="screen">
-    <div class="top"><div><p class="sub">Akses</p><h1>User</h1></div></div>
-    ${state.users.map((u) => `
-      <div class="card"><div class="name">${u.name}</div><div class="meta">${u.role}</div></div>
-    `).join("")}
-    <button class="fab" data-toast="Form user — mockup">+ User</button>
+    <div class="top"><div><p class="sub">Owner yang nyalain</p><h1>User</h1></div></div>
+    <div class="segment tight">
+      <button class="${state.userFilter === "pengajuan" ? "on" : ""}" data-ufilter="pengajuan">Pengajuan</button>
+      <button class="${state.userFilter === "aktif" ? "on" : ""}" data-ufilter="aktif">Aktif</button>
+    </div>
+    ${list.map((u) => `
+      <div class="card">
+        <div class="name">${u.name}</div>
+        <div class="meta">${u.role} · ${u.status}</div>
+        ${u.status === "pending" ? `<div class="row-actions">
+          <button class="btn primary" data-approve="${u.name}">Setujui</button>
+          <button class="btn danger" data-reject="${u.name}">Tolak</button>
+        </div>` : ""}
+      </div>`).join("") || `<p class="empty">Kosong</p>`}
   </div>`;
 }
 
 function screenRoles() {
   return `<div class="screen">
-    <div class="top"><div><p class="sub">Bisa ditambah, modul di-custom</p><h1>Role</h1></div></div>
+    <div class="top"><div><p class="sub">Role baru ikut dropdown Daftar</p><h1>Role</h1></div></div>
     ${state.roles.map((r) => `
       <div class="card">
-        <div class="name">${r.name}</div>
+        <div class="name">${r.name} ${r.owner ? '<span class="chip pipe">bukan daftar publik</span>' : ""}</div>
         <div class="meta">${r.modules.map((id) => MODULES.find((m) => m.id === id)?.label).join(" · ")}</div>
       </div>`).join("")}
     <div class="card">
-      <div class="name">Tambah role baru</div>
+      <div class="name">Tambah role</div>
+      <label class="form"><span>Nama role</span><input id="new-role-name" placeholder="contoh: Setrika" /></label>
       ${MODULES.map((m) => `<div class="toggle">${m.label}<button class="switch" type="button" data-toggle-switch><i></i></button></div>`).join("")}
-      <button class="btn primary" data-toast="Role tersimpan">Simpan role</button>
+      <button class="btn primary" data-add-role>Simpan role</button>
     </div>
   </div>`;
 }
@@ -525,8 +692,25 @@ function screenProfil() {
     <div class="top">${backBtn("more")}<h1>Profil usaha</h1><span></span></div>
     <label class="form"><span>Nama laundry</span><input value="Cuciin" /></label>
     <label class="form"><span>Alamat</span><textarea rows="2">Jl. Laundry Raya 1, Bandung</textarea></label>
-    <p class="meta">Kepala nota WhatsApp.</p>
+    <button class="btn ghost" data-toast="Permintaan hapus akun (syarat Play)">Hapus akun saya</button>
     <button class="btn primary" data-toast="Profil tersimpan" data-go="more">Simpan</button>
+  </div>`;
+}
+
+function screenTutupKas() {
+  return `<div class="screen">
+    <div class="top">${backBtn("home")}<h1>Tutup kas</h1><span></span></div>
+    <p class="meta" style="margin-bottom:12px">Shift Rina · 10 Sep 2026</p>
+    <div class="card">
+      <div class="cart-item"><span>Modal awal</span><b>${Rp(300000)}</b></div>
+      <div class="cart-item"><span>Tunai sistem</span><b>${Rp(420000)}</b></div>
+      <div class="cart-item"><span>QRIS</span><b>${Rp(185000)}</b></div>
+      <div class="cart-item"><span>Transfer</span><b>${Rp(90000)}</b></div>
+      <div class="cart-item"><span>Piutang / DP</span><b>${Rp(54000)}</b></div>
+    </div>
+    <label class="form"><span>Tunai di laci (hitung)</span><input value="420000" /></label>
+    <p class="sisa">Selisih <b>Rp 0</b></p>
+    <button class="btn primary" data-toast="Kas ditutup" data-go="home">Tutup shift</button>
   </div>`;
 }
 
@@ -534,11 +718,12 @@ function screenMore() {
   return `<div class="screen">
     <div class="top"><div><p class="sub">Owner</p><h1>Lainnya</h1></div></div>
     <div class="menu-list">
-      <button data-go="orders">Nota & pelunasan <span>›</span></button>
+      <button data-go="orders">Cari nota <span>›</span></button>
+      <button data-go="tutup-kas">Tutup kas <span>›</span></button>
       <button data-go="layanan">Layanan <span>›</span></button>
-      <button data-go="users">User <span>›</span></button>
+      <button data-go="users">User & pengajuan <span>›</span></button>
       <button data-go="roles">Role & akses <span>›</span></button>
-      <button data-go="profil">Profil usaha <span>›</span></button>
+      <button data-go="profil">Profil & hapus akun <span>›</span></button>
       <button data-go="login">Keluar <span>›</span></button>
     </div>
   </div>`;
@@ -546,12 +731,18 @@ function screenMore() {
 
 const SCREENS = {
   login: screenLogin,
+  register: screenRegister,
+  pending: screenPending,
+  rejected: screenRejected,
   home: screenHome,
   customers: screenCustomers,
   "customer-form": screenCustomerForm,
   kasir: screenKasir,
   bayar: screenBayar,
   nota: screenNota,
+  "wa-chat": screenWaChat,
+  "wa-ready": screenWaReady,
+  "queue-detail": screenQueueDetail,
   orders: screenOrders,
   pelunasan: screenPelunasan,
   layanan: screenLayanan,
@@ -561,22 +752,21 @@ const SCREENS = {
   users: screenUsers,
   roles: screenRoles,
   profil: screenProfil,
+  "tutup-kas": screenTutupKas,
   more: screenMore,
-  "wa-chat": screenWaChat,
 };
 
 function qtySheet() {
   if (!state.sheet) return "";
   const s = SERVICES.find((x) => x.id === state.sheet);
-  const unit = s.unit;
   return `<div class="sheet-bg" data-close-sheet>
     <div class="sheet" data-stop>
       <div class="grab"></div>
       <h2>${s.name}</h2>
-      <p class="meta">${s.desc} · ${Rp(s.price)} / ${unit}</p>
+      <p class="meta">${s.desc} · ${Rp(s.price)} / ${s.unit}</p>
       <div class="qty-row">
         <button data-qty="-1">−</button>
-        <strong>${state.qtyDraft} ${unit}</strong>
+        <strong>${state.qtyDraft} ${s.unit}</strong>
         <button data-qty="1">+</button>
       </div>
       <button class="btn primary" data-add-cart="${s.id}">Tambah · ${Rp(state.qtyDraft * s.price)}</button>
@@ -586,24 +776,24 @@ function qtySheet() {
 
 function renderTabbar() {
   const bar = document.getElementById("tabbar");
-  const hide = !state.loggedIn || ["login", "bayar", "nota", "customer-form", "layanan-form", "pelunasan", "stok-masuk", "profil", "wa-chat"].includes(state.screen);
+  const hide =
+    !state.loggedIn ||
+    AUTH.includes(state.screen) ||
+    ["bayar", "nota", "customer-form", "layanan-form", "pelunasan", "stok-masuk", "profil", "wa-chat", "wa-ready", "queue-detail", "tutup-kas"].includes(state.screen);
   bar.hidden = hide;
   if (hide) {
     bar.innerHTML = "";
     return;
   }
-  const tabs = TABS[state.role];
+  const tabs = TABS[state.role] || TABS.kasir;
   const active = tabs.some((t) => t.id === state.screen) ? state.screen : "";
   bar.innerHTML = tabs
-    .map(
-      (t) => `<button class="${t.id === active ? "on" : ""}" data-go="${t.id}">${ICONS[t.icon]}${t.label}</button>`
-    )
+    .map((t) => `<button class="${t.id === active ? "on" : ""}" data-go="${t.id}">${ICONS[t.icon]}${t.label}</button>`)
     .join("");
 }
 
 function renderJumps() {
-  const nav = document.getElementById("screen-jump");
-  nav.innerHTML = JUMPS.map(
+  document.getElementById("screen-jump").innerHTML = JUMPS.map(
     (j) => `<button class="${j.id === state.screen ? "current" : ""}" data-jump="${j.id}">${j.label}</button>`
   ).join("");
 }
@@ -633,15 +823,98 @@ document.body.addEventListener("click", (e) => {
   const jump = e.target.closest("[data-jump]");
   if (jump) {
     const id = jump.dataset.jump;
-    state.screen = id;
-    state.loggedIn = id !== "login";
-    if (id === "login") state.loggedIn = false;
-    if (!navAllowed(id) && id !== "login") {
-      state.screen = "home";
+    if (!navAllowed(id) && !AUTH.includes(id)) {
       showToast("Role ini nggak punya modul itu");
       return;
     }
+    state.screen = id;
+    state.loggedIn = !AUTH.includes(id);
     render();
+    return;
+  }
+
+  if (e.target.closest("[data-register]")) {
+    const sel = document.getElementById("reg-role");
+    const roleName = sel ? sel.value : "Kasir";
+    if (!state.users.some((u) => u.name === "Fajar Putra" && u.status === "pending")) {
+      state.users.push({ name: "Fajar Putra", role: roleName, status: "pending" });
+    } else {
+      state.users.find((u) => u.name === "Fajar Putra").role = roleName;
+    }
+    go("pending");
+    return;
+  }
+
+  if (e.target.closest("[data-add-role]")) {
+    const input = document.getElementById("new-role-name");
+    const name = (input && input.value.trim()) || "Setrika";
+    if (!state.roles.some((r) => r.name === name)) {
+      state.roles.push({ name, modules: ["dashboard"] });
+    }
+    showToast(`Role ${name} muncul di form Daftar`);
+    return;
+  }
+
+  const approve = e.target.closest("[data-approve]");
+  if (approve) {
+    const u = state.users.find((x) => x.name === approve.dataset.approve);
+    if (u) u.status = "approved";
+    showToast(`${approve.dataset.approve} disetujui`);
+    return;
+  }
+  const reject = e.target.closest("[data-reject]");
+  if (reject) {
+    const u = state.users.find((x) => x.name === reject.dataset.reject);
+    if (u) u.status = "rejected";
+    showToast("Ditolak");
+    return;
+  }
+
+  const qf = e.target.closest("[data-qfilter]");
+  if (qf) {
+    state.queueFilter = qf.dataset.qfilter;
+    render();
+    return;
+  }
+  const uf = e.target.closest("[data-ufilter]");
+  if (uf) {
+    state.userFilter = uf.dataset.ufilter;
+    render();
+    return;
+  }
+
+  const method = e.target.closest("[data-method]");
+  if (method) {
+    state.payMethod = method.dataset.method;
+    render();
+    return;
+  }
+
+  const openQ = e.target.closest("[data-open-queue]");
+  if (openQ) {
+    state.activeQueueId = openQ.dataset.openQueue;
+    go("queue-detail");
+    return;
+  }
+
+  if (e.target.closest("[data-advance-pipe]")) {
+    const o = activeQueue();
+    const next = pipeMeta(o.pipe).next;
+    if (next) o.pipe = next;
+    if (next === "siap") {
+      state.waKind = "siap";
+      state.waSent = false;
+      go("wa-ready");
+      return;
+    }
+    render();
+    return;
+  }
+
+  if (e.target.closest("[data-mark-taken]")) {
+    activeQueue().pipe = "diambil";
+    showToast("Sudah diambil");
+    go("home");
     return;
   }
 
@@ -651,24 +924,17 @@ document.body.addEventListener("click", (e) => {
       state.customer = CUSTOMERS.find((c) => c.id === goBtn.dataset.pickCustomer);
     }
     const id = goBtn.dataset.go;
-    if (id === "home") state.loggedIn = true;
     if (id === "login") {
-      state.loggedIn = false;
       state.cart = [];
       state.paid = 0;
+      state.waSent = false;
     }
     if ((id === "bayar" || id === "nota") && !state.cart.length) {
       state.cart = [{ ...SERVICES[2], qty: 3 }];
-      state.paid = id === "nota" ? 15000 : 0;
+      state.paid = id === "nota" ? 30000 : 0;
     }
     go(id);
     if (goBtn.dataset.toast) showToast(goBtn.dataset.toast);
-    return;
-  }
-
-  const pick = e.target.closest("[data-pick-customer]");
-  if (pick) {
-    state.customer = CUSTOMERS.find((c) => c.id === pick.dataset.pickCustomer);
     return;
   }
 
@@ -679,24 +945,19 @@ document.body.addEventListener("click", (e) => {
     render();
     return;
   }
-
   if (e.target.closest("[data-close-sheet]") && !e.target.closest("[data-stop]")) {
     state.sheet = null;
     render();
     return;
   }
-
   const q = e.target.closest("[data-qty]");
   if (q) {
-    e.stopPropagation();
-    const step = Number(q.dataset.qty);
     const s = SERVICES.find((x) => x.id === state.sheet);
     const min = s.unit === "kg" ? 0.5 : 1;
-    state.qtyDraft = Math.max(min, +(state.qtyDraft + step).toFixed(1));
+    state.qtyDraft = Math.max(min, +(state.qtyDraft + Number(q.dataset.qty)).toFixed(1));
     render();
     return;
   }
-
   const add = e.target.closest("[data-add-cart]");
   if (add) {
     const s = SERVICES.find((x) => x.id === add.dataset.addCart);
@@ -707,14 +968,12 @@ document.body.addEventListener("click", (e) => {
     render();
     return;
   }
-
   const paidBtn = e.target.closest("[data-paid]");
   if (paidBtn) {
     state.paid = Number(paidBtn.dataset.paid);
     render();
     return;
   }
-
   const order = e.target.closest("[data-open-order]");
   if (order) {
     const o = state.orders.find((x) => x.id === order.dataset.openOrder);
@@ -723,31 +982,46 @@ document.body.addEventListener("click", (e) => {
       showToast("Nota ini sudah lunas");
       return;
     }
-    state.extraPay = o.total - o.paid;
     go("pelunasan");
     return;
   }
-
   const wa = e.target.closest("[data-wa]");
   if (wa) {
+    state.waKind = wa.dataset.wa || "nota";
     state.waSent = false;
-    go("wa-chat");
+    go(state.waKind === "siap" ? "wa-ready" : "wa-chat");
     return;
   }
-
   const waSend = e.target.closest("[data-wa-send]");
   if (waSend) {
     state.waSent = true;
+    if (state.waKind === "nota" && state.cart.length) {
+      const id = "CU-2401-0043";
+      if (!state.queue.some((q) => q.id === id)) {
+        state.queue.unshift({
+          id,
+          customer: state.customer.name,
+          phone: state.customer.phone,
+          items: state.cart.map((i) => `${i.name} ${i.qty}${i.unit}`).join(", "),
+          total: cartTotal(),
+          paid: state.paid,
+          pay: payStatus(state.paid, cartTotal()).id,
+          pipe: "diterima",
+          dropOut: state.cart.some((i) => i.dropOut),
+          promise: state.promise,
+          late: false,
+        });
+        state.activeQueueId = id;
+      }
+    }
     render();
     return;
   }
-
   const sw = e.target.closest("[data-toggle-switch]");
   if (sw) {
     sw.classList.toggle("on");
     return;
   }
-
   const toastBtn = e.target.closest("[data-toast]");
   if (toastBtn && !toastBtn.dataset.go) showToast(toastBtn.dataset.toast);
 });
@@ -758,21 +1032,14 @@ document.body.addEventListener("input", (e) => {
     const total = cartTotal() || 85000;
     const st = payStatus(state.paid, total);
     const sisa = Math.max(total - state.paid, 0);
-    const box = document.querySelector(".pay-box");
-    if (box) {
-      box.querySelector(".chip")?.replaceWith(
-        Object.assign(document.createElement("span"), {
-          className: `chip ${st.id}`,
-          textContent: st.label,
-        })
-      );
-    }
+    document.querySelector(".pay-box .chip")?.replaceWith(
+      Object.assign(document.createElement("span"), { className: `chip ${st.id}`, textContent: st.label })
+    );
     const sisaEl = document.querySelector(".sisa");
-    if (sisaEl) {
-      sisaEl.innerHTML = `Sisa tagihan <b>${Rp(sisa)}</b> · ${
-        st.id === "dp" ? "uang muka, pelunasan nanti" : st.id === "belum" ? "belum ada bayaran" : "sudah nutup"
-      }`;
-    }
+    if (sisaEl) sisaEl.innerHTML = `Sisa tagihan <b>${Rp(sisa)}</b>`;
+  }
+  if (e.target.id === "nota-search") {
+    state.searchQ = e.target.value;
   }
 });
 
