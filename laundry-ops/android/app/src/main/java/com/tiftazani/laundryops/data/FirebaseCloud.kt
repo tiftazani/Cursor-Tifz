@@ -38,6 +38,31 @@ object FirebaseCloud {
         Log.i(TAG, "enabled=$enabled")
     }
 
+    fun listenSnapshot(onSnap: (Snapshot) -> Unit) {
+        if (!enabled) return
+        FirebaseFirestore.getInstance().collection("ops").document("cuciin")
+            .addSnapshotListener { snap, err ->
+                if (err != null) {
+                    Log.w(TAG, "listen", err)
+                    return@addSnapshotListener
+                }
+                val json = snap?.getString("json") ?: return@addSnapshotListener
+                try {
+                    val parsed = LocalJson.json.decodeFromString(Snapshot.serializer(), json)
+                    ui { onSnap(parsed) }
+                } catch (e: Exception) {
+                    Log.w(TAG, "decode", e)
+                }
+            }
+    }
+
+    fun pushSnapshot(s: Snapshot) {
+        if (!enabled) return
+        val json = LocalJson.json.encodeToString(Snapshot.serializer(), s)
+        FirebaseFirestore.getInstance().collection("ops").document("cuciin")
+            .set(hashMapOf("json" to json, "updatedAt" to s.updatedAt), SetOptions.merge())
+    }
+
     fun signIn(email: String, password: String, onDone: (ok: Boolean, pending: Boolean, msg: String) -> Unit) {
         if (!enabled) {
             ui { onDone(false, false, "Firebase belum dikonfigurasi") }

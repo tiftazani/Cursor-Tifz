@@ -58,6 +58,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.tiftazani.laundryops.BuildConfig
 import com.tiftazani.laundryops.data.Clock
+import com.tiftazani.laundryops.data.CloudSync
 import com.tiftazani.laundryops.data.CuciinStore
 import com.tiftazani.laundryops.data.FileExports
 import com.tiftazani.laundryops.data.FirebaseCloud
@@ -157,7 +158,7 @@ private fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
         Text("Cuciin", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = Navy)
         Text("Owner: ${store.ownerName}", color = Muted)
         Text(
-            "Data tersimpan di HP. Tutup app, transaksi tetap ada.",
+            CloudSync.lastStatus,
             color = Muted,
             fontSize = 12.sp,
             modifier = Modifier.padding(bottom = 20.dp),
@@ -275,17 +276,17 @@ private fun HomeScreen(nav: NavHostController) {
             if (s.role == Role.Owner) {
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(store.viewBranch.value == "all", { store.viewBranch.value = "all"; store.bumpPublic() }, label = { Text("Semua") })
+                        FilterChip(store.viewBranch.value == "all", { store.viewBranch.value = "all" }, label = { Text("Semua") })
                         store.branches.forEach { b ->
-                            FilterChip(store.viewBranch.value == b.id, { store.viewBranch.value = b.id; store.bumpPublic() }, label = { Text(b.name.removePrefix("Cuciin ")) })
+                            FilterChip(store.viewBranch.value == b.id, { store.viewBranch.value = b.id }, label = { Text(b.name.removePrefix("Cuciin ")) })
                         }
                     }
                 }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(store.viewKasir.value == "all", { store.viewKasir.value = "all"; store.bumpPublic() }, label = { Text("Semua kasir") })
+                        FilterChip(store.viewKasir.value == "all", { store.viewKasir.value = "all" }, label = { Text("Semua kasir") })
                         store.staff.filter { it.role == Role.Kasir && it.approved }.forEach { k ->
-                            FilterChip(store.viewKasir.value == k.name, { store.viewKasir.value = k.name; store.bumpPublic() }, label = { Text(k.name) })
+                            FilterChip(store.viewKasir.value == k.name, { store.viewKasir.value = k.name }, label = { Text(k.name) })
                         }
                     }
                 }
@@ -656,11 +657,11 @@ private fun AnalyticsScreen(nav: NavHostController) {
     val masuk = store.collected(rows)
     Scaffold(topBar = { CuciinTopBar("Analytics", "${rows.size} nota · ${store.ownerName}", onBack = { nav.popBackStack() }) }) { p ->
         LazyColumn(Modifier.padding(p).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item { PeriodRow(period) { store.reportPeriod.value = it; store.bumpPublic() } }
+            item { PeriodRow(period) { store.reportPeriod.value = it } }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(store.viewBranch.value == "all", { store.viewBranch.value = "all"; store.bumpPublic() }, label = { Text("Semua") })
-                    store.branches.forEach { b -> FilterChip(store.viewBranch.value == b.id, { store.viewBranch.value = b.id; store.bumpPublic() }, label = { Text(b.name.removePrefix("Cuciin ")) }) }
+                    FilterChip(store.viewBranch.value == "all", { store.viewBranch.value = "all" }, label = { Text("Semua") })
+                    store.branches.forEach { b -> FilterChip(store.viewBranch.value == b.id, { store.viewBranch.value = b.id }, label = { Text(b.name.removePrefix("Cuciin ")) }) }
                 }
             }
             item { Hero("Omzet (total nota)", rp(omzet), listOf("masuk kas ${rp(masuk)}", "piutang ${rp(store.piutang())}")) }
@@ -791,7 +792,7 @@ private fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
             Text(s?.name ?: store.ownerName, fontWeight = FontWeight.Bold)
             Text(s?.email ?: store.ownerEmail, color = Muted)
             Text("Versi ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", color = Muted)
-            Text("Data: file di HP (cuciin-data.json). Cloud: ${if (FirebaseCloud.enabled) "Firebase nyala" else "off"}", color = Muted, fontSize = 12.sp)
+            Text("Database: ${CloudSync.lastStatus}", color = Muted, fontSize = 12.sp)
             OutlinedButton({ nav.navigate("versions") }, Modifier.fillMaxWidth()) { Text("Riwayat versi") }
             OutlinedButton({
                 if (s?.role == Role.Owner) toast("Owner tidak bisa hapus akun dari sini")

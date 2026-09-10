@@ -31,6 +31,8 @@ object CuciinStore {
 
     private var app: Application? = null
     private var ready = false
+    private var applyingCloud = false
+    private var localUpdatedAt = 0L
 
     fun attach(application: Application) {
         if (ready) return
@@ -42,9 +44,11 @@ object CuciinStore {
             persist()
         } else {
             applySnapshot(snap)
+            localUpdatedAt = snap.updatedAt
         }
         ready = true
         revision.intValue++
+        CloudSync.start()
     }
 
     private fun applySeed() {
@@ -92,6 +96,7 @@ object CuciinStore {
         audit.clear()
         cashCloses.clear()
         val t = Clock.nowMs()
+        localUpdatedAt = t
         audit.add(AuditRow(Clock.nowLabel(t), t, ownerName, "melati", "Data awal: 2 cabang, antrian kosong. Isi stok & pelanggan sebelum nota pertama.", null))
     }
 
@@ -115,6 +120,42 @@ object CuciinStore {
         s.sessionEmail?.let { login(it, skipPassword = true) }
     }
 
+    private fun applyBusiness(s: Snapshot) {
+        fun <T> fill(dest: MutableList<T>, src: List<T>) {
+            dest.clear()
+            dest.addAll(src)
+        }
+        fill(branches, s.branches)
+        fill(staff, s.staff)
+        fill(customers, s.customers)
+        fill(services, s.services)
+        fill(products, s.products)
+        fill(notas, s.notas)
+        fill(stockMoves, s.stockMoves)
+        fill(audit, s.audit)
+        fill(cashCloses, s.cashCloses)
+    }
+
+    fun applyCloud(s: Snapshot) {
+        if (s.updatedAt < localUpdatedAt) return
+        if (s.staff.isEmpty() && branches.isNotEmpty()) {
+            CloudSync.push(cloudSnapshot())
+            revision.intValue++
+            return
+        }
+        applyingCloud = true
+        try {
+            applyBusiness(s)
+            localUpdatedAt = s.updatedAt
+            persist()
+            revision.intValue++
+        } finally {
+            applyingCloud = false
+        }
+    }
+
+    fun cloudSnapshot(): Snapshot = snapshot().copy(sessionEmail = null, updatedAt = localUpdatedAt)
+
     private fun snapshot(): Snapshot = Snapshot(
         branches = branches.toList(),
         staff = staff.toList(),
@@ -129,6 +170,7 @@ object CuciinStore {
         viewBranch = viewBranch.value,
         viewKasir = viewKasir.value,
         reportPeriod = reportPeriod.value,
+        updatedAt = localUpdatedAt,
     )
 
     private fun persist() {
@@ -137,10 +179,16 @@ object CuciinStore {
 
     private fun bump() {
         revision.intValue++
+        localUpdatedAt = Clock.nowMs()
         persist()
+        if (!applyingCloud) CloudSync.push(cloudSnapshot())
     }
 
     fun bumpPublic() = bump()
+
+    fun touchStatus() {
+        revision.intValue++
+    }
 
     private fun log(action: String, branchId: String, notaId: String? = null): AuditRow {
         val t = Clock.nowMs()
