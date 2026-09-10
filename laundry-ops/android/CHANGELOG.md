@@ -2,6 +2,16 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.2.0 — 10 Sep 2026 (versionCode 3)
+
+App operasional di HP, bukan angka dummy.
+
+- Persist JSON di penyimpanan app; session, nota, stok, pelanggan, cabang, audit, tutup kas
+- Timestamp Asia/Jakarta; ID nota `{KODE}-{yyMM}-{urut}`
+- Analytics & tutup kas dari nota tersimpan (Tunai/QRIS/Transfer = catat metode)
+- Foto disalin ke `files/proofs`; share PDF + CSV file
+- Tambah pelanggan & cabang; antrian awal kosong
+
 ## 1.1.0 — 10 Sep 2026 (versionCode 2)
 
 Firebase Auth + Firestore, tetap jalan lokal tanpa `google-services.json`.

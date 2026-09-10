@@ -4,7 +4,19 @@ Owner: **Tiftazani Khara**. Android Kotlin (`com.tiftazani.laundryops`) + mockup
 
 ## Android
 
-Folder: [`android/`](./android). Versi sekarang **1.1.0**. Changelog: [`android/CHANGELOG.md`](./android/CHANGELOG.md).
+Folder: [`android/`](./android). Versi sekarang **1.2.0**. Changelog: [`android/CHANGELOG.md`](./android/CHANGELOG.md).
+
+**Unduh APK debug:** [https://cuan-tif.vercel.app/cuciin/cuciin.apk](https://cuan-tif.vercel.app/cuciin/cuciin.apk)
+
+Data tersimpan di HP. Bukan mock angka. Antrian awal kosong.
+
+Kalau repo sudah di-clone:
+
+```bash
+cd ~/Cursor-Tifz
+git checkout main
+git pull origin main
+```
 
 **Unduh APK debug:** [https://cuan-tif.vercel.app/cuciin/cuciin.apk](https://cuan-tif.vercel.app/cuciin/cuciin.apk)
 
