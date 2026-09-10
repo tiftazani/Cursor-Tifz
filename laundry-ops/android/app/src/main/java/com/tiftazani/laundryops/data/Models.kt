@@ -140,7 +140,14 @@ data class Nota(
 }
 
 @Serializable
-data class Product(val name: String, var stock: Int, val min: Int)
+data class Product(
+    val name: String,
+    var stock: Int,
+    val min: Int,
+    val id: String = "",
+) {
+    val key: String get() = id.ifBlank { name }
+}
 
 @Serializable
 data class StockMove(

@@ -2,6 +2,14 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.4.0 — 10 Sep 2026 (versionCode 5)
+
+UI dirombak. Master data lengkap CRUD. Layout aman di banyak ukuran layar.
+
+- Tambah / ubah / hapus: user, pelanggan, kasir, SPV, cabang, layanan, produk
+- Tampilan teal + kartu, hero kas, chip yang bisa di-scroll
+- HP sempit pakai bottom bar; layar ≥600dp pakai navigation rail
+
 ## 1.3.0 — 10 Sep 2026 (versionCode 4)
 
 Database di server. HP kasir/owner nge-share dokumen toko yang sama.

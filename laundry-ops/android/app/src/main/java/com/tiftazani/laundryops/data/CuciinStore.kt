@@ -294,27 +294,188 @@ object CuciinStore {
         FirebaseCloud.pushApprove(name, ok)
     }
 
+    fun addBranch(name: String, code: String, location: String, maps: String): Branch {
+        val id = uniqueBranchId(name)
+        val b = Branch(id, code.uppercase().take(4).ifBlank { "CAB" }, name.trim(), location.trim(), maps.trim())
+        branches.add(b)
+        grantOwnerBranch(b.id)
+        log("Cabang ${b.name} ditambah", b.id)
+        bump()
+        return b
+    }
+
+    fun updateBranch(id: String, name: String, code: String, location: String, maps: String) {
+        val i = branches.indexOfFirst { it.id == id }
+        if (i < 0) return
+        branches[i] = branches[i].copy(
+            name = name.trim(),
+            code = code.uppercase().take(4).ifBlank { branches[i].code },
+            location = location.trim(),
+            mapsQuery = maps.trim(),
+        )
+        log("Cabang ${name.trim()} diubah", id)
+        bump()
+    }
+
+    fun deleteBranch(id: String): String? {
+        if (branches.size <= 1) return "Minimal satu cabang harus tersisa"
+        if (notas.any { it.branchId == id && it.hanging }) return "Masih ada nota menggantung di cabang ini"
+        val gone = branches.find { it.id == id } ?: return "Cabang tidak ketemu"
+        branches.removeAll { it.id == id }
+        val relocated = staff.map { u ->
+            u.copy(branchIds = u.branchIds.filter { it != id }.ifEmpty { listOf(branches.first().id) })
+        }
+        staff.clear()
+        staff.addAll(relocated)
+        if (viewBranch.value == id) viewBranch.value = "all"
+        log("Cabang ${gone.name} dihapus", branches.first().id)
+        bump()
+        return null
+    }
+
     fun addCustomer(name: String, phone: String, address: String): Customer {
         val c = Customer("c-${Clock.nowMs()}", name.trim(), address.trim(), phone.trim())
         customers.add(0, c)
         selectedCustomer.value = c
-        log("Pelanggan ${c.name} ditambah", session.value?.branchId ?: "melati")
+        log("Pelanggan ${c.name} ditambah", session.value?.branchId ?: branches.first().id)
         bump()
         return c
     }
 
-    fun addBranch(name: String, code: String, location: String, maps: String): Branch {
-        val id = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "cabang-${Clock.nowMs()}" }
-        val b = Branch(id, code.uppercase().take(4).ifBlank { "CAB" }, name.trim(), location.trim(), maps.trim())
-        branches.add(b)
+    fun updateCustomer(id: String, name: String, phone: String, address: String) {
+        val i = customers.indexOfFirst { it.id == id }
+        if (i < 0) return
+        customers[i] = customers[i].copy(name = name.trim(), phone = phone.trim(), address = address.trim())
+        if (selectedCustomer.value?.id == id) selectedCustomer.value = customers[i]
+        log("Pelanggan ${name.trim()} diubah", session.value?.branchId ?: branches.first().id)
+        bump()
+    }
+
+    fun deleteCustomer(id: String): String? {
+        val c = customers.find { it.id == id } ?: return "Pelanggan tidak ketemu"
+        customers.removeAll { it.id == id }
+        if (selectedCustomer.value?.id == id) selectedCustomer.value = null
+        log("Pelanggan ${c.name} dihapus", session.value?.branchId ?: branches.first().id)
+        bump()
+        return null
+    }
+
+    fun addStaff(name: String, email: String, role: Role, branchIds: List<String>, password: String = "", approved: Boolean = true): String? {
+        val em = email.trim()
+        if (name.isBlank() || em.isBlank()) return "Nama dan email wajib"
+        if (staff.any { it.email.equals(em, ignoreCase = true) }) return "Email sudah dipakai"
+        val bids = branchIds.ifEmpty { listOf(branches.first().id) }
+        val hash = if (password.isBlank()) "" else Passwords.hash(password)
+        staff.add(Staff(name.trim(), em, role, bids, approved = approved, passwordHash = hash))
+        log("User ${name.trim()} (${role.name}) ditambah", bids.first())
+        bump()
+        return null
+    }
+
+    fun updateStaff(email: String, name: String, role: Role, branchIds: List<String>, password: String? = null, approved: Boolean? = null): String? {
+        val i = staff.indexOfFirst { it.email.equals(email, ignoreCase = true) }
+        if (i < 0) return "User tidak ketemu"
+        val old = staff[i]
+        if (old.role == Role.Owner && role != Role.Owner && staff.count { it.role == Role.Owner } <= 1) {
+            return "Owner terakhir tidak bisa diturunkan"
+        }
+        val bids = branchIds.ifEmpty { old.branchIds }
+        staff[i] = old.copy(
+            name = name.trim().ifBlank { old.name },
+            role = role,
+            branchIds = bids,
+            approved = approved ?: old.approved,
+            passwordHash = if (password.isNullOrBlank()) old.passwordHash else Passwords.hash(password),
+        )
+        val s = session.value
+        if (s != null && s.email.equals(email, ignoreCase = true)) {
+            session.value = s.copy(name = staff[i].name, role = staff[i].role, branchId = staff[i].branchIds.first())
+        }
+        log("User ${staff[i].name} diubah", staff[i].branchIds.first())
+        bump()
+        return null
+    }
+
+    fun deleteStaff(email: String): String? {
+        val u = staff.find { it.email.equals(email, ignoreCase = true) } ?: return "User tidak ketemu"
+        if (u.role == Role.Owner && staff.count { it.role == Role.Owner } <= 1) return "Owner terakhir tidak bisa dihapus"
+        if (session.value?.email.equals(email, ignoreCase = true) == true) return "Tidak bisa hapus akun yang sedang login. Pakai Hapus akun saya."
+        staff.removeAll { it.email.equals(email, ignoreCase = true) }
+        log("User ${u.name} dihapus", u.branchIds.firstOrNull() ?: branches.first().id)
+        bump()
+        return null
+    }
+
+    fun addService(name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean): ServiceItem {
+        val id = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "svc-${Clock.nowMs()}" }
+        val unique = if (services.any { it.id == id }) "$id-${Clock.nowMs()}" else id
+        val s = ServiceItem(unique, name.trim(), unit.trim().ifBlank { "pcs" }, price.coerceAtLeast(0), retail, dropOut)
+        services.add(s)
+        log("Layanan ${s.name} ditambah", session.value?.branchId ?: branches.first().id)
+        bump()
+        return s
+    }
+
+    fun updateService(id: String, name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean) {
+        val i = services.indexOfFirst { it.id == id }
+        if (i < 0) return
+        services[i] = services[i].copy(
+            name = name.trim(),
+            unit = unit.trim().ifBlank { services[i].unit },
+            price = price.coerceAtLeast(0),
+            retail = retail,
+            dropOut = dropOut,
+        )
+        log("Layanan ${name.trim()} diubah", session.value?.branchId ?: branches.first().id)
+        bump()
+    }
+
+    fun deleteService(id: String): String? {
+        val s = services.find { it.id == id } ?: return "Layanan tidak ketemu"
+        services.removeAll { it.id == id }
+        cart.removeAll { it.service.id == id }
+        log("Layanan ${s.name} dihapus", session.value?.branchId ?: branches.first().id)
+        bump()
+        return null
+    }
+
+    fun addProduct(name: String, stock: Int, min: Int): Product {
+        val p = Product(name.trim(), stock.coerceAtLeast(0), min.coerceAtLeast(0), "p-${Clock.nowMs()}")
+        products.add(p)
+        log("Produk ${p.name} ditambah", session.value?.branchId ?: branches.first().id)
+        bump()
+        return p
+    }
+
+    fun updateProduct(key: String, name: String, min: Int) {
+        val i = products.indexOfFirst { it.key == key || it.name == key }
+        if (i < 0) return
+        val old = products[i]
+        products[i] = old.copy(name = name.trim(), min = min.coerceAtLeast(0), id = old.id.ifBlank { "p-${Clock.nowMs()}" })
+        log("Produk ${name.trim()} diubah", session.value?.branchId ?: branches.first().id)
+        bump()
+    }
+
+    fun deleteProduct(key: String): String? {
+        val p = products.find { it.key == key || it.name == key } ?: return "Produk tidak ketemu"
+        products.removeAll { it.key == key || it.name == key }
+        log("Produk ${p.name} dihapus", session.value?.branchId ?: branches.first().id)
+        bump()
+        return null
+    }
+
+    private fun uniqueBranchId(name: String): String {
+        val base = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "cabang" }
+        if (branches.none { it.id == base }) return base
+        return "$base-${Clock.nowMs()}"
+    }
+
+    private fun grantOwnerBranch(id: String) {
         val ownerIdx = staff.indexOfFirst { it.role == Role.Owner }
         if (ownerIdx >= 0) {
             val o = staff[ownerIdx]
-            staff[ownerIdx] = o.copy(branchIds = (o.branchIds + b.id).distinct())
+            staff[ownerIdx] = o.copy(branchIds = (o.branchIds + id).distinct())
         }
-        log("Cabang ${b.name} ditambah", b.id)
-        bump()
-        return b
     }
 
     fun nextNotaId(branchId: String): String {
@@ -427,7 +588,7 @@ object CuciinStore {
 
     fun editStock(product: String, kind: StockKind, qty: Int) {
         val s = session.value ?: return
-        val p = products.find { it.name == product } ?: return
+        val p = products.find { it.key == product || it.name == product } ?: return
         val t = Clock.nowMs()
         val delta = when (kind) {
             StockKind.Tambah -> qty.also { p.stock += qty }
