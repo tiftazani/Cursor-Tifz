@@ -1,14 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { ToastProvider } from './components/Toast'
-import { ApiMissingScreen, AuthGate } from './components/AuthGate'
 import { RecoveryKeyModal } from './components/RecoveryKeyModal'
 import { VaultProvider, useVault } from './state/VaultContext'
 import { LockScreen, SetupScreen } from './views/Gate'
 import { AppShell } from './views/AppShell'
 import { IconKey } from './components/Icons'
-import { isPublicHost, sessionStatus } from './lib/cloud'
 import { applyPlatformAttr } from './lib/platform'
-import { isPreviewUi } from './lib/preview-vault'
 
 function BootScreen({ message }: { message: string }) {
   return (
@@ -23,38 +20,8 @@ function BootScreen({ message }: { message: string }) {
   )
 }
 
-function CloudSessionGate({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<'load' | 'auth' | 'ok' | 'missing' | 'offline'>('load')
-
-  useEffect(() => {
-    applyPlatformAttr()
-    void sessionStatus()
-      .then((s) => {
-        if (s.signedIn) setState('ok')
-        else if (!s.configured) setState(s.error === 'network' ? 'offline' : 'missing')
-        else setState('auth')
-      })
-      .catch(() => setState('offline'))
-  }, [])
-
-  if (state === 'load') return <BootScreen message="Memeriksa sesi cloud…" />
-  if (state === 'offline') return <ApiMissingScreen reason="network" />
-  if (state === 'missing') {
-    if (!isPublicHost()) return <AuthGate onAuthed={() => setState('ok')} />
-    return <ApiMissingScreen reason="missing" />
-  }
-  if (state === 'auth') return <AuthGate onAuthed={() => setState('ok')} />
-  return children
-}
-
 function ThemedApp() {
-  const {
-    status,
-    vault,
-    pendingRecoveryKey,
-    dismissRecoveryKey,
-    emailPendingRecoveryKey,
-  } = useVault()
+  const { status, vault, pendingRecoveryKey, dismissRecoveryKey } = useVault()
   const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   useEffect(() => {
@@ -78,32 +45,17 @@ function ThemedApp() {
       {status === 'setup' ? <SetupScreen /> : null}
       {status === 'locked' ? <LockScreen /> : null}
       {status === 'unlocked' ? <AppShell /> : null}
-      {pendingRecoveryKey ? (
-        <RecoveryKeyModal
-          recoveryKey={pendingRecoveryKey}
-          onDone={dismissRecoveryKey}
-          onEmail={emailPendingRecoveryKey}
-        />
-      ) : null}
+      {pendingRecoveryKey ? <RecoveryKeyModal recoveryKey={pendingRecoveryKey} onDone={dismissRecoveryKey} /> : null}
     </>
   )
 }
 
 export default function App() {
-  const preview = isPreviewUi()
   return (
     <ToastProvider>
-      {preview ? (
-        <VaultProvider>
-          <ThemedApp />
-        </VaultProvider>
-      ) : (
-        <CloudSessionGate>
-          <VaultProvider>
-            <ThemedApp />
-          </VaultProvider>
-        </CloudSessionGate>
-      )}
+      <VaultProvider>
+        <ThemedApp />
+      </VaultProvider>
     </ToastProvider>
   )
 }

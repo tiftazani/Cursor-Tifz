@@ -1,7 +1,7 @@
 {
   "name": "Kunci",
   "short_name": "Kunci",
-  "description": "Manajer kata sandi zero-knowledge. Pasang di layar Utama iPhone, lalu buka seperti aplikasi.",
+  "description": "Manajer kata sandi zero-knowledge untuk Mac. Buka di http://127.0.0.1:8780.",
   "id": "/",
   "lang": "id",
   "dir": "ltr",

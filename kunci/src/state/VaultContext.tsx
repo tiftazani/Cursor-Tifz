@@ -23,7 +23,6 @@ import { useToast } from '../components/Toast'
 import { newId } from '../lib/id'
 import { RECOVERY_EMAIL } from '../lib/account'
 import { localToken } from '../lib/recovery-api'
-import { cloudGetVault, cloudPutVault, emailRecoveryKey, isPublicHost, logoutSession } from '../lib/cloud'
 import { resolveAutoLockSeconds } from '../lib/autolock'
 import { matchAppName } from '../lib/capture'
 import { isPreviewUi, previewVault } from '../lib/preview-vault'
@@ -45,15 +44,12 @@ interface VaultApi {
   backupFolderName: string | null
   pendingRecoveryKey: string | null
   hasRecoveryWrap: boolean
-  publicHost: boolean
   setup: (password: string, hint: string) => Promise<void>
   unlock: (password: string) => Promise<void>
   confirmPasswordReset: (recoveryKey: string, newPassword: string) => Promise<void>
   dismissRecoveryKey: () => void
   rotateRecoveryKey: () => Promise<void>
-  emailPendingRecoveryKey: () => Promise<boolean>
   recoveryEmail: string
-  logoutPublic: () => Promise<void>
   lock: () => void
   saveEntry: (entry: Entry, isNew?: boolean) => Promise<void>
   mergeEntries: (keepId: string, dropIds: string[]) => Promise<void>
@@ -145,14 +141,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     void (async () => {
       try {
-        let blob = (await vaultDb.getBlob()) ?? null
-        const remote = await cloudGetVault()
-        if (remote && (!blob || (remote.savedAt ?? 0) >= (blob.savedAt ?? 0))) {
-          blob = remote
-          await vaultDb.setBlob(remote)
-        } else if (blob && (!remote || (blob.savedAt ?? 0) > (remote.savedAt ?? 0))) {
-          await cloudPutVault(blob).catch(() => undefined)
-        }
+        const blob = (await vaultDb.getBlob()) ?? null
         const storedHint = (await vaultDb.getHint()) ?? ''
         const storedBackups = await vaultDb.getBackups()
         const dir = await vaultDb.getBackupDir()
@@ -187,11 +176,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       blobRef.current = updated
       await vaultDb.setBlob(updated)
       syncExtension(updated)
-      try {
-        await cloudPutVault(updated)
-      } catch (err) {
-        toast.push(err instanceof Error ? err.message : 'Gagal sinkron cloud', 'warn')
-      }
       const mode = next.settings.autoBackup
       const shouldSnap =
         reason === 'manual' ||
@@ -219,15 +203,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         blobRef.current = again
         await vaultDb.setBlob(again)
         syncExtension(again)
-        try {
-          await cloudPutVault(again)
-        } catch (err) {
-          toast.push(err instanceof Error ? err.message : 'Gagal sinkron cloud', 'warn')
-        }
       }
     })
     await persistChain.current
-  }, [toast])
+  }, [])
 
   useEffect(() => {
     const stop = listenExtensionVault((incoming) => {
@@ -237,7 +216,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         blobRef.current = incoming
         setRecoveryWrapReady(hasRecoveryWrap(incoming))
         await vaultDb.setBlob(incoming)
-        await cloudPutVault(incoming).catch(() => undefined)
         const key = keyRef.current
         if (key) {
           try {
@@ -272,11 +250,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         setRecoveryWrapReady(true)
         setPendingRecoveryKey(recoveryKey)
         syncExtension(blob)
-        try {
-          await cloudPutVault(blob)
-        } catch (err) {
-          toast.push(err instanceof Error ? err.message : 'Gagal sinkron cloud', 'warn')
-        }
         toast.push('Brankas dibuat. Simpan recovery key di tempat yang aman.', 'ok')
       } finally {
         setBusy(false)
@@ -300,21 +273,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
           key = migrated.key
           await vaultDb.setBlob(nextBlob)
           setPendingRecoveryKey(migrated.recoveryKey)
-          try {
-            await cloudPutVault(nextBlob)
-          } catch {
-            /* local still works */
-          }
         } else if (unlocked.dekBytes && !hasRecoveryWrap(nextBlob)) {
           const attached = await attachRecoveryWrap(nextBlob, key)
           nextBlob = attached.blob
           await vaultDb.setBlob(nextBlob)
           setPendingRecoveryKey(attached.recoveryKey)
-          try {
-            await cloudPutVault(nextBlob)
-          } catch {
-            /* local still works */
-          }
         }
         keyRef.current = key
         blobRef.current = nextBlob
@@ -481,11 +444,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       blobRef.current = nextBlob
       await vaultDb.setBlob(nextBlob)
       syncExtension(nextBlob)
-      try {
-        await cloudPutVault(nextBlob)
-      } catch (err) {
-        toast.push(err instanceof Error ? err.message : 'Gagal sinkron cloud', 'warn')
-      }
       toast.push('Kata sandi induk diganti')
     },
     [toast],
@@ -511,11 +469,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         setStatus('unlocked')
         setRecoveryWrapReady(true)
         syncExtension(nextBlob)
-        try {
-          await cloudPutVault(nextBlob)
-        } catch (err) {
-          toast.push(err instanceof Error ? err.message : 'Gagal sinkron cloud', 'warn')
-        }
         toast.push('Kata sandi diganti. Brankas terbuka.')
       } catch (err) {
         if (err instanceof Error && err.message.startsWith('Brankas ini belum')) throw err
@@ -541,27 +494,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     syncExtension(attached.blob)
     setRecoveryWrapReady(true)
     setPendingRecoveryKey(attached.recoveryKey)
-    try {
-      await cloudPutVault(attached.blob)
-    } catch (err) {
-      toast.push(err instanceof Error ? err.message : 'Gagal sinkron cloud', 'warn')
-    }
     toast.push('Recovery key baru dibuat. Yang lama tidak berlaku.')
   }, [toast])
-
-  const emailPendingRecoveryKey = useCallback(async () => {
-    if (!pendingRecoveryKey) return false
-    return emailRecoveryKey(pendingRecoveryKey)
-  }, [pendingRecoveryKey])
-
-  const logoutPublic = useCallback(async () => {
-    await logoutSession()
-    keyRef.current = null
-    setVault(null)
-    setStatus(blobRef.current ? 'locked' : 'setup')
-    notifyExtensionLock()
-    window.location.reload()
-  }, [])
 
   const setHint = useCallback(async (value: string) => {
     await vaultDb.setHint(value)
@@ -859,15 +793,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       backupFolderName,
       pendingRecoveryKey,
       hasRecoveryWrap: recoveryWrapReady,
-      publicHost: isPublicHost(),
       setup,
       unlock,
       confirmPasswordReset,
       dismissRecoveryKey,
       rotateRecoveryKey,
-      emailPendingRecoveryKey,
       recoveryEmail: RECOVERY_EMAIL,
-      logoutPublic,
       lock,
       saveEntry,
       mergeEntries,
@@ -914,8 +845,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       confirmPasswordReset,
       dismissRecoveryKey,
       rotateRecoveryKey,
-      emailPendingRecoveryKey,
-      logoutPublic,
       lock,
       saveEntry,
       mergeEntries,

@@ -7,7 +7,7 @@ Folder Mac: `/Users/tiftazani/Cursor-Tifz`. Hub app pribadi — tiap project pun
 | Folder | Isi |
 | --- | --- |
 | [`cuan-yuk-guys/`](./cuan-yuk-guys) | Website **Cuan Yuk Guys** (IHSG, reksadana, Cuan Bot) |
-| [`kunci/`](./kunci) | **Kunci** — manajer kata sandi zero-knowledge (web + URL publik HTTPS) |
+| [`kunci/`](./kunci) | **Kunci** — manajer kata sandi zero-knowledge (hanya `http://127.0.0.1:8780`) |
 
 Kode Cuan Yuk Guys: [github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys](https://github.com/tiftazani/Cursor-Tifz/tree/main/cuan-yuk-guys)
 
@@ -41,7 +41,7 @@ npm install
 npm run dev
 ```
 
-Buka [http://localhost:5173](http://localhost:5173). URL publik HTTPS (zero-knowledge, gerbang OTP): lihat [`kunci/README.md`](./kunci/README.md). Autofill Mac dan ekstensi juga di situ.
+Buka [http://127.0.0.1:5173](http://127.0.0.1:5173) untuk dev, atau **http://127.0.0.1:8780** setelah `npm run install-service`. Tidak ada URL publik. Autofill Mac dan ekstensi: [`kunci/README.md`](./kunci/README.md).
 
 Clone `--single-branch` tidak punya `origin/cursor/...`. Ambil branch Kunci pakai `FETCH_HEAD`, bukan `git checkout origin/branch`:
 

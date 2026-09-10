@@ -51,8 +51,8 @@ export function AutofillView() {
       <header className="page-head">
         <h2>Isi otomatis</h2>
         <p className="muted">
-          Website: hanya form masuk sistem. Aplikasi Mac: Kunci Helper mengisi app yang kamu pilih. Sama di cloud dan di
-          localhost.
+          Website: hanya form masuk sistem. Aplikasi Mac: Kunci Helper mengisi app yang kamu pilih. Semua di
+          http://127.0.0.1:8780.
         </p>
       </header>
 
@@ -62,7 +62,7 @@ export function AutofillView() {
           Folder ekstensi: <code>{extensionDir}</code>
           {fromHelper ? ' (dari helper Mac).' : ' — fallback clone Cursor-Tifz, bukan tifz-apps.'}{' '}
           Load unpacked ke folder itu <strong>sekali</strong>. Setelah itu, kalau aplikasi/helper di-update (git pull
-          atau <code>npm run install-service</code>), Chrome reload sendiri. Kartu harus {helperExtensionVersion || '1.2.9'}
+          atau <code>npm run install-service</code>), Chrome reload sendiri. Kartu harus {helperExtensionVersion || '1.3.0'}
           — bukan 1.2.6.
         </p>
         <ol className="steps">

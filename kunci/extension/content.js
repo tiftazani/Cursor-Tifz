@@ -131,7 +131,6 @@ function fill(match) {
 
 function isKunciPage() {
   const { hostname, port } = location
-  if (hostname === 'kunci-tifta.netlify.app') return true
   return (hostname === '127.0.0.1' || hostname === 'localhost') && ['8780', '5173', '4173'].includes(port)
 }
 
@@ -634,16 +633,7 @@ function scan() {
 }
 
 function wireKunciBridge() {
-  const sendToken = () => {
-    try {
-      void send({ type: 'CLOUD_TOKEN', token: window.localStorage.getItem('kunci_cloud_token') || '' })
-    } catch {
-      /* ignore */
-    }
-  }
-  sendToken()
   void send({ type: 'SYNC_EXTENSION' })
-  window.addEventListener('storage', sendToken)
   window.addEventListener('message', (event) => {
     if (event.source !== window) return
     if (event.data?.type === 'KUNCI_VAULT_SYNC' && event.data.blob) {
