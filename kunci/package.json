@@ -21,12 +21,9 @@
     "ambil-branch": "bash scripts/ambil-branch.sh",
     "sync-branch": "node scripts/sync-branch.mjs",
     "refresh-local": "node scripts/sync-branch.mjs && node helper/install-service.mjs",
-    "extension-status": "node scripts/extension-status.mjs",
-    "netlify:dev": "npx netlify dev"
+    "extension-status": "node scripts/extension-status.mjs"
   },
   "dependencies": {
-    "@netlify/blobs": "^10.7.13",
-    "@netlify/functions": "^5.3.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

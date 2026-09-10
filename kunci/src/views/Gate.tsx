@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Field, SecretInput, StrengthBar, TextArea, TextInput } from '../components/Field'
 import { IconKey, IconLock } from '../components/Icons'
-import { IosInstallCard } from '../components/IosInstallCard'
 import { isStrongMaster, passwordStrength } from '../lib/strength'
 import { useVault } from '../state/VaultContext'
 
@@ -41,9 +40,8 @@ export function SetupScreen() {
         </div>
         <form className="stack" autoComplete="off" onSubmit={(e) => void onSubmit(e)}>
           <p className="lede">
-            Localhost dan URL publik memakai brankas terenkripsi yang sama. Simpan recovery key di luar Kunci.
+            Brankas hanya di Mac ini, di http://127.0.0.1:8780. Simpan recovery key di luar Kunci.
           </p>
-          <IosInstallCard />
           <Field label="Kata sandi induk">
             <SecretInput value={password} onChange={setPassword} autoComplete="new-password" placeholder="Minimal 12 karakter" />
           </Field>
@@ -118,7 +116,6 @@ export function LockScreen() {
             </p>
           </div>
         </div>
-        <IosInstallCard />
         {mode === 'unlock' ? (
           <form className="stack" onSubmit={(e) => void onSubmit(e)}>
             <Field label="Kata sandi induk">

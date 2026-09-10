@@ -27,10 +27,7 @@ const TOKEN_DIR = join(homedir(), '.kunci')
 const TOKEN_PATH = join(TOKEN_DIR, 'helper-token')
 const RECOVERY_PATH = join(TOKEN_DIR, 'recovery.json')
 const OTP_PATH = join(TOKEN_DIR, 'otp.json')
-const CLOUD_ORIGIN = 'https://kunci-tifta.netlify.app'
 const serveUi = process.env.KUNCI_SERVE_UI !== '0'
-const NETLIFY_PRIVATE_SITE_HELP =
-  'Situs Netlify Kunci masih Private / Team login. Helper di Mac tidak punya cookie login Netlify, jadi OTP gagal. Di Netlify: Project configuration → General → Visitor access → Project visibility → Public (production). Kunci tetap dikunci kode Gmail + kata sandi induk.'
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -90,62 +87,6 @@ async function wipeLegacyDek() {
   }
 }
 
-function shouldProxyCloud(pathname) {
-  if (pathname === '/kunci-status') return true
-  if (!pathname.startsWith('/api/')) return false
-  if (pathname === '/api/local-token') return false
-  if (pathname.startsWith('/api/recovery')) return false
-  return true
-}
-
-function isNetlifyAccessGate(status, body) {
-  if (status !== 401 && status !== 403) return false
-  const text = String(body || '').toLowerCase()
-  return (
-    text.includes('edge-access') ||
-    text.includes('login redirect') ||
-    text.includes('app.netlify.com') ||
-    (text.includes('<!doctype html') && text.includes('netlify'))
-  )
-}
-
-async function proxyCloud(req, res, url) {
-  try {
-    const dest = `${CLOUD_ORIGIN}${url.pathname}${url.search}`
-    const headers = {
-      Origin: CLOUD_ORIGIN,
-      Referer: `${CLOUD_ORIGIN}/`,
-      Accept: 'application/json',
-      'User-Agent': 'Kunci-local/1',
-    }
-    if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type']
-    if (req.headers.authorization) headers.Authorization = req.headers.authorization
-    if (req.headers.cookie) headers.Cookie = req.headers.cookie
-    const init = { method: req.method, headers }
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      init.body = await readBody(req)
-    }
-    const forwarded = await fetch(dest, init)
-    const text = await forwarded.text()
-    if (isNetlifyAccessGate(forwarded.status, text)) {
-      console.error('Cloud Kunci ditolak Site protection Netlify (Private / Team login).')
-      json(res, 403, { error: NETLIFY_PRIVATE_SITE_HELP })
-      return
-    }
-    const out = {
-      'Content-Type': forwarded.headers.get('content-type') || 'application/json',
-      'Cache-Control': 'no-store',
-    }
-    const cookies = typeof forwarded.headers.getSetCookie === 'function' ? forwarded.headers.getSetCookie() : []
-    res.writeHead(forwarded.status, cookies.length ? { ...out, 'Set-Cookie': cookies } : out)
-    res.end(text)
-  } catch (err) {
-    json(res, 502, {
-      error: err instanceof Error ? `Gagal menghubungi cloud: ${err.message}` : 'Gagal menghubungi cloud',
-    })
-  }
-}
-
 function missingUiPage(res) {
   const cmd = refreshCommands().install
   res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
@@ -158,7 +99,6 @@ function missingUiPage(res) {
 <p>Di Terminal Mac:</p>
 <pre style="background:#12171f;padding:12px 16px;border-radius:8px">${cmd}</pre>
 <p>Lalu buka lagi <a href="/" style="color:#3ee0c3">http://127.0.0.1:8780</a></p>
-<p style="color:#8b97a8">Atau pakai situs: <a href="https://kunci-tifta.netlify.app" style="color:#3ee0c3">kunci-tifta.netlify.app</a></p>
 </body>`)
 }
 
@@ -198,7 +138,7 @@ function staleUiPage(res) {
 
 function serveStatic(req, res) {
   const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname
-  if (pathname.startsWith('/api/') || pathname === '/kunci-status') return false
+  if (pathname.startsWith('/api/')) return false
   if (!serveUi || !existsSync(DIST)) return false
   let path = new URL(req.url || '/', 'http://127.0.0.1').pathname
   if (path === '/') path = '/index.html'
@@ -316,10 +256,6 @@ const server = createServer(async (req, res) => {
         ok: false,
         error: 'Reset memakai recovery key di layar Kunci. Helper tidak lagi menyimpan DEK di disk.',
       })
-      return
-    }
-    if (shouldProxyCloud(url.pathname)) {
-      await proxyCloud(req, res, url)
       return
     }
     if (req.method === 'GET' && serveStatic(req, res)) return

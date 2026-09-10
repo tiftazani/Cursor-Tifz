@@ -16,7 +16,6 @@ const KUNCI_PORTS = new Set(['8780', '5173', '4173'])
 export function isKunciAppUrl(raw) {
   try {
     const url = new URL(raw)
-    if (url.hostname === 'kunci-tifta.netlify.app') return true
     if ((url.hostname === '127.0.0.1' || url.hostname === 'localhost') && KUNCI_PORTS.has(url.port || '80')) return true
     return false
   } catch {

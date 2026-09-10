@@ -35,7 +35,6 @@ const session = (() => {
   }
 })()
 
-const CLOUD = 'https://kunci-tifta.netlify.app'
 const KUNCI_TAB_URLS = [
   'http://127.0.0.1:8780/*',
   'http://localhost:8780/*',
@@ -43,12 +42,11 @@ const KUNCI_TAB_URLS = [
   'http://localhost:5173/*',
   'http://127.0.0.1:4173/*',
   'http://localhost:4173/*',
-  `${CLOUD}/*`,
 ]
 
 async function sessionState() {
-  const { vault, unlocked, dekB64, cloudToken } = await session.get(['vault', 'unlocked', 'dekB64', 'cloudToken'])
-  return { vault: unlocked ? vault : null, dekB64, cloudToken: cloudToken || '' }
+  const { vault, unlocked, dekB64 } = await session.get(['vault', 'unlocked', 'dekB64'])
+  return { vault: unlocked ? vault : null, dekB64 }
 }
 
 async function publicMatches(vault, url) {
@@ -73,27 +71,12 @@ async function notifyKunciTabs(blob) {
   }
 }
 
-async function pushCloud(blob, token) {
-  if (!token) return
-  try {
-    await fetch(`${CLOUD}/api/vault`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ blob }),
-    })
-  } catch {
-    /* tab listener still writes IndexedDB */
-  }
-}
-
 async function writeVault(vault, dekB64, blob) {
   const dekRaw = dekFromB64(dekB64)
   const nextBlob = await persistVault(vault, dekRaw, blob)
   await chrome.storage.local.set({ blob: nextBlob })
   await session.set({ vault, unlocked: true, dekB64 })
-  const { cloudToken } = await session.get('cloudToken')
   await notifyKunciTabs(nextBlob)
-  await pushCloud(nextBlob, cloudToken)
   return nextBlob
 }
 
@@ -203,9 +186,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
       }
     })
-  }
-  if (msg.type === 'CLOUD_TOKEN') {
-    return ack(sendResponse, () => session.set({ cloudToken: msg.token || '' }))
   }
   if (msg.type === 'TOUCH') {
     return ack(sendResponse, async () => {

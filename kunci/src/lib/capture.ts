@@ -1,5 +1,5 @@
 import type { Entry } from '../types'
-import { DEFAULT_CLOUD_URL, LOCAL_APP_ORIGINS } from './allowed-origins'
+import { LOCAL_APP_ORIGINS } from './allowed-origins'
 import { entryMatchesPage, hostFromUrl } from './match'
 import { withCredentialHistory } from './history'
 import { newId } from './id'
@@ -15,8 +15,7 @@ export type SaveDecision = { action: 'skip'; reason: 'empty' | 'kunci-app' | 'un
 export function isKunciAppUrl(raw: string): boolean {
   try {
     const url = new URL(raw)
-    if (LOCAL_APP_ORIGINS.includes(url.origin)) return true
-    return url.hostname === new URL(DEFAULT_CLOUD_URL).hostname
+    return LOCAL_APP_ORIGINS.includes(url.origin)
   } catch {
     return false
   }

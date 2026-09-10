@@ -114,15 +114,14 @@ export function FillMacDialog({ entry, onClose }: { entry: Entry; onClose: () =>
         ) : (
           <>
             <p className="muted">
-              Helper Mac tidak terhubung. Situs cloud dan localhost memakai helper yang sama di{' '}
-              <code>127.0.0.1:8780</code>.
+              Helper Mac tidak terhubung. Kunci hanya jalan di <code>http://127.0.0.1:8780</code>.
             </p>
             <ol className="steps">
               <li>
                 Di folder <code>kunci</code>: <code>npm run install-service</code>
               </li>
               <li>Izinkan <strong>Kunci Helper</strong> di Accessibility — app ada di /Applications</li>
-              <li>Biarkan helper menyala, lalu buka lagi cloud atau http://127.0.0.1:8780</li>
+              <li>Biarkan helper menyala, lalu buka lagi http://127.0.0.1:8780</li>
             </ol>
             <button type="button" className="btn" onClick={onClose}>
               Tutup

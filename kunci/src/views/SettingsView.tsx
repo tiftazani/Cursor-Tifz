@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Field, SecretInput, TextInput } from '../components/Field'
 import { isStrongMaster } from '../lib/strength'
 import { AUTO_LOCK_OPTIONS, resolveAutoLockSeconds } from '../lib/autolock'
-import { IosInstallGuide } from '../components/IosInstallCard'
 import { useVault } from '../state/VaultContext'
 
 export function SettingsView() {
@@ -15,9 +14,7 @@ export function SettingsView() {
     lock,
     destroyVault,
     rotateRecoveryKey,
-    logoutPublic,
     hasRecoveryWrap,
-    recoveryEmail,
   } = useVault()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
@@ -52,16 +49,14 @@ export function SettingsView() {
     <div className="page">
       <header className="page-head">
         <h2>Pengaturan</h2>
-        <p className="muted">Keamanan brankas, tema, dan sesi cloud. Perubahan ikut tersimpan di cloud dan di perangkat ini.</p>
+        <p className="muted">Keamanan brankas dan tema. Perubahan tersimpan di perangkat ini.</p>
       </header>
-
-      <IosInstallGuide />
 
       <div className="card stack">
         <h3>Keamanan</h3>
         <Field
           label="Kunci otomatis"
-          hint="Mengunci brankas (minta kata sandi induk lagi). Tidak mengeluarkan sesi cloud Gmail."
+          hint="Mengunci brankas (minta kata sandi induk lagi)."
         >
           <select
             className="input"
@@ -182,18 +177,11 @@ export function SettingsView() {
         <button type="button" className="btn" onClick={lock}>
           Kunci sekarang
         </button>
-        <button type="button" className="btn" onClick={() => void logoutPublic()}>
-          Keluar dari sesi cloud ({recoveryEmail})
-        </button>
         <button
           type="button"
           className="btn btn-danger"
           onClick={() => {
-            if (
-              window.confirm(
-                'Hapus brankas dari browser ini? Salinan terenkripsi di cloud (localhost dan URL publik) tidak ikut terhapus.',
-              )
-            ) {
+            if (window.confirm('Hapus brankas dari browser ini? Cadangan file yang sudah diunduh tidak ikut terhapus.')) {
               void destroyVault()
             }
           }}
