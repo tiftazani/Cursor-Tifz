@@ -12,10 +12,20 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.4.0"
-    val currentCode: Int = 5
+    val currentName: String = "1.4.1"
+    val currentCode: Int = 6
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.4.1",
+            code = 6,
+            date = "10 Sep 2026",
+            notes = listOf(
+                "Masuk tanpa kata sandi untuk akun awal (Owner/Kasir/SPV hash kosong).",
+                "Tombol Masuk tidak wajibkan password. Toast cuma minta email kalau email kosong.",
+                "Firebase Auth dilewati kalau kolom kata sandi kosong, supaya tidak gagal di Auth.",
+            ),
+        ),
         AppRelease(
             name = "1.4.0",
             code = 5,

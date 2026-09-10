@@ -41,6 +41,7 @@ import com.tiftazani.laundryops.BuildConfig
 import com.tiftazani.laundryops.data.CloudSync
 import com.tiftazani.laundryops.data.CuciinStore
 import com.tiftazani.laundryops.data.FirebaseCloud
+import com.tiftazani.laundryops.data.LoginGate
 import com.tiftazani.laundryops.data.Role
 import com.tiftazani.laundryops.ui.components.ChipRow
 import com.tiftazani.laundryops.ui.components.GhostBtn
@@ -103,7 +104,31 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
     fun localLogin() {
         if (store.login(email, pass)) goHome()
         else if (store.pendingName.value != null) nav.navigate("pending")
-        else toast("Email / password salah, atau akun belum ada.")
+        else toast(LoginGate.WRONG)
+    }
+    fun submitForm() {
+        if (busy) return
+        LoginGate.emailError(email)?.let {
+            toast(it)
+            return
+        }
+        if (LoginGate.useLocalLogin(pass, FirebaseCloud.enabled)) {
+            localLogin()
+            return
+        }
+        busy = true
+        FirebaseCloud.signIn(email, pass) { ok, pending, msg ->
+            busy = false
+            when {
+                ok -> goHome()
+                pending -> nav.navigate("pending")
+                else -> {
+                    if (store.login(email, pass)) goHome()
+                    else if (store.pendingName.value != null) nav.navigate("pending")
+                    else toast(msg)
+                }
+            }
+        }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Box(
@@ -123,28 +148,18 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
         }
         Column(Modifier.padding(ui.pad), verticalArrangement = Arrangement.spacedBy(ui.gap)) {
             Text(CloudSync.lastStatus, color = Muted, fontSize = 12.sp)
-            Field(email, { email = it }, "Email")
-            Field(pass, { pass = it }, "Password (kosong = akun awal)", password = true)
-            PrimaryBtn(if (busy) "Masuk…" else "Masuk", enabled = !busy) {
-                if (busy) return@PrimaryBtn
-                if (!FirebaseCloud.enabled) {
-                    localLogin()
-                    return@PrimaryBtn
-                }
-                busy = true
-                FirebaseCloud.signIn(email, pass) { ok, pending, msg ->
-                    busy = false
-                    when {
-                        ok -> goHome()
-                        pending -> nav.navigate("pending")
-                        else -> {
-                            if (store.login(email, pass)) goHome()
-                            else if (store.pendingName.value != null) nav.navigate("pending")
-                            else toast(msg)
-                        }
-                    }
-                }
+            Text(
+                "Akun awal belum punya kata sandi. Isi email, biarkan kolom kata sandi kosong, lalu ketuk Masuk.",
+                color = Muted,
+                fontSize = 13.sp,
+            )
+            PrimaryBtn("Masuk tanpa kata sandi", enabled = !busy) {
+                store.demoLogin(Role.Owner)
+                goHome()
             }
+            Field(email, { email = it }, "Email")
+            Field(pass, { pass = it }, "Kata sandi — boleh dikosongkan", password = true)
+            PrimaryBtn(if (busy) "Masuk…" else "Masuk", enabled = !busy) { submitForm() }
             if (busy) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                     CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Teal)
@@ -153,7 +168,7 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
             GhostBtn("Daftar Kasir / SPV") { nav.navigate("register") }
             Text("MASUK CEPAT", color = Teal, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                listOf(Role.Owner to "Owner", Role.Kasir to "Kasir", Role.Supervisor to "SPV").forEach { (role, label) ->
+                listOf(Role.Kasir to "Kasir", Role.Supervisor to "SPV").forEach { (role, label) ->
                     GhostBtn(label, modifier = Modifier.weight(1f)) {
                         store.demoLogin(role)
                         goHome()

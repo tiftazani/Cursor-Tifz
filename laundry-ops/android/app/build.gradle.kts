@@ -13,8 +13,8 @@ android {
         applicationId = "com.tiftazani.laundryops"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.4.0"
+        versionCode = 6
+        versionName = "1.4.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "CUCIIN_CLOUD_URL", "\"https://cuan-tif.vercel.app/api/cuciin\"")
         buildConfigField("String", "CUCIIN_CLOUD_KEY", "\"cuciin-48c12bb800fa8770e5a7e96d3eb00f0ff2d6ab7c8eaff4bb\"")
@@ -63,6 +63,8 @@ dependencies {
     implementation(firebaseBom)
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
+
+    testImplementation("junit:junit:4.13.2")
 }
 
 // Tanpa google-services.json app tetap compile + jalan lokal.

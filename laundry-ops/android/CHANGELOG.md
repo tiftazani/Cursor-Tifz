@@ -2,6 +2,14 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.4.1 — 10 Sep 2026 (versionCode 6)
+
+Masuk akun awal tanpa kata sandi.
+
+- Tombol **Masuk tanpa kata sandi** (Owner) + form **Masuk** tidak mewajibkan password
+- Kalau email kosong, toast cuma "Email wajib diisi" — bukan "email dan kata sandi wajib diisi"
+- Firebase Auth dilewati kalau password kosong (akun awal hash-nya kosong)
+
 ## 1.4.0 — 10 Sep 2026 (versionCode 5)
 
 UI dirombak. Master data lengkap CRUD. Layout aman di banyak ukuran layar.

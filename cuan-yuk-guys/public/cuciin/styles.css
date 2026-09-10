@@ -527,7 +527,9 @@ label.form input, label.form textarea, label.form select {
   margin-bottom: 16px;
 }
 .login h1 { font-size: 32px; margin-bottom: 6px; }
-.login .lede { margin-bottom: 28px; }
+.login .lede { margin-bottom: 16px; }
+.login .hint { margin: 0 0 16px; }
+.login .btn { margin-bottom: 10px; }
 .empty { text-align: center; padding: 32px 12px; color: var(--muted); }
 .toast {
   position: absolute;

@@ -64,8 +64,8 @@ object FirebaseCloud {
     }
 
     fun signIn(email: String, password: String, onDone: (ok: Boolean, pending: Boolean, msg: String) -> Unit) {
-        if (!enabled) {
-            ui { onDone(false, false, "Firebase belum dikonfigurasi") }
+        if (!enabled || password.isBlank()) {
+            ui { onDone(false, false, "pakai akun lokal") }
             return
         }
         FirebaseAuth.getInstance()
