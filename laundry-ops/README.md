@@ -4,16 +4,22 @@ Aplikasi kasir laundry (Android, Kotlin) masih **belum dibangun**. Yang ada seka
 
 ## Mockup UI
 
-Buka di browser:
-
 ```bash
 cd laundry-ops/mockup
 python3 -m http.server 4173
 ```
 
-Lalu [http://localhost:4173](http://localhost:4173).
+- Preview studio: [http://localhost:4173](http://localhost:4173)
+- Mode film (HP doang, buat rekam): [http://localhost:4173/?film=1&role=kasir&screen=login](http://localhost:4173/?film=1&role=kasir&screen=login)
 
-Di panel kiri bisa ganti preview **Owner / Kasir / Supervisor** dan loncat ke layar. Di frame HP, alur kasir bisa diklik: pilih layanan → qty → bayar (Lunas / DP / Belum lunas) → nota WhatsApp.
+Alur operasional: login → pilih pelanggan → kasir (qty) → bayar lunas → WhatsApp nota ke HP pelanggan.
+
+Rekam ulang video walkthrough:
+
+```bash
+# butuh Chrome + playwright-core
+node mockup/record-walkthrough.mjs
+```
 
 ## Yang belum
 
