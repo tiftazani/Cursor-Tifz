@@ -63,7 +63,7 @@ const MODULES = [
 ];
 
 const state = {
-  role: "kasir",
+  role: "owner",
   screen: "login",
   history: [],
   loggedIn: false,
