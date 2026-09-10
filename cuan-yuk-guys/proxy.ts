@@ -9,7 +9,9 @@ export async function proxy(request: NextRequest) {
   if (
     pathname === "/imo" ||
     pathname.startsWith("/imo/") ||
-    pathname === "/imo.html"
+    pathname === "/imo.html" ||
+    pathname === "/cuciin" ||
+    pathname.startsWith("/cuciin/")
   ) {
     return NextResponse.next();
   }
