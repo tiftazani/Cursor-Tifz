@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cuciin — mockup UI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="studio">
+    <aside class="studio-panel">
+      <p class="eyebrow">Mockup · bukan APK</p>
+      <h1>Cuciin</h1>
+      <p class="lede">Operasional laundry. Klik di HP palsu di kanan — ini preview UI sebelum Android dibangun.</p>
+
+      <div class="field">
+        <span>Preview sebagai</span>
+        <div class="segment" id="role-switch" role="tablist">
+          <button type="button" data-role="owner" class="on">Owner</button>
+          <button type="button" data-role="kasir">Kasir</button>
+          <button type="button" data-role="supervisor">Supervisor</button>
+        </div>
+      </div>
+
+      <p class="hint">Ganti role = ganti menu. SPV: antrian + stok, tanpa uang. Daftar nunggu Owner.</p>
+
+      <h2>Loncat ke layar</h2>
+      <nav class="screen-jump" id="screen-jump"></nav>
+
+      <ol class="legend">
+        <li>Daftar → pilih role (termasuk role baru Owner) → nunggu approve</li>
+        <li>Nota baru → qty → janji selesai → bayar → WA nota</li>
+        <li>Antrian: geser status sampai Siap ambil → WA pelanggan</li>
+        <li>Tutup kas akhir shift</li>
+      </ol>
+    </aside>
+
+    <main class="stage">
+      <div class="phone">
+        <div class="phone-notch" aria-hidden="true"></div>
+        <div class="phone-screen">
+          <div class="status-bar">
+            <span>09.41</span>
+            <span class="status-icons">▌▌▌ ●</span>
+          </div>
+          <div id="app"></div>
+          <nav class="tabbar" id="tabbar" hidden></nav>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
