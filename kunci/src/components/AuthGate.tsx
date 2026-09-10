@@ -1,24 +1,55 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Field, TextInput } from './Field'
 import { IconLock } from './Icons'
 import { IosInstallCard } from './IosInstallCard'
 import { RECOVERY_EMAIL } from '../lib/account'
 import { DEFAULT_CLOUD_URL } from '../lib/allowed-origins'
 import { isPublicHost, requestOtp, verifyOtp } from '../lib/cloud'
+import { OTP_SENT_AT_KEY, otpSendCooldownRemaining } from '../lib/otp-policy'
+
+function readOtpSentAt(): number | null {
+  try {
+    const raw = sessionStorage.getItem(OTP_SENT_AT_KEY)
+    const n = raw ? Number(raw) : NaN
+    return Number.isFinite(n) ? n : null
+  } catch {
+    return null
+  }
+}
+
+function rememberOtpSentAt(sentAt: number): void {
+  try {
+    sessionStorage.setItem(OTP_SENT_AT_KEY, String(sentAt))
+  } catch {
+    /* private mode */
+  }
+}
 
 export function AuthGate({ onAuthed }: { onAuthed: () => void }) {
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState(false)
+  const [sentAt, setSentAt] = useState<number | null>(() => readOtpSentAt())
+  const [now, setNow] = useState(() => Date.now())
   const local = !isPublicHost()
+  const cooling = otpSendCooldownRemaining(sentAt, now) > 0
+
+  useEffect(() => {
+    if (!cooling) return
+    const id = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [cooling])
 
   async function send() {
+    if (busy || otpSendCooldownRemaining(sentAt, Date.now()) > 0) return
     setError('')
     setBusy(true)
     try {
       await requestOtp()
-      setSent(true)
+      const t = Date.now()
+      setSentAt(t)
+      setNow(t)
+      rememberOtpSentAt(t)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Gagal kirim kode')
     } finally {
@@ -59,8 +90,12 @@ export function AuthGate({ onAuthed }: { onAuthed: () => void }) {
         <p className="hint-pill">Situs ini: {window.location.host}</p>
         <IosInstallCard />
         <form className="stack" onSubmit={(e) => void onSubmit(e)}>
-          <button type="button" className="btn" onClick={() => void send()} disabled={busy}>
-            {sent ? 'Kirim ulang kode' : 'Kirim kode masuk ke Gmail'}
+          <button type="button" className="btn" onClick={() => void send()} disabled={busy || cooling}>
+            {cooling
+              ? 'Kode sudah dikirim — cek Gmail'
+              : sentAt
+                ? 'Kirim ulang kode'
+                : 'Kirim kode masuk ke Gmail'}
           </button>
           <Field label="Kode dari email">
             <TextInput

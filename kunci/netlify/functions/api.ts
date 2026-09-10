@@ -2,6 +2,7 @@ import { getStore } from '@netlify/blobs'
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { isAllowedKunciOrigin } from '../../src/lib/allowed-origins'
 import { isPingPath, isSessionPath, normalizeApiPath } from '../../src/lib/api-path'
+import { OTP_MAX_ATTEMPTS, OTP_TTL_MS, shouldReuseOtp, type StoredOtp } from '../../src/lib/otp-policy'
 
 const ALLOWED_EMAIL = 'tiftazani.khara@gmail.com'
 const COOKIE = 'kunci_session'
@@ -215,18 +216,25 @@ export default async (req: Request): Promise<Response> => {
     }
 
     if (req.method === 'POST' && path === '/api/auth/otp') {
+      const blobs = await store()
+      const existing = ((await blobs.get('otp', { type: 'json' })) as StoredOtp | null) ?? null
+      if (shouldReuseOtp(existing, Date.now())) {
+        return respond({ ok: true, email: ALLOWED_EMAIL })
+      }
+
       const ip = clientIp(req)
       if (!(await bumpRateLimit(`rl:otp:${ip}`, 20, 60 * 60 * 1000))) {
         return respond({ error: 'Terlalu banyak permintaan. Coba 1 jam lagi.' }, 429)
       }
 
-      const blobs = await store()
       const code = randomBytes(5).toString('hex').slice(0, 8).toUpperCase()
       const salt = randomBytes(16).toString('hex')
+      const now = Date.now()
       await blobs.setJSON('otp', {
         hash: hashOtp(code, salt),
         salt,
-        exp: Date.now() + 10 * 60 * 1000,
+        exp: now + OTP_TTL_MS,
+        issuedAt: now,
         attempts: 0,
       })
       await sendEmail('Kode masuk Kunci', `Kode masuk Kunci: ${code}\nBerlaku 10 menit.\nKalau bukan kamu, abaikan.\n`)
@@ -243,12 +251,10 @@ export default async (req: Request): Promise<Response> => {
         return respond({ error: 'Email tidak diizinkan' }, 403)
       }
       const blobs = await store()
-      const otp = (await blobs.get('otp', { type: 'json' })) as
-        | { hash: string; salt: string; exp: number; attempts: number }
-        | null
+      const otp = ((await blobs.get('otp', { type: 'json' })) as StoredOtp | null) ?? null
       if (!otp) return respond({ error: 'Tidak ada kode aktif' }, 400)
       if (Date.now() > otp.exp) return respond({ error: 'Kode kedaluwarsa' }, 400)
-      if (otp.attempts >= 5) return respond({ error: 'Terlalu banyak percobaan' }, 429)
+      if (otp.attempts >= OTP_MAX_ATTEMPTS) return respond({ error: 'Terlalu banyak percobaan' }, 429)
       const incoming = hashOtp(String(body.code || '').trim().toUpperCase(), otp.salt)
       const ok = incoming.length === otp.hash.length && timingSafeEqual(Buffer.from(incoming), Buffer.from(otp.hash))
       otp.attempts += 1
