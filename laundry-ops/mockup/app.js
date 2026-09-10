@@ -18,6 +18,16 @@ const PIPE = [
   { id: "diambil", label: "Diambil", next: null },
 ];
 
+const SVC_ICON = {
+  cuci: { bg: "#dbeafe", svg: `<svg viewBox="0 0 32 32" fill="none"><path d="M10 12l6-6 6 6v12a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V12z" fill="#60a5fa"/><path d="M8 14h16" stroke="#1d4ed8" stroke-width="1.6"/></svg>` },
+  curing: { bg: "#e0e7ff", svg: `<svg viewBox="0 0 32 32" fill="none"><path d="M16 6v4M10 14h12l-1 12H11L10 14z" stroke="#6366f1" stroke-width="1.8" fill="#c7d2fe"/><circle cx="16" cy="8" r="2" fill="#6366f1"/></svg>` },
+  do: { bg: "#fce7f3", svg: `<svg viewBox="0 0 32 32" fill="none"><path d="M8 12h16l-2 14H10L8 12z" fill="#f9a8d4" stroke="#db2777" stroke-width="1.5"/><path d="M12 12V9a4 4 0 0 1 8 0v3" stroke="#db2777" stroke-width="1.6"/></svg>` },
+  "do-lipat": { bg: "#fae8ff", svg: `<svg viewBox="0 0 32 32" fill="none"><rect x="7" y="10" width="18" height="14" rx="2" fill="#e879f9"/><path d="M7 17h18M16 10v14" stroke="#fff" stroke-width="1.4"/></svg>` },
+  sabun: { bg: "#d1fae5", svg: `<svg viewBox="0 0 32 32" fill="none"><rect x="8" y="12" width="16" height="12" rx="6" fill="#34d399"/><circle cx="20" cy="10" r="3" fill="#6ee7b7"/></svg>` },
+  softener: { bg: "#ccfbf1", svg: `<svg viewBox="0 0 32 32" fill="none"><path d="M12 8h8l2 4v14a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V12l2-4z" fill="#2dd4bf"/><path d="M12 12h8" stroke="#0f766e" stroke-width="1.4"/></svg>` },
+  parfum: { bg: "#fef3c7", svg: `<svg viewBox="0 0 32 32" fill="none"><rect x="12" y="12" width="8" height="14" rx="2" fill="#fbbf24"/><path d="M14 12V8h4v4M16 6v2" stroke="#d97706" stroke-width="1.6"/><circle cx="22" cy="9" r="1.5" fill="#f59e0b"/></svg>` },
+};
+
 const SERVICES = [
   { id: "cuci", name: "Cuci", desc: "Cuci reguler, kering di tempat", unit: "kg", price: 7000, dropOut: false, retail: false },
   { id: "curing", name: "Cuci kering (Curing)", desc: "Curing, tidak basah pulang", unit: "kg", price: 9000, dropOut: false, retail: false },
@@ -44,6 +54,7 @@ const MODULES = [
   { id: "user", label: "User" },
   { id: "role", label: "Role & akses" },
   { id: "profil", label: "Profil usaha" },
+  { id: "laporan", label: "Laporan" },
 ];
 
 const state = {
@@ -64,6 +75,8 @@ const state = {
   payTarget: null,
   extraPay: 0,
   userFilter: "pengajuan",
+  ownerEmail: "tiftazani.khara@gmail.com",
+  reportPeriod: "minggu",
   queueFilter: "aktif",
   activeQueueId: "CU-2401-0042",
   searchQ: "",
@@ -130,6 +143,7 @@ const JUMPS = [
   { id: "roles", label: "Role" },
   { id: "inventory", label: "Inventory" },
   { id: "layanan", label: "Layanan" },
+  { id: "laporan", label: "Laporan Owner" },
 ];
 
 function pipeMeta(id) {
@@ -262,6 +276,18 @@ function chipStatus(id, label) {
   return `<span class="chip ${id}">${label}</span>`;
 }
 
+function svcTile(s) {
+  const ico = SVC_ICON[s.id] || SVC_ICON.cuci;
+  return `<button class="svc" data-open-qty="${s.id}">
+    <div class="svc-ico" style="background:${ico.bg}">${ico.svg}</div>
+    <div>
+      <div class="t">${s.name}</div>
+      <div class="d">${s.desc}</div>
+      <div class="p">${Rp(s.price)} / ${s.unit} ${s.dropOut ? '<span class="chip do">DO</span>' : ""}</div>
+    </div>
+  </button>`;
+}
+
 function authTabs(active) {
   return `<div class="auth-tabs">
     <button class="${active === "login" ? "on" : ""}" data-go="login">Masuk</button>
@@ -303,7 +329,7 @@ function screenLogin() {
     <h1>Cuciin</h1>
     <p class="lede">Kasir dan SPV daftar dulu. Owner yang nyalain akses.</p>
     ${authTabs("login")}
-    <label class="form"><span>Email</span><input value="rina@cuciin.id" /></label>
+    <label class="form"><span>Email</span><input value="${state.role === "owner" ? state.ownerEmail : "rina@cuciin.id"}" /></label>
     <label class="form"><span>Password</span><input type="password" value="••••••••" /></label>
     <button class="btn primary" data-go="home">Masuk</button>
   </div>`;
@@ -377,6 +403,11 @@ function screenHome() {
       </div>
     </div>
     ${
+      state.role === "owner"
+        ? `<button class="card tap" data-go="laporan"><div class="name">Laporan mingguan & bulanan</div><div class="meta">Export Excel atau PDF</div></button>`
+        : ""
+    }
+    ${
       state.role === "owner" && pending
         ? `<button class="card tap warn" data-go="users"><div class="name">${pending} pengajuan akun</div><div class="meta">Setujui Kasir / SPV / role baru</div></button>`
         : ""
@@ -446,14 +477,9 @@ function screenKasir() {
         <span class="meta">ganti</span>
       </div>
     </button>
-    <div class="section-label">Layanan <span>kiloan atau satuan</span></div>
+    <div class="section-label">Layanan kami <span>ikon per jenis</span></div>
     <div class="grid-svc">
-      ${SERVICES.map((s) => `
-        <button class="svc" data-open-qty="${s.id}">
-          <div class="t">${s.name}</div>
-          <div class="d">${s.desc}</div>
-          <div class="p">${Rp(s.price)} / ${s.unit} ${s.dropOut ? '<span class="chip do">DO</span>' : ""}</div>
-        </button>`).join("")}
+      ${SERVICES.map(svcTile).join("")}
     </div>
     <div class="cart dock">
       ${
@@ -595,12 +621,19 @@ function screenPelunasan() {
 function screenLayanan() {
   return `<div class="screen">
     <div class="top"><div><p class="sub">Tambah / hapus</p><h1>Layanan</h1></div></div>
-    ${SERVICES.map((s) => `
-      <button class="card tap" data-go="layanan-form">
-        <div class="name">${s.name} ${s.dropOut ? '<span class="chip do">Drop Out</span>' : ""}</div>
-        <div class="meta">${s.desc}</div>
-        <div class="meta">${Rp(s.price)} / ${s.unit === "kg" ? "kiloan" : "satuan"}</div>
-      </button>`).join("")}
+      ${SERVICES.map((s) => {
+        const ico = SVC_ICON[s.id] || SVC_ICON.cuci;
+        return `<button class="card tap" data-go="layanan-form">
+        <div class="row">
+          <div class="svc-ico" style="background:${ico.bg}">${ico.svg}</div>
+          <div class="grow">
+            <div class="name">${s.name} ${s.dropOut ? '<span class="chip do">Drop Out</span>' : ""}</div>
+            <div class="meta">${s.desc}</div>
+            <div class="meta">${Rp(s.price)} / ${s.unit === "kg" ? "kiloan" : "satuan"}</div>
+          </div>
+        </div>
+      </button>`;
+      }).join("")}
     <button class="fab" data-go="layanan-form">+ Layanan</button>
   </div>`;
 }
@@ -692,8 +725,48 @@ function screenProfil() {
     <div class="top">${backBtn("more")}<h1>Profil usaha</h1><span></span></div>
     <label class="form"><span>Nama laundry</span><input value="Cuciin" /></label>
     <label class="form"><span>Alamat</span><textarea rows="2">Jl. Laundry Raya 1, Bandung</textarea></label>
+    <label class="form"><span>Email Owner</span><input id="owner-email" value="${state.ownerEmail}" /></label>
+    <p class="meta" style="margin-bottom:12px">Bisa diubah. Default awal: tiftazani.khara@gmail.com</p>
     <button class="btn ghost" data-toast="Permintaan hapus akun (syarat Play)">Hapus akun saya</button>
-    <button class="btn primary" data-toast="Profil tersimpan" data-go="more">Simpan</button>
+    <button class="btn primary" data-save-profil>Simpan</button>
+  </div>`;
+}
+
+function reportData() {
+  return state.reportPeriod === "minggu"
+    ? { label: "Minggu ini · 4–10 Sep", omzet: 3210000, nota: 18, dropOut: 12, piutang: 54000, bars: [40, 55, 35, 70, 90, 60, 78] }
+    : { label: "September 2026", omzet: 12840000, nota: 86, dropOut: 48, piutang: 186000, bars: [30, 45, 50, 62, 80, 70, 88, 75] };
+}
+
+function screenLaporan() {
+  const r = reportData();
+  return `<div class="screen">
+    <div class="top">${backBtn("more")}<h1>Laporan</h1><span></span></div>
+    <div class="segment tight">
+      <button class="${state.reportPeriod === "minggu" ? "on" : ""}" data-rperiod="minggu">Mingguan</button>
+      <button class="${state.reportPeriod === "bulan" ? "on" : ""}" data-rperiod="bulan">Bulanan</button>
+    </div>
+    <p class="meta" style="margin-bottom:10px">${r.label} · ${state.ownerEmail}</p>
+    <div class="hero">
+      <div class="k">Omzet</div>
+      <div class="v">${Rp(r.omzet)}</div>
+      <div class="hero-row">
+        <span class="pill">${r.nota} nota</span>
+        <span class="pill">${r.dropOut} Drop Out</span>
+        <span class="pill">Piutang ${Rp(r.piutang)}</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="name">Tren</div>
+      <div class="bars">${r.bars.map((h) => `<i style="height:${h}%"></i>`).join("")}</div>
+    </div>
+    <div class="card">
+      <div class="cart-item"><span>Cuci</span><b>${Rp(Math.round(r.omzet * 0.32))}</b></div>
+      <div class="cart-item"><span>Curing / DO</span><b>${Rp(Math.round(r.omzet * 0.48))}</b></div>
+      <div class="cart-item"><span>Retail</span><b>${Rp(Math.round(r.omzet * 0.2))}</b></div>
+    </div>
+    <button class="btn primary" data-export="xlsx">Export Excel</button>
+    <button class="btn ghost" data-export="pdf">Export PDF</button>
   </div>`;
 }
 
@@ -718,6 +791,7 @@ function screenMore() {
   return `<div class="screen">
     <div class="top"><div><p class="sub">Owner</p><h1>Lainnya</h1></div></div>
     <div class="menu-list">
+      <button data-go="laporan">Laporan (Excel / PDF) <span>›</span></button>
       <button data-go="orders">Cari nota <span>›</span></button>
       <button data-go="tutup-kas">Tutup kas <span>›</span></button>
       <button data-go="layanan">Layanan <span>›</span></button>
@@ -752,6 +826,7 @@ const SCREENS = {
   users: screenUsers,
   roles: screenRoles,
   profil: screenProfil,
+  laporan: screenLaporan,
   "tutup-kas": screenTutupKas,
   more: screenMore,
 };
@@ -762,6 +837,7 @@ function qtySheet() {
   return `<div class="sheet-bg" data-close-sheet>
     <div class="sheet" data-stop>
       <div class="grab"></div>
+      ${(SVC_ICON[s.id] ? `<div class="svc-ico" style="background:${SVC_ICON[s.id].bg};margin:0 auto 8px">${SVC_ICON[s.id].svg}</div>` : "")}
       <h2>${s.name}</h2>
       <p class="meta">${s.desc} · ${Rp(s.price)} / ${s.unit}</p>
       <div class="qty-row">
@@ -779,7 +855,7 @@ function renderTabbar() {
   const hide =
     !state.loggedIn ||
     AUTH.includes(state.screen) ||
-    ["bayar", "nota", "customer-form", "layanan-form", "pelunasan", "stok-masuk", "profil", "wa-chat", "wa-ready", "queue-detail", "tutup-kas"].includes(state.screen);
+    ["bayar", "nota", "customer-form", "layanan-form", "pelunasan", "stok-masuk", "profil", "wa-chat", "wa-ready", "queue-detail", "tutup-kas", "laporan"].includes(state.screen);
   bar.hidden = hide;
   if (hide) {
     bar.innerHTML = "";
@@ -852,6 +928,46 @@ document.body.addEventListener("click", (e) => {
       state.roles.push({ name, modules: ["dashboard"] });
     }
     showToast(`Role ${name} muncul di form Daftar`);
+    return;
+  }
+
+  const rp = e.target.closest("[data-rperiod]");
+  if (rp) {
+    state.reportPeriod = rp.dataset.rperiod;
+    render();
+    return;
+  }
+
+  if (e.target.closest("[data-save-profil]")) {
+    const em = document.getElementById("owner-email");
+    if (em && em.value.trim()) state.ownerEmail = em.value.trim();
+    showToast("Profil tersimpan");
+    go("more");
+    return;
+  }
+
+  const exp = e.target.closest("[data-export]");
+  if (exp) {
+    const r = reportData();
+    const period = state.reportPeriod;
+    if (exp.dataset.export === "xlsx") {
+      const csv = `Laporan Cuciin,${r.label}\nOwner,${state.ownerEmail}\nOmzet,${r.omzet}\nNota,${r.nota}\nDrop Out,${r.dropOut}\nPiutang,${r.piutang}\n`;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+      a.download = `laporan-cuciin-${period}.csv`;
+      a.click();
+      showToast("Excel (CSV) terunduh");
+    } else {
+      const html = `<html><head><title>Laporan Cuciin</title></head><body style="font-family:sans-serif;padding:24px"><h1>Cuciin</h1><p>${r.label}<br>${state.ownerEmail}</p><p>Omzet ${Rp(r.omzet)}</p><p>Nota ${r.nota} · Drop Out ${r.dropOut}</p><p>Piutang ${Rp(r.piutang)}</p><p>Print → Save as PDF</p></body></html>`;
+      const w = window.open("", "_blank");
+      if (w) {
+        w.document.write(html);
+        w.document.close();
+        w.focus();
+        w.print();
+      }
+      showToast("PDF: Print / Save as PDF");
+    }
     return;
   }
 

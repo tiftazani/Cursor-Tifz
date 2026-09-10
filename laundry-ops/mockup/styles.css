@@ -1,22 +1,23 @@
 :root {
-  --teal: #0f766e;
-  --teal-deep: #115e59;
-  --mint: #14b8a6;
-  --mint-soft: #ccfbf1;
-  --foam: #f4f7f6;
+  --teal: #ec4899;
+  --teal-deep: #1e1a4a;
+  --mint: #f9a8d4;
+  --mint-soft: #fce7f3;
+  --foam: #fff4f8;
   --card: #ffffff;
-  --ink: #134e4a;
-  --muted: #5b7874;
-  --line: #d7e4e1;
+  --ink: #1e1a4a;
+  --muted: #8b7a88;
+  --line: #f3d4e4;
   --amber: #d97706;
   --amber-bg: #fff7ed;
-  --blue: #2563eb;
-  --blue-bg: #eff6ff;
-  --green: #15803d;
-  --green-bg: #f0fdf4;
-  --danger: #b91c1c;
-  --shadow: 0 18px 40px rgba(15, 118, 110, 0.12);
-  --radius: 20px;
+  --blue: #6366f1;
+  --blue-bg: #eef2ff;
+  --green: #059669;
+  --green-bg: #ecfdf5;
+  --danger: #e11d48;
+  --navy: #1e1a4a;
+  --shadow: 0 16px 36px rgba(236, 72, 153, 0.14);
+  --radius: 24px;
   --phone-w: 390px;
   --phone-h: 844px;
 }
@@ -26,9 +27,9 @@ html, body { margin: 0; min-height: 100%; }
 body {
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
   background:
-    radial-gradient(1200px 600px at 10% -10%, #99f6e4 0%, transparent 50%),
-    radial-gradient(900px 500px at 100% 100%, #ccfbf1 0%, transparent 45%),
-    #ecf4f2;
+    radial-gradient(900px 500px at 0% 0%, #fbcfe8 0%, transparent 50%),
+    radial-gradient(800px 400px at 100% 100%, #fce7f3 0%, transparent 45%),
+    #f9a8d4;
   color: var(--ink);
 }
 
@@ -182,9 +183,9 @@ h1, h2, h3, p { margin: 0; }
 }
 
 .hero {
-  background: #0f5f59;
+  background: linear-gradient(145deg, #1e1a4a 0%, #4c1d45 70%, #ec4899 160%);
   color: #fff;
-  border-radius: 24px;
+  border-radius: 28px;
   padding: 18px 18px 16px;
   margin-bottom: 14px;
 }
@@ -297,20 +298,37 @@ h1, h2, h3, p { margin: 0; }
 .svc {
   border: 0;
   background: #fff;
-  border-radius: 18px;
-  padding: 12px;
+  border-radius: 24px;
+  padding: 14px 12px 12px;
   text-align: left;
-  box-shadow: 0 1px 0 var(--line);
-  min-height: 96px;
+  box-shadow: 0 10px 24px rgba(30, 26, 74, 0.06);
+  min-height: 132px;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-.svc:last-child:nth-child(odd) { grid-column: 1 / -1; min-height: 76px; }
+.svc-ico {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 6px;
+}
+.svc-ico svg { width: 28px; height: 28px; }
+.svc:last-child:nth-child(odd) { grid-column: 1 / -1; min-height: 108px; flex-direction: row; align-items: center; gap: 12px; }
 .svc .t { font-weight: 800; font-size: 14px; }
 .svc .d { font-size: 11px; color: var(--muted); line-height: 1.35; flex: 1; }
 .svc .p { font-size: 12px; font-weight: 700; color: var(--teal); }
-.svc.on { outline: 2px solid var(--mint); background: #f0fdfa; }
+.svc.on { outline: 2px solid #ec4899; background: #fff7fb; }
+.bars { display: flex; align-items: flex-end; gap: 6px; height: 88px; margin: 8px 0 14px; }
+.bars i {
+  flex: 1;
+  background: linear-gradient(180deg, #f9a8d4, #ec4899);
+  border-radius: 8px 8px 4px 4px;
+  display: block;
+  min-height: 8px;
+}
 
 .cart {
   background: #fff;
@@ -444,26 +462,36 @@ label.form input, label.form textarea, label.form select {
 .qty-row strong { font-size: 28px; min-width: 80px; text-align: center; }
 
 .tabbar {
-  flex: 0 0 64px;
-  background: rgba(255,255,255,0.94);
-  backdrop-filter: blur(12px);
+  flex: 0 0 68px;
+  background: var(--navy);
   display: flex;
-  border-top: 1px solid var(--line);
-  padding: 6px 8px 10px;
+  border-top: 0;
+  margin: 0 10px 10px;
+  border-radius: 22px;
+  padding: 8px 6px 10px;
 }
+.tabbar[hidden] { display: none; }
 .tabbar button {
   flex: 1;
   border: 0;
   background: transparent;
-  color: var(--muted);
+  color: rgba(255,255,255,0.45);
   font-size: 10px;
   font-weight: 700;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
-.tabbar button.on { color: var(--teal); }
+.tabbar button.on { color: #fff; }
+.tabbar button.on svg {
+  background: #ec4899;
+  border-radius: 999px;
+  padding: 5px;
+  width: 28px;
+  height: 28px;
+  box-sizing: content-box;
+}
 .tabbar svg { width: 22px; height: 22px; }
 
 .login {
@@ -471,7 +499,7 @@ label.form input, label.form textarea, label.form select {
   padding: 48px 24px 24px;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #ccfbf1 0%, var(--foam) 42%);
+  background: linear-gradient(180deg, #fce7f3 0%, var(--foam) 48%);
 }
 .mark {
   width: 64px;
