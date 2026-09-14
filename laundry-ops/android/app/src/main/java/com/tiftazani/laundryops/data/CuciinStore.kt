@@ -376,7 +376,7 @@ object CuciinStore {
             persist()
             return false
         }
-        val passwordMatches = u.passwordHash.isNotBlank() && Passwords.matches(password, u.passwordHash)
+        val passwordMatches = skipPassword || (u.passwordHash.isNotBlank() && Passwords.matches(password, u.passwordHash))
         if (!LoginPolicy.permits(
                 debug = BuildConfig.DEBUG,
                 approved = u.approved,
@@ -789,6 +789,7 @@ object CuciinStore {
     }
 
     fun setCartHandler(svcId: String, email: String) {
+        if (session.value?.role != Role.Owner) return
         val staffMember = staff.firstOrNull { it.email.equals(email, true) } ?: return
         cart.find { it.service.id == svcId }?.let {
             it.handledByEmail = staffMember.email
@@ -842,14 +843,16 @@ object CuciinStore {
             dropOut = cartLines.any { it.service.dropOut },
             payMethod = method,
             lines = cartLines.map {
+                val handlerEmail = if (s.role == Role.Owner) it.handledByEmail.ifBlank { s.email } else s.email
+                val handlerName = if (s.role == Role.Owner) it.handledByName.ifBlank { s.name } else s.name
                 NotaLine(
                     serviceId = it.service.id,
                     name = it.service.name,
                     qty = it.qty,
                     unit = it.service.unit,
                     unitPrice = it.unitPrice,
-                    handledByEmail = it.handledByEmail.ifBlank { s.email },
-                    handledByName = it.handledByName.ifBlank { s.name },
+                    handledByEmail = handlerEmail,
+                    handledByName = handlerName,
                     commissionPerUnit = it.service.commissionPerUnit,
                 )
             },
@@ -857,14 +860,16 @@ object CuciinStore {
         notas.add(0, nota)
         cartLines.filter { it.service.retail }.forEach { line ->
             val qty = line.qty.toInt()
+            var balanceAfter: Int? = null
             products.find { it.name == line.service.name }?.let { product ->
                 val balance = branchStocks.firstOrNull { it.branchId == branchId && it.productKey == product.key }
                     ?: BranchStock(branchId, product.key, 0).also { branchStocks.add(it) }
                 balance.stock = (balance.stock - qty).coerceAtLeast(0)
+                balanceAfter = balance.stock
             }
             stockMoves.add(
                 0,
-                StockMove(Clock.nowLabel(t), t, line.service.name, StockKind.Jual, -qty, s.name, branchId, "Jual via nota", nota.id),
+                StockMove(Clock.nowLabel(t), t, line.service.name, StockKind.Jual, -qty, s.name, branchId, "Jual via nota", nota.id, balanceAfter),
             )
         }
         log("Nota ${nota.id} disimpan · ${nota.pay.label} · ${method.label}", branchId, nota.id)
@@ -888,7 +893,12 @@ object CuciinStore {
             return "Akun ini tidak dapat mengoreksi Service tersebut"
         }
         val clean = newLines.map {
-            it.copy(qty = it.qty.coerceAtLeast(0.0), unitPrice = it.unitPrice.coerceAtLeast(0))
+            it.copy(
+                qty = it.qty.coerceAtLeast(0.0),
+                unitPrice = it.unitPrice.coerceAtLeast(0),
+                handledByEmail = if (s.role == Role.Owner) it.handledByEmail else s.email,
+                handledByName = if (s.role == Role.Owner) it.handledByName else s.name,
+            )
         }.filter { it.qty > 0.0 }
         if (clean.isEmpty()) return "Service harus memiliki minimal satu layanan"
         if (clean.any { !it.qty.isFinite() || it.qty > 9999.0 || (it.unit != "kg" && it.qty % 1.0 != 0.0) }) {
@@ -918,7 +928,7 @@ object CuciinStore {
                     StockMove(
                         Clock.nowLabel(now), now, product.name,
                         if (delta > 0) StockKind.Tambah else StockKind.Kurang,
-                        delta, s.name, old.branchId, "Koreksi Service $id", id,
+                        delta, s.name, old.branchId, "Koreksi Service $id", id, balance.stock,
                     ),
                 )
             }
@@ -969,7 +979,7 @@ object CuciinStore {
             val balance = branchStocks.firstOrNull { it.branchId == old.branchId && it.productKey == product.key }
                 ?: BranchStock(old.branchId, product.key, 0).also { branchStocks.add(it) }
             balance.stock += qty
-            stockMoves.add(0, StockMove(Clock.nowLabel(now), now, product.name, StockKind.Tambah, qty, s.name, old.branchId, "Service $id dihapus", id))
+            stockMoves.add(0, StockMove(Clock.nowLabel(now), now, product.name, StockKind.Tambah, qty, s.name, old.branchId, "Service $id dihapus", id, balance.stock))
         }
         notas.removeAll { it.id == id }
         if (id !in deletedNotaIds) deletedNotaIds.add(id)
@@ -1028,24 +1038,32 @@ object CuciinStore {
     }
 
     fun editStock(product: String, branchId: String, kind: StockKind, qty: Int, occurredAtMs: Long = Clock.nowMs()) {
-        val s = session.value ?: return
-        val p = products.find { it.key == product || it.name == product } ?: return
-        if (s.role != Role.Owner && branchId != s.branchId) return
-        val balance = branchStocks.firstOrNull { it.branchId == branchId && it.productKey == p.key }
-            ?: BranchStock(branchId, p.key, 0).also { branchStocks.add(it) }
+        editStocks(mapOf(product to qty), branchId, kind, occurredAtMs)
+    }
+
+    fun editStocks(changes: Map<String, Int>, branchId: String, kind: StockKind, occurredAtMs: Long = Clock.nowMs()): Int {
+        val s = session.value ?: return 0
+        if (s.role != Role.Owner && branchId != s.branchId) return 0
         val t = occurredAtMs
-        val delta = when (kind) {
-            StockKind.Tambah -> qty.also { balance.stock += qty }
-            StockKind.Kurang -> (-qty).also { balance.stock = (balance.stock - qty).coerceAtLeast(0) }
-            StockKind.Update -> qty.also { balance.stock = qty }
-            StockKind.Jual -> -qty
+        var saved = 0
+        changes.forEach { (product, qty) ->
+            val p = products.find { it.key == product || it.name == product } ?: return@forEach
+            if (qty < 0 || (qty == 0 && kind != StockKind.Update)) return@forEach
+            val balance = branchStocks.firstOrNull { it.branchId == branchId && it.productKey == p.key }
+                ?: BranchStock(branchId, p.key, 0).also { branchStocks.add(it) }
+            if (kind == StockKind.Kurang && qty > balance.stock) return@forEach
+            val delta = when (kind) {
+                StockKind.Tambah -> qty.also { balance.stock += qty }
+                StockKind.Kurang -> (-qty).also { balance.stock -= qty }
+                StockKind.Update -> qty.also { balance.stock = qty }
+                StockKind.Jual -> -qty
+            }
+            stockMoves.add(0, StockMove(Clock.nowLabel(t), t, p.key, kind, if (kind == StockKind.Update) qty else delta, s.name, branchId, "Pencatatan stok massal", balanceAfter = balance.stock))
+            log("Stok ${p.name} ${kind.label} $qty → sisa ${balance.stock}", branchId)
+            saved++
         }
-        stockMoves.add(
-            0,
-            StockMove(Clock.nowLabel(t), t, p.key, kind, if (kind == StockKind.Update) qty else delta, s.name, branchId, "Edit manual kasir"),
-        )
-        log("Stok ${p.name} ${kind.label} $qty → sisa ${balance.stock}", branchId)
-        bump()
+        if (saved > 0) bump()
+        return saved
     }
 
     fun closeCash(): CashClose {

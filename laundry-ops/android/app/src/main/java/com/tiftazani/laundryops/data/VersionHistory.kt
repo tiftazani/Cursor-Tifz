@@ -12,10 +12,23 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.8.1"
-    val currentCode: Int = 13
+    val currentName: String = "1.8.2"
+    val currentCode: Int = 14
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.8.2", code = 14, date = "14 Sep 2026",
+            notes = listOf(
+                "Kolom laporan transaksi membungkus teks panjang agar rincian tetap terbaca tanpa terpotong.",
+                "Petugas layanan otomatis mengikuti akun aktif; hanya Owner yang dapat mengganti petugas, dan aturan ini ditegakkan saat data disimpan.",
+                "Perubahan stok dapat dicatat untuk beberapa produk sekaligus dengan satu waktu kejadian.",
+                "Laporan perubahan stok mendukung periode, multi-cabang, filter akun pelaksana, saldo setelah mutasi, serta ekspor PDF dan CSV.",
+                "Nota WhatsApp dan PDF memakai identitas cabang, informasi kasir dan pelanggan, waktu layanan, tabel rincian bernomor, dan grand total.",
+                "PDF laporan transaksi memakai baris lebih tinggi dan pembungkusan teks supaya kolom panjang tetap rapi.",
+                "Pemulihan sesi lokal lama diperkeras agar kata sandi kosong tidak menyebabkan aplikasi berhenti saat upgrade.",
+                "Kunci endpoint Vercel lama tidak lagi disimpan di source dan endpoint gagal secara aman bila secret server belum tersedia.",
+            ),
+        ),
         AppRelease(
             name = "1.8.1", code = 13, date = "13 Sep 2026",
             notes = listOf(

@@ -273,6 +273,8 @@ data class StockMove(
     val branchId: String,
     val note: String,
     val notaId: String? = null,
+    /** Saldo setelah mutasi; null untuk data lama yang belum menyimpan snapshot saldo. */
+    val balanceAfter: Int? = null,
 )
 
 @Serializable

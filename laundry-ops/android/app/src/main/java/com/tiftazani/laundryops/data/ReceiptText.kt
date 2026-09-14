@@ -1,41 +1,44 @@
 package com.tiftazani.laundryops.data
 
-/** Format tunggal untuk teks nota, WhatsApp, dan PDF. */
+/** Nota teks ringkas yang tetap terbaca rapi di WhatsApp. PDF memakai tata letak tabel tersendiri. */
 object ReceiptText {
     fun format(nota: Nota, branch: Branch): String {
         val mapLine = mapReference(branch.mapsQuery)
-        val serviceLines = nota.lines.takeIf { it.isNotEmpty() }?.joinToString("\n") {
-            "${it.name} ${quantity(it.qty)} ${it.unit} × ${rp(it.unitPrice)} = ${rp((it.qty * it.unitPrice).toInt())}"
-        } ?: nota.items
+        val serviceLines = nota.lines.takeIf { it.isNotEmpty() }?.mapIndexed { index, line ->
+            "${index + 1}. *${line.name}*\n   ${quantity(line.qty)} ${line.unit} × ${rp(line.unitPrice)}\n   Subtotal: *${rp((line.qty * line.unitPrice).toInt())}*"
+        }?.joinToString("\n\n") ?: normalizeLegacyItems(nota.items)
         return """
-            *CUCIIN — NOTA ${nota.id}*
+            *${branch.name.uppercase()}*
+            _Nota Service ${nota.id}_
 
-            *Cabang layanan*
-            ${branch.name}
-            ${branch.location.ifBlank { "Alamat belum diisi" }}
-            Maps: $mapLine
+            ${branch.location.ifBlank { "Alamat cabang belum diisi" }}
+            $mapLine
 
+            *Informasi Service*
             Kasir: ${nota.kasir}
+            Pelanggan: ${nota.customer}
+            WhatsApp: ${nota.phone}
             Waktu Masuk: ${nota.createdAt}
             Estimasi Waktu Keluar: ${nota.pickupAt}
             Status Pengerjaan: ${nota.laundry.label}
 
-            *Pelanggan*
-            ${nota.customer}
-            WA ${nota.phone}
-
-            *Layanan*
+            *Rincian Layanan*
             $serviceLines
 
-            Total: ${rp(nota.total)}
+            ─────────────
+            *GRAND TOTAL: ${rp(nota.total)}*
             Dibayar: ${rp(nota.paid)}
-            Metode: ${nota.payMethod.label}
-            Pembayaran: ${nota.pay.label}
+            ${nota.payMethod.label} · ${nota.pay.label}
+
+            Terima kasih telah mempercayakan laundry Anda kepada ${branch.name}.
         """.trimIndent()
     }
 
     private fun quantity(value: Double): String =
         if (value % 1.0 == 0.0) value.toInt().toString() else value.toString().replace('.', ',')
+
+    private fun normalizeLegacyItems(value: String): String =
+        Regex("(\\d+)\\.0\\s*([A-Za-z]+)").replace(value) { match -> "${match.groupValues[1]} ${match.groupValues[2]}" }
 
     private fun mapReference(raw: String): String {
         if (raw.isBlank()) return "Belum disimpan"

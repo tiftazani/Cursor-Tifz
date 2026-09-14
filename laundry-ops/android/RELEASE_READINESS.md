@@ -1,10 +1,10 @@
-# Cuciin 1.8.1 — kesiapan rilis
+# Cuciin 1.8.2 — kesiapan rilis
 
 Status: kandidat rilis teknis. **Belum dinyatakan aman untuk data produksi atau disetujui Google Play.** APK bertanda tangan tidak menjamin hilangnya peringatan Play Protect.
 
 ## Yang disiapkan
 
-- Application ID rilis `com.tiftazani.laundryops`, versi `1.8.1`, versionCode `13`, target Android 16/API 36.
+- Application ID rilis `com.tiftazani.laundryops`, versi `1.8.2`, versionCode `14`, target Android 16/API 36.
 - APK non-debuggable dan AAB dengan kunci rilis terpisah. Build rilis berhenti bila konfigurasi penandatanganan tidak tersedia.
 - Kunci privat dan kata sandi berada di luar repo, pada folder `signing-private` di sebelah folder repo; izin folder 700 dan berkas rahasia 600. Cadangkan keduanya ke penyimpanan privat yang aman sebelum dipakai untuk distribusi. Jangan mengganti kunci sembarangan setelah aplikasi terpasang.
 - Rilis menolak akun tanpa kata sandi dan tidak menampilkan masuk cepat. Sesuai konfigurasi operasional saat ini, akun awal memakai `test1234` dan wajib diubah dari Profil sebelum dipakai untuk data nyata.

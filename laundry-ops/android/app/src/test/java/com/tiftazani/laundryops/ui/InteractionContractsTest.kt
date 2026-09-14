@@ -52,7 +52,10 @@ class InteractionContractsTest {
         assertFalse(text.contains("Waktu Pengambilan"))
         assertFalse(text.contains("\nPengerjaan:"))
         assertFalse(text.contains("Selesai dikerjakan"))
-        assertTrue(text.contains("Cuci 3 kg × Rp 8.000 = Rp 24.000"))
+        assertTrue(text.contains("1. *Cuci*"))
+        assertTrue(text.contains("3 kg × Rp 8.000"))
+        assertTrue(text.contains("Subtotal: *Rp 24.000*"))
+        assertTrue(text.contains("*GRAND TOTAL: Rp 24.000*"))
     }
 
     @Test fun analyticsBuildsRealDailyBarsAndOperationalAlerts() {

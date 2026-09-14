@@ -183,7 +183,7 @@ async function save(data: Store) {
 }
 
 export async function GET(req: Request) {
-  if (keyOf(req) !== CUCIIN_CLOUD_KEY) {
+  if (!CUCIIN_CLOUD_KEY || keyOf(req) !== CUCIIN_CLOUD_KEY) {
     const data = await load();
     if (wantsBrowser(req)) return statusHtml(data);
     return ok(publicStatus(data));
@@ -193,7 +193,7 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
-  if (keyOf(req) !== CUCIIN_CLOUD_KEY) return unauthorized();
+  if (!CUCIIN_CLOUD_KEY || keyOf(req) !== CUCIIN_CLOUD_KEY) return unauthorized();
   const body = (await req.json()) as Store;
   const current = await load();
   const incoming = Number(body.updatedAt ?? 0);

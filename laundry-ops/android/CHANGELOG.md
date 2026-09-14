@@ -2,6 +2,18 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.8.2 — 14 Sep 2026 (versionCode 14)
+
+- Teks panjang pada kolom laporan transaksi kini membungkus ke baris berikutnya dan tidak dipotong menjadi elipsis.
+- Petugas layanan otomatis memakai identitas akun aktif. Hanya Owner yang dapat menggantinya; validasi yang sama berlaku di lapisan penyimpanan untuk Service baru maupun koreksi.
+- Pencatatan stok massal memperbarui beberapa produk sekaligus dengan jenis perubahan dan waktu kejadian yang sama.
+- Laporan perubahan stok memiliki interval tanggal/jam, filter satu atau beberapa cabang, filter akun pelaksana, saldo setelah perubahan, serta ekspor PDF/CSV.
+- Nota WhatsApp ditata ulang menjadi bagian informasi, rincian layanan bernomor, subtotal, dan grand total.
+- Nota PDF memakai header nama cabang, informasi kasir/pelanggan/waktu, tabel No.–Service–Harga, serta grand total.
+- PDF laporan transaksi memakai pembungkusan teks di dalam sel, baris yang lebih lega, header konsisten, ringkasan, dan footer halaman.
+- Pemulihan sesi dari data lokal lama tidak lagi mencoba memproses kata sandi kosong, sehingga pembaruan aplikasi dapat dibuka tanpa crash PBKDF2.
+- Kunci endpoint Vercel lama dihapus dari source; endpoint menolak penulisan bila secret environment belum dikonfigurasi.
+
 ## 1.8.1 — 13 Sep 2026 (versionCode 13)
 
 - Cloudflare Workers + D1 produksi aktif di region APAC dan menerima sinkronisasi Android melalui HTTPS.

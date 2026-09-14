@@ -321,7 +321,7 @@ private fun TransactionReportTable(rows: List<Nota>, branchName: (String) -> Str
         Text("Geser tabel ke samping untuk melihat seluruh kolom. Ketuk baris untuk membuka Service.", color = Muted, fontSize = 11.sp)
         Column(Modifier.horizontalScroll(scroll).width(1470.dp)) {
             Surface(color = Teal, shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)) {
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(IntrinsicSize.Min)) {
                     ReportCell("No", 44.dp, true)
                     ReportCell("ID Service", 150.dp, true)
                     ReportCell("Waktu masuk", 145.dp, true)
@@ -342,7 +342,7 @@ private fun TransactionReportTable(rows: List<Nota>, branchName: (String) -> Str
                     color = if (index % 2 == 0) Card else Mist.copy(alpha = .55f),
                     border = BorderStroke(0.5.dp, Line),
                 ) {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).height(IntrinsicSize.Min), verticalAlignment = Alignment.Top) {
                         ReportCell((index + 1).toString(), 44.dp)
                         ReportCell(nota.id, 150.dp)
                         ReportCell(nota.createdAt, 145.dp)
@@ -366,13 +366,14 @@ private fun TransactionReportTable(rows: List<Nota>, branchName: (String) -> Str
 private fun ReportCell(text: String, width: androidx.compose.ui.unit.Dp, header: Boolean = false) {
     Text(
         text,
-        modifier = Modifier.width(width).padding(horizontal = 8.dp, vertical = 8.dp),
+        modifier = Modifier.width(width).fillMaxHeight().padding(horizontal = 8.dp, vertical = 8.dp),
         color = if (header) androidx.compose.ui.graphics.Color.White else Ink,
         fontSize = if (header) 11.sp else 10.sp,
         lineHeight = 14.sp,
         fontWeight = if (header) FontWeight.Bold else FontWeight.Normal,
-        maxLines = 2,
-        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        maxLines = if (header) 3 else 5,
+        softWrap = true,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
     )
 }
 
