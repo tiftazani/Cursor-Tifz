@@ -16,8 +16,8 @@ jobs:
       run:
         working-directory: laundry-ops/cloudflare
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -33,7 +33,7 @@ jobs:
         env:
           CUCIIN_BACKUP_PASSPHRASE: ${{ secrets.CUCIIN_BACKUP_PASSPHRASE }}
         run: ./scripts/verify-backup.sh backups/*.sql.enc
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cuciin-d1-backup-${{ github.run_id }}
           path: |
