@@ -10,7 +10,8 @@ Endpoint produksi saat ini: `https://cuciin-api.tiftazani-cuciin.workers.dev/api
 - `SYNC_SECRET` tersedia sebagai jalur bootstrap tertutup. Secret dipasang melalui `wrangler secret put`, tidak ditulis ke repository. Jangan menganggap nilai di APK sebagai rahasia permanen.
 - Semua query memakai parameter binding, payload dibatasi 4 MB, respons tidak boleh di-cache, dan kata sandi tidak memiliki kolom di D1.
 - Staf ditautkan ke Firebase UID pada login pertama. UID tetap sama saat alamat email akun diperbarui.
-- Snapshot menyediakan kompatibilitas untuk aplikasi Android saat ini. Tabel relasional diproyeksikan pada setiap sinkronisasi agar laporan dapat di-query dengan indeks. Endpoint perubahan per baris (`sync_changes` dan `processed_commands`) sudah disiapkan di skema untuk fase sinkronisasi multi-penulis berikutnya.
+- Sinkronisasi produksi memakai command idempoten (`POST /v1/sync/commands`) dan journal delta berurutan (`GET /v1/sync/changes`). D1 mengeksekusi setiap command secara atomik, menolak stok negatif, memeriksa role/cabang, dan menyimpan hasil command untuk retry yang aman. Kontrak lengkap ada di [SYNC_API.md](SYNC_API.md).
+- Snapshot tetap tersedia untuk kompatibilitas selama rollout, tetapi APK multi-writer tidak boleh memakai snapshot PUT sebagai jalur tulis utama.
 
 ## Menyiapkan akun gratis
 
@@ -24,6 +25,8 @@ Endpoint produksi saat ini: `https://cuciin-api.tiftazani-cuciin.workers.dev/api
 8. Deploy: `npm run deploy`.
 9. Build Android dengan environment `CUCIIN_CLOUD_URL=https://<worker>.workers.dev/api/cuciin`. Jangan memasukkan `SYNC_SECRET` atau `CUCIIN_CLOUD_KEY` ke APK produksi; aplikasi memakai Firebase ID token.
 
+Sebelum APK command-sync dibagikan, jalankan migrasi `0003_command_sync.sql` dan deploy Worker. `/health` memeriksa binding D1 serta tabel journal dan mengembalikan HTTP 503 bila database belum siap.
+
 Resource aktif saat ini:
 
 - Worker: `cuciin-api`
@@ -31,3 +34,5 @@ Resource aktif saat ini:
 - Firebase project: `cuciin-ops-tiftazani`
 
 Gunakan satu proyek produksi dan satu proyek staging terpisah. Aktifkan export/backup terjadwal sebelum big bang 20 cabang. Uji pemulihan, transaksi bersamaan, pergantian perangkat, dan pencabutan akses karyawan sebelum hari operasional.
+
+Workflow `cuciin-health.yml` memeriksa Worker serta D1 setiap 15 menit. Workflow `cuciin-backup.yml` mengekspor D1 setiap hari, mengenkripsi hasil dengan AES-256/PBKDF2, lalu menguji checksum, dekripsi, impor SQLite, dan integrity check sebelum menyimpan artifact 30 hari. Isi GitHub Actions secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, dan `CUCIIN_BACKUP_PASSPHRASE`; simpan passphrase di luar repository. Prosedur rollout dan restore ada di `../OPERATIONS_RUNBOOK.md`.

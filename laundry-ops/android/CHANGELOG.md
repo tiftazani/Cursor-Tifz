@@ -2,6 +2,20 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.9.0 — 14 Sep 2026 (versionCode 15)
+
+- Sinkronisasi snapshot global diganti dengan persistent outbox dan command per entitas. Command baru dihapus setelah acknowledgement server; retry memakai ID yang sama sehingga tidak menggandakan transaksi.
+- Perangkat melakukan bootstrap snapshot satu kali, kemudian mengambil delta berurutan dengan pagination revision. Cache lokal dan antrean memiliki salinan cadangan atomik.
+- D1 mencatat command yang sudah diproses, jurnal perubahan per cabang, actor, optimistic concurrency Service, dan penjaga stok nonnegatif dalam transaksi atomik.
+- Mutasi stok membawa baseline dan delta agar dua HP tidak saling menimpa. Saldo canonical dikirim kembali ke perangkat lain tanpa menerapkan branch stock dan stock move dua kali.
+- Nota retail dan pengurangan/pengembalian stok diproses dalam satu transaksi D1; dua penjualan yang memperebutkan stok terakhir tidak dapat sama-sama tersimpan.
+- Command permanen yang ditolak dipindahkan ke catatan konflik persisten agar satu konflik tidak memblokir seluruh antrean; alasan konflik terlihat pada status sinkronisasi.
+- Nota PDF dengan banyak layanan tidak lagi menumpuk grand total. Token panjang dipecah sesuai lebar sel, filter periode mencakup seluruh menit terakhir, dan riwayat stok lama tersedia melalui pilihan Semua tanggal.
+- Build rilis gagal aman jika Firebase tidak terkonfigurasi. Petunjuk kata sandi awal di layar login dihapus.
+- CI Android menjalankan unit test, lint, dan build; Worker memiliki check tersendiri. Health check produksi dan backup D1 harian terenkripsi beserta restore integrity check ditambahkan.
+- Runbook 20 cabang, kebijakan data, dan konteks siap salin untuk beberapa coding agent ditambahkan.
+- Cabang yang sudah mempunyai riwayat Service atau data operasional tidak dapat dihapus agar laporan historis dan foreign key tetap utuh.
+
 ## 1.8.2 — 14 Sep 2026 (versionCode 14)
 
 - Teks panjang pada kolom laporan transaksi kini membungkus ke baris berikutnya dan tidak dipotong menjadi elipsis.

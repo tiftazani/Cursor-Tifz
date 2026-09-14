@@ -12,10 +12,24 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.8.2"
-    val currentCode: Int = 14
+    val currentName: String = "1.9.0"
+    val currentCode: Int = 15
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.9.0", code = 15, date = "14 Sep 2026",
+            notes = listOf(
+                "Sinkronisasi multi-perangkat memakai antrean command persisten, acknowledgement, retry idempoten, dan delta berurutan per revision.",
+                "Perubahan stok membawa baseline dan delta agar pembaruan beberapa HP tidak saling menimpa; saldo negatif ditolak secara atomik oleh server.",
+                "Service retail dan stok diproses atomik; konflik permanen disimpan untuk ditinjau tanpa memblokir antrean perubahan lain.",
+                "Instalasi baru maupun upgrade mengambil snapshot server satu kali sebelum melanjutkan sinkronisasi delta.",
+                "Nota dan entitas yang berubah dikirim per baris; perubahan Service memakai optimistic concurrency untuk mencegah koreksi diam-diam tertimpa.",
+                "Nota PDF multi-halaman, teks panjang, batas akhir periode, dan pembacaan riwayat stok lama telah diperbaiki.",
+                "Build rilis gagal aman bila Firebase tidak tersedia dan layar login tidak lagi menampilkan kata sandi awal.",
+                "CI memeriksa Android dan Worker; health check serta backup D1 terenkripsi disiapkan untuk operasi harian.",
+                "Cabang yang memiliki riwayat operasional dilindungi dari penghapusan agar laporan lama tetap utuh.",
+            ),
+        ),
         AppRelease(
             name = "1.8.2", code = 14, date = "14 Sep 2026",
             notes = listOf(

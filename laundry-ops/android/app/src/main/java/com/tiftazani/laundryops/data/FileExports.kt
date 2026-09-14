@@ -14,28 +14,8 @@ import java.io.File
 object FileExports {
     private fun csv(value: Any?): String = "\"${value?.toString().orEmpty().replace("\"", "\"\"")}\""
 
-    private fun wrapped(text: String, paint: Paint, width: Float, maxLines: Int = Int.MAX_VALUE): List<String> {
-        if (text.isBlank()) return listOf("")
-        val result = mutableListOf<String>()
-        text.lines().forEach { paragraph ->
-            var line = ""
-            paragraph.split(Regex("\\s+")).filter(String::isNotBlank).forEach { word ->
-                val candidate = if (line.isBlank()) word else "$line $word"
-                if (paint.measureText(candidate) <= width) line = candidate
-                else {
-                    if (line.isNotBlank()) result += line
-                    line = word
-                }
-            }
-            if (line.isNotBlank()) result += line
-        }
-        if (result.size <= maxLines) return result.ifEmpty { listOf("") }
-        val clipped = result.take(maxLines).toMutableList()
-        var last = clipped.last()
-        while (last.isNotEmpty() && paint.measureText("$last…") > width) last = last.dropLast(1)
-        clipped[clipped.lastIndex] = "$last…"
-        return clipped
-    }
+    private fun wrapped(text: String, paint: Paint, width: Float, maxLines: Int = Int.MAX_VALUE): List<String> =
+        wrapMeasuredText(text, width, maxLines, paint::measureText)
 
     private fun drawWrapped(canvas: Canvas, text: String, x: Float, y: Float, width: Float, paint: Paint, lineHeight: Float, maxLines: Int = Int.MAX_VALUE): Int {
         val lines = wrapped(text, paint, width, maxLines)
@@ -327,6 +307,19 @@ object FileExports {
         val bold = Paint(body).apply { isFakeBoldText = true }
         val white = Paint(bold).apply { color = Color.WHITE }
         val grid = Paint().apply { color = Color.rgb(211, 224, 228); style = Paint.Style.STROKE; strokeWidth = 1f }
+        fun drawGrandTotal(target: Canvas, top: Float): Float {
+            target.drawRect(40f, top, 427f, top + 44f, Paint().apply { color = Color.rgb(232, 244, 246) })
+            target.drawRect(427f, top, 555f, top + 44f, Paint().apply { color = teal })
+            target.drawText("GRAND TOTAL", 300f, top + 27f, bold)
+            target.drawText(rp(n.total), 437f, top + 27f, white)
+            return top + 66f
+        }
+        fun drawPaymentAndStatus(target: Canvas, top: Float) {
+            target.drawText("Pembayaran", 40f, top, small)
+            target.drawText("${n.payMethod.label} · ${n.pay.label} · Dibayar ${rp(n.paid)}", 40f, top + 18f, bold)
+            target.drawText("Status Pengerjaan", 330f, top, small)
+            target.drawText(n.laundry.label, 330f, top + 18f, bold)
+        }
         canvas.drawColor(Color.WHITE)
         canvas.drawRoundRect(32f, 28f, 563f, 132f, 16f, 16f, Paint().apply { color = teal })
         canvas.drawText(branch.name.uppercase(), 50f, 61f, Paint(white).apply { textSize = 21f })
@@ -362,7 +355,8 @@ object FileExports {
         y += 32f
         val legacyItems = Regex("(\\d+)\\.0\\s*([A-Za-z]+)").replace(n.items) { match -> "${match.groupValues[1]} ${match.groupValues[2]}" }
         val lines = n.lines.ifEmpty { listOf(NotaLine("", legacyItems, 1.0, "nota", n.total, n.kasirEmail, n.kasir, 0)) }
-        lines.take(7).forEachIndexed { index, line ->
+        val pageLineCounts = receiptPageLineCounts(lines.size)
+        lines.take(pageLineCounts.first()).forEachIndexed { index, line ->
             val rowHeight = 52f
             x = 40f
             val qty = if (line.qty % 1.0 == 0.0) line.qty.toInt().toString() else line.qty.toString().replace('.', ',')
@@ -376,20 +370,17 @@ object FileExports {
             }
             y += rowHeight
         }
-        if (lines.size > 7) canvas.drawText("+ ${lines.size - 7} layanan dilanjutkan pada halaman berikutnya.", 48f, y + 18f, small)
-        canvas.drawRect(40f, y, 427f, y + 44f, Paint().apply { color = Color.rgb(232, 244, 246) })
-        canvas.drawRect(427f, y, 555f, y + 44f, Paint().apply { color = teal })
-        canvas.drawText("GRAND TOTAL", 300f, y + 27f, bold)
-        canvas.drawText(rp(n.total), 437f, y + 27f, white)
-        y += 66f
-        canvas.drawText("Pembayaran", 40f, y, small)
-        canvas.drawText("${n.payMethod.label} · ${n.pay.label} · Dibayar ${rp(n.paid)}", 40f, y + 18f, bold)
-        canvas.drawText("Status Pengerjaan", 330f, y, small)
-        canvas.drawText(n.laundry.label, 330f, y + 18f, bold)
+        if (lines.size > 7) {
+            canvas.drawText("+ ${lines.size - 7} layanan dilanjutkan pada halaman berikutnya.", 48f, y + 18f, small)
+        } else {
+            y = drawGrandTotal(canvas, y)
+            drawPaymentAndStatus(canvas, y)
+        }
         canvas.drawLine(40f, 790f, 555f, 790f, Paint().apply { color = Color.rgb(211, 224, 228) })
         canvas.drawText("Terima kasih telah mempercayakan laundry Anda kepada ${branch.name}.", 40f, 812f, small)
         pdf.finishPage(page)
-        lines.drop(7).chunked(10).forEachIndexed { extraPageIndex, pageLines ->
+        val continuationPages = lines.drop(pageLineCounts.first()).chunked(10)
+        continuationPages.forEachIndexed { extraPageIndex, pageLines ->
             val extra = pdf.startPage(PdfDocument.PageInfo.Builder(595, 842, extraPageIndex + 2).create())
             val extraCanvas = extra.canvas
             extraCanvas.drawColor(Color.WHITE)
@@ -419,10 +410,12 @@ object FileExports {
                 }
                 extraY += 52f
             }
-            extraCanvas.drawRect(40f, extraY, 427f, extraY + 44f, Paint().apply { color = Color.rgb(232, 244, 246) })
-            extraCanvas.drawRect(427f, extraY, 555f, extraY + 44f, Paint().apply { color = teal })
-            extraCanvas.drawText("GRAND TOTAL", 300f, extraY + 27f, bold)
-            extraCanvas.drawText(rp(n.total), 437f, extraY + 27f, white)
+            if (extraPageIndex == continuationPages.lastIndex) {
+                extraY = drawGrandTotal(extraCanvas, extraY)
+                drawPaymentAndStatus(extraCanvas, extraY)
+            } else {
+                extraCanvas.drawText("Rincian berlanjut ke halaman berikutnya.", 48f, extraY + 18f, small)
+            }
             extraCanvas.drawText("Halaman ${extraPageIndex + 2}", 40f, 812f, small)
             pdf.finishPage(extra)
         }

@@ -11,6 +11,8 @@ import org.junit.Assert.*
 import org.junit.Test
 import java.time.LocalDateTime
 import java.time.Instant
+import com.tiftazani.laundryops.data.wrapMeasuredText
+import com.tiftazani.laundryops.data.receiptPageLineCounts
 
 class InteractionContractsTest {
     @Test fun dateAndTimeRoundTripPreservesUserSelection() {
@@ -20,6 +22,34 @@ class InteractionContractsTest {
         val midnightJakarta = Instant.parse("2026-09-10T17:05:00Z").toEpochMilli()
         assertEquals(LocalDateTime.of(2026, 9, 11, 0, 5), DisplayDates.fromMillis(midnightJakarta))
         assertTrue(DisplayDates.full(midnightJakarta).startsWith("Jumat, 11 September 2026"))
+    }
+
+    @Test fun reportRangeIncludesTheEntireSelectedEndMinute() {
+        val from = LocalDateTime.of(2026, 9, 11, 0, 0)
+        val until = LocalDateTime.of(2026, 9, 11, 23, 59)
+        val lastMillisecond = Instant.parse("2026-09-11T16:59:59.999Z").toEpochMilli()
+        val nextMidnight = Instant.parse("2026-09-11T17:00:00Z").toEpochMilli()
+        assertTrue(DisplayDates.isInSelectedMinute(lastMillisecond, from, until))
+        assertFalse(DisplayDates.isInSelectedMinute(nextMidnight, from, until))
+    }
+
+    @Test fun legacyReportTimestampFallsBackToStoredLabel() {
+        val expected = Instant.parse("2026-09-11T01:05:00Z").toEpochMilli()
+        assertEquals(expected, DisplayDates.reportTimestamp(0, "11 Sep 2026, 08.05"))
+        assertNull(DisplayDates.reportTimestamp(0, "format lama tidak dikenal"))
+    }
+
+    @Test fun pdfWrappingSplitsLongTokensInsideCellWidth() {
+        val lines = wrapMeasuredText("NOTA-TANPA-SPASI-1234567890", width = 8f, measure = { it.length.toFloat() })
+        assertTrue(lines.size > 1)
+        assertTrue(lines.all { it.length <= 8 })
+        assertEquals("NOTA-TANPA-SPASI-1234567890", lines.joinToString(""))
+    }
+
+    @Test fun multiPageReceiptReservesGrandTotalForTheFinalPage() {
+        assertEquals(listOf(7), receiptPageLineCounts(7))
+        assertEquals(listOf(7, 1), receiptPageLineCounts(8))
+        assertEquals(listOf(7, 10, 10), receiptPageLineCounts(27))
     }
     @Test fun existingWorkingStatesBothCompleteInOneStep() {
         assertEquals("Masuk Antrian, dan akan dikerjakan", LaundryStatus.Masuk.label)

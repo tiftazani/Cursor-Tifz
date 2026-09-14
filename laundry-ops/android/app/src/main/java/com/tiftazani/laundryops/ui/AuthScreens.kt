@@ -162,7 +162,7 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
                 Text("Gunakan akun yang terdaftar di laundry Anda.", color = Muted, fontSize = 13.sp)
             Field(email, { email = it }, "Email")
             Field(pass, { pass = it }, "Kata sandi", password = true)
-            Text("Akun awal memakai kata sandi test1234. Segera ubah melalui menu Profil.", color = Muted, fontSize = 12.sp)
+            Text("Gunakan kata sandi pribadi Anda. Jika lupa, kirim link pemulihan melalui tombol di bawah.", color = Muted, fontSize = 12.sp)
             PrimaryBtn(if (busy) "Memeriksa akun…" else "Masuk", enabled = !busy, icon = Icons.Outlined.Login) {
                 if (busy) return@PrimaryBtn
                 if (!BuildConfig.DEBUG && (email.isBlank() || pass.isBlank())) {
@@ -170,7 +170,8 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
                     return@PrimaryBtn
                 }
                 if (!FirebaseCloud.enabled) {
-                    localLogin()
+                    if (BuildConfig.DEBUG) localLogin()
+                    else toast("Konfigurasi identitas belum tersedia. Hubungi Owner sebelum memakai aplikasi.")
                     return@PrimaryBtn
                 }
                 busy = true

@@ -167,6 +167,8 @@ data class Nota(
     val lines: List<NotaLine> = emptyList(),
     /** Email kasir disimpan sebagai identitas stabil; nama tetap menjadi snapshot tampilan. */
     val kasirEmail: String = "",
+    /** Versi server terakhir untuk mencegah koreksi dari dua perangkat saling menimpa. */
+    val updatedAtMs: Long = 0,
 ) {
     val hanging: Boolean get() = laundry != LaundryStatus.Selesai || pay != PayStatus.Lunas || pickedUpAt == null
 }

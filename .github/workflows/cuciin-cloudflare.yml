@@ -1,0 +1,32 @@
+name: Cuciin Cloudflare validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "laundry-ops/cloudflare/**"
+      - ".github/workflows/cuciin-cloudflare.yml"
+  pull_request:
+    paths:
+      - "laundry-ops/cloudflare/**"
+      - ".github/workflows/cuciin-cloudflare.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: laundry-ops/cloudflare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: laundry-ops/cloudflare/package-lock.json
+      - run: npm ci
+      - run: npm run check

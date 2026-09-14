@@ -20,7 +20,7 @@ erDiagram
     BRANCHES ||--o{ STOCK_MOVES : memutasi
     BRANCHES ||--o{ CASH_CLOSES : menutup_kas
     ORDERS ||--o{ AUDIT_LOGS : diaudit
-    ORGANIZATIONS ||--|| SYNC_SNAPSHOTS : kompatibilitas
+    ORGANIZATIONS ||--|| SYNC_SNAPSHOTS : bootstrap_kompatibilitas
     ORGANIZATIONS ||--o{ SYNC_CHANGES : jurnal_perubahan
     ORGANIZATIONS ||--o{ PROCESSED_COMMANDS : idempotensi
 ```
@@ -29,4 +29,4 @@ Pusat transaksi berada pada `orders` dan `order_lines`. Setiap order menyimpan c
 
 Stok memakai katalog `products` dan saldo gabungan `(branch_id, product_id)` pada `branch_stocks`. Mesin dan aset lain berada pada `inventory_items` per cabang. `expenses`, `attendance`, `cash_closes`, `stock_moves`, dan `audit_logs` juga membawa cabang sehingga laporan dapat difilter dengan indeks.
 
-`sync_snapshots` menjaga kompatibilitas aplikasi Android local-first saat ini. `sync_changes` dan `processed_commands` disediakan untuk migrasi ke sinkronisasi mutasi per baris dan idempotensi. Sebelum dua puluh cabang menulis bersamaan, kontrak Android perlu dipindahkan penuh ke jurnal mutasi ini agar konflik tidak bergantung pada versi snapshot global.
+`sync_snapshots` dipakai saat bootstrap instalasi lama atau perangkat baru. `processed_commands` menyimpan hash request dan hasil per `commandId`, sehingga retry sesudah timeout tidak menggandakan transaksi. `sync_changes` memberi sequence global monoton dan payload kanonis yang ditarik perangkat setelah revision terakhir. Saldo `branch_stocks` dijaga trigger non-negatif dan `stockMove` diterapkan sebagai delta di transaksi D1. Detail integrasi ada di [SYNC_API.md](SYNC_API.md).

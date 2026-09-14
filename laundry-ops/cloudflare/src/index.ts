@@ -1,3 +1,5 @@
+import { pullChanges, pushCommands } from "./command-sync";
+
 interface Env {
   DB: D1Database;
   SYNC_SECRET?: string;
@@ -61,10 +63,6 @@ async function authorize(request: Request, env: Env): Promise<Identity | null> {
   if (bearer && env.FIREBASE_PROJECT_ID) {
     const firebaseUser = await firebaseIdentity(bearer, env.FIREBASE_PROJECT_ID);
     if (firebaseUser?.email) {
-      if (firebaseUser.email.toLowerCase() === "tiftazani.khara@gmail.com") {
-        const branches = await env.DB.prepare("SELECT id FROM branches WHERE organization_id=? AND active=1 ORDER BY name").bind(ORG_ID).all<{id:string}>();
-        return { uid: firebaseUser.sub, email: firebaseUser.email, name: "Tiftazani Khara", role: "Owner", branchIds: branches.results.map((row) => row.id), bootstrap: false };
-      }
       let staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE firebase_uid=? AND approved=1 AND active=1").bind(firebaseUser.sub).first<{email:string;name:string;role:string}>();
       if (!staff) {
         staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE lower(email)=lower(?) AND approved=1 AND active=1").bind(firebaseUser.email).first<{email:string;name:string;role:string}>();
@@ -136,6 +134,12 @@ function listOfStrings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function withoutLocalCredentials(snapshot:JsonRecord):JsonRecord {
+  const safe={...snapshot};
+  safe.staff=list(snapshot,"staff").map(({passwordHash: _passwordHash,...person})=>person);
+  return safe;
+}
+
 async function projectSnapshot(env: Env, snapshot: JsonRecord, updatedAt: number): Promise<void> {
   const statements: D1PreparedStatement[] = [
     env.DB.prepare("INSERT INTO organizations(id,name,owner_email,created_at,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET updated_at=excluded.updated_at").bind(ORG_ID, "Cuciin", "tiftazani.khara@gmail.com", updatedAt, updatedAt),
@@ -182,8 +186,8 @@ async function putSnapshot(request: Request, env: Env, identity: Identity): Prom
   if (!updatedAt || !Array.isArray(incoming.branches) || !Array.isArray(incoming.staff)) return json({ error: "Snapshot tidak lengkap" }, 422);
   const current = await env.DB.prepare("SELECT revision,payload_json FROM sync_snapshots WHERE organization_id=?").bind(ORG_ID).first<{revision:number;payload_json:string}>();
   if (current && current.revision > updatedAt && (identity.role === "Owner" || identity.bootstrap)) return json({ error: "Versi server lebih baru", revision: current.revision }, 409);
-  const currentSnapshot = current ? JSON.parse(current.payload_json) as JsonRecord : {};
-  const snapshot = mergeRestrictedSnapshot(currentSnapshot, incoming, identity);
+  const currentSnapshot = current ? withoutLocalCredentials(JSON.parse(current.payload_json) as JsonRecord) : {};
+  const snapshot = withoutLocalCredentials(mergeRestrictedSnapshot(currentSnapshot, withoutLocalCredentials(incoming), identity));
   const revision = Math.max(Date.now(), updatedAt, (current?.revision ?? 0) + 1);
   snapshot.updatedAt = revision;
   const text = JSON.stringify(snapshot);
@@ -206,7 +210,15 @@ async function report(request: Request, env: Env, identity: Identity): Promise<R
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname === "/health" && request.method === "GET") return json({ ok: true, service: "cuciin-api", environment: env.ENVIRONMENT });
+    if (url.pathname === "/health" && request.method === "GET") {
+      try {
+        const db=await env.DB.prepare("SELECT COALESCE(MAX(sequence),0) AS revision FROM sync_changes WHERE organization_id=?").bind(ORG_ID).first<{revision:number}>();
+        return json({ ok:true,service:"cuciin-api",environment:env.ENVIRONMENT,database:"ready",revision:db?.revision ?? 0 });
+      } catch(error) {
+        console.error("health_database_failed",error);
+        return json({ok:false,service:"cuciin-api",environment:env.ENVIRONMENT,database:"unavailable"},503);
+      }
+    }
     const identity = await authorize(request, env);
     if (!identity) return json({ error: "Tidak terautentikasi" }, 401);
     if (url.pathname === "/v1/me" && request.method === "GET") {
@@ -223,9 +235,11 @@ export default {
     if ((url.pathname === "/api/cuciin" || url.pathname === "/v1/snapshot") && request.method === "GET") {
       const row = await env.DB.prepare("SELECT payload_json FROM sync_snapshots WHERE organization_id=?").bind(ORG_ID).first<{payload_json:string}>();
       if (!row) return json({}, 200);
-      return new Response(JSON.stringify(visibleSnapshot(JSON.parse(row.payload_json) as JsonRecord, identity)), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+      return new Response(JSON.stringify(visibleSnapshot(withoutLocalCredentials(JSON.parse(row.payload_json) as JsonRecord), identity)), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options":"nosniff" } });
     }
     if ((url.pathname === "/api/cuciin" || url.pathname === "/v1/snapshot") && request.method === "PUT") return putSnapshot(request, env, identity);
+    if (url.pathname === "/v1/sync/commands" && request.method === "POST") return pushCommands(request, env, identity);
+    if (url.pathname === "/v1/sync/changes" && request.method === "GET") return pullChanges(request, env, identity);
     if (url.pathname === "/v1/reports/cashier-services" && request.method === "GET") return report(request, env, identity);
     return json({ error: "Rute tidak ditemukan" }, 404);
   },

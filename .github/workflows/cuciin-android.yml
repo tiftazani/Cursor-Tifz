@@ -11,7 +11,7 @@ on:
       - "laundry-ops/android/**"
 
 jobs:
-  assemble:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,9 +21,9 @@ jobs:
           java-version: "17"
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-      - name: Assemble debug APK
+      - name: Unit test, lint, and assemble debug APK
         working-directory: laundry-ops/android
-        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+        run: chmod +x gradlew && ./gradlew testDebugUnitTest lintDebug assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: cuciin-debug-apk

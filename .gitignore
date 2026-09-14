@@ -14,6 +14,8 @@ next-env.d.ts
 npm-debug.log*
 .pnpm-debug.log*
 .gradle/
+**/.kotlin/
+**/.wrangler/
 **/local.properties
 **/*.jks
 **/*.keystore
@@ -22,3 +24,4 @@ npm-debug.log*
 # Release signing credentials must remain outside version control
 **/cuciin-signing.properties
 **/signing-private/
+laundry-ops/cloudflare/backups/

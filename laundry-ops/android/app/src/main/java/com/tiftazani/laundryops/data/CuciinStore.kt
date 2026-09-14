@@ -48,6 +48,7 @@ object CuciinStore {
         if (ready) return
         app = application
         LocalJson.init(application)
+        CloudSync.init(application)
         val snap = LocalJson.load()
         if (snap == null || snap.staff.isEmpty()) {
             applySeed()
@@ -57,6 +58,7 @@ object CuciinStore {
             localUpdatedAt = snap.updatedAt
         }
         ready = true
+        CloudSync.initializeLocalState(cloudSnapshot())
         revision.intValue++
         CloudSync.start()
     }
@@ -187,6 +189,7 @@ object CuciinStore {
             applyBusiness(s)
             localUpdatedAt = s.updatedAt
             persist()
+            CloudSync.acceptRemoteSnapshot(cloudSnapshot())
             revision.intValue++
         } finally {
             applyingCloud = false
@@ -465,7 +468,11 @@ object CuciinStore {
 
     fun deleteBranch(id: String): String? {
         if (branches.size <= 1) return "Minimal satu cabang harus tersisa"
-        if (notas.any { it.branchId == id && it.hanging }) return "Masih ada nota menggantung di cabang ini"
+        if (notas.any { it.branchId == id }) return "Cabang memiliki riwayat Service dan tidak dapat dihapus"
+        if (inventory.any { it.branchId == id } || expenses.any { it.branchId == id } ||
+            stockMoves.any { it.branchId == id } || cashCloses.any { it.branchId == id } ||
+            attendance.any { it.branchId == id }
+        ) return "Cabang memiliki riwayat operasional dan tidak dapat dihapus"
         val gone = branches.find { it.id == id } ?: return "Cabang tidak ketemu"
         branches.removeAll { it.id == id }
         branchStocks.removeAll { it.branchId == id }

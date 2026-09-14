@@ -13,3 +13,7 @@ migrations_dir = "migrations"
 [vars]
 ENVIRONMENT = "production"
 FIREBASE_PROJECT_ID = "cuciin-ops-tiftazani"
+
+[observability]
+enabled = true
+head_sampling_rate = 1

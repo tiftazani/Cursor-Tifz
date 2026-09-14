@@ -163,12 +163,10 @@ internal fun AnalyticsScreen(nav: NavHostController) {
     val from = DisplayDates.parse(fromValue) ?: LocalDateTime.now(Clock.ZONE).withHour(0).withMinute(0)
     val until = DisplayDates.parse(untilValue) ?: LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59)
     val selectedBranches = store.reportBranchIds.value
-    val fromMs = from.atZone(Clock.ZONE).toInstant().toEpochMilli()
-    val untilMs = until.atZone(Clock.ZONE).toInstant().toEpochMilli()
-    val baseRows = if (customRange) store.notas.filter { it.createdAtMs in fromMs..untilMs && (selectedBranches.isEmpty() || it.branchId in selectedBranches) } else store.periodNotas()
+    val baseRows = if (customRange) store.notas.filter { DisplayDates.isInSelectedMinute(it.createdAtMs, from, until) && (selectedBranches.isEmpty() || it.branchId in selectedBranches) } else store.periodNotas()
     val handlers = baseRows.flatMap { nota -> nota.lines.map { it.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir } to it.handledByName.ifBlank { nota.kasir } } }.distinctBy { it.first }
     val rows = baseRows.filter { nota -> handlerFilter == "all" || nota.lines.any { it.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir } == handlerFilter } }
-    val expenseRows = if (customRange) store.expenses.filter { it.occurredAtMs in fromMs..untilMs && (selectedBranches.isEmpty() || it.branchId in selectedBranches) } else store.periodExpenses()
+    val expenseRows = if (customRange) store.expenses.filter { DisplayDates.isInSelectedMinute(it.occurredAtMs, from, until) && (selectedBranches.isEmpty() || it.branchId in selectedBranches) } else store.periodExpenses()
     val omzet = store.omzet(rows)
     val masuk = store.collected(rows)
     val biaya = expenseRows.sumOf { it.amount }

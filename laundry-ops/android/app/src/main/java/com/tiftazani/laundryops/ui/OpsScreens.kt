@@ -917,19 +917,30 @@ internal fun StockHistoryScreen(nav: NavHostController) {
     var untilValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59))) }
     var branchIds by remember { mutableStateOf(if (session.role == Role.Owner) emptySet<String>() else setOf(session.branchId)) }
     var actor by rememberSaveable { mutableStateOf("all") }
+    var allDates by rememberSaveable { mutableStateOf(false) }
     store.revision.intValue
     val from = DisplayDates.parse(fromValue) ?: LocalDateTime.now(Clock.ZONE).minusDays(30)
     val until = DisplayDates.parse(untilValue) ?: LocalDateTime.now(Clock.ZONE)
-    val fromMs = from.atZone(Clock.ZONE).toInstant().toEpochMilli()
-    val untilMs = until.atZone(Clock.ZONE).toInstant().toEpochMilli()
     val actors = store.stockMoves.map { it.by }.filter(String::isNotBlank).distinct().sorted()
     val rows = store.stockMoves.filter { move ->
-        (branchIds.isEmpty() || move.branchId in branchIds) && move.atMs in fromMs..untilMs && (actor == "all" || move.by == actor)
-    }.sortedByDescending { it.atMs }
+        val timestamp = DisplayDates.reportTimestamp(move.atMs, move.at)
+        (branchIds.isEmpty() || move.branchId in branchIds) &&
+            (allDates || timestamp?.let { DisplayDates.isInSelectedMinute(it, from, until) } == true) &&
+            (actor == "all" || move.by == actor)
+    }.sortedByDescending { DisplayDates.reportTimestamp(it.atMs, it.at) ?: Long.MIN_VALUE }
     val groups = rows.groupBy { if (it.atMs > 0) DisplayDates.date(DisplayDates.fromMillis(it.atMs)) else it.at.substringBefore(',') }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Laporan perubahan stok", "${rows.size} transaksi stok", onBack = { nav.popBackStack() }) }
-        item { CardBlock { SectionLabel("Periode laporan"); DateTimeFields(from, { fromValue = DisplayDates.encode(it) }, "Mulai"); DateTimeFields(until, { untilValue = DisplayDates.encode(it) }, "Sampai") } }
+        item {
+            CardBlock {
+                SectionLabel("Periode laporan")
+                ChipRow { SelectChip(allDates, "Semua tanggal") { allDates = !allDates } }
+                if (!allDates) {
+                    DateTimeFields(from, { fromValue = DisplayDates.encode(it) }, "Mulai")
+                    DateTimeFields(until, { untilValue = DisplayDates.encode(it) }, "Sampai")
+                }
+            }
+        }
         if (session.role == Role.Owner) item {
             CardBlock { SectionLabel("Cabang"); ChipRow {
                 SelectChip(branchIds.isEmpty(), "Semua cabang") { branchIds = emptySet() }
@@ -938,8 +949,8 @@ internal fun StockHistoryScreen(nav: NavHostController) {
         }
         if (actors.isNotEmpty()) item { CardBlock { SectionLabel("Akun pelaksana"); ChipRow { SelectChip(actor == "all", "Semua akun") { actor = "all" }; actors.forEach { name -> SelectChip(actor == name, name) { actor = name } } } } }
         item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PrimaryBtn("Export PDF", Modifier.weight(1f), enabled = !until.isBefore(from), icon = Icons.Outlined.PictureAsPdf) { FileExports.shareStockPdf(ctx, rows, "${DisplayDates.date(from)} — ${DisplayDates.date(until)}") }
-            GhostBtn("Export CSV", Modifier.weight(1f), enabled = !until.isBefore(from), icon = Icons.Outlined.TableView) { FileExports.shareStock(ctx, rows) }
+            PrimaryBtn("Export PDF", Modifier.weight(1f), enabled = allDates || !until.isBefore(from), icon = Icons.Outlined.PictureAsPdf) { FileExports.shareStockPdf(ctx, rows, if (allDates) "Semua tanggal" else "${DisplayDates.date(from)} — ${DisplayDates.date(until)}") }
+            GhostBtn("Export CSV", Modifier.weight(1f), enabled = allDates || !until.isBefore(from), icon = Icons.Outlined.TableView) { FileExports.shareStock(ctx, rows) }
         } }
         if (rows.isEmpty()) item { EmptyHint("Belum ada perubahan stok", "Barang masuk dan keluar akan tampil di sini lengkap dengan hari, tanggal, dan petugas.") }
         groups.forEach { (day, moves) ->
