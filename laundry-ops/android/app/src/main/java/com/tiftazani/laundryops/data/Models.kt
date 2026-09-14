@@ -9,12 +9,13 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-fun rp(n: Int): String = "Rp " + NumberFormat.getIntegerInstance(Locale("id", "ID")).format(n)
+fun rp(n: Int): String = "Rp " + NumberFormat.getIntegerInstance(Locale.forLanguageTag("id-ID")).format(n)
 
 object Clock {
     val ZONE: ZoneId = ZoneId.of("Asia/Jakarta")
-    private val labelFmt = DateTimeFormatter.ofPattern("d MMM yyyy, HH.mm", Locale("id", "ID"))
+    private val labelFmt = DateTimeFormatter.ofPattern("d MMM yyyy, HH.mm", Locale.forLanguageTag("id-ID"))
     private val ymFmt = DateTimeFormatter.ofPattern("yyMM")
+    private val dateKeyFmt = DateTimeFormatter.ISO_LOCAL_DATE
 
     fun nowMs(): Long = System.currentTimeMillis()
 
@@ -24,6 +25,9 @@ object Clock {
     fun yearMonth(): String = ZonedDateTime.now(ZONE).format(ymFmt)
 
     fun todayStartMs(): Long = LocalDate.now(ZONE).atStartOfDay(ZONE).toInstant().toEpochMilli()
+
+    fun dateKey(ms: Long = nowMs()): String =
+        ZonedDateTime.ofInstant(Instant.ofEpochMilli(ms), ZONE).format(dateKeyFmt)
 
     fun periodStartMs(period: String): Long {
         val today = LocalDate.now(ZONE)
@@ -38,8 +42,9 @@ object Clock {
     }
 
     fun defaultPickup(): String {
-        val t = LocalDate.now(ZONE).atTime(17, 0).atZone(ZONE)
-        return t.format(labelFmt)
+        val now = ZonedDateTime.now(ZONE)
+        val today = now.toLocalDate().atTime(17, 0).atZone(ZONE)
+        return (if (today.isAfter(now)) today else today.plusDays(1)).format(labelFmt)
     }
 }
 
@@ -48,13 +53,13 @@ enum class Role { Owner, Kasir, Supervisor }
 
 @Serializable
 enum class LaundryStatus(val label: String) {
-    Masuk("Laundry Masuk"),
-    Progress("Laundry In Progress"),
-    Selesai("Laundry Selesai");
+    Masuk("Masuk Antrian, dan akan dikerjakan"),
+    Progress("Masuk Antrian, dan akan dikerjakan"),
+    Selesai("Selesai");
 
     val next: LaundryStatus?
         get() = when (this) {
-            Masuk -> Progress
+            Masuk -> Selesai
             Progress -> Selesai
             Selesai -> null
         }
@@ -74,7 +79,7 @@ enum class PayMethod(val label: String) {
 }
 
 @Serializable
-enum class StockKind(val label: String) { Tambah("Tambah"), Kurang("Kurang"), Update("Update"), Jual("Jual") }
+enum class StockKind(val label: String) { Tambah("Tambah"), Kurang("Kurang"), Update("Set stok akhir"), Jual("Jual") }
 
 @Serializable
 data class Branch(
@@ -111,9 +116,30 @@ data class ServiceItem(
     val price: Int,
     val retail: Boolean,
     val dropOut: Boolean,
+    val selfService: Boolean = false,
+    /** Komisi petugas yang menangani layanan, dihitung per satuan pada saat Service dibuat. */
+    val commissionPerUnit: Int = 0,
 )
 
-data class CartLine(val service: ServiceItem, var qty: Double)
+data class CartLine(
+    val service: ServiceItem,
+    var qty: Double,
+    var unitPrice: Int = service.price,
+    var handledByEmail: String = "",
+    var handledByName: String = "",
+)
+
+@Serializable
+data class NotaLine(
+    val serviceId: String,
+    val name: String,
+    val qty: Double,
+    val unit: String,
+    val unitPrice: Int,
+    val handledByEmail: String = "",
+    val handledByName: String = "",
+    val commissionPerUnit: Int = 0,
+)
 
 @Serializable
 data class Nota(
@@ -135,9 +161,29 @@ data class Nota(
     val photos: MutableList<String> = mutableListOf(),
     val dropOut: Boolean = false,
     var payMethod: PayMethod = PayMethod.Tunai,
+    var completedAt: String? = null,
+    /** Terpisah dari status pengerjaan: null berarti belum diserahkan ke pelanggan. */
+    var pickedUpAt: String? = null,
+    val lines: List<NotaLine> = emptyList(),
+    /** Email kasir disimpan sebagai identitas stabil; nama tetap menjadi snapshot tampilan. */
+    val kasirEmail: String = "",
 ) {
-    val hanging: Boolean get() = laundry != LaundryStatus.Selesai || pay != PayStatus.Lunas
+    val hanging: Boolean get() = laundry != LaundryStatus.Selesai || pay != PayStatus.Lunas || pickedUpAt == null
 }
+
+@Serializable
+data class AttendanceRecord(
+    val id: String,
+    val staffEmail: String,
+    val staffName: String,
+    val branchId: String,
+    val workDate: String,
+    val checkInAtMs: Long,
+    val checkInAt: String,
+    val checkOutAtMs: Long? = null,
+    val checkOutAt: String? = null,
+    val note: String = "",
+)
 
 @Serializable
 data class Product(
@@ -148,6 +194,73 @@ data class Product(
 ) {
     val key: String get() = id.ifBlank { name }
 }
+
+/** Saldo produk per cabang; Product tetap menjadi katalog bersama. */
+@Serializable
+data class BranchStock(
+    val branchId: String,
+    val productKey: String,
+    var stock: Int,
+)
+
+@Serializable
+enum class InventoryCategory(val label: String) {
+    MesinCuci("Mesin cuci"),
+    MesinPengering("Mesin pengering"),
+    Setrika("Setrika / steamer"),
+    Timbangan("Timbangan"),
+    Peralatan("Peralatan operasional"),
+    BarangJual("Barang dijual"),
+    BahanHabisPakai("Bahan habis pakai"),
+    Lainnya("Lainnya"),
+}
+
+@Serializable
+enum class InventoryStatus(val label: String) {
+    Normal("Normal"),
+    PerluPerbaikan("Perlu perbaikan"),
+    Rusak("Rusak"),
+}
+
+@Serializable
+data class InventoryItem(
+    val id: String,
+    val branchId: String,
+    val name: String,
+    val category: InventoryCategory,
+    val brand: String = "",
+    val serialNumber: String = "",
+    val quantity: Int = 1,
+    val unit: String = "unit",
+    val status: InventoryStatus = InventoryStatus.Normal,
+    val purchaseAt: String = "",
+    val notes: String = "",
+    val sellable: Boolean = false,
+)
+
+@Serializable
+enum class ExpenseCategory(val label: String) {
+    Gaji("Gaji pegawai"),
+    Sewa("Sewa laundry"),
+    ListrikAir("Listrik & air"),
+    PerbaikanMesin("Perbaikan mesin"),
+    BahanLaundry("Bahan laundry"),
+    Transportasi("Transportasi"),
+    Pemasaran("Pemasaran"),
+    Lainnya("Lainnya"),
+}
+
+@Serializable
+data class Expense(
+    val id: String,
+    val branchId: String,
+    val category: ExpenseCategory,
+    val amount: Int,
+    val occurredAtMs: Long,
+    val occurredAt: String,
+    val note: String,
+    val by: String,
+)
 
 @Serializable
 data class StockMove(
@@ -193,16 +306,29 @@ data class Session(
 )
 
 @Serializable
+data class CloudIdentity(
+    val email: String,
+    val name: String,
+    val role: Role,
+    val branchIds: List<String>,
+)
+
+@Serializable
 data class Snapshot(
     val branches: List<Branch> = emptyList(),
     val staff: List<Staff> = emptyList(),
     val customers: List<Customer> = emptyList(),
     val services: List<ServiceItem> = emptyList(),
     val products: List<Product> = emptyList(),
+    val branchStocks: List<BranchStock> = emptyList(),
+    val inventory: List<InventoryItem> = emptyList(),
+    val expenses: List<Expense> = emptyList(),
     val notas: List<Nota> = emptyList(),
     val stockMoves: List<StockMove> = emptyList(),
     val audit: List<AuditRow> = emptyList(),
     val cashCloses: List<CashClose> = emptyList(),
+    val attendance: List<AttendanceRecord> = emptyList(),
+    val deletedNotaIds: List<String> = emptyList(),
     val sessionEmail: String? = null,
     val viewBranch: String = "all",
     val viewKasir: String = "all",

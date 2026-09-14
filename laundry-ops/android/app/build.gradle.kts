@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -6,21 +8,61 @@ plugins {
     id("com.google.gms.google-services") apply false
 }
 
+// The file lives outside the repository. Never commit signing credentials.
+val signingPropertiesPath = providers.environmentVariable("CUCIIN_SIGNING_PROPERTIES").orNull
+val releaseSigning = Properties().apply {
+    signingPropertiesPath?.let { path -> file(path).inputStream().use { load(it) } }
+}
+val signingKeys = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+val hasReleaseSigning = signingKeys.all { !releaseSigning.getProperty(it).isNullOrBlank() }
+fun buildConfigString(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+val cloudUrl = providers.environmentVariable("CUCIIN_CLOUD_URL").orNull.orEmpty()
+val cloudKey = providers.environmentVariable("CUCIIN_CLOUD_KEY").orNull.orEmpty()
+val verifyReleaseSigning by tasks.registering {
+    doLast {
+        check(hasReleaseSigning) {
+            "Rilis memerlukan CUCIIN_SIGNING_PROPERTIES dengan storeFile, storePassword, keyAlias, keyPassword."
+        }
+        check(file(releaseSigning.getProperty("storeFile")).isFile) { "Keystore rilis tidak ditemukan." }
+    }
+}
+tasks.configureEach {
+    if (name == "preReleaseBuild") dependsOn(verifyReleaseSigning)
+}
+
 android {
     namespace = "com.tiftazani.laundryops"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "com.tiftazani.laundryops"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 5
-        versionName = "1.4.0"
+        targetSdk = 36
+        versionCode = 13
+        versionName = "1.8.1"
+        buildConfigField("String", "CUCIIN_CLOUD_URL", buildConfigString(cloudUrl))
+        buildConfigField("String", "CUCIIN_CLOUD_KEY", buildConfigString(cloudKey))
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "CUCIIN_CLOUD_URL", "\"https://cuan-tif.vercel.app/api/cuciin\"")
-        buildConfigField("String", "CUCIIN_CLOUD_KEY", "\"cuciin-48c12bb800fa8770e5a7e96d3eb00f0ff2d6ab7c8eaff4bb\"")
+    }
+    bundle {
+        language { enableSplit = false }
+    }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("production") {
+                storeFile = file(releaseSigning.getProperty("storeFile"))
+                storePassword = releaseSigning.getProperty("storePassword")
+                keyAlias = releaseSigning.getProperty("keyAlias")
+                keyPassword = releaseSigning.getProperty("keyPassword")
+                enableV1Signing = false
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
     }
     buildTypes {
         release {
+            isDebuggable = false
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("production")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -46,6 +88,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
@@ -62,7 +105,6 @@ dependencies {
     val firebaseBom = platform("com.google.firebase:firebase-bom:33.7.0")
     implementation(firebaseBom)
     implementation("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-firestore")
 }
 
 // Tanpa google-services.json app tetap compile + jalan lokal.

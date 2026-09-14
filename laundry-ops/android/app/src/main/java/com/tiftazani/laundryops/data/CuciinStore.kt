@@ -1,5 +1,6 @@
 package com.tiftazani.laundryops.data
 
+import com.tiftazani.laundryops.BuildConfig
 import android.app.Application
 import android.net.Uri
 import androidx.compose.runtime.mutableIntStateOf
@@ -15,10 +16,15 @@ object CuciinStore {
     val customers = mutableStateListOf<Customer>()
     val services = mutableStateListOf<ServiceItem>()
     val products = mutableStateListOf<Product>()
+    val branchStocks = mutableStateListOf<BranchStock>()
+    val inventory = mutableStateListOf<InventoryItem>()
+    val expenses = mutableStateListOf<Expense>()
     val notas = mutableStateListOf<Nota>()
     val stockMoves = mutableStateListOf<StockMove>()
     val audit = mutableStateListOf<AuditRow>()
     val cashCloses = mutableStateListOf<CashClose>()
+    val attendance = mutableStateListOf<AttendanceRecord>()
+    private val deletedNotaIds = mutableStateListOf<String>()
     val cart = mutableStateListOf<CartLine>()
 
     val session = mutableStateOf<Session?>(null)
@@ -26,7 +32,11 @@ object CuciinStore {
     val viewBranch = mutableStateOf("all")
     val viewKasir = mutableStateOf("all")
     val reportPeriod = mutableStateOf("hari")
+    val reportBranchIds = mutableStateOf<Set<String>>(emptySet())
     val selectedCustomer = mutableStateOf<Customer?>(null)
+    /** Cabang operasional untuk nota yang sedang disusun. Tidak ikut sinkronisasi. */
+    val notaBranchId = mutableStateOf<String?>(null)
+    val stockBranchId = mutableStateOf<String?>(null)
     val revision = mutableIntStateOf(0)
 
     private var app: Application? = null
@@ -62,12 +72,12 @@ object CuciinStore {
         staff.clear()
         staff.addAll(
             listOf(
-                Staff(ownerName, ownerEmail, Role.Owner, listOf("melati", "cibaduyut")),
-                Staff("Rina", "rina@cuciin.id", Role.Kasir, listOf("melati")),
-                Staff("Dedi", "dedi@cuciin.id", Role.Kasir, listOf("melati")),
-                Staff("Andi", "andi@cuciin.id", Role.Supervisor, listOf("melati")),
-                Staff("Salsa", "salsa@cuciin.id", Role.Kasir, listOf("cibaduyut")),
-                Staff("Yoga", "yoga@cuciin.id", Role.Supervisor, listOf("cibaduyut")),
+                Staff(ownerName, ownerEmail, Role.Owner, listOf("melati", "cibaduyut"), passwordHash = Passwords.hash("test1234")),
+                Staff("Rina", "rina@cuciin.id", Role.Kasir, listOf("melati"), passwordHash = Passwords.hash("test1234")),
+                Staff("Dedi", "dedi@cuciin.id", Role.Kasir, listOf("melati"), passwordHash = Passwords.hash("test1234")),
+                Staff("Andi", "andi@cuciin.id", Role.Supervisor, listOf("melati"), passwordHash = Passwords.hash("test1234")),
+                Staff("Salsa", "salsa@cuciin.id", Role.Kasir, listOf("cibaduyut"), passwordHash = Passwords.hash("test1234")),
+                Staff("Yoga", "yoga@cuciin.id", Role.Supervisor, listOf("cibaduyut"), passwordHash = Passwords.hash("test1234")),
             ),
         )
         customers.clear()
@@ -78,6 +88,7 @@ object CuciinStore {
                 ServiceItem("curing", "Cuci kering (Curing)", "kg", 9000, retail = false, dropOut = false),
                 ServiceItem("do", "Curing DO", "kg", 10000, retail = false, dropOut = true),
                 ServiceItem("do-lipat", "Curing DO Lipat", "kg", 12000, retail = false, dropOut = true),
+                ServiceItem("self-load", "Cuci mandiri", "Load", 25000, retail = false, dropOut = false, selfService = true),
                 ServiceItem("sabun", "Sabun", "pcs", 8000, retail = true, dropOut = false),
                 ServiceItem("softener", "Softener", "pcs", 10000, retail = true, dropOut = false),
                 ServiceItem("parfum", "Parfum uk 100", "pcs", 15000, retail = true, dropOut = false),
@@ -91,10 +102,18 @@ object CuciinStore {
                 Product("Parfum uk 100", 0, 5),
             ),
         )
+        branchStocks.clear()
+        branches.forEach { branch ->
+            products.forEach { product -> branchStocks.add(BranchStock(branch.id, product.key, product.stock)) }
+        }
+        inventory.clear()
+        expenses.clear()
         notas.clear()
+        deletedNotaIds.clear()
         stockMoves.clear()
         audit.clear()
         cashCloses.clear()
+        attendance.clear()
         val t = Clock.nowMs()
         localUpdatedAt = t
         audit.add(AuditRow(Clock.nowLabel(t), t, ownerName, "melati", "Data awal: 2 cabang, antrian kosong. Isi stok & pelanggan sebelum nota pertama.", null))
@@ -107,13 +126,23 @@ object CuciinStore {
         }
         fill(branches, s.branches)
         fill(staff, s.staff)
+        ensureInitialPasswords()
         fill(customers, s.customers)
         fill(services, s.services)
+        ensureServiceDefaults()
         fill(products, s.products)
+        fill(branchStocks, s.branchStocks)
+        fill(inventory, s.inventory)
+        fill(expenses, s.expenses)
         fill(notas, s.notas)
+        deletedNotaIds.clear()
+        deletedNotaIds.addAll(s.deletedNotaIds)
+        notas.removeAll { it.id in deletedNotaIds }
         fill(stockMoves, s.stockMoves)
+        ensureBranchStocks()
         fill(audit, s.audit)
         fill(cashCloses, s.cashCloses)
+        fill(attendance, s.attendance)
         viewBranch.value = s.viewBranch
         viewKasir.value = s.viewKasir
         reportPeriod.value = s.reportPeriod
@@ -125,15 +154,25 @@ object CuciinStore {
             dest.clear()
             dest.addAll(src)
         }
+        val localPasswordHashes = staff.associate { it.email.lowercase() to it.passwordHash }
         fill(branches, s.branches)
-        fill(staff, s.staff)
+        fill(staff, s.staff.map { remote -> remote.copy(passwordHash = localPasswordHashes[remote.email.lowercase()].orEmpty()) })
+        ensureInitialPasswords()
         fill(customers, s.customers)
         fill(services, s.services)
+        ensureServiceDefaults()
         fill(products, s.products)
-        fill(notas, s.notas)
+        if (s.branchStocks.isNotEmpty()) fill(branchStocks, s.branchStocks)
+        fill(inventory, s.inventory)
+        fill(expenses, s.expenses)
+        val localPhotos = notas.associate { it.id to it.photos.toMutableList() }
+        deletedNotaIds.addAll(s.deletedNotaIds.filterNot { it in deletedNotaIds })
+        fill(notas, s.notas.filterNot { it.id in deletedNotaIds }.map { remote -> remote.copy(photos = localPhotos[remote.id] ?: mutableListOf()) })
         fill(stockMoves, s.stockMoves)
+        ensureBranchStocks()
         fill(audit, s.audit)
         fill(cashCloses, s.cashCloses)
+        fill(attendance, s.attendance)
     }
 
     fun applyCloud(s: Snapshot) {
@@ -154,7 +193,14 @@ object CuciinStore {
         }
     }
 
-    fun cloudSnapshot(): Snapshot = snapshot().copy(sessionEmail = null, updatedAt = localUpdatedAt)
+    fun cloudSnapshot(): Snapshot = snapshot().copy(
+        staff = staff.map { it.copy(passwordHash = "") },
+        notas = notas.map { it.copy(photos = mutableListOf()) },
+        sessionEmail = null,
+        updatedAt = localUpdatedAt,
+    )
+
+    fun syncUpdatedAt(): Long = localUpdatedAt
 
     private fun snapshot(): Snapshot = Snapshot(
         branches = branches.toList(),
@@ -162,10 +208,15 @@ object CuciinStore {
         customers = customers.toList(),
         services = services.toList(),
         products = products.toList(),
+        branchStocks = branchStocks.toList(),
+        inventory = inventory.toList(),
+        expenses = expenses.toList(),
         notas = notas.toList(),
         stockMoves = stockMoves.toList(),
         audit = audit.toList(),
         cashCloses = cashCloses.toList(),
+        attendance = attendance.toList(),
+        deletedNotaIds = deletedNotaIds.toList(),
         sessionEmail = session.value?.email,
         viewBranch = viewBranch.value,
         viewKasir = viewKasir.value,
@@ -194,13 +245,51 @@ object CuciinStore {
         val t = Clock.nowMs()
         val row = AuditRow(Clock.nowLabel(t), t, session.value?.name ?: ownerName, branchId, action, notaId)
         audit.add(0, row)
-        FirebaseCloud.pushAudit(row)
         return row
     }
 
     fun branch(id: String = session.value?.branchId ?: viewBranch.value): Branch {
         if (id == "all") return branches.first()
         return branches.first { it.id == id }
+    }
+
+    private fun ensureBranchStocks() {
+        val legacyMigration = branchStocks.isEmpty()
+        branches.forEach { branch ->
+            products.forEach { product ->
+                if (branchStocks.none { it.branchId == branch.id && it.productKey == product.key }) {
+                    val opening = if (legacyMigration) legacyBranchBalance(product, branch.id) else 0
+                    branchStocks.add(BranchStock(branch.id, product.key, opening))
+                }
+            }
+        }
+        branchStocks.removeAll { row ->
+            branches.none { it.id == row.branchId } || products.none { it.key == row.productKey }
+        }
+    }
+
+    private fun legacyBranchBalance(product: Product, branchId: String): Int {
+        val moves = stockMoves.filter {
+            it.branchId == branchId && (it.product == product.key || it.product == product.name)
+        }.sortedBy { it.atMs }
+        if (moves.isEmpty()) return if (branchId == branches.firstOrNull()?.id) product.stock.coerceAtLeast(0) else 0
+        var balance = 0
+        moves.forEach { move ->
+            balance = if (move.kind == StockKind.Update) move.qty.coerceAtLeast(0)
+            else (balance + move.qty).coerceAtLeast(0)
+        }
+        return balance
+    }
+
+    fun stockOf(productKey: String, branchId: String): Int =
+        branchStocks.firstOrNull { it.branchId == branchId && it.productKey == productKey }?.stock ?: 0
+
+    fun selectedStockBranch(): String {
+        val s = session.value ?: return branches.first().id
+        if (s.role != Role.Owner) return s.branchId
+        return stockBranchId.value
+            ?.takeIf { id -> branches.any { it.id == id } }
+            ?: branches.first().id.also { stockBranchId.value = it }
     }
 
     fun visibleNotas(): List<Nota> {
@@ -216,7 +305,39 @@ object CuciinStore {
 
     fun periodNotas(): List<Nota> {
         val start = Clock.periodStartMs(reportPeriod.value)
-        return visibleNotas().filter { it.createdAtMs >= start }
+        val s = session.value ?: return emptyList()
+        val selected = reportBranchIds.value
+        return notas.filter {
+            it.createdAtMs >= start && when (s.role) {
+                Role.Owner -> selected.isEmpty() || it.branchId in selected
+                else -> it.branchId == s.branchId
+            }
+        }
+    }
+
+    fun periodExpenses(): List<Expense> {
+        val start = Clock.periodStartMs(reportPeriod.value)
+        val s = session.value ?: return emptyList()
+        val selected = reportBranchIds.value
+        return expenses.filter {
+            it.occurredAtMs >= start && when (s.role) {
+                Role.Owner -> selected.isEmpty() || it.branchId in selected
+                else -> it.branchId == s.branchId
+            }
+        }
+    }
+
+    private fun ensureInitialPasswords() {
+        val initialHash = Passwords.hash("test1234")
+        staff.indices.filter { staff[it].passwordHash.isBlank() }.forEach { index ->
+            staff[index] = staff[index].copy(passwordHash = initialHash)
+        }
+    }
+
+    private fun ensureServiceDefaults() {
+        if (services.none { it.selfService }) {
+            services.add(ServiceItem("self-load", "Cuci mandiri", "Load", 25000, retail = false, dropOut = false, selfService = true))
+        }
     }
 
     fun omzet(rows: List<Nota> = periodNotas()): Int = rows.sumOf { it.total }
@@ -243,7 +364,8 @@ object CuciinStore {
     }
 
     fun login(email: String, password: String = "", skipPassword: Boolean = false): Boolean {
-        val u = staff.firstOrNull { it.email.equals(email.trim(), ignoreCase = true) }
+        val userIndex = staff.indexOfFirst { it.email.equals(email.trim(), ignoreCase = true) }
+        val u = staff.getOrNull(userIndex)
         if (u == null) {
             pendingName.value = null
             return false
@@ -254,9 +376,20 @@ object CuciinStore {
             persist()
             return false
         }
-        if (!skipPassword && u.passwordHash.isNotBlank() && !Passwords.matches(password, u.passwordHash)) {
+        val passwordMatches = u.passwordHash.isNotBlank() && Passwords.matches(password, u.passwordHash)
+        if (!LoginPolicy.permits(
+                debug = BuildConfig.DEBUG,
+                approved = u.approved,
+                hasBranches = u.branchIds.isNotEmpty(),
+                hasPassword = u.passwordHash.isNotBlank(),
+                trustedRestore = skipPassword,
+                passwordMatches = passwordMatches,
+            )) {
             pendingName.value = null
             return false
+        }
+        if (!skipPassword && passwordMatches && Passwords.needsUpgrade(u.passwordHash)) {
+            staff[userIndex] = u.copy(passwordHash = Passwords.hash(password))
         }
         pendingName.value = null
         session.value = Session(u.role, u.name, u.email, u.branchIds.first())
@@ -266,6 +399,7 @@ object CuciinStore {
     }
 
     fun demoLogin(role: Role) {
+        if (!BuildConfig.DEBUG) return
         when (role) {
             Role.Owner -> login(ownerEmail, skipPassword = true)
             Role.Kasir -> login("rina@cuciin.id", skipPassword = true)
@@ -274,13 +408,17 @@ object CuciinStore {
     }
 
     fun logout() {
+        if (FirebaseCloud.enabled) {
+            FirebaseCloud.signOut()
+            CloudSync.onSignedOut()
+        }
         session.value = null
         persist()
         revision.intValue++
     }
 
     fun register(name: String, email: String, role: Role, branchId: String, password: String = "") {
-        val hash = if (password.isBlank()) "" else Passwords.hash(password)
+        val hash = Passwords.hash(password.ifBlank { "test1234" })
         staff.add(Staff(name.trim(), email.trim(), role, listOf(branchId), approved = false, passwordHash = hash))
         pendingName.value = name.trim()
         bump()
@@ -291,13 +429,13 @@ object CuciinStore {
         if (i >= 0) staff[i] = staff[i].copy(approved = ok)
         log("${if (ok) "Setujui" else "Tolak"} $name", session.value?.branchId ?: "melati")
         bump()
-        FirebaseCloud.pushApprove(name, ok)
     }
 
     fun addBranch(name: String, code: String, location: String, maps: String): Branch {
         val id = uniqueBranchId(name)
         val b = Branch(id, code.uppercase().take(4).ifBlank { "CAB" }, name.trim(), location.trim(), maps.trim())
         branches.add(b)
+        products.forEach { branchStocks.add(BranchStock(b.id, it.key, 0)) }
         grantOwnerBranch(b.id)
         log("Cabang ${b.name} ditambah", b.id)
         bump()
@@ -317,11 +455,20 @@ object CuciinStore {
         bump()
     }
 
+    fun updateBranchMap(id: String, maps: String) {
+        val i = branches.indexOfFirst { it.id == id }
+        if (i < 0 || maps.isBlank()) return
+        branches[i] = branches[i].copy(mapsQuery = maps.trim())
+        log("Lokasi peta ${branches[i].name} diperbarui", id)
+        bump()
+    }
+
     fun deleteBranch(id: String): String? {
         if (branches.size <= 1) return "Minimal satu cabang harus tersisa"
         if (notas.any { it.branchId == id && it.hanging }) return "Masih ada nota menggantung di cabang ini"
         val gone = branches.find { it.id == id } ?: return "Cabang tidak ketemu"
         branches.removeAll { it.id == id }
+        branchStocks.removeAll { it.branchId == id }
         val relocated = staff.map { u ->
             u.copy(branchIds = u.branchIds.filter { it != id }.ifEmpty { listOf(branches.first().id) })
         }
@@ -372,16 +519,20 @@ object CuciinStore {
         return null
     }
 
-    fun updateStaff(email: String, name: String, role: Role, branchIds: List<String>, password: String? = null, approved: Boolean? = null): String? {
+    fun updateStaff(email: String, name: String, role: Role, branchIds: List<String>, password: String? = null, approved: Boolean? = null, newEmail: String = email): String? {
         val i = staff.indexOfFirst { it.email.equals(email, ignoreCase = true) }
         if (i < 0) return "User tidak ketemu"
         val old = staff[i]
+        val targetEmail = newEmail.trim()
+        if (targetEmail.isBlank()) return "Email wajib diisi"
+        if (staff.any { it.email.equals(targetEmail, true) && !it.email.equals(email, true) }) return "Email sudah dipakai"
         if (old.role == Role.Owner && role != Role.Owner && staff.count { it.role == Role.Owner } <= 1) {
             return "Owner terakhir tidak bisa diturunkan"
         }
         val bids = branchIds.ifEmpty { old.branchIds }
         staff[i] = old.copy(
             name = name.trim().ifBlank { old.name },
+            email = targetEmail,
             role = role,
             branchIds = bids,
             approved = approved ?: old.approved,
@@ -389,7 +540,7 @@ object CuciinStore {
         )
         val s = session.value
         if (s != null && s.email.equals(email, ignoreCase = true)) {
-            session.value = s.copy(name = staff[i].name, role = staff[i].role, branchId = staff[i].branchIds.first())
+            session.value = s.copy(name = staff[i].name, email = targetEmail, role = staff[i].role, branchId = staff[i].branchIds.first())
         }
         log("User ${staff[i].name} diubah", staff[i].branchIds.first())
         bump()
@@ -406,25 +557,28 @@ object CuciinStore {
         return null
     }
 
-    fun addService(name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean): ServiceItem {
+    fun addService(name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean, selfService: Boolean = false, commissionPerUnit: Int = 0): ServiceItem {
         val id = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "svc-${Clock.nowMs()}" }
         val unique = if (services.any { it.id == id }) "$id-${Clock.nowMs()}" else id
-        val s = ServiceItem(unique, name.trim(), unit.trim().ifBlank { "pcs" }, price.coerceAtLeast(0), retail, dropOut)
+        val finalUnit = if (selfService) "Load" else unit.trim().ifBlank { "pcs" }
+        val s = ServiceItem(unique, name.trim(), finalUnit, price.coerceAtLeast(0), retail && !selfService, dropOut && !selfService, selfService, commissionPerUnit.coerceAtLeast(0))
         services.add(s)
         log("Layanan ${s.name} ditambah", session.value?.branchId ?: branches.first().id)
         bump()
         return s
     }
 
-    fun updateService(id: String, name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean) {
+    fun updateService(id: String, name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean, selfService: Boolean = false, commissionPerUnit: Int = 0) {
         val i = services.indexOfFirst { it.id == id }
         if (i < 0) return
         services[i] = services[i].copy(
             name = name.trim(),
-            unit = unit.trim().ifBlank { services[i].unit },
+            unit = if (selfService) "Load" else unit.trim().ifBlank { services[i].unit },
             price = price.coerceAtLeast(0),
-            retail = retail,
-            dropOut = dropOut,
+            retail = retail && !selfService,
+            dropOut = dropOut && !selfService,
+            selfService = selfService,
+            commissionPerUnit = commissionPerUnit.coerceAtLeast(0),
         )
         log("Layanan ${name.trim()} diubah", session.value?.branchId ?: branches.first().id)
         bump()
@@ -439,9 +593,12 @@ object CuciinStore {
         return null
     }
 
-    fun addProduct(name: String, stock: Int, min: Int): Product {
-        val p = Product(name.trim(), stock.coerceAtLeast(0), min.coerceAtLeast(0), "p-${Clock.nowMs()}")
+    fun addProduct(name: String, stock: Int, min: Int, initialBranchId: String): Product {
+        val p = Product(name.trim(), 0, min.coerceAtLeast(0), "p-${Clock.nowMs()}")
         products.add(p)
+        branches.forEach { branch ->
+            branchStocks.add(BranchStock(branch.id, p.key, if (branch.id == initialBranchId) stock.coerceAtLeast(0) else 0))
+        }
         log("Produk ${p.name} ditambah", session.value?.branchId ?: branches.first().id)
         bump()
         return p
@@ -451,7 +608,11 @@ object CuciinStore {
         val i = products.indexOfFirst { it.key == key || it.name == key }
         if (i < 0) return
         val old = products[i]
-        products[i] = old.copy(name = name.trim(), min = min.coerceAtLeast(0), id = old.id.ifBlank { "p-${Clock.nowMs()}" })
+        val updated = old.copy(name = name.trim(), min = min.coerceAtLeast(0), id = old.id.ifBlank { "p-${Clock.nowMs()}" })
+        products[i] = updated
+        branchStocks.indices.filter { branchStocks[it].productKey == old.key }.forEach { index ->
+            branchStocks[index] = branchStocks[index].copy(productKey = updated.key)
+        }
         log("Produk ${name.trim()} diubah", session.value?.branchId ?: branches.first().id)
         bump()
     }
@@ -459,10 +620,127 @@ object CuciinStore {
     fun deleteProduct(key: String): String? {
         val p = products.find { it.key == key || it.name == key } ?: return "Produk tidak ketemu"
         products.removeAll { it.key == key || it.name == key }
+        branchStocks.removeAll { it.productKey == p.key }
         log("Produk ${p.name} dihapus", session.value?.branchId ?: branches.first().id)
         bump()
         return null
     }
+
+    fun addInventory(
+        branchId: String,
+        name: String,
+        category: InventoryCategory,
+        brand: String,
+        serialNumber: String,
+        quantity: Int,
+        unit: String,
+        status: InventoryStatus,
+        purchaseAt: String,
+        notes: String,
+        sellable: Boolean,
+    ): InventoryItem {
+        val row = InventoryItem(
+            id = "inv-${Clock.nowMs()}", branchId = branchId, name = name.trim(), category = category,
+            brand = brand.trim(), serialNumber = serialNumber.trim(), quantity = quantity.coerceAtLeast(0),
+            unit = unit.trim().ifBlank { "unit" }, status = status, purchaseAt = purchaseAt,
+            notes = notes.trim(), sellable = sellable,
+        )
+        inventory.add(0, row)
+        log("Inventory ${row.name} ditambah · ${row.quantity} ${row.unit} · ${row.status.label}", branchId)
+        bump()
+        return row
+    }
+
+    fun updateInventory(row: InventoryItem) {
+        val index = inventory.indexOfFirst { it.id == row.id }
+        if (index < 0) return
+        inventory[index] = row.copy(name = row.name.trim(), quantity = row.quantity.coerceAtLeast(0), unit = row.unit.trim().ifBlank { "unit" })
+        log("Inventory ${row.name.trim()} diubah · ${row.status.label}", row.branchId)
+        bump()
+    }
+
+    fun deleteInventory(id: String): String? {
+        val row = inventory.firstOrNull { it.id == id } ?: return "Inventory tidak ditemukan"
+        inventory.removeAll { it.id == id }
+        log("Inventory ${row.name} dihapus", row.branchId)
+        bump()
+        return null
+    }
+
+    fun addExpense(branchId: String, category: ExpenseCategory, amount: Int, occurredAtMs: Long, note: String): Expense {
+        val s = session.value!!
+        val row = Expense(
+            id = "cost-${Clock.nowMs()}", branchId = branchId, category = category,
+            amount = amount.coerceAtLeast(0), occurredAtMs = occurredAtMs,
+            occurredAt = Clock.nowLabel(occurredAtMs), note = note.trim(), by = s.name,
+        )
+        expenses.add(0, row)
+        log("Biaya ${category.label} ${rp(row.amount)} · ${row.note}", branchId)
+        bump()
+        return row
+    }
+
+    fun deleteExpense(id: String): String? {
+        val row = expenses.firstOrNull { it.id == id } ?: return "Biaya tidak ditemukan"
+        expenses.removeAll { it.id == id }
+        log("Biaya ${row.category.label} ${rp(row.amount)} dihapus", row.branchId)
+        bump()
+        return null
+    }
+
+    fun todayAttendance(email: String = session.value?.email.orEmpty()): AttendanceRecord? =
+        attendance.firstOrNull { it.staffEmail.equals(email, true) && it.workDate == Clock.dateKey() }
+
+    fun visibleAttendance(fromMs: Long? = null, untilMs: Long? = null, branchIds: Set<String> = emptySet()): List<AttendanceRecord> {
+        val s = session.value ?: return emptyList()
+        return attendance.filter { row ->
+            val maySee = if (s.role == Role.Owner) branchIds.isEmpty() || row.branchId in branchIds
+            else row.staffEmail.equals(s.email, true) && row.branchId == s.branchId
+            maySee && (fromMs == null || row.checkInAtMs >= fromMs) && (untilMs == null || row.checkInAtMs <= untilMs)
+        }.sortedByDescending { it.checkInAtMs }
+    }
+
+    fun checkIn(branchId: String, note: String = ""): String? {
+        val s = session.value ?: return "Silakan masuk kembali"
+        if (s.role != Role.Owner && branchId != s.branchId) return "Cabang absensi tidak sesuai akun"
+        if (s.role == Role.Owner && branches.none { it.id == branchId }) return "Cabang tidak ditemukan"
+        if (todayAttendance(s.email) != null) return "Anda sudah absen masuk hari ini"
+        val now = Clock.nowMs()
+        val row = AttendanceRecord(
+            id = "att-${java.util.UUID.randomUUID()}",
+            staffEmail = s.email,
+            staffName = s.name,
+            branchId = branchId,
+            workDate = Clock.dateKey(now),
+            checkInAtMs = now,
+            checkInAt = Clock.nowLabel(now),
+            note = note.trim(),
+        )
+        attendance.add(0, row)
+        log("Absen masuk ${s.name}", branchId)
+        bump()
+        return null
+    }
+
+    fun checkOut(note: String = ""): String? {
+        val s = session.value ?: return "Silakan masuk kembali"
+        val index = attendance.indexOfFirst {
+            it.staffEmail.equals(s.email, true) && it.workDate == Clock.dateKey() && it.checkOutAtMs == null
+        }
+        if (index < 0) return "Absen masuk hari ini belum ditemukan"
+        val now = Clock.nowMs()
+        val old = attendance[index]
+        attendance[index] = old.copy(
+            checkOutAtMs = now,
+            checkOutAt = Clock.nowLabel(now),
+            note = note.trim().ifBlank { old.note },
+        )
+        log("Absen pulang ${s.name}", old.branchId)
+        bump()
+        return null
+    }
+
+    fun exportSnapshot(): Snapshot = snapshot().copy(sessionEmail = null)
 
     private fun uniqueBranchId(name: String): String {
         val base = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "cabang" }
@@ -482,15 +760,19 @@ object CuciinStore {
         val b = branches.first { it.id == branchId }
         val prefix = "${b.code}-${Clock.yearMonth()}-"
         val max = notas.filter { it.id.startsWith(prefix) }
-            .mapNotNull { it.id.removePrefix(prefix).toIntOrNull() }
+            .mapNotNull { it.id.removePrefix(prefix).substringBefore('-').toIntOrNull() }
             .maxOrNull() ?: 0
-        return prefix + (max + 1).toString().padStart(4, '0')
+        val deviceSafeSuffix = java.util.UUID.randomUUID().toString().take(5).uppercase()
+        return prefix + (max + 1).toString().padStart(4, '0') + "-$deviceSafeSuffix"
     }
 
     fun addToCart(svc: ServiceItem) {
         val exist = cart.find { it.service.id == svc.id }
         if (exist != null) exist.qty += if (svc.unit == "kg") 1.0 else 1.0
-        else cart.add(CartLine(svc, if (svc.unit == "kg") 3.0 else 1.0))
+        else {
+            val current = session.value
+            cart.add(CartLine(svc, if (svc.unit == "kg") 3.0 else 1.0, handledByEmail = current?.email.orEmpty(), handledByName = current?.name.orEmpty()))
+        }
         revision.intValue++
     }
 
@@ -501,24 +783,54 @@ object CuciinStore {
         revision.intValue++
     }
 
+    fun setCartPrice(svcId: String, price: Int) {
+        cart.find { it.service.id == svcId }?.unitPrice = price.coerceAtLeast(0)
+        revision.intValue++
+    }
+
+    fun setCartHandler(svcId: String, email: String) {
+        val staffMember = staff.firstOrNull { it.email.equals(email, true) } ?: return
+        cart.find { it.service.id == svcId }?.let {
+            it.handledByEmail = staffMember.email
+            it.handledByName = staffMember.name
+        }
+        revision.intValue++
+    }
+
+    fun retailStockShortages(cartLines: List<CartLine>, branchId: String): List<String> =
+        cartLines.filter { it.service.retail }.mapNotNull { line ->
+            val product = products.firstOrNull { it.name == line.service.name } ?: return@mapNotNull null
+            val needed = line.qty.toInt()
+            val available = stockOf(product.key, branchId)
+            if (needed > available) "${product.name}: perlu $needed, tersedia $available" else null
+        }
+
     fun saveNota(
         customer: Customer,
         cartLines: List<CartLine>,
         paid: Int,
         pickup: String,
         method: PayMethod,
+        branchId: String,
         sendWa: Boolean,
     ): Nota {
         val s = session.value!!
-        val total = cartLines.sumOf { (it.qty * it.service.price).toInt() }
+        val permittedBranch = when (s.role) {
+            Role.Owner -> branches.any { it.id == branchId }
+            else -> branchId == s.branchId
+        }
+        require(permittedBranch) { "Cabang transaksi tidak tersedia untuk akun ini" }
+        require(retailStockShortages(cartLines, branchId).isEmpty()) { "Stok retail cabang tidak mencukupi" }
+        val total = cartLines.sumOf { (it.qty * it.unitPrice).toInt() }
         val t = Clock.nowMs()
         val nota = Nota(
-            id = nextNotaId(s.branchId),
-            branchId = s.branchId,
+            id = nextNotaId(branchId),
+            branchId = branchId,
             kasir = s.name,
+            kasirEmail = s.email,
             customer = customer.name,
             phone = customer.phone,
-            items = cartLines.joinToString { "${it.service.name} ${it.qty}${it.service.unit}" },
+            items = cartLines.joinToString { "${it.service.name} ${displayQuantity(it.qty)} ${it.service.unit}" },
             total = total,
             paid = paid.coerceAtLeast(0),
             pay = if (paid >= total && total > 0) PayStatus.Lunas else PayStatus.Belum,
@@ -529,22 +841,141 @@ object CuciinStore {
             waSent = false,
             dropOut = cartLines.any { it.service.dropOut },
             payMethod = method,
+            lines = cartLines.map {
+                NotaLine(
+                    serviceId = it.service.id,
+                    name = it.service.name,
+                    qty = it.qty,
+                    unit = it.service.unit,
+                    unitPrice = it.unitPrice,
+                    handledByEmail = it.handledByEmail.ifBlank { s.email },
+                    handledByName = it.handledByName.ifBlank { s.name },
+                    commissionPerUnit = it.service.commissionPerUnit,
+                )
+            },
         )
         notas.add(0, nota)
         cartLines.filter { it.service.retail }.forEach { line ->
             val qty = line.qty.toInt()
-            products.find { it.name == line.service.name }?.let { it.stock = (it.stock - qty).coerceAtLeast(0) }
+            products.find { it.name == line.service.name }?.let { product ->
+                val balance = branchStocks.firstOrNull { it.branchId == branchId && it.productKey == product.key }
+                    ?: BranchStock(branchId, product.key, 0).also { branchStocks.add(it) }
+                balance.stock = (balance.stock - qty).coerceAtLeast(0)
+            }
             stockMoves.add(
                 0,
-                StockMove(Clock.nowLabel(t), t, line.service.name, StockKind.Jual, -qty, s.name, s.branchId, "Jual via nota", nota.id),
+                StockMove(Clock.nowLabel(t), t, line.service.name, StockKind.Jual, -qty, s.name, branchId, "Jual via nota", nota.id),
             )
         }
-        log("Nota ${nota.id} disimpan · ${nota.pay.label} · ${method.label}", s.branchId, nota.id)
+        log("Nota ${nota.id} disimpan · ${nota.pay.label} · ${method.label}", branchId, nota.id)
+        cartLines.filter { it.unitPrice != it.service.price }.forEach { line ->
+            log("Harga ${line.service.name} pada ${nota.id}: ${rp(line.service.price)} → ${rp(line.unitPrice)} per ${line.service.unit}", branchId, nota.id)
+        }
         cart.clear()
+        notaBranchId.value = null
         bump()
-        FirebaseCloud.pushNota(nota)
         if (sendWa) markWaSent(nota.id)
         return nota
+    }
+
+    /** Mengoreksi item Service yang sudah tersimpan sambil menjaga stok cabang dan audit trail. */
+    fun updateNotaLines(id: String, newLines: List<NotaLine>): String? {
+        val s = session.value ?: return "Silakan masuk kembali"
+        val index = notas.indexOfFirst { it.id == id }
+        if (index < 0) return "Service tidak ditemukan"
+        val old = notas[index]
+        if (s.role == Role.Supervisor || (s.role != Role.Owner && s.branchId != old.branchId)) {
+            return "Akun ini tidak dapat mengoreksi Service tersebut"
+        }
+        val clean = newLines.map {
+            it.copy(qty = it.qty.coerceAtLeast(0.0), unitPrice = it.unitPrice.coerceAtLeast(0))
+        }.filter { it.qty > 0.0 }
+        if (clean.isEmpty()) return "Service harus memiliki minimal satu layanan"
+        if (clean.any { !it.qty.isFinite() || it.qty > 9999.0 || (it.unit != "kg" && it.qty % 1.0 != 0.0) }) {
+            return "Jumlah layanan belum valid"
+        }
+
+        val oldQty = old.lines.groupBy { it.serviceId }.mapValues { (_, rows) -> rows.sumOf { it.qty }.toInt() }
+        val newQty = clean.groupBy { it.serviceId }.mapValues { (_, rows) -> rows.sumOf { it.qty }.toInt() }
+        val retailProducts = (old.lines + clean).mapNotNull { line ->
+            products.firstOrNull { it.name == line.name }?.let { line.serviceId to it }
+        }.toMap()
+        retailProducts.forEach { (serviceId, product) ->
+            val availableAfterRestore = stockOf(product.key, old.branchId) + (oldQty[serviceId] ?: 0)
+            val needed = newQty[serviceId] ?: 0
+            if (needed > availableAfterRestore) return "Stok ${product.name} di cabang hanya tersedia $availableAfterRestore"
+        }
+
+        val now = Clock.nowMs()
+        retailProducts.forEach { (serviceId, product) ->
+            val delta = (oldQty[serviceId] ?: 0) - (newQty[serviceId] ?: 0)
+            if (delta != 0) {
+                val balance = branchStocks.firstOrNull { it.branchId == old.branchId && it.productKey == product.key }
+                    ?: BranchStock(old.branchId, product.key, 0).also { branchStocks.add(it) }
+                balance.stock = (balance.stock + delta).coerceAtLeast(0)
+                stockMoves.add(
+                    0,
+                    StockMove(
+                        Clock.nowLabel(now), now, product.name,
+                        if (delta > 0) StockKind.Tambah else StockKind.Kurang,
+                        delta, s.name, old.branchId, "Koreksi Service $id", id,
+                    ),
+                )
+            }
+        }
+
+        val total = clean.sumOf { (it.qty * it.unitPrice).toInt() }
+        old.lines.forEach { before ->
+            val after = clean.firstOrNull { it.serviceId == before.serviceId }
+            if (after == null) log("${before.name} dihapus dari Service $id", old.branchId, id)
+            else {
+                if (before.qty != after.qty) log("Jumlah ${before.name} pada $id: ${before.qty} → ${after.qty} ${after.unit}", old.branchId, id)
+                if (before.unitPrice != after.unitPrice) log("Harga ${before.name} pada $id: ${rp(before.unitPrice)} → ${rp(after.unitPrice)} per ${after.unit}", old.branchId, id)
+                if (before.handledByEmail != after.handledByEmail) log("Petugas ${before.name} pada $id: ${before.handledByName.ifBlank { old.kasir }} → ${after.handledByName.ifBlank { old.kasir }}", old.branchId, id)
+            }
+        }
+        clean.filter { after -> old.lines.none { it.serviceId == after.serviceId } }
+            .forEach { log("${it.name} ditambahkan ke Service $id", old.branchId, id) }
+
+        val correctedPaid = old.paid.coerceAtMost(total)
+        val updated = old.copy(
+            items = clean.joinToString { "${it.name} ${displayQuantity(it.qty)} ${it.unit}" },
+            total = total,
+            paid = correctedPaid,
+            pay = if (total > 0 && correctedPaid >= total) PayStatus.Lunas else PayStatus.Belum,
+            lines = clean,
+        )
+        notas[index] = updated
+        log("Service $id dikoreksi · total ${rp(old.total)} → ${rp(total)}", old.branchId, id)
+        bump()
+        return null
+    }
+
+    private fun displayQuantity(qty: Double): String =
+        if (qty % 1.0 == 0.0) qty.toInt().toString() else qty.toString().replace('.', ',')
+
+    /** Menghapus Service dan mengembalikan stok barang jual ke cabang asal. */
+    fun deleteNota(id: String): String? {
+        val s = session.value ?: return "Silakan masuk kembali"
+        val old = notas.firstOrNull { it.id == id } ?: return "Service tidak ditemukan"
+        if (s.role == Role.Supervisor || (s.role != Role.Owner && s.branchId != old.branchId)) {
+            return "Akun ini tidak dapat menghapus Service tersebut"
+        }
+        val now = Clock.nowMs()
+        old.lines.forEach { line ->
+            val product = products.firstOrNull { it.name == line.name } ?: return@forEach
+            val qty = line.qty.toInt()
+            if (qty <= 0) return@forEach
+            val balance = branchStocks.firstOrNull { it.branchId == old.branchId && it.productKey == product.key }
+                ?: BranchStock(old.branchId, product.key, 0).also { branchStocks.add(it) }
+            balance.stock += qty
+            stockMoves.add(0, StockMove(Clock.nowLabel(now), now, product.name, StockKind.Tambah, qty, s.name, old.branchId, "Service $id dihapus", id))
+        }
+        notas.removeAll { it.id == id }
+        if (id !in deletedNotaIds) deletedNotaIds.add(id)
+        log("Service $id dihapus · ${old.customer} · ${rp(old.total)}", old.branchId, id)
+        bump()
+        return null
     }
 
     fun markWaSent(id: String) {
@@ -554,15 +985,16 @@ object CuciinStore {
         n.waAt = Clock.nowLabel(t)
         log("WA nota ${n.id} terkirim → archive", n.branchId, n.id)
         bump()
-        FirebaseCloud.pushNota(n)
     }
 
     fun advanceLaundry(id: String) {
         val n = notas.find { it.id == id } ?: return
-        n.laundry.next?.let { n.laundry = it }
+        n.laundry.next?.let {
+            n.laundry = it
+            if (it == LaundryStatus.Selesai && n.completedAt == null) n.completedAt = Clock.nowLabel()
+        }
         log("${n.id} → ${n.laundry.label}", n.branchId, n.id)
         bump()
-        FirebaseCloud.pushNota(n)
     }
 
     fun markLunas(id: String, method: PayMethod = PayMethod.Tunai) {
@@ -572,7 +1004,17 @@ object CuciinStore {
         n.payMethod = method
         log("${n.id} ditandai Lunas · ${method.label}", n.branchId, n.id)
         bump()
-        FirebaseCloud.pushNota(n)
+    }
+
+    fun markPickedUp(id: String): String? {
+        val n = notas.find { it.id == id } ?: return "Nota tidak ditemukan"
+        if (n.laundry != LaundryStatus.Selesai) return "Pesanan belum selesai dikerjakan"
+        if (n.pay != PayStatus.Lunas) return "Lunasi pembayaran sebelum serah terima"
+        if (n.pickedUpAt != null) return "Pesanan sudah diserahkan"
+        n.pickedUpAt = Clock.nowLabel()
+        log("${n.id} diserahkan kepada pelanggan", n.branchId, n.id)
+        bump()
+        return null
     }
 
     fun addLocalProof(id: String, uri: Uri): String? {
@@ -582,25 +1024,27 @@ object CuciinStore {
         n.photos.add(path)
         log("Bukti disimpan di HP: ${path.substringAfterLast('/')}", n.branchId, n.id)
         bump()
-        FirebaseCloud.pushNota(n)
         return path
     }
 
-    fun editStock(product: String, kind: StockKind, qty: Int) {
+    fun editStock(product: String, branchId: String, kind: StockKind, qty: Int, occurredAtMs: Long = Clock.nowMs()) {
         val s = session.value ?: return
         val p = products.find { it.key == product || it.name == product } ?: return
-        val t = Clock.nowMs()
+        if (s.role != Role.Owner && branchId != s.branchId) return
+        val balance = branchStocks.firstOrNull { it.branchId == branchId && it.productKey == p.key }
+            ?: BranchStock(branchId, p.key, 0).also { branchStocks.add(it) }
+        val t = occurredAtMs
         val delta = when (kind) {
-            StockKind.Tambah -> qty.also { p.stock += qty }
-            StockKind.Kurang -> (-qty).also { p.stock = (p.stock - qty).coerceAtLeast(0) }
-            StockKind.Update -> qty.also { p.stock = qty }
+            StockKind.Tambah -> qty.also { balance.stock += qty }
+            StockKind.Kurang -> (-qty).also { balance.stock = (balance.stock - qty).coerceAtLeast(0) }
+            StockKind.Update -> qty.also { balance.stock = qty }
             StockKind.Jual -> -qty
         }
         stockMoves.add(
             0,
-            StockMove(Clock.nowLabel(t), t, product, kind, if (kind == StockKind.Update) qty else delta, s.name, s.branchId, "Edit manual kasir"),
+            StockMove(Clock.nowLabel(t), t, p.key, kind, if (kind == StockKind.Update) qty else delta, s.name, branchId, "Edit manual kasir"),
         )
-        log("Stok $product ${kind.label} $qty → sisa ${p.stock}", s.branchId)
+        log("Stok ${p.name} ${kind.label} $qty → sisa ${balance.stock}", branchId)
         bump()
     }
 
@@ -628,6 +1072,21 @@ object CuciinStore {
         return row
     }
 
+    fun changeMyPassword(currentPassword: String, newPassword: String): String? {
+        val current = session.value ?: return "Silakan masuk kembali"
+        val account = staff.firstOrNull { it.email.equals(current.email, true) } ?: return "Akun tidak ditemukan"
+        if (account.passwordHash.isNotBlank() && !Passwords.matches(currentPassword, account.passwordHash)) return "Kata sandi saat ini tidak sesuai"
+        if (newPassword.length < 8) return "Kata sandi minimal 8 karakter"
+        return updateStaff(account.email, account.name, account.role, account.branchIds, password = newPassword)
+    }
+
+    fun changeMyEmail(newEmail: String, password: String): String? {
+        val current = session.value ?: return "Silakan masuk kembali"
+        val account = staff.firstOrNull { it.email.equals(current.email, true) } ?: return "Akun tidak ditemukan"
+        if (!Passwords.matches(password, account.passwordHash)) return "Kata sandi tidak sesuai"
+        return updateStaff(account.email, account.name, account.role, account.branchIds, newEmail = newEmail)
+    }
+
     fun deleteMyAccount(): Boolean {
         val s = session.value ?: return false
         if (s.role == Role.Owner) return false
@@ -639,27 +1098,9 @@ object CuciinStore {
     }
 
     fun notaText(n: Nota): String {
-        val b = branches.first { it.id == n.branchId }
-        return """
-Cuciin — Nota ${n.id}
-Cabang  ${b.name}
-Lokasi  ${b.location}
-Maps    ${b.mapsQuery}
-Kasir   ${n.kasir}
-Waktu   ${n.createdAt}
-
-${n.customer}
-WA ${n.phone}
-
-${n.items}
-
-Total     ${rp(n.total)}
-Dibayar   ${rp(n.paid)}
-Metode    ${n.payMethod.label}
-Bayar     ${n.pay.label}
-Laundry   ${n.laundry.label}
-Selesai / pickup  ${n.pickupAt}
-        """.trimIndent()
+        val b = branches.firstOrNull { it.id == n.branchId }
+            ?: Branch(n.branchId, n.id.substringBefore('-'), "Cabang ${n.branchId}", "", "")
+        return ReceiptText.format(n, b)
     }
 
     fun waMe(phone: String): String {
