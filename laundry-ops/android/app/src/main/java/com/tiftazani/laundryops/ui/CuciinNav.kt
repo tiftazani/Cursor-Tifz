@@ -1,10 +1,20 @@
 package com.tiftazani.laundryops.ui
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Chat
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Inventory2
@@ -20,6 +30,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -46,8 +57,8 @@ private data class Tab(val route: String, val label: String, val icon: ImageVect
 
 private val tabs = listOf(
     Tab("home", "Antrian", Icons.Outlined.Home) { true },
-    Tab("nota", "Nota", Icons.Outlined.PointOfSale) { it != Role.Supervisor },
-    Tab("wa", "WA", Icons.Outlined.Chat) { it != Role.Supervisor },
+    Tab("nota", "Service", Icons.Outlined.PointOfSale) { it != Role.Supervisor },
+    Tab("wa", "WA", Icons.AutoMirrored.Outlined.Chat) { it != Role.Supervisor },
     Tab("stok", "Stok", Icons.Outlined.Inventory2) { true },
     Tab("more", "Modul", Icons.Outlined.GridView) { true },
 )
@@ -57,36 +68,42 @@ fun CuciinRoot() {
     val nav = rememberNavController()
     val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val tap = com.tiftazani.laundryops.ui.components.rememberTapFeedback()
     val session = store.session.value
     store.revision.intValue
     val ui = rememberUi()
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
-    val showBar = session != null && route in setOf("home", "nota", "wa", "stok", "more")
+    val showBar = session != null && route in setOf("home", "wa", "stok", "more")
+    val mapLink = MapSelection.pendingLink.value
+    LaunchedEffect(mapLink, session?.role) {
+        if (mapLink != null && session?.role == Role.Owner && route != "branches") nav.navigate("branches") { launchSingleTop = true }
+    }
     val visibleTabs = tabs.filter { session != null && it.show(session.role) }
     fun toast(msg: String) { scope.launch { snack.showSnackbar(msg) } }
 
     val navColors = NavigationBarItemDefaults.colors(
-        selectedIconColor = Teal,
+        selectedIconColor = androidx.compose.ui.graphics.Color.White,
         selectedTextColor = Teal,
-        indicatorColor = Teal.copy(alpha = 0.14f),
+        indicatorColor = Teal,
         unselectedIconColor = Muted,
         unselectedTextColor = Muted,
     )
     val railColors = NavigationRailItemDefaults.colors(
-        selectedIconColor = Teal,
+        selectedIconColor = androidx.compose.ui.graphics.Color.White,
         selectedTextColor = Teal,
-        indicatorColor = Teal.copy(alpha = 0.14f),
+        indicatorColor = Teal,
         unselectedIconColor = Muted,
         unselectedTextColor = Muted,
     )
 
     fun go(r: String) {
-        nav.navigate(r) { launchSingleTop = true }
+        tap()
+        nav.navigate(r) { launchSingleTop = true; popUpTo("home") { saveState = true }; restoreState = true }
     }
 
     Row(Modifier.fillMaxSize()) {
         if (showBar && ui.useRail) {
-            NavigationRail(containerColor = Card) {
+            NavigationRail(modifier = Modifier.verticalScroll(rememberScrollState()), containerColor = Card, header = { com.tiftazani.laundryops.ui.components.BrandMark(Modifier.padding(vertical = 16.dp)) }) {
                 visibleTabs.forEach { t ->
                     NavigationRailItem(
                         selected = route == t.route,
@@ -117,34 +134,45 @@ fun CuciinRoot() {
                 }
             },
         ) { pad ->
-            NavHost(
-                nav,
-                startDestination = if (session == null) "login" else "home",
-                modifier = Modifier.padding(pad).fillMaxSize(),
-            ) {
-                composable("login") { LoginScreen(nav, ::toast) }
-                composable("register") { RegisterScreen(nav, ::toast) }
-                composable("pending") { PendingScreen(nav) }
-                composable("home") { HomeScreen(nav) }
-                composable("nota") { NotaScreen(nav, ::toast) }
-                composable("bayar") { BayarScreen(nav, ::toast) }
-                composable("queue/{id}") { e -> QueueDetailScreen(nav, e.arguments?.getString("id") ?: "", ::toast) }
-                composable("wa") { WaListScreen(nav, archive = false) }
-                composable("waArchive") { WaListScreen(nav, archive = true) }
-                composable("stok") { StockScreen(nav, ::toast) }
-                composable("stokEdit") { StockEditScreen(nav, ::toast) }
-                composable("stokHistory") { StockHistoryScreen(nav) }
-                composable("more") { MoreScreen(nav) }
-                composable("analytics") { AnalyticsScreen(nav) }
-                composable("branches") { BranchesScreen(nav, ::toast) }
-                composable("audit") { AuditScreen(nav) }
-                composable("users") { UsersScreen(nav, ::toast) }
-                composable("services") { ServicesScreen(nav, ::toast) }
-                composable("products") { ProductsScreen(nav, ::toast) }
-                composable("versions") { VersionScreen(nav) }
-                composable("cash") { CashScreen(nav, ::toast) }
-                composable("customers") { CustomersScreen(nav, ::toast) }
-                composable("profil") { ProfilScreen(nav, ::toast) }
+            Box(Modifier.padding(pad).fillMaxSize().imePadding(), contentAlignment = Alignment.TopCenter) {
+                NavHost(
+                    nav,
+                    startDestination = if (session == null) "login" else "home",
+                    modifier = Modifier.widthIn(max = 960.dp).fillMaxSize(),
+                    enterTransition = { fadeIn(tween(180)) },
+                    exitTransition = { fadeOut(tween(120)) },
+                    popEnterTransition = { fadeIn(tween(180)) },
+                    popExitTransition = { fadeOut(tween(120)) },
+                ) {
+                    composable("login") { LoginScreen(nav, ::toast) }
+                    composable("register") { RegisterScreen(nav, ::toast) }
+                    composable("pending") { PendingScreen(nav) }
+                    composable("home") { HomeScreen(nav) }
+                    composable("nota") { NotaScreen(nav, ::toast) }
+                    composable("preview") { PreviewScreen(nav, ::toast) }
+                    composable("bayar") { BayarScreen(nav, ::toast) }
+                    composable("queue/{id}") { e -> QueueDetailScreen(nav, e.arguments?.getString("id") ?: "", ::toast) }
+                    composable("queueEdit/{id}") { e -> QueueEditScreen(nav, e.arguments?.getString("id") ?: "", ::toast) }
+                    composable("wa") { WaListScreen(nav, archive = false) }
+                    composable("waArchive") { WaListScreen(nav, archive = true) }
+                    composable("stok") { StockScreen(nav, ::toast) }
+                    composable("stokEdit") { StockEditScreen(nav, ::toast) }
+                    composable("stokHistory") { StockHistoryScreen(nav) }
+                    composable("more") { MoreScreen(nav) }
+                    composable("analytics") { AnalyticsScreen(nav) }
+                    composable("branches") { BranchesScreen(nav, ::toast) }
+                    composable("audit") { AuditScreen(nav) }
+                    composable("users") { UsersScreen(nav, ::toast) }
+                    composable("services") { ServicesScreen(nav, ::toast) }
+                    composable("products") { ProductsScreen(nav, ::toast) }
+                    composable("inventory") { InventoryScreen(nav, ::toast) }
+                    composable("expenses") { ExpensesScreen(nav, ::toast) }
+                    composable("attendance") { AttendanceScreen(nav, ::toast) }
+                    composable("versions") { VersionScreen(nav) }
+                    composable("cash") { CashScreen(nav, ::toast) }
+                    composable("customers") { CustomersScreen(nav, ::toast) }
+                    composable("profil") { ProfilScreen(nav, ::toast) }
+                }
             }
         }
     }

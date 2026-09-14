@@ -1,0 +1,17 @@
+{
+  "name": "cuciin-cloud",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 migrations apply cuciin-db --local",
+    "db:remote": "wrangler d1 migrations apply cuciin-db --remote",
+    "check": "tsc --noEmit && node scripts/validate-schema.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260911.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.131.1"
+  }
+}

@@ -1,6 +1,8 @@
 package com.tiftazani.laundryops
 
 import android.os.Bundle
+import android.content.Intent
+import com.tiftazani.laundryops.ui.MapSelection
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -8,9 +10,33 @@ import com.tiftazani.laundryops.ui.CuciinRoot
 import com.tiftazani.laundryops.ui.theme.CuciinTheme
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) {
+        val locale = java.util.Locale.forLanguageTag("id-ID")
+        java.util.Locale.setDefault(locale)
+        val configuration = android.content.res.Configuration(newBase.resources.configuration).apply { setLocale(locale) }
+        super.attachBaseContext(newBase.createConfigurationContext(configuration))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        captureSharedMap(intent)
         enableEdgeToEdge()
         setContent { CuciinTheme { CuciinRoot() } }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        captureSharedMap(intent)
+    }
+
+    /** Consume once: survives return from Maps, but is not replayed on rotation. */
+    private fun captureSharedMap(sharedIntent: Intent) {
+        MapSelection.receive(sharedIntent)
+        if (sharedIntent.action == Intent.ACTION_SEND) {
+            sharedIntent.action = null
+            sharedIntent.removeExtra(Intent.EXTRA_TEXT)
+            sharedIntent.clipData = null
+        }
     }
 }

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.tiftazani.laundryops.ui.InteractionContractsTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-11T05:10:45" hostname="Tiftas-MacBook-M5-Pro.local" time="0.051">
+  <properties/>
+  <testcase name="existingWorkingStatesBothCompleteInOneStep" classname="com.tiftazani.laundryops.ui.InteractionContractsTest" time="0.008"/>
+  <testcase name="analyticsBuildsRealDailyBarsAndOperationalAlerts" classname="com.tiftazani.laundryops.ui.InteractionContractsTest" time="0.011"/>
+  <testcase name="acceptsSharedMapLinksAndRejectsUntrustedUrls" classname="com.tiftazani.laundryops.ui.InteractionContractsTest" time="0.015"/>
+  <testcase name="dateAndTimeRoundTripPreservesUserSelection" classname="com.tiftazani.laundryops.ui.InteractionContractsTest" time="0.004"/>
+  <testcase name="whatsappReceiptUsesTheNotasBranchAndServiceDates" classname="com.tiftazani.laundryops.ui.InteractionContractsTest" time="0.011"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

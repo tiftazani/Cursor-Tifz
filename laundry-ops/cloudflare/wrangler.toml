@@ -1,0 +1,15 @@
+name = "cuciin-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+workers_dev = true
+preview_urls = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cuciin-db"
+database_id = "7152b13e-f23a-4576-a6bc-f38d67ac2146"
+migrations_dir = "migrations"
+
+[vars]
+ENVIRONMENT = "production"
+FIREBASE_PROJECT_ID = "cuciin-ops-tiftazani"

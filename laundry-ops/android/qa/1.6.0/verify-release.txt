@@ -1,0 +1,5 @@
+package: name='com.tiftazani.laundryops' versionCode='8' versionName='1.6.0' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+PASS: tanda tangan rilis v2; non-debuggable; target SDK; izin minimum; ZIP/ELF 16 KB.
+Pustaka native 64-bit: lib/arm64-v8a/libandroidx.graphics.path.so, lib/x86_64/libandroidx.graphics.path.so
+Signer #1 certificate SHA-256 digest: 3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee
+Pemeriksaan lokal ini bukan sertifikasi Google Play Protect.

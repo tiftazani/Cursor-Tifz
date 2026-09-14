@@ -38,17 +38,17 @@ fun rememberUi(): UiMetrics {
                 w >= 840 -> 28.dp
                 else -> 20.dp
             },
-            gap = if (w < 360) 8.dp else 12.dp,
-            radius = if (w < 360) 18.dp else 24.dp,
+            gap = 12.dp,
+            radius = 22.dp,
             titleSp = when {
                 w < 340 -> 22.sp
                 h < 640 -> 24.sp
-                else -> 28.sp
+                else -> 26.sp
             },
             heroSp = when {
                 w < 340 -> 24.sp
                 h < 640 -> 28.sp
-                else -> 34.sp
+                else -> 30.sp
             },
             twoPane = w >= 840,
         )
