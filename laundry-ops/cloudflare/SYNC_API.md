@@ -35,7 +35,7 @@ Kontrak ini dipakai Android setelah pengguna memperoleh Firebase ID token. Semua
 }
 ```
 
-Batch dapat berhasil sebagian. Android hanya boleh menghapus command yang ada di `acknowledgedCommandIds`. Result yang ditolak memuat `status` HTTP semantik dan `error`, lalu tetap berada di outbox untuk diselesaikan atau ditandai perlu tindakan pengguna.
+Batch dapat berhasil sebagian. Android hanya boleh menghapus command yang ada di `acknowledgedCommandIds`. Setelah satu command gagal, command berikutnya pada batch dikembalikan sebagai `retryable` agar efek lanjutan tidak mendahului dependensinya. Kesalahan validasi, hak akses, atau konflik data memakai `status: "rejected"` dan dapat dipindahkan ke daftar konflik. Gangguan D1/Worker sementara memakai `status: "retryable"` dengan kode 5xx; command tetap berada di outbox dan dicoba lagi, bukan dipindahkan ke dead-letter.
 
 Entity yang diterima adalah `branch`, `staff`, `customer`, `service`, `product`, `branchStock`, `inventory`, `expense`, `nota`, `stockMove`, `audit`, `cashClose`, dan `attendance`, dengan operasi `upsert` atau `delete`. Payload memakai nama field Kotlin secara persis. Data `passwordHash` dibuang oleh server dan tidak dimasukkan ke journal.
 
@@ -45,7 +45,12 @@ Entity yang diterima adalah `branch`, `staff`, `customer`, `service`, `product`,
 - `Kurang` dan `Jual`: server mengurangi `abs(qty)`.
 - `Update`: server memakai `balanceAfter`, atau `qty` bila field itu tidak tersedia.
 - saldo negatif membatalkan command dengan konflik 409.
-- server mengirim delta `stockMove` dan `branchStock` kanonis agar semua HP menuju saldo yang sama.
+- server mengembalikan `stockMove` dengan `syncId` yang sama dengan `entityId`, actor dari sesi terverifikasi, dan saldo setelah mutasi. Android memakai `syncId` sebagai identitas stabil sehingga canonicalization tidak menduplikasi riwayat. Saldo kanonis juga dikirim melalui delta `branchStock`.
+- `stockMove` kompensasi memakai `requiresDeletedNota=true` dan baru diterima bila Nota sudah tidak ada serta tombstone penghapusannya berada pada cabang yang sama; riwayat disimpan tanpa mengubah stok untuk kedua kalinya.
+
+Payload `audit` juga memperoleh `syncId` stabil. Nama actor pada delta berasal dari sesi terverifikasi, dan email actor dicatat pada kolom relasional `audit_logs.actor` serta metadata `sync_changes.actor_email`.
+
+Tombstone penghapusan Nota bersifat permanen. Upsert offline untuk ID yang pernah dihapus ditolak dengan konflik 409 agar data lama tidak menghidupkan Nota dan mengurangi stok kembali. Pemulihan hanya dapat ditambahkan kelak sebagai command Owner yang eksplisit.
 
 Untuk integrasi baru yang tidak berasal dari proyeksi Snapshot, endpoint yang sama juga menerima domain command `type`: `order.create`, `order.update`, `order.delete`, `order.status`, `order.payment`, `order.handover`, dan `stock.batch`. Domain command mengunci harga, kasir, handler, komisi, pembayaran, dan saldo di transaksi D1.
 
@@ -59,6 +64,7 @@ Untuk integrasi baru yang tidak berasal dari proyeksi Snapshot, endpoint yang sa
   "nextRevision": 1844,
   "latestRevision": 1844,
   "hasMore": false,
+  "scopeKey": "kasir:melati",
   "changes": [
     {
       "revision": 1843,
@@ -72,7 +78,7 @@ Untuk integrasi baru yang tidak berasal dari proyeksi Snapshot, endpoint yang sa
 }
 ```
 
-Simpan `revision` hanya setelah seluruh perubahan pada halaman berhasil diterapkan ke database lokal. Owner menerima semua cabang. Role lain hanya menerima data global dan cabang yang tercantum di `staff_branches`.
+Simpan `revision` hanya setelah seluruh perubahan pada halaman berhasil diterapkan ke database lokal. Sebelum menulis snapshot lokal, simpan pending-remote marker; hapus marker setelah snapshot dan cursor selesai. Owner menerima semua cabang. Role lain hanya menerima data global dan cabang yang tercantum di `staff_branches`. `scopeKey` juga tersedia pada header snapshot `X-Cuciin-Scope`; jika nilainya berubah, kosongkan cursor dan lakukan bootstrap ulang agar riwayat cabang yang baru diberikan ikut masuk.
 
 ## Otorisasi server
 
@@ -84,4 +90,4 @@ Simpan `revision` hanya setelah seluruh perubahan pada halaman berhasil diterapk
 
 ## Kompatibilitas dan rollout
 
-`GET/PUT /api/cuciin` dan `/v1/snapshot` tetap tersedia selama migrasi. APK multi-writer harus memakai command/delta; snapshot PUT tidak boleh dijadikan jalur tulis utama setelah rollout. Urutan deploy: migrasi `0003_command_sync.sql`, Worker, lalu APK. Uji staging dengan dua HP sebelum produksi.
+`GET /api/cuciin` dan `GET /v1/snapshot` tetap tersedia untuk bootstrap. Snapshot yang dikembalikan sudah memuat seluruh journal sampai revision pada header `X-Cuciin-Revision`. `PUT` snapshot hanya menerima secret bootstrap privat ketika journal masih kosong; setelah command sync aktif, endpoint menolak bootstrap PUT dengan `409`. Aplikasi lama tanpa secret mendapat `426` dan harus diperbarui agar tidak menimpa command multi-perangkat. Urutan deploy: migrasi `0003_command_sync.sql`, Worker, lalu APK. Uji staging dengan dua HP sebelum produksi.

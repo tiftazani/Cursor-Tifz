@@ -13,6 +13,7 @@ Backend: Cloudflare Worker + D1, autentikasi Firebase Email/Password
 Endpoint produksi: https://cuciin-api.tiftazani-cuciin.workers.dev
 
 Sumber data utama adalah D1. Android wajib local-first: perubahan disimpan lokal dan masuk persistent outbox, dikirim sebagai command idempoten, lalu mengambil delta berdasarkan revision. Foto bukti hanya berada di perangkat dan tidak boleh dikirim ke cloud.
+Penerapan delta memakai pending-remote marker yang persisten; jangan menulis snapshot lokal sebelum marker tersimpan atau memajukan cursor sebelum snapshot lokal selesai. Scope role+cabang berasal dari server; perubahan scope wajib bootstrap ulang sebelum cursor dilanjutkan.
 
 Peran:
 - Owner: semua cabang dan modul; boleh mengganti petugas Service.
@@ -28,6 +29,7 @@ Aturan yang tidak boleh dilanggar:
 - Stok, inventory, biaya, absensi, nomor Service, laporan, dan akses operasional harus terkait cabang.
 - Harga tiap baris Service boleh dikoreksi dan perubahan masuk audit trail.
 - Jangan force-push. Jangan menimpa perubahan agen lain. Periksa git status dan diff sebelum mengubah file.
+- Jangan menghidupkan kembali PUT snapshot setelah journal command aktif. Jangan menjalankan kompensasi stok penghapusan sebelum command penghapusan Service berhasil.
 
 Area kode utama:
 - UI: laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/

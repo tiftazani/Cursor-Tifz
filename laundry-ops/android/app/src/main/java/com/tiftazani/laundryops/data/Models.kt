@@ -277,6 +277,9 @@ data class StockMove(
     val notaId: String? = null,
     /** Saldo setelah mutasi; null untuk data lama yang belum menyimpan snapshot saldo. */
     val balanceAfter: Int? = null,
+    val syncId: String = "",
+    /** Hanya true untuk stok yang dikembalikan setelah penghapusan Service berhasil di server. */
+    val requiresDeletedNota: Boolean = false,
 )
 
 @Serializable
@@ -287,6 +290,7 @@ data class AuditRow(
     val branchId: String,
     val action: String,
     val notaId: String? = null,
+    val syncId: String = "",
 )
 
 @Serializable

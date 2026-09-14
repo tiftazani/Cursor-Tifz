@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import java.util.UUID
 
 object CuciinStore {
     val ownerName = "Tiftazani Khara"
@@ -50,15 +51,17 @@ object CuciinStore {
         LocalJson.init(application)
         CloudSync.init(application)
         val snap = LocalJson.load()
-        if (snap == null || snap.staff.isEmpty()) {
+        val loadedPersistedData = snap != null && snap.staff.isNotEmpty()
+        val preserveLocalOnBootstrap = loadedPersistedData && !isPristineSeed(snap!!)
+        if (!loadedPersistedData) {
             applySeed()
             persist()
         } else {
-            applySnapshot(snap)
+            applySnapshot(snap!!)
             localUpdatedAt = snap.updatedAt
         }
         ready = true
-        CloudSync.initializeLocalState(cloudSnapshot())
+        CloudSync.initializeLocalState(cloudSnapshot(), preserveLocalOnBootstrap)?.let(::applyRecoveredCloud)
         revision.intValue++
         CloudSync.start()
     }
@@ -118,8 +121,15 @@ object CuciinStore {
         attendance.clear()
         val t = Clock.nowMs()
         localUpdatedAt = t
-        audit.add(AuditRow(Clock.nowLabel(t), t, ownerName, "melati", "Data awal: 2 cabang, antrian kosong. Isi stok & pelanggan sebelum nota pertama.", null))
+        audit.add(AuditRow(Clock.nowLabel(t), t, ownerName, "melati", "Data awal: 2 cabang, antrian kosong. Isi stok & pelanggan sebelum nota pertama.", null, syncEventId()))
     }
+
+    private fun isPristineSeed(snapshot: Snapshot): Boolean =
+        snapshot.customers.isEmpty() && snapshot.notas.isEmpty() && snapshot.deletedNotaIds.isEmpty() &&
+            snapshot.stockMoves.isEmpty() && snapshot.inventory.isEmpty() && snapshot.expenses.isEmpty() &&
+            snapshot.cashCloses.isEmpty() && snapshot.attendance.isEmpty() &&
+            snapshot.branchStocks.all { it.stock == 0 } &&
+            snapshot.audit.all { it.action.startsWith("Data awal:") }
 
     private fun applySnapshot(s: Snapshot) {
         fun <T> fill(dest: MutableList<T>, src: List<T>) {
@@ -164,7 +174,7 @@ object CuciinStore {
         fill(services, s.services)
         ensureServiceDefaults()
         fill(products, s.products)
-        if (s.branchStocks.isNotEmpty()) fill(branchStocks, s.branchStocks)
+        fill(branchStocks, s.branchStocks)
         fill(inventory, s.inventory)
         fill(expenses, s.expenses)
         val localPhotos = notas.associate { it.id to it.photos.toMutableList() }
@@ -178,7 +188,7 @@ object CuciinStore {
     }
 
     fun applyCloud(s: Snapshot) {
-        if (s.updatedAt < localUpdatedAt) return
+        if (s.updatedAt < localUpdatedAt && !CloudSync.hasPreparedRemote()) return
         if (s.staff.isEmpty() && branches.isNotEmpty()) {
             CloudSync.push(cloudSnapshot())
             revision.intValue++
@@ -190,6 +200,19 @@ object CuciinStore {
             localUpdatedAt = s.updatedAt
             persist()
             CloudSync.acceptRemoteSnapshot(cloudSnapshot())
+            revision.intValue++
+        } finally {
+            applyingCloud = false
+        }
+    }
+
+    private fun applyRecoveredCloud(s: Snapshot) {
+        applyingCloud = true
+        try {
+            applyBusiness(s)
+            localUpdatedAt = maxOf(localUpdatedAt, s.updatedAt)
+            persist()
+            CloudSync.completeRecoveredRemote(cloudSnapshot())
             revision.intValue++
         } finally {
             applyingCloud = false
@@ -233,7 +256,7 @@ object CuciinStore {
 
     private fun bump() {
         revision.intValue++
-        localUpdatedAt = Clock.nowMs()
+        localUpdatedAt = maxOf(Clock.nowMs(), localUpdatedAt + 1)
         persist()
         if (!applyingCloud) CloudSync.push(cloudSnapshot())
     }
@@ -246,7 +269,7 @@ object CuciinStore {
 
     private fun log(action: String, branchId: String, notaId: String? = null): AuditRow {
         val t = Clock.nowMs()
-        val row = AuditRow(Clock.nowLabel(t), t, session.value?.name ?: ownerName, branchId, action, notaId)
+        val row = AuditRow(Clock.nowLabel(t), t, session.value?.name ?: ownerName, branchId, action, notaId, syncEventId())
         audit.add(0, row)
         return row
     }
@@ -876,7 +899,7 @@ object CuciinStore {
             }
             stockMoves.add(
                 0,
-                StockMove(Clock.nowLabel(t), t, line.service.name, StockKind.Jual, -qty, s.name, branchId, "Jual via nota", nota.id, balanceAfter),
+                StockMove(Clock.nowLabel(t), t, line.service.name, StockKind.Jual, -qty, s.name, branchId, "Jual via nota", nota.id, balanceAfter, syncEventId()),
             )
         }
         log("Nota ${nota.id} disimpan · ${nota.pay.label} · ${method.label}", branchId, nota.id)
@@ -935,7 +958,7 @@ object CuciinStore {
                     StockMove(
                         Clock.nowLabel(now), now, product.name,
                         if (delta > 0) StockKind.Tambah else StockKind.Kurang,
-                        delta, s.name, old.branchId, "Koreksi Service $id", id, balance.stock,
+                        delta, s.name, old.branchId, "Koreksi Service $id", id, balance.stock, syncEventId(),
                     ),
                 )
             }
@@ -986,7 +1009,7 @@ object CuciinStore {
             val balance = branchStocks.firstOrNull { it.branchId == old.branchId && it.productKey == product.key }
                 ?: BranchStock(old.branchId, product.key, 0).also { branchStocks.add(it) }
             balance.stock += qty
-            stockMoves.add(0, StockMove(Clock.nowLabel(now), now, product.name, StockKind.Tambah, qty, s.name, old.branchId, "Service $id dihapus", id, balance.stock))
+            stockMoves.add(0, StockMove(Clock.nowLabel(now), now, product.name, StockKind.Tambah, qty, s.name, old.branchId, "Service $id dihapus", id, balance.stock, syncEventId(), requiresDeletedNota = true))
         }
         notas.removeAll { it.id == id }
         if (id !in deletedNotaIds) deletedNotaIds.add(id)
@@ -1065,13 +1088,15 @@ object CuciinStore {
                 StockKind.Update -> qty.also { balance.stock = qty }
                 StockKind.Jual -> -qty
             }
-            stockMoves.add(0, StockMove(Clock.nowLabel(t), t, p.key, kind, if (kind == StockKind.Update) qty else delta, s.name, branchId, "Pencatatan stok massal", balanceAfter = balance.stock))
+            stockMoves.add(0, StockMove(Clock.nowLabel(t), t, p.key, kind, if (kind == StockKind.Update) qty else delta, s.name, branchId, "Pencatatan stok massal", balanceAfter = balance.stock, syncId = syncEventId()))
             log("Stok ${p.name} ${kind.label} $qty → sisa ${balance.stock}", branchId)
             saved++
         }
         if (saved > 0) bump()
         return saved
     }
+
+    private fun syncEventId(): String = UUID.randomUUID().toString()
 
     fun closeCash(): CashClose {
         val s = session.value!!

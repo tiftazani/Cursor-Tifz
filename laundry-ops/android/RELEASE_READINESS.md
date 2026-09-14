@@ -4,10 +4,10 @@ Status: kandidat rilis operasional yang sudah lulus pemeriksaan kode, build, mig
 
 ## Bukti verifikasi kandidat
 
-- Android: 22 unit test lulus, lint debug/rilis lulus, APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
+- Android: 37 unit test debug dan 37 unit test rilis lulus, lint debug/rilis lulus, APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
 - APK rilis: non-debuggable, application ID `com.tiftazani.laundryops`, versionCode `15`, versionName `1.9.0`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB.
 - SHA-256 sertifikat rilis cocok dengan fingerprint yang dicatat: `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`.
-- Cloudflare: migrasi `0003_command_sync.sql` sudah diterapkan ke D1 produksi dan Worker versi `c3e454b5-f655-45d1-95b1-95480bd0967f` sudah aktif.
+- Cloudflare: migrasi `0003_command_sync.sql` sudah diterapkan ke D1 produksi dan Worker versi `e442bb2c-259f-47eb-afc4-c4fe8b4e814d` sudah aktif.
 - Health produksi mengembalikan database `ready`. Uji command pelanggan membuktikan retry command yang sama tidak menggandakan mutasi; penghapusan dan delta revision juga berhasil.
 - Backup sebelum migrasi sudah diuji dengan `PRAGMA integrity_check = ok`. Backup harian terenkripsi belum aktif sampai Owner mengisi secret GitHub Actions.
 - Checksum APK/AAB kandidat dicatat pada `laundry-ops/releases/1.9.0-candidate/SHA256SUMS`.
@@ -22,6 +22,8 @@ Status: kandidat rilis operasional yang sudah lulus pemeriksaan kode, build, mig
 - HTTPS wajib, backup Android dinonaktifkan, FileProvider tidak diekspor dan hanya membagikan direktori bukti/ekspor. Tidak meminta izin SMS, aksesibilitas, kontak, atau instal aplikasi.
 - Path dan berkas foto bukti dikeluarkan dari snapshot cloud; sinkronisasi mempertahankan foto lokal yang ada pada masing-masing HP.
 - Penyimpanan bersifat local-first: perubahan ditulis ke file lokal atomik dan persistent outbox sebelum dikirim. Command baru dihapus setelah acknowledgement, retry mempertahankan ID yang sama, dan perangkat mengambil delta berurutan dengan pagination revision.
+- Delta cloud diterapkan dengan pending-remote marker persisten. Restart di tengah penerapan akan menyelesaikan snapshot dan cursor yang sama, bukan mengirim delta server kembali sebagai perubahan HP.
+- Server mengirim scope role+cabang. Perubahan penugasan cabang memaksa bootstrap ulang; Service memakai versi monoton dan kompensasi stok menunggu tombstone penghapusan.
 - Sinkronisasi Firebase dimulai setelah autentikasi berhasil dan listener dihentikan saat pengguna logout.
 - Kata sandi lokal memakai PBKDF2-HMAC-SHA256 dengan salt acak. Hash lama dimigrasikan setelah login valid; snapshot server dan ekspor tidak memuat hash kata sandi.
 
@@ -41,7 +43,7 @@ Cloudflare Workers + D1 dapat dimulai dari paket gratis dan dinaikkan ke paket b
 
 Worker memverifikasi Firebase ID token menggunakan kunci publik Google, mendukung secret bootstrap melalui Cloudflare Secrets, memakai query terparameter, dan tidak menyimpan kata sandi. Command per entitas dicatat idempoten, delta dibatasi cabang, koreksi Service memakai optimistic concurrency, dan stok dijaga nonnegatif secara atomik. Foto bukti tetap disimpan di perangkat. QRIS tetap pencatatan metode pembayaran.
 
-Resource produksi aktif: Worker `cuciin-api`, D1 `cuciin-db` di APAC, dan proyek Firebase `cuciin-ops-tiftazani`. Petunjuk migrasi, deploy, pemulihan, dan build ada di `laundry-ops/cloudflare/README.md`.
+Resource produksi aktif: Worker `cuciin-api` versi `e442bb2c-259f-47eb-afc4-c4fe8b4e814d`, D1 `cuciin-db` di APAC, dan proyek Firebase `cuciin-ops-tiftazani`. Health check produksi lulus pada 15 September 2026 dengan revision 2; snapshot privat mengembalikan `X-Cuciin-Scope: owner`. Petunjuk migrasi, deploy, pemulihan, dan build ada di `laundry-ops/cloudflare/README.md`.
 
 ## Build ulang
 

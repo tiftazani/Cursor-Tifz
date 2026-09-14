@@ -28,6 +28,8 @@ object VersionHistory {
                 "Build rilis gagal aman bila Firebase tidak tersedia dan layar login tidak lagi menampilkan kata sandi awal.",
                 "CI memeriksa Android dan Worker; health check serta backup D1 terenkripsi disiapkan untuk operasi harian.",
                 "Cabang yang memiliki riwayat operasional dilindungi dari penghapusan agar laporan lama tetap utuh.",
+                "Pemulihan sinkronisasi dua fase mencegah delta cloud terkirim balik sebagai edit lokal setelah aplikasi berhenti mendadak.",
+                "Perubahan akses cabang memicu bootstrap ulang; versi Service selalu naik dan kompensasi stok menunggu penghapusan berhasil.",
             ),
         ),
         AppRelease(

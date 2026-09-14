@@ -15,6 +15,10 @@ Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `ve
 - CI Android menjalankan unit test, lint, dan build; Worker memiliki check tersendiri. Health check produksi dan backup D1 harian terenkripsi beserta restore integrity check ditambahkan.
 - Runbook 20 cabang, kebijakan data, dan konteks siap salin untuk beberapa coding agent ditambahkan.
 - Cabang yang sudah mempunyai riwayat Service atau data operasional tidak dapat dihapus agar laporan historis dan foreign key tetap utuh.
+- Penerapan delta cloud memakai penanda pemulihan dua fase. Jika aplikasi berhenti setelah data lokal ditulis tetapi sebelum cursor disimpan, restart menyelesaikan delta yang sama tanpa mengirimkannya kembali sebagai edit lokal.
+- Perubahan cakupan cabang terdeteksi melalui scope sinkronisasi dan memicu bootstrap ulang, sehingga cabang yang baru ditugaskan tidak kehilangan riwayat lama.
+- Versi optimistic concurrency Service selalu naik meskipun dua koreksi terjadi pada milidetik yang sama. Batch berhenti setelah command gagal agar kompensasi stok tidak berjalan bila penghapusan Service ditolak.
+- `syncId` riwayat stok dan audit dibuat unik serta divalidasi server. Bootstrap snapshot lama otomatis ditutup setelah journal command aktif.
 
 ## 1.8.2 — 14 Sep 2026 (versionCode 14)
 

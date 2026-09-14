@@ -8,7 +8,9 @@ import com.tiftazani.laundryops.BuildConfig
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /** Local-first sync with a durable command outbox and revision-based deltas. */
 object CloudSync {
@@ -35,6 +37,7 @@ object CloudSync {
     private var syncing = false
     private var rerunRequested = false
     private var latestSnapshot: Snapshot? = null
+    private var hadPersistedLocalData = false
     private var persistence: SyncPersistence? = null
     private var outbox = SyncOutbox()
     private val endpointConfigured: Boolean get() = BuildConfig.CUCIIN_CLOUD_URL.isNotBlank()
@@ -47,9 +50,24 @@ object CloudSync {
         updateRejectedStatus()
     }
 
-    @Synchronized fun initializeLocalState(snapshot: Snapshot) {
+    @Synchronized fun initializeLocalState(snapshot: Snapshot, hadPersistedData: Boolean): Snapshot? {
         latestSnapshot = snapshot
-        if (outbox.initialize(SyncProjection.entities(snapshot))) saveState()
+        hadPersistedLocalData = hadPersistedData
+        outbox.state.pendingRemote?.let { prepared ->
+            latestSnapshot = prepared.snapshot
+            return prepared.snapshot
+        }
+        val entities = SyncProjection.entities(snapshot)
+        val session = CuciinStore.session.value
+        outbox.restoreLocal(
+            entities,
+            snapshot.updatedAt.takeIf { it > 0 } ?: Clock.nowMs(),
+            session?.branchId,
+            allowedSyncBranches(session, CuciinStore.staff),
+            actorRole = session?.role,
+        )
+        saveState()
+        return null
     }
 
     fun onAuthenticated() { if (endpointConfigured) synchronize() }
@@ -106,7 +124,7 @@ object CloudSync {
     @Synchronized fun push(snapshot: Snapshot) {
         latestSnapshot = snapshot
         val session = CuciinStore.session.value
-        val allowed = session?.takeIf { it.role != Role.Owner }?.let { setOf(it.branchId) }
+        val allowed = allowedSyncBranches(session, CuciinStore.staff)
         outbox.enqueue(
             SyncProjection.entities(snapshot),
             snapshot.updatedAt.takeIf { it > 0 } ?: Clock.nowMs(),
@@ -131,8 +149,15 @@ object CloudSync {
 
     @Synchronized fun acceptRemoteSnapshot(snapshot: Snapshot) {
         latestSnapshot = snapshot
-        if (outbox.acceptRemote(SyncProjection.entities(snapshot), outbox.state.revision)) saveState()
+        if (outbox.completePreparedRemote() || outbox.acceptRemote(SyncProjection.entities(snapshot), outbox.state.revision)) saveState()
     }
+
+    @Synchronized fun completeRecoveredRemote(snapshot: Snapshot) {
+        latestSnapshot = snapshot
+        if (outbox.completePreparedRemote()) saveState()
+    }
+
+    @Synchronized fun hasPreparedRemote(): Boolean = outbox.state.pendingRemote != null
 
     private fun synchronize() {
         if (!endpointConfigured || (FirebaseCloud.enabled && !FirebaseCloud.authenticated)) return
@@ -164,7 +189,7 @@ object CloudSync {
 
     private fun flushCommands(): EndpointResult {
         while (true) {
-            val batch = pendingCommands().take(BATCH_LIMIT)
+            val batch = synchronized(this) { outbox.nextBatch(BATCH_LIMIT) }
             if (batch.isEmpty()) return EndpointResult.OK
             val conn = open("POST", apiUrl("/v1/sync/commands"))
             conn.doOutput = true
@@ -192,8 +217,11 @@ object CloudSync {
             }
             val acknowledged = response.acknowledged()
             val rejected = response.rejected()
+            val updatedAtByCommand = response.results.mapNotNull { result ->
+                result.updatedAt?.let { result.commandId to it }
+            }.toMap()
             val moved = synchronized(this) {
-                val acked = outbox.acknowledge(acknowledged, response.revision)
+                val acked = outbox.acknowledge(acknowledged, response.revision, updatedAtByCommand)
                 val dead = outbox.reject(rejected, Clock.nowMs())
                 if (acked > 0 || dead > 0) saveState()
                 acked + dead
@@ -205,9 +233,11 @@ object CloudSync {
 
     private fun pullChanges(): EndpointResult {
         var after = synchronized(this) { outbox.state.revision }
-        var current = synchronized(this) { latestSnapshot } ?: return EndpointResult.OK
+        val base = synchronized(this) { latestSnapshot } ?: return EndpointResult.OK
+        val expectedGeneration = synchronized(this) { outbox.state.generation }
+        var current = base
         val collected = mutableListOf<SyncChange>()
-        val allowed = CuciinStore.session.value?.takeIf { it.role != Role.Owner }?.let { setOf(it.branchId) }
+        var responseScope = synchronized(this) { outbox.state.scopeKey }
         while (true) {
             val conn = open("GET", apiUrl("/v1/sync/changes?after=$after"))
             val code = conn.responseCode
@@ -218,21 +248,41 @@ object CloudSync {
             val response = runCatching { LocalJson.json.decodeFromString(SyncChangesResponse.serializer(), body) }.getOrElse {
                 markOffline("Data perubahan server tidak valid", it); return EndpointResult.FAILED
             }
-            val safe = response.changes.filter { it.branchId == null || allowed == null || it.branchId in allowed }
-            collected += safe
-            current = SyncProjection.apply(current, safe, maxOf(current.updatedAt + 1, Clock.nowMs()))
+            val knownScope = synchronized(this) { outbox.state.scopeKey }
+            if (response.scopeKey.isNotBlank() && response.scopeKey != knownScope) {
+                val reset = synchronized(this) {
+                    outbox.resetForScope(response.scopeKey).also { if (it) { hadPersistedLocalData = false; saveState() } }
+                }
+                return if (reset) bootstrapSnapshot() else EndpointResult.FAILED
+            }
+            if (response.scopeKey.isNotBlank()) responseScope = response.scopeKey
+            collected += response.changes
+            current = SyncProjection.apply(current, response.changes, maxOf(current.updatedAt + 1, Clock.nowMs()))
             val next = response.cursor()
             if (!response.hasMore) { after = maxOf(after, next); break }
             if (next <= after) { markOffline("Cursor sinkronisasi server tidak maju"); return EndpointResult.FAILED }
             after = next
         }
-        synchronized(this) {
-            latestSnapshot = current
-            outbox.acceptRemote(SyncProjection.entities(current), after)
-            saveState()
+        val remote = current
+        val revision = after
+        main.post {
+            val accepted = synchronized(this) { outbox.canAcceptRemote(expectedGeneration) }
+            if (accepted) {
+                if (collected.isNotEmpty()) {
+                    val prepared = synchronized(this) {
+                        outbox.prepareRemote(remote, SyncProjection.entities(remote), revision, expectedGeneration, responseScope)
+                            .also { if (it) saveState() }
+                    }
+                    if (prepared) CuciinStore.applyCloud(remote) else synchronize()
+                } else {
+                    synchronized(this) {
+                        outbox.acceptRemote(SyncProjection.entities(remote), revision, responseScope)
+                        saveState()
+                    }
+                    CuciinStore.touchStatus()
+                }
+            } else synchronize()
         }
-        if (collected.isNotEmpty()) main.post { CuciinStore.applyCloud(current) }
-        else main.post { CuciinStore.touchStatus() }
         markOnline()
         return EndpointResult.OK
     }
@@ -241,25 +291,67 @@ object CloudSync {
         val conn = open("GET")
         val code = conn.responseCode
         val body = readBody(conn, code)
+        val remoteRevision = conn.getHeaderField("X-Cuciin-Revision")?.toLongOrNull()?.coerceAtLeast(0) ?: 0
+        val remoteScope = conn.getHeaderField("X-Cuciin-Scope").orEmpty()
         conn.disconnect()
         if (code !in 200..299 || body.isBlank()) { markOffline("Bootstrap database gagal ($code)"); return EndpointResult.FAILED }
         val remote = runCatching { LocalJson.json.decodeFromString(Snapshot.serializer(), body) }.getOrElse {
             markOffline("Snapshot bootstrap tidak valid", it); return EndpointResult.FAILED
         }
-        val local = synchronized(this) { latestSnapshot } ?: return EndpointResult.FAILED
-        val canonical = remote.copy(updatedAt = maxOf(remote.updatedAt, local.updatedAt + 1, Clock.nowMs()))
-        synchronized(this) {
-            if (remote.staff.isEmpty()) {
-                outbox.beginFromEmptyRemote()
-                outbox.enqueue(SyncProjection.entities(local), Clock.nowMs(), CuciinStore.session.value?.branchId, null)
-            } else {
-                latestSnapshot = canonical
-                outbox.completeBootstrap(SyncProjection.entities(canonical))
+        val completed = CountDownLatch(1)
+        var result = EndpointResult.FAILED
+        main.post {
+            val local = synchronized(this) { latestSnapshot }
+            if (local != null) {
+                if (synchronized(this) { outbox.state.pending.isNotEmpty() }) {
+                    result = EndpointResult.OK
+                    completed.countDown()
+                    return@post
+                }
+                if (remote.staff.isEmpty()) {
+                    synchronized(this) {
+                        val session = CuciinStore.session.value
+                        outbox.beginFromEmptyRemote(remoteScope)
+                        outbox.enqueue(
+                            SyncProjection.entities(local), Clock.nowMs(), session?.branchId,
+                            allowedSyncBranches(session, CuciinStore.staff), session?.role,
+                        )
+                        saveState()
+                    }
+                } else {
+                    val canonical = SyncProjection.bootstrapSnapshot(
+                        remote,
+                        local,
+                        hadPersistedLocalData,
+                        maxOf(remote.updatedAt, local.updatedAt + 1, Clock.nowMs()),
+                    )
+                    synchronized(this) {
+                        val session = CuciinStore.session.value
+                        latestSnapshot = canonical
+                        val remoteEntities = SyncProjection.entities(remote)
+                        val canonicalEntities = SyncProjection.entities(canonical)
+                        if (remoteEntities == canonicalEntities) {
+                            outbox.prepareBootstrapRemote(canonical, canonicalEntities, remoteRevision, remoteScope)
+                        } else {
+                            outbox.reconcileBootstrap(
+                                remoteEntities, canonicalEntities, remoteRevision, Clock.nowMs(),
+                                session?.branchId, allowedSyncBranches(session, CuciinStore.staff),
+                                session?.role, remoteScope,
+                            )
+                        }
+                        saveState()
+                    }
+                    CuciinStore.applyCloud(canonical)
+                }
+                result = EndpointResult.OK
             }
-            saveState()
+            completed.countDown()
         }
-        if (remote.staff.isNotEmpty()) main.post { CuciinStore.applyCloud(canonical) }
-        return EndpointResult.OK
+        if (!completed.await(10, TimeUnit.SECONDS)) {
+            markOffline("Bootstrap database melewati batas waktu")
+            return EndpointResult.FAILED
+        }
+        return result
     }
 
     private fun legacyPushThenPull(): EndpointResult {

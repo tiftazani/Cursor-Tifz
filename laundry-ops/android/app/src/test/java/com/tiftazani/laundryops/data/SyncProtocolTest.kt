@@ -3,6 +3,7 @@ package com.tiftazani.laundryops.data
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -33,7 +34,7 @@ class SyncProtocolTest {
         assertEquals(1, outbox.state.pending.size)
         assertEquals(1, outbox.acknowledge(setOf("cmd-1"), revision = 9))
         assertTrue(outbox.state.pending.isEmpty())
-        assertEquals(9, outbox.state.revision)
+        assertEquals(0, outbox.state.revision)
     }
 
     @Test fun nonOwnerCannotQueueAnotherBranchMutation() {
@@ -123,7 +124,7 @@ class SyncProtocolTest {
         val restored = LocalJson.json.decodeFromString(SyncClientState.serializer(), encoded)
         assertEquals("409 · data berubah di perangkat lain", restored.rejected.single().reason)
         assertEquals(99, restored.rejected.single().rejectedAt)
-        assertEquals(7, restored.revision)
+        assertEquals(0, restored.revision)
     }
 
     @Test fun supervisorStatusMutationIsExplicitAndPhotoPathsNeverEnterProjection() {
@@ -145,5 +146,199 @@ class SyncProtocolTest {
         ) { "status-command" }.single()
         assertEquals("\"status\"", command.payload.jsonObject["syncIntent"].toString())
         assertEquals(21L, command.expectedUpdatedAt)
+    }
+
+    @Test fun bootstrapPreservesLocalOverridesAndImportsRemoteOnlyEntities() {
+        val remote = Snapshot(
+            branches = listOf(Branch("melati", "MEL", "Nama server", "", "")),
+            customers = listOf(Customer("server-only", "Server", "0811", "")),
+            notas = listOf(
+                Nota("deleted-local", "melati", "Rina", "Pelanggan", "0812", "Cuci", 10_000, 0, PayStatus.Belum, LaundryStatus.Masuk, "hari ini", 1, "besok", false),
+            ),
+            updatedAt = 100,
+        )
+        val local = Snapshot(
+            branches = listOf(Branch("melati", "MEL", "Edit lokal", "", "")),
+            deletedNotaIds = listOf("deleted-local"),
+            updatedAt = 200,
+        )
+        val merged = SyncProjection.reconcileBootstrap(remote, local, 201)
+        assertEquals("Edit lokal", merged.branches.single().name)
+        assertEquals("Server", merged.customers.single().name)
+        assertTrue(merged.notas.isEmpty())
+
+        val outbox = SyncOutbox().also { it.initialize(SyncProjection.entities(local)) }
+        var sequence = 0
+        val commands = outbox.reconcileBootstrap(
+            SyncProjection.entities(remote), SyncProjection.entities(merged), 12, 201, "melati", null,
+        ) { "bootstrap-${sequence++}" }
+        assertTrue(outbox.state.bootstrapped)
+        assertEquals(12, outbox.state.revision)
+        assertTrue(commands.any { it.entityType == "branch" && it.operation == "upsert" })
+        assertTrue(commands.any { it.entityType == "nota" && it.operation == "delete" })
+        assertFalse(commands.any { it.entityType == "customer" })
+    }
+
+    @Test fun freshInstallSeedDoesNotOverwriteExistingServerData() {
+        val remote = Snapshot(branches = listOf(Branch("remote", "REM", "Cabang server", "", "")), updatedAt = 50)
+        val seed = Snapshot(branches = listOf(Branch("melati", "MEL", "Data contoh", "", "")), updatedAt = 0)
+        val selected = SyncProjection.bootstrapSnapshot(remote, seed, preserveLocal = false, updatedAt = 60)
+        assertEquals(listOf("remote"), selected.branches.map { it.id })
+        assertEquals(60, selected.updatedAt)
+    }
+
+    @Test fun remotePullIsRejectedWhenLocalStateChangedDuringNetworkWait() {
+        val initial = listOf(entity("customer", "c-1", value = 1))
+        val outbox = SyncOutbox().also { it.initialize(initial) }
+        outbox.enqueue(listOf(entity("customer", "c-1", value = 2)), 20, null, null) { "local-edit" }
+
+        assertFalse(outbox.acceptRemoteIfUnchanged(listOf(entity("customer", "c-1", value = 3)), 8, initial))
+        assertEquals(2, outbox.state.shadow.single().payload.jsonObject["value"]?.toString()?.toInt())
+        assertEquals(0, outbox.state.revision)
+    }
+
+    @Test fun startupRecoveryQueuesLocalFileThatIsAheadOfPersistedShadow() {
+        val persisted = listOf(entity("customer", "c-1", value = 1))
+        val localFile = listOf(entity("customer", "c-1", value = 2))
+        val outbox = SyncOutbox(SyncClientState(revision = 4, shadow = persisted, bootstrapped = true))
+
+        val recovered = outbox.restoreLocal(localFile, 20, null, null, commandId = { "recovered-command" })
+        assertEquals(listOf("recovered-command"), recovered.map { it.commandId })
+        assertEquals(2, outbox.state.shadow.single().payload.jsonObject["value"]?.toString()?.toInt())
+        assertEquals(4, outbox.state.revision)
+    }
+
+    @Test fun startupDoesNotReverseACommandWhenLocalFileIsOlderThanOutbox() {
+        val desired = listOf(entity("customer", "c-1", value = 2))
+        val pending = SyncCommand("pending-edit", "customer", "c-1", "upsert", occurredAt = 20, payload = desired.single().payload)
+        val outbox = SyncOutbox(SyncClientState(shadow = desired, pending = listOf(pending), bootstrapped = true))
+
+        val recovered = outbox.restoreLocal(listOf(entity("customer", "c-1", value = 1)), 19, null, null) { "reverse" }
+        assertTrue(recovered.isEmpty())
+        assertEquals(listOf("pending-edit"), outbox.state.pending.map { it.commandId })
+        assertEquals(desired, outbox.state.shadow)
+    }
+
+    @Test fun sequentialNotaEditsUseAcknowledgedServerVersionAndAreSentOneAtATime() {
+        fun nota(version: Long, value: Int) = SyncEntity(
+            "nota", "MEL-1", "melati",
+            buildJsonObject { put("id", "MEL-1"); put("branchId", "melati"); put("value", value); put("updatedAtMs", version) },
+        )
+        val outbox = SyncOutbox().also { it.initialize(listOf(nota(10, 1))) }
+        outbox.enqueue(listOf(nota(10, 2)), 20, "melati", null) { "nota-edit-1" }
+        outbox.enqueue(listOf(nota(10, 3)), 21, "melati", null) { "nota-edit-2" }
+        assertEquals(listOf("nota-edit-1"), outbox.nextBatch(100).map { it.commandId })
+
+        outbox.acknowledge(setOf("nota-edit-1"), revision = 5, updatedAtByCommand = mapOf("nota-edit-1" to 30L))
+        val second = outbox.state.pending.single()
+        assertEquals(30L, second.expectedUpdatedAt)
+        assertEquals("30", second.payload.jsonObject["updatedAtMs"].toString())
+        assertEquals(listOf("nota-edit-2"), outbox.nextBatch(100).map { it.commandId })
+    }
+
+    @Test fun notaEditCreatedAfterPreviousAckUsesNewServerVersionWithoutSkippingPullCursor() {
+        fun nota(version: Long, value: Int) = SyncEntity(
+            "nota", "MEL-1", "melati",
+            buildJsonObject { put("id", "MEL-1"); put("branchId", "melati"); put("value", value); put("updatedAtMs", version) },
+        )
+        val outbox = SyncOutbox(SyncClientState(revision = 4, shadow = listOf(nota(10, 1)), bootstrapped = true))
+        outbox.enqueue(listOf(nota(10, 2)), 20, "melati", null) { "nota-edit-1" }
+        outbox.acknowledge(setOf("nota-edit-1"), revision = 9, updatedAtByCommand = mapOf("nota-edit-1" to 30L))
+        assertEquals(4, outbox.state.revision)
+
+        assertTrue(outbox.acceptRemote(listOf(nota(30, 2)), revision = 9))
+        assertEquals(9, outbox.state.revision)
+
+        val localSecondEdit = listOf(nota(30, 3))
+        val second = outbox.enqueue(localSecondEdit, 31, "melati", null) { "nota-edit-2" }.single()
+        assertEquals(30L, second.expectedUpdatedAt)
+    }
+
+    @Test fun nonOwnerSyncScopeIncludesEveryAssignedBranch() {
+        val session = Session(Role.Kasir, "Rina", "rina@example.com", "melati")
+        val staff = listOf(Staff("Rina", "RINA@example.com", Role.Kasir, listOf("melati", "cibaduyut")))
+        assertEquals(setOf("melati", "cibaduyut"), allowedSyncBranches(session, staff))
+        assertEquals(null, allowedSyncBranches(session.copy(role = Role.Owner), staff))
+    }
+
+    @Test fun stableOperationalIdSurvivesCanonicalActorAndSupportsLegacyRows() {
+        val legacy = StockMove("hari ini", 10, "Sabun", StockKind.Tambah, 2, "Nama lokal", "melati", "Tambah")
+        val legacyId = SyncProjection.entities(Snapshot(stockMoves = listOf(legacy))).single().entityId
+        val canonical = legacy.copy(by = "server@example.com", syncId = legacyId)
+        assertEquals(legacyId, SyncProjection.entities(Snapshot(stockMoves = listOf(canonical))).single().entityId)
+        assertEquals(legacyId, SyncProjection.entities(Snapshot(stockMoves = listOf(legacy))).single().payload.jsonObject["syncId"]?.jsonPrimitive?.content)
+    }
+
+    @Test fun localEditGenerationPreventsAnInFlightPullFromApplying() {
+        val initial = listOf(entity("customer", "c-1", value = 1))
+        val outbox = SyncOutbox(SyncClientState(revision = 4, shadow = initial, bootstrapped = true))
+        val generationBeforePull = outbox.state.generation
+        outbox.enqueue(listOf(entity("customer", "c-1", value = 2)), 20, null, null) { "edit-during-pull" }
+
+        assertFalse(outbox.canAcceptRemote(generationBeforePull))
+        outbox.acknowledge(setOf("edit-during-pull"), revision = 8)
+        assertFalse(outbox.canAcceptRemote(generationBeforePull))
+        assertEquals(4, outbox.state.revision)
+    }
+
+    @Test fun persistedBusinessDataIsPreservedWithoutTrustingDeviceClock() {
+        val remote = Snapshot(
+            branches = listOf(Branch("melati", "MEL", "Server", "", "")),
+            updatedAt = 100,
+        )
+        val stale = Snapshot(
+            branches = listOf(Branch("melati", "MEL", "Lokal lama", "", "")),
+            updatedAt = 90,
+        )
+        val newer = stale.copy(
+            branches = listOf(Branch("melati", "MEL", "Edit offline", "", "")),
+            updatedAt = 110,
+        )
+
+        assertEquals("Lokal lama", SyncProjection.bootstrapSnapshot(remote, stale, preserveLocal = true, updatedAt = 120).branches.single().name)
+        assertEquals("Edit offline", SyncProjection.bootstrapSnapshot(remote, newer, preserveLocal = true, updatedAt = 120).branches.single().name)
+        assertEquals("Server", SyncProjection.bootstrapSnapshot(remote, newer, preserveLocal = false, updatedAt = 120).branches.single().name)
+    }
+
+    @Test fun identicalOperationalEventsKeepDistinctExplicitIds() {
+        val first = StockMove("hari ini", 10, "Sabun", StockKind.Tambah, 2, "Rina", "melati", "Tambah", syncId = "event-1")
+        val second = first.copy(syncId = "event-2")
+        val ids = SyncProjection.entities(Snapshot(stockMoves = listOf(first, second))).map { it.entityId }.toSet()
+        assertEquals(setOf("event-1", "event-2"), ids)
+    }
+
+    @Test fun preparedRemoteApplySurvivesCrashWithoutCreatingOutboundCommand() {
+        val local = Snapshot(customers = listOf(Customer("c-1", "Lama", "", "")), updatedAt = 10)
+        val remote = Snapshot(customers = listOf(Customer("c-1", "Baru", "", "")), updatedAt = 20)
+        val outbox = SyncOutbox(SyncClientState(revision = 4, shadow = SyncProjection.entities(local), bootstrapped = true, scopeKey = "kasir:melati"))
+        assertTrue(outbox.prepareRemote(remote, SyncProjection.entities(remote), 8, outbox.state.generation, "kasir:melati"))
+
+        val encoded = LocalJson.json.encodeToString(SyncClientState.serializer(), outbox.state)
+        val recovered = SyncOutbox(LocalJson.json.decodeFromString(SyncClientState.serializer(), encoded))
+        assertTrue(recovered.restoreLocal(SyncProjection.entities(remote), 20, "melati", setOf("melati")).isEmpty())
+        assertTrue(recovered.completePreparedRemote())
+        assertEquals(8, recovered.state.revision)
+        assertEquals(SyncProjection.entities(remote), recovered.state.shadow)
+        assertTrue(recovered.state.pending.isEmpty())
+    }
+
+    @Test fun changedBranchScopeForcesFreshBootstrapOnlyAfterOutboxIsClear() {
+        val outbox = SyncOutbox(SyncClientState(revision = 9, shadow = listOf(entity("customer", "c-1")), bootstrapped = true, scopeKey = "kasir:melati"))
+        assertTrue(outbox.resetForScope("kasir:melati,cibaduyut"))
+        assertEquals(0, outbox.state.revision)
+        assertFalse(outbox.state.bootstrapped)
+        assertEquals("kasir:melati,cibaduyut", outbox.state.scopeKey)
+
+        outbox.beginFromEmptyRemote(outbox.state.scopeKey)
+        outbox.enqueue(listOf(entity("expense", "e-1", "melati")), 10, "melati", null) { "pending" }
+        assertFalse(outbox.resetForScope("kasir:melati"))
+    }
+
+    @Test fun legacyBlankScopeCanBeResetBeforeTrustingItsOldCursor() {
+        val legacy = SyncOutbox(SyncClientState(revision = 99, shadow = listOf(entity("expense", "old", "melati")), bootstrapped = true))
+        assertEquals("", legacy.state.scopeKey)
+        assertTrue(legacy.resetForScope("kasir:cibaduyut"))
+        assertEquals(0, legacy.state.revision)
+        assertFalse(legacy.state.bootstrapped)
     }
 }

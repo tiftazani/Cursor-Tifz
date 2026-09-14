@@ -37,6 +37,7 @@ data class SyncCommandResult(
     val error: String? = null,
     val message: String? = null,
     val detail: JsonElement = JsonNull,
+    val updatedAt: Long? = null,
 )
 
 @Serializable
@@ -95,6 +96,7 @@ data class SyncChangesResponse(
     val nextRevision: Long = 0,
     val latestRevision: Long = 0,
     val hasMore: Boolean = false,
+    val scopeKey: String = "",
     val changes: List<SyncChange> = emptyList(),
 ) {
     fun cursor(): Long = maxOf(revision, nextRevision, latestRevision.takeUnless { hasMore } ?: 0)
@@ -113,10 +115,21 @@ data class SyncEntity(
 @Serializable
 data class SyncClientState(
     val revision: Long = 0,
+    val generation: Long = 0,
     val shadow: List<SyncEntity> = emptyList(),
     val pending: List<SyncCommand> = emptyList(),
     val rejected: List<RejectedSyncCommand> = emptyList(),
     val bootstrapped: Boolean = false,
+    val scopeKey: String = "",
+    val pendingRemote: PendingRemoteApply? = null,
+)
+
+@Serializable
+data class PendingRemoteApply(
+    val snapshot: Snapshot,
+    val entities: List<SyncEntity>,
+    val revision: Long,
+    val scopeKey: String = "",
 )
 
 @Serializable
@@ -135,6 +148,24 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
         if (state.shadow.isNotEmpty() || state.pending.isNotEmpty()) return false
         state = state.copy(shadow = entities)
         return true
+    }
+
+    fun restoreLocal(
+        entities: List<SyncEntity>,
+        occurredAt: Long,
+        defaultBranchId: String?,
+        allowedBranchIds: Set<String>?,
+        actorRole: Role? = null,
+        commandId: () -> String = { UUID.randomUUID().toString() },
+    ): List<SyncCommand> {
+        if (state.pendingRemote != null) return emptyList()
+        if (!state.bootstrapped) {
+            initialize(entities)
+            return emptyList()
+        }
+        val newestPendingAt = state.pending.maxOfOrNull { it.occurredAt } ?: Long.MIN_VALUE
+        if (state.pending.isNotEmpty() && occurredAt <= newestPendingAt) return emptyList()
+        return enqueue(entities, occurredAt, defaultBranchId, allowedBranchIds, actorRole, commandId)
     }
 
     fun enqueue(
@@ -180,20 +211,56 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
                 payload = payload,
             )
         }
-        state = state.copy(shadow = entities, pending = state.pending + created)
+        state = state.copy(
+            generation = if (created.isEmpty()) state.generation else state.generation + 1,
+            shadow = entities,
+            pending = state.pending + created,
+        )
         return created
     }
 
     fun acknowledge(commandIds: Set<String>, revision: Long): Int {
+        return acknowledge(commandIds, revision, emptyMap())
+    }
+
+    fun acknowledge(commandIds: Set<String>, revision: Long, updatedAtByCommand: Map<String, Long>): Int {
         if (commandIds.isEmpty()) return 0
-        val known = state.pending.mapTo(hashSetOf()) { it.commandId }
+        val pending = state.pending
+        val known = pending.mapTo(hashSetOf()) { it.commandId }
         val accepted = commandIds.intersect(known)
         if (accepted.isEmpty()) return 0
+        val acceptedCommands = pending.filter { it.commandId in accepted }
+        val remaining = pending.filterNot { it.commandId in accepted }.map { command ->
+            val predecessor = acceptedCommands.lastOrNull {
+                it.entityType == command.entityType && it.entityId == command.entityId
+            } ?: return@map command
+            val serverUpdatedAt = updatedAtByCommand[predecessor.commandId] ?: return@map command
+            command.copy(
+                expectedUpdatedAt = serverUpdatedAt,
+                payload = if (command.entityType == "nota" && command.payload is JsonObject) {
+                    JsonObject(command.payload + ("updatedAtMs" to JsonPrimitive(serverUpdatedAt)))
+                } else command.payload,
+            )
+        }
+        val acknowledgedNotaVersions = acceptedCommands.mapNotNull { command ->
+            updatedAtByCommand[command.commandId]?.takeIf { command.entityType == "nota" }
+                ?.let { "${command.entityType}\u0000${command.entityId}" to it }
+        }.toMap()
+        val shadow = state.shadow.map { entity ->
+            val serverUpdatedAt = acknowledgedNotaVersions[entity.key]
+            if (serverUpdatedAt == null || entity.payload !is JsonObject) entity
+            else entity.copy(payload = JsonObject(entity.payload + ("updatedAtMs" to JsonPrimitive(serverUpdatedAt))))
+        }
         state = state.copy(
-            revision = maxOf(state.revision, revision),
-            pending = state.pending.filterNot { it.commandId in accepted },
+            shadow = shadow,
+            pending = remaining,
         )
         return accepted.size
+    }
+
+    fun nextBatch(limit: Int): List<SyncCommand> {
+        val entities = hashSetOf<String>()
+        return state.pending.filter { entities.add("${it.entityType}\u0000${it.entityId}") }.take(limit)
     }
 
     fun reject(reasons: Map<String, String>, rejectedAt: Long, limit: Int = 200): Int {
@@ -208,20 +275,74 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
         return doomed.size
     }
 
-    fun acceptRemote(entities: List<SyncEntity>, revision: Long): Boolean {
-        if (state.pending.isNotEmpty()) return false
+    fun acceptRemote(entities: List<SyncEntity>, revision: Long, scopeKey: String = ""): Boolean {
+        if (state.pending.isNotEmpty() || state.pendingRemote != null) return false
+        state = state.copy(revision = maxOf(state.revision, revision), shadow = entities, scopeKey = scopeKey.ifBlank { state.scopeKey })
+        return true
+    }
+
+    fun prepareRemote(snapshot: Snapshot, entities: List<SyncEntity>, revision: Long, expectedGeneration: Long, scopeKey: String): Boolean {
+        if (!canAcceptRemote(expectedGeneration)) return false
+        state = state.copy(pendingRemote = PendingRemoteApply(snapshot, entities, revision, scopeKey))
+        return true
+    }
+
+    fun prepareBootstrapRemote(snapshot: Snapshot, entities: List<SyncEntity>, revision: Long, scopeKey: String) {
+        require(state.pending.isEmpty())
+        state = state.copy(pendingRemote = PendingRemoteApply(snapshot, entities, revision, scopeKey))
+    }
+
+    fun completePreparedRemote(): Boolean {
+        val prepared = state.pendingRemote ?: return false
+        state = state.copy(
+            revision = maxOf(state.revision, prepared.revision),
+            shadow = prepared.entities,
+            scopeKey = prepared.scopeKey.ifBlank { state.scopeKey },
+            pendingRemote = null,
+            bootstrapped = true,
+        )
+        return true
+    }
+
+    fun acceptRemoteIfUnchanged(entities: List<SyncEntity>, revision: Long, expectedLocal: List<SyncEntity>): Boolean {
+        if (state.pending.isNotEmpty() || state.shadow != expectedLocal) return false
         state = state.copy(revision = maxOf(state.revision, revision), shadow = entities)
         return true
     }
 
-    fun completeBootstrap(entities: List<SyncEntity>, revision: Long = 0) {
+    fun canAcceptRemote(expectedGeneration: Long): Boolean =
+        state.pending.isEmpty() && state.pendingRemote == null && state.generation == expectedGeneration
+
+    fun completeBootstrap(entities: List<SyncEntity>, revision: Long = 0, scopeKey: String = "") {
         require(state.pending.isEmpty())
-        state = state.copy(revision = revision, shadow = entities, bootstrapped = true)
+        state = state.copy(revision = revision, shadow = entities, bootstrapped = true, scopeKey = scopeKey)
     }
 
-    fun beginFromEmptyRemote() {
+    fun beginFromEmptyRemote(scopeKey: String = "") {
         require(state.pending.isEmpty())
-        state = state.copy(revision = 0, shadow = emptyList(), bootstrapped = true)
+        state = state.copy(revision = 0, shadow = emptyList(), bootstrapped = true, scopeKey = scopeKey)
+    }
+
+    fun reconcileBootstrap(
+        remote: List<SyncEntity>,
+        desired: List<SyncEntity>,
+        revision: Long,
+        occurredAt: Long,
+        defaultBranchId: String?,
+        allowedBranchIds: Set<String>?,
+        actorRole: Role? = null,
+        scopeKey: String = "",
+        commandId: () -> String = { UUID.randomUUID().toString() },
+    ): List<SyncCommand> {
+        require(state.pending.isEmpty())
+        state = state.copy(revision = revision, shadow = remote, bootstrapped = true, scopeKey = scopeKey)
+        return enqueue(desired, occurredAt, defaultBranchId, allowedBranchIds, actorRole, commandId)
+    }
+
+    fun resetForScope(scopeKey: String): Boolean {
+        if (state.pending.isNotEmpty() || state.pendingRemote != null) return false
+        state = state.copy(revision = 0, shadow = emptyList(), bootstrapped = false, scopeKey = scopeKey)
+        return true
     }
 
     fun acceptLegacySnapshot(entities: List<SyncEntity>) {
@@ -250,8 +371,8 @@ object SyncProjection {
         "inventory" to Spec("inventory", text("id"), text("branchId")),
         "expense" to Spec("expenses", text("id"), text("branchId")),
         "nota" to Spec("notas", text("id"), text("branchId")),
-        "stockMove" to Spec("stockMoves", { stableId(it) }, text("branchId")),
-        "audit" to Spec("audit", { stableId(it) }, text("branchId")),
+        "stockMove" to Spec("stockMoves", { syncIdOrLegacyHash(it) }, text("branchId")),
+        "audit" to Spec("audit", { syncIdOrLegacyHash(it) }, text("branchId")),
         "cashClose" to Spec("cashCloses", text("id"), text("branchId")),
         "attendance" to Spec("attendance", text("id"), text("branchId")),
     )
@@ -262,7 +383,11 @@ object SyncProjection {
             (root[spec.field] as? JsonArray).orEmpty().mapNotNull { element ->
                 val obj = element as? JsonObject ?: return@mapNotNull null
                 val id = spec.id(obj)
-                val cloudPayload = if (type == "nota") JsonObject(obj + ("photos" to JsonArray(emptyList()))) else obj
+                val cloudPayload = when (type) {
+                    "nota" -> JsonObject(obj + ("photos" to JsonArray(emptyList())))
+                    "stockMove", "audit" -> JsonObject(obj + ("syncId" to JsonPrimitive(id)))
+                    else -> obj
+                }
                 if (id.isBlank()) null else SyncEntity(type, id, spec.branch(obj)?.ifBlank { null }, cloudPayload)
             }
         }.sortedBy { it.key }
@@ -281,8 +406,50 @@ object SyncProjection {
         return LocalJson.json.decodeFromJsonElement(Snapshot.serializer(), JsonObject(root))
     }
 
+    fun reconcileBootstrap(remote: Snapshot, local: Snapshot, updatedAt: Long): Snapshot {
+        val remoteEntities = entities(remote).associateBy { it.key }
+        val localEntities = entities(local).associateBy { it.key }
+        val changes = localEntities.values.mapNotNull { entity ->
+            if (remoteEntities[entity.key] == entity) null
+            else SyncChange(
+                entityType = entity.entityType,
+                entityId = entity.entityId,
+                operation = "upsert",
+                branchId = entity.branchId,
+                payload = entity.payload,
+            )
+        }.toMutableList()
+        remoteEntities.values.filter { it.entityType == "nota" && it.entityId in local.deletedNotaIds }
+            .forEach { entity ->
+                changes += SyncChange(
+                    entityType = entity.entityType,
+                    entityId = entity.entityId,
+                    operation = "delete",
+                    branchId = entity.branchId,
+                )
+            }
+        return apply(remote, changes, updatedAt).copy(
+            deletedNotaIds = (remote.deletedNotaIds + local.deletedNotaIds).distinct(),
+        )
+    }
+
+    fun bootstrapSnapshot(remote: Snapshot, local: Snapshot, preserveLocal: Boolean, updatedAt: Long): Snapshot =
+        if (preserveLocal) reconcileBootstrap(remote, local, updatedAt)
+        else remote.copy(updatedAt = updatedAt)
+
     private fun stableId(value: JsonObject): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(value.toString().toByteArray())
         return digest.take(16).joinToString("") { "%02x".format(it) }
     }
+
+    private fun syncIdOrLegacyHash(value: JsonObject): String =
+        value["syncId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+            ?: stableId(JsonObject(value.filterKeys { it != "syncId" }))
+}
+
+internal fun allowedSyncBranches(session: Session?, staff: List<Staff>): Set<String>? {
+    if (session == null || session.role == Role.Owner) return null
+    return staff.firstOrNull { it.email.equals(session.email, ignoreCase = true) }
+        ?.branchIds?.toSet()?.takeIf { it.isNotEmpty() }
+        ?: setOf(session.branchId)
 }

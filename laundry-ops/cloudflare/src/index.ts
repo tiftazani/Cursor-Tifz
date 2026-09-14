@@ -1,4 +1,4 @@
-import { pullChanges, pushCommands } from "./command-sync";
+import { pullChanges, pushCommands, syncScopeKey } from "./command-sync.ts";
 
 interface Env {
   DB: D1Database;
@@ -91,8 +91,8 @@ const BRANCH_DATASETS = ["branchStocks", "inventory", "expenses", "notas", "stoc
 
 function rowKey(dataset: string, row: JsonRecord): string {
   if (dataset === "branchStocks") return `${str(row,"branchId")}|${str(row,"productKey")}`;
-  if (dataset === "stockMoves") return `${str(row,"branchId")}|${num(row,"atMs")}|${str(row,"product")}|${str(row,"kind")}|${str(row,"notaId")}`;
-  if (dataset === "audit") return `${str(row,"branchId")}|${num(row,"atMs")}|${str(row,"user")}|${str(row,"action")}|${str(row,"notaId")}`;
+  if (dataset === "stockMoves") return str(row,"syncId") || `${str(row,"branchId")}|${num(row,"atMs")}|${str(row,"product")}|${str(row,"kind")}|${str(row,"notaId")}`;
+  if (dataset === "audit") return str(row,"syncId") || `${str(row,"branchId")}|${num(row,"atMs")}|${str(row,"user")}|${str(row,"action")}|${str(row,"notaId")}`;
   return str(row, "id") || `${str(row,"branchId")}|${num(row,"atMs")}|${str(row,"staffEmail")}`;
 }
 
@@ -134,6 +134,74 @@ function listOfStrings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+export type SnapshotJournalChange = {
+  sequence: number;
+  entity_type: string;
+  entity_id: string;
+  operation: string;
+  payload_json: string | null;
+  updated_at: number;
+};
+
+const CHANGE_DATASETS:Record<string,string>={
+  branch:"branches",staff:"staff",customer:"customers",service:"services",product:"products",branchStock:"branchStocks",
+  inventory:"inventory",expense:"expenses",nota:"notas",stockMove:"stockMoves",audit:"audit",cashClose:"cashCloses",attendance:"attendance",
+};
+
+function journalEntityId(dataset:string,row:JsonRecord):string {
+  if(dataset==="branchStocks") return `${str(row,"branchId")}:${str(row,"productKey")}`;
+  if(dataset==="stockMoves" || dataset==="audit") return str(row,"syncId") || rowKey(dataset,row);
+  if(dataset==="staff") return str(row,"email").toLowerCase();
+  if(dataset==="products") return str(row,"id") || str(row,"name");
+  return str(row,"id");
+}
+
+export function applyJournalToSnapshot(base:JsonRecord,changes:SnapshotJournalChange[],revision:number):JsonRecord {
+  const snapshot:JsonRecord={...base};
+  for(const change of changes) {
+    const dataset=CHANGE_DATASETS[change.entity_type];
+    if(!dataset) continue;
+    const rows=list(snapshot,dataset).filter(row=>journalEntityId(dataset,row)!==change.entity_id);
+    if(change.operation!=="delete" && change.payload_json) {
+      const payload=JSON.parse(change.payload_json) as unknown;
+      if(payload && typeof payload==="object" && !Array.isArray(payload)) rows.push(payload as JsonRecord);
+    }
+    snapshot[dataset]=rows;
+    if(change.entity_type==="nota") {
+      const deleted=new Set(listOfStrings(snapshot.deletedNotaIds));
+      if(change.operation==="delete") deleted.add(change.entity_id); else deleted.delete(change.entity_id);
+      snapshot.deletedNotaIds=[...deleted];
+    }
+    snapshot.updatedAt=Math.max(num(snapshot,"updatedAt"),change.updated_at);
+  }
+  snapshot.syncRevision=revision;
+  return snapshot;
+}
+
+async function materializedSnapshot(env:Env,row?:{payload_json:string}|null):Promise<{snapshot:JsonRecord;revision:number}> {
+  const stored=row === undefined ? await env.DB.prepare("SELECT payload_json FROM sync_snapshots WHERE organization_id=?").bind(ORG_ID).first<{payload_json:string}>() : row;
+  let snapshot=stored ? withoutLocalCredentials(JSON.parse(stored.payload_json) as JsonRecord) : {};
+  const storedRevision=num(snapshot,"syncRevision");
+  let revision=storedRevision;
+  while(true) {
+    const changes=(await env.DB.prepare("SELECT sequence,entity_type,entity_id,operation,payload_json,updated_at FROM sync_changes WHERE organization_id=? AND sequence>? ORDER BY sequence ASC LIMIT 500").bind(ORG_ID,revision).all<SnapshotJournalChange>()).results;
+    if(!changes.length) break;
+    revision=changes.at(-1)?.sequence ?? revision;
+    snapshot=applyJournalToSnapshot(snapshot,changes,revision);
+    if(changes.length<500) break;
+  }
+  snapshot.syncRevision=revision;
+  if(stored && revision>storedRevision) {
+    await env.DB.prepare(`UPDATE sync_snapshots SET payload_json=?,updated_at=? WHERE organization_id=? AND COALESCE(CAST(json_extract(payload_json,'$.syncRevision') AS INTEGER),0)<=?`)
+      .bind(JSON.stringify(withoutLocalCredentials(snapshot)),Date.now(),ORG_ID,revision).run();
+  }
+  return {snapshot,revision};
+}
+
+export function legacySnapshotWriteAllowed(identity:{bootstrap:boolean}, journalRevision = 0):boolean {
+  return identity.bootstrap && journalRevision === 0;
+}
+
 function withoutLocalCredentials(snapshot:JsonRecord):JsonRecord {
   const safe={...snapshot};
   safe.staff=list(snapshot,"staff").map(({passwordHash: _passwordHash,...person})=>person);
@@ -169,13 +237,15 @@ async function projectSnapshot(env: Env, snapshot: JsonRecord, updatedAt: number
     lines.forEach((line, index) => statements.push(env.DB.prepare("INSERT INTO order_lines(order_id,service_id,line_no,service_name,quantity,unit,unit_price,handler_email,handler_name,commission_per_unit) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(orderId,str(line,"serviceId"),index,str(line,"name"),num(line,"qty"),str(line,"unit"),num(line,"unitPrice"),str(line,"handledByEmail"),str(line,"handledByName"),num(line,"commissionPerUnit"))));
   }
   for (const row of list(snapshot, "attendance")) statements.push(env.DB.prepare("INSERT INTO attendance(id,organization_id,branch_id,staff_email,staff_name,work_date,check_in_at,check_out_at,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET check_out_at=excluded.check_out_at,note=excluded.note,updated_at=excluded.updated_at").bind(str(row,"id"),ORG_ID,str(row,"branchId"),str(row,"staffEmail").toLowerCase(),str(row,"staffName"),str(row,"workDate"),num(row,"checkInAtMs"),typeof row.checkOutAtMs === "number" ? row.checkOutAtMs : null,str(row,"note"),updatedAt));
-  list(snapshot, "stockMoves").forEach((row, index) => statements.push(env.DB.prepare("INSERT INTO stock_moves(id,organization_id,branch_id,payload_json,occurred_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(`${str(row,"branchId")}:${num(row,"atMs")}:${str(row,"product")}:${index}`,ORG_ID,str(row,"branchId"),JSON.stringify(row),num(row,"atMs"),updatedAt)));
-  list(snapshot, "audit").forEach((row, index) => statements.push(env.DB.prepare("INSERT INTO audit_logs(id,organization_id,branch_id,actor,action,order_id,occurred_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING").bind(`${str(row,"branchId")}:${num(row,"atMs")}:${index}`,ORG_ID,str(row,"branchId"),str(row,"user"),str(row,"action"),row.notaId ?? null,num(row,"atMs"))));
+  list(snapshot, "stockMoves").forEach((row, index) => statements.push(env.DB.prepare("INSERT INTO stock_moves(id,organization_id,branch_id,payload_json,occurred_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(row,"syncId") || `${str(row,"branchId")}:${num(row,"atMs")}:${str(row,"product")}:${index}`,ORG_ID,str(row,"branchId"),JSON.stringify(row),num(row,"atMs"),updatedAt)));
+  list(snapshot, "audit").forEach((row, index) => statements.push(env.DB.prepare("INSERT INTO audit_logs(id,organization_id,branch_id,actor,action,order_id,occurred_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING").bind(str(row,"syncId") || `${str(row,"branchId")}:${num(row,"atMs")}:${index}`,ORG_ID,str(row,"branchId"),str(row,"user"),str(row,"action"),row.notaId ?? null,num(row,"atMs"))));
   for (const row of list(snapshot, "cashCloses")) statements.push(env.DB.prepare("INSERT INTO cash_closes(id,organization_id,branch_id,payload_json,occurred_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(row,"id"),ORG_ID,str(row,"branchId"),JSON.stringify(row),num(row,"atMs"),updatedAt));
   for (let i = 0; i < statements.length; i += 80) await env.DB.batch(statements.slice(i, i + 80));
 }
 
 async function putSnapshot(request: Request, env: Env, identity: Identity): Promise<Response> {
+  const journal=await env.DB.prepare("SELECT COALESCE(MAX(sequence),0) AS revision FROM sync_changes WHERE organization_id=?").bind(ORG_ID).first<{revision:number}>();
+  if(!legacySnapshotWriteAllowed(identity,journal?.revision ?? 0)) return json({error:identity.bootstrap ? "Bootstrap snapshot ditutup setelah command sync aktif" : "Versi aplikasi wajib diperbarui sebelum sinkronisasi"},identity.bootstrap ? 409 : 426);
   const length = Number(request.headers.get("content-length") ?? 0);
   if (length > MAX_BODY_BYTES) return json({ error: "Payload terlalu besar" }, 413);
   const requestText = await request.text();
@@ -186,10 +256,12 @@ async function putSnapshot(request: Request, env: Env, identity: Identity): Prom
   if (!updatedAt || !Array.isArray(incoming.branches) || !Array.isArray(incoming.staff)) return json({ error: "Snapshot tidak lengkap" }, 422);
   const current = await env.DB.prepare("SELECT revision,payload_json FROM sync_snapshots WHERE organization_id=?").bind(ORG_ID).first<{revision:number;payload_json:string}>();
   if (current && current.revision > updatedAt && (identity.role === "Owner" || identity.bootstrap)) return json({ error: "Versi server lebih baru", revision: current.revision }, 409);
-  const currentSnapshot = current ? withoutLocalCredentials(JSON.parse(current.payload_json) as JsonRecord) : {};
+  const materialized=await materializedSnapshot(env,current);
+  const currentSnapshot=materialized.snapshot;
   const snapshot = withoutLocalCredentials(mergeRestrictedSnapshot(currentSnapshot, withoutLocalCredentials(incoming), identity));
   const revision = Math.max(Date.now(), updatedAt, (current?.revision ?? 0) + 1);
   snapshot.updatedAt = revision;
+  snapshot.syncRevision=materialized.revision;
   const text = JSON.stringify(snapshot);
   await projectSnapshot(env, snapshot, revision);
   await env.DB.prepare("INSERT INTO sync_snapshots(organization_id,revision,payload_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(organization_id) DO UPDATE SET revision=excluded.revision,payload_json=excluded.payload_json,updated_at=excluded.updated_at WHERE excluded.revision>=sync_snapshots.revision").bind(ORG_ID,revision,text,Date.now()).run();
@@ -228,14 +300,13 @@ export default {
       if (identity.role !== "Owner") return json({ error: "Khusus Owner" }, 403);
       const row = await env.DB.prepare("SELECT revision,payload_json FROM sync_snapshots WHERE organization_id=?").bind(ORG_ID).first<{revision:number;payload_json:string}>();
       if (!row) return json({ error: "Snapshot belum tersedia" }, 404);
-      const snapshot = JSON.parse(row.payload_json) as JsonRecord;
-      await projectSnapshot(env, snapshot, row.revision);
-      return json({ ok: true, revision: row.revision });
+      const materialized=await materializedSnapshot(env,row);
+      await projectSnapshot(env, materialized.snapshot, row.revision);
+      return json({ ok: true, revision: row.revision, syncRevision:materialized.revision });
     }
     if ((url.pathname === "/api/cuciin" || url.pathname === "/v1/snapshot") && request.method === "GET") {
-      const row = await env.DB.prepare("SELECT payload_json FROM sync_snapshots WHERE organization_id=?").bind(ORG_ID).first<{payload_json:string}>();
-      if (!row) return json({}, 200);
-      return new Response(JSON.stringify(visibleSnapshot(withoutLocalCredentials(JSON.parse(row.payload_json) as JsonRecord), identity)), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options":"nosniff" } });
+      const materialized=await materializedSnapshot(env);
+      return new Response(JSON.stringify(visibleSnapshot(materialized.snapshot, identity)), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options":"nosniff", "X-Cuciin-Revision":String(materialized.revision), "X-Cuciin-Scope":syncScopeKey(identity) } });
     }
     if ((url.pathname === "/api/cuciin" || url.pathname === "/v1/snapshot") && request.method === "PUT") return putSnapshot(request, env, identity);
     if (url.pathname === "/v1/sync/commands" && request.method === "POST") return pushCommands(request, env, identity);

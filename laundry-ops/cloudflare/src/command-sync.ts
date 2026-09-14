@@ -69,6 +69,40 @@ class CommandError extends Error {
   constructor(status: number, message: string, detail?: unknown) { super(message); this.status=status; this.detail=detail; }
 }
 
+export function commandFailureResult(commandId: string, error: unknown): JsonRecord {
+  if (error instanceof CommandError && error.status < 500) {
+    return { commandId, accepted:false, status:"rejected", code:error.status, error:error.message, detail:error.detail };
+  }
+  return {
+    commandId,
+    accepted:false,
+    status:"retryable",
+    code:error instanceof CommandError ? error.status : 503,
+    error:"Command belum dapat diproses; perangkat akan mencoba lagi",
+  };
+}
+
+export function stockMoveOrderReferenceAllowed(orderExists: boolean, deletedOrderBranchId: string | null, branchId: string, requiresDeletedOrder = false): boolean {
+  return requiresDeletedOrder ? !orderExists && deletedOrderBranchId === branchId : orderExists || deletedOrderBranchId === branchId;
+}
+
+export function nextEntityVersion(now: number, current?: number | null): number {
+  return Math.max(now, (current ?? 0) + 1);
+}
+
+export function syncScopeKey(identity: SyncIdentity): string {
+  if (identity.bootstrap || identity.role === "Owner") return "owner";
+  return `${identity.role.toLowerCase()}:${[...new Set(identity.branchIds)].sort().join(",")}`;
+}
+
+export function orderUpsertAllowed(orderExists: boolean, hasDeleteTombstone: boolean): boolean {
+  return orderExists || !hasDeleteTombstone;
+}
+
+export function canonicalHistoryPayload(payload: JsonRecord, syncId: string, branchId: string, actorField: "by"|"user", actorName: string): JsonRecord {
+  return { ...payload, syncId, branchId, [actorField]:actorName };
+}
+
 async function sha256(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -142,7 +176,7 @@ function guardPreviousMutation(db:D1Database, command:SyncCommand, token:string)
     .bind(token,command.commandId,ORG_ID,token);
 }
 
-type Plan = { statements: D1PreparedStatement[]; entityType: string; entityId: string; branchId: string | null; operation?: "upsert"|"delete"; changePayload?: unknown };
+type Plan = { statements: D1PreparedStatement[]; entityType: string; entityId: string; branchId: string | null; operation?: "upsert"|"delete"; changePayload?: unknown; updatedAt?: number };
 
 type RetailAdjustment={productId:string;productName:string;delta:number};
 async function retailAdjustments(db:D1Database, orderId:string, lines:Array<{serviceId:string;serviceName:string;quantity:number}>):Promise<RetailAdjustment[]> {
@@ -173,9 +207,14 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
   const p = command.payload;
   const id = command.entityId || requiredString(p, "id", 100);
   const existing = await db.prepare("SELECT * FROM orders WHERE id=? AND organization_id=?").bind(id, ORG_ID).first<{branch_id:string;updated_at:number;cashier_email:string;cashier_name:string;customer_name:string;phone:string;total:number;paid:number;payment_status:string;payment_method:string;work_status:string;created_at:number;estimated_finish:string;completed_at:string|null;picked_up_at:string|null;wa_sent:number;payload_json:string|null}>();
+  now=nextEntityVersion(now,existing?.updated_at);
   const branchId = command.branchId || optionalString(p, "branchId", 100) || existing?.branch_id || "";
   assertBranch(identity, branchId);
   if (existing) assertBranch(identity, existing.branch_id);
+  if(!existing && ["order.create","order.put"].includes(command.type)) {
+    const tombstone=await db.prepare("SELECT 1 AS deleted FROM sync_changes WHERE organization_id=? AND entity_type IN ('nota','order') AND entity_id=? AND operation='delete' LIMIT 1").bind(ORG_ID,id).first<{deleted:number}>();
+    if(!orderUpsertAllowed(false,Boolean(tombstone))) throw new CommandError(409,"Service sudah dihapus dan tidak dapat dipulihkan tanpa proses restore Owner");
+  }
   if (command.expectedUpdatedAt != null && existing?.updated_at !== command.expectedUpdatedAt) throw new CommandError(409, "Service sudah berubah di perangkat lain", { updatedAt: existing?.updated_at ?? null });
   const gate = commandGate();
   const statements: D1PreparedStatement[] = [];
@@ -195,7 +234,7 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
     statements.push(db.prepare(`UPDATE orders SET work_status=?,completed_at=?,updated_at=?,payload_json=? WHERE id=? AND organization_id=? AND updated_at=? AND ${gate}`).bind(status,p.completedAt ?? null,now,JSON.stringify(canonical),id,ORG_ID,existing.updated_at,command.commandId,ORG_ID,token));
     statements.push(guardPreviousMutation(db,command,token));
     statements.push(audit(db,command,identity,token,branchId,"Mengubah status pengerjaan",id,now));
-    return {statements,entityType:"nota",entityId:id,branchId,changePayload:canonical};
+    return {statements,entityType:"nota",entityId:id,branchId,changePayload:canonical,updatedAt:now};
   }
 
   if (command.type === "order.delete") {
@@ -205,7 +244,7 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
     statements.push(guardPreviousMutation(db,command,token));
     appendRetailStock(db,statements,command,identity,token,branchId,adjustments,now);
     statements.push(audit(db, command, identity, token, branchId, "Menghapus Service", id, now));
-    return { statements, entityType: command.wireEntityType ?? "order", entityId: id, branchId, operation: "delete", changePayload: null };
+    return { statements, entityType: command.wireEntityType ?? "order", entityId: id, branchId, operation: "delete", changePayload: null, updatedAt:now };
   }
 
   if (["order.status", "order.payment", "order.handover"].includes(command.type)) {
@@ -225,7 +264,7 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
     }
     statements.push(guardPreviousMutation(db,command,token));
     statements.push(audit(db, command, identity, token, branchId, command.type, id, now));
-    return { statements, entityType: "order", entityId: id, branchId, changePayload: { ...p, id, branchId, updatedAt: now } };
+    return { statements, entityType: "order", entityId: id, branchId, changePayload: { ...p, id, branchId, updatedAt: now }, updatedAt:now };
   }
 
   const linesRaw = p.lines;
@@ -271,7 +310,7 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
     SELECT ?,?,?,?,?,?,?,?,?,? WHERE ${gate}`).bind(id,line.serviceId,index,line.serviceName,line.quantity,line.unit,line.unitPrice,line.handlerEmail,line.handlerName,line.commissionPerUnit,command.commandId,ORG_ID,token)));
   appendRetailStock(db,statements,command,identity,token,branchId,stockAdjustments,now);
   statements.push(audit(db,command,identity,token,branchId,command.type,id,now));
-  return { statements, entityType:command.wireEntityType ?? "order", entityId:id, branchId, changePayload:canonical };
+  return { statements, entityType:command.wireEntityType ?? "order", entityId:id, branchId, changePayload:canonical, updatedAt:now };
 }
 
 async function planStock(db: D1Database, command: SyncCommand, identity: SyncIdentity, token: string, now: number): Promise<Plan> {
@@ -327,13 +366,14 @@ async function planStockMove(db:D1Database, command:SyncCommand, identity:SyncId
   const orderId=typeof p.notaId === "string"&&p.notaId ? p.notaId : null;
   if(orderId) {
     const order=await db.prepare("SELECT id FROM orders WHERE id=? AND organization_id=? AND branch_id=?").bind(orderId,ORG_ID,branchId).first();
-    if(!order) throw new CommandError(409,"Service asal mutasi stok belum tersimpan");
+    const deletedOrder=!order ? await db.prepare("SELECT branch_id FROM sync_changes WHERE organization_id=? AND entity_type IN ('nota','order') AND entity_id=? AND operation='delete' ORDER BY sequence DESC LIMIT 1").bind(ORG_ID,orderId).first<{branch_id:string|null}>() : null;
+    if(!stockMoveOrderReferenceAllowed(Boolean(order),deletedOrder?.branch_id ?? null,branchId,p.requiresDeletedNota===true)) throw new CommandError(409,p.requiresDeletedNota===true ? "Penghapusan Service belum berhasil; kompensasi stok ditunda" : "Service asal mutasi stok belum tersimpan");
   } else if(isSet) statements.push(db.prepare(`INSERT INTO branch_stocks(branch_id,product_id,quantity,updated_at) SELECT ?,?,?,? WHERE ${commandGate()} ON CONFLICT(branch_id,product_id) DO UPDATE SET quantity=excluded.quantity,updated_at=excluded.updated_at`).bind(branchId,product.id,target,now,command.commandId,ORG_ID,token));
   else {
     statements.push(db.prepare(`INSERT OR IGNORE INTO branch_stocks(branch_id,product_id,quantity,updated_at) SELECT ?,?,0,? WHERE ${commandGate()}`).bind(branchId,product.id,now,command.commandId,ORG_ID,token));
     statements.push(db.prepare(`UPDATE branch_stocks SET quantity=quantity+?,updated_at=? WHERE branch_id=? AND product_id=? AND ${commandGate()}`).bind(target,now,branchId,product.id,command.commandId,ORG_ID,token));
   }
-  const canonical={...p,branchId,product:product.id,by:identity.name,atMs:typeof p.atMs === "number" ? p.atMs : now};
+  const canonical=canonicalHistoryPayload(p,moveId,branchId,"by",identity.name);
   statements.push(db.prepare(`INSERT INTO stock_moves(id,organization_id,branch_id,payload_json,occurred_at,updated_at) SELECT ?,?,?,json_set(?,'$.balanceAfter',(SELECT quantity FROM branch_stocks WHERE branch_id=? AND product_id=?)),?,? WHERE ${commandGate()}`).bind(moveId,ORG_ID,branchId,JSON.stringify(canonical),branchId,product.id,typeof p.atMs === "number" ? p.atMs : now,now,command.commandId,ORG_ID,token));
   statements.push(db.prepare(`INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id) SELECT ?,'stockMove',?,'upsert',json_set(?,'$.balanceAfter',(SELECT quantity FROM branch_stocks WHERE branch_id=? AND product_id=?)),?,?,?,? WHERE ${commandGate()}`).bind(ORG_ID,moveId,JSON.stringify(canonical),branchId,product.id,now,branchId,identity.email.toLowerCase(),command.commandId,command.commandId,ORG_ID,token));
   const balanceId=`${branchId}:${product.id}`;
@@ -347,9 +387,11 @@ async function planRawOperational(db:D1Database, command:SyncCommand, identity:S
   const id=command.entityId || requiredString(p,"id",100); const deleting=command.type.endsWith(".delete"); const statements:D1PreparedStatement[]=[];
   if(command.wireEntityType==="audit") {
     if(deleting) return {statements:[db.prepare(`DELETE FROM audit_logs WHERE id=? AND organization_id=? AND ${commandGate()}`).bind(id,ORG_ID,command.commandId,ORG_ID,token)],entityType:"audit",entityId:id,branchId,operation:"delete",changePayload:null};
+    const collision=await db.prepare("SELECT 1 AS found FROM audit_logs WHERE id=? AND organization_id=?").bind(id,ORG_ID).first<{found:number}>();
+    if(collision) throw new CommandError(409,"ID audit sudah digunakan");
     const actor=identity.email.toLowerCase();
-    statements.push(db.prepare(`INSERT INTO audit_logs(id,organization_id,branch_id,actor,action,order_id,occurred_at) SELECT ?,?,?,?,?,?,? WHERE ${commandGate()} ON CONFLICT(id) DO NOTHING`).bind(id,ORG_ID,branchId,actor,requiredString(p,"action",500),typeof p.notaId === "string" ? p.notaId : null,typeof p.atMs === "number" ? p.atMs : now,command.commandId,ORG_ID,token));
-    return {statements,entityType:"audit",entityId:id,branchId,changePayload:{...p,user:actor,branchId}};
+    statements.push(db.prepare(`INSERT INTO audit_logs(id,organization_id,branch_id,actor,action,order_id,occurred_at) SELECT ?,?,?,?,?,?,? WHERE ${commandGate()}`).bind(id,ORG_ID,branchId,actor,requiredString(p,"action",500),typeof p.notaId === "string" ? p.notaId : null,typeof p.atMs === "number" ? p.atMs : now,command.commandId,ORG_ID,token));
+    return {statements,entityType:"audit",entityId:id,branchId,changePayload:canonicalHistoryPayload(p,id,branchId,"user",identity.name)};
   }
   if(command.wireEntityType==="cashClose") {
     if(deleting) statements.push(db.prepare(`DELETE FROM cash_closes WHERE id=? AND organization_id=? AND ${commandGate()}`).bind(id,ORG_ID,command.commandId,ORG_ID,token));
@@ -439,10 +481,11 @@ async function executeCommand(env:CommandEnv, command:SyncCommand, identity:Sync
   else plan=await planGeneric(env.DB,command,identity,token,now);
   const initial=env.DB.prepare("INSERT OR IGNORE INTO processed_commands(command_id,organization_id,processed_at,command_type,actor_email,request_hash,execution_token,result_json) VALUES(?,?,?,?,?,?,?,NULL)").bind(command.commandId,ORG_ID,now,command.type,identity.email.toLowerCase(),requestHash,token);
   const operation=plan.operation ?? "upsert";
+  const updatedAt=plan.updatedAt ?? now;
   const organization=env.DB.prepare("INSERT OR IGNORE INTO organizations(id,name,owner_email,created_at,updated_at) VALUES(?,?,?,?,?)").bind(ORG_ID,"Cuciin","tiftazani.khara@gmail.com",now,now);
   const all=[organization,initial,...plan.statements];
-  if(!["stock-batch","derived-noop"].includes(plan.entityType)) all.push(journal(env.DB,command,identity,token,plan.entityType,plan.entityId,operation,plan.branchId,plan.changePayload,now));
-  const result={commandId:command.commandId,accepted:true,replayed:false,entityType:plan.entityType,entityId:plan.entityId,updatedAt:now};
+  if(!["stock-batch","derived-noop"].includes(plan.entityType)) all.push(journal(env.DB,command,identity,token,plan.entityType,plan.entityId,operation,plan.branchId,plan.changePayload,updatedAt));
+  const result={commandId:command.commandId,accepted:true,replayed:false,entityType:plan.entityType,entityId:plan.entityId,updatedAt};
   all.push(env.DB.prepare(`UPDATE processed_commands SET result_json=? WHERE command_id=? AND organization_id=? AND execution_token=?`).bind(JSON.stringify(result),command.commandId,ORG_ID,token));
   all.push(env.DB.prepare("DELETE FROM sync_command_guards WHERE execution_token=?").bind(token));
   try { await env.DB.batch(all); }
@@ -469,11 +512,17 @@ export async function pushCommands(request:Request, env:CommandEnv, identity:Syn
   try { commands=raw.commands.map(parseCommand); } catch(error) { return error instanceof CommandError ? response({error:error.message,detail:error.detail},error.status) : response({error:"Command tidak valid"},422); }
   if(new Set(commands.map(c=>c.commandId)).size!==commands.length) return response({error:"commandId dalam satu request tidak boleh duplikat"},422);
   const results:JsonRecord[]=[];
+  let priorFailure=false;
   for(const command of commands) {
+    if(priorFailure) {
+      results.push({commandId:command.commandId,accepted:false,status:"retryable",code:503,error:"Menunggu command sebelumnya berhasil"});
+      continue;
+    }
     try { results.push(await executeCommand(env,command,identity)); }
     catch(error) {
-      if(error instanceof CommandError) results.push({commandId:command.commandId,accepted:false,status:"rejected",code:error.status,error:error.message,detail:error.detail});
-      else { console.error("command_failed",command.commandId,error); results.push({commandId:command.commandId,accepted:false,status:"error",code:500,error:"Command gagal diproses"}); }
+      if(!(error instanceof CommandError) || error.status >= 500) console.error("command_retryable",command.commandId,error);
+      results.push(commandFailureResult(command.commandId,error));
+      priorFailure=true;
     }
   }
   const acknowledgedCommandIds=results.filter(item=>item.accepted===true).map(item=>String(item.commandId));
@@ -500,5 +549,5 @@ export async function pullChanges(request:Request, env:CommandEnv, identity:Sync
   const hasMore=rows.length>limit; const page=rows.slice(0,limit);
   const latest=await env.DB.prepare("SELECT COALESCE(MAX(sequence),0) AS revision FROM sync_changes WHERE organization_id=?").bind(ORG_ID).first<{revision:number}>();
   const nextRevision=page.at(-1)?.sequence ?? after;
-  return response({revision:nextRevision,changes:page.map(row=>({revision:row.sequence,entityType:row.entity_type,entityId:row.entity_id,operation:row.operation,payload:row.payload_json?JSON.parse(row.payload_json):null,updatedAt:row.updated_at,branchId:row.branch_id,actorEmail:row.actor_email,commandId:row.command_id})),nextRevision,latestRevision:latest?.revision ?? 0,hasMore});
+  return response({revision:nextRevision,changes:page.map(row=>({revision:row.sequence,entityType:row.entity_type,entityId:row.entity_id,operation:row.operation,payload:row.payload_json?JSON.parse(row.payload_json):null,updatedAt:row.updated_at,branchId:row.branch_id,actorEmail:row.actor_email,commandId:row.command_id})),nextRevision,latestRevision:latest?.revision ?? 0,hasMore,scopeKey:syncScopeKey(identity)});
 }
