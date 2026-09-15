@@ -22,7 +22,7 @@ Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `ve
 - Kompensasi stok menunggu seluruh command Service terkait selesai. Penulisan snapshot cloud dipindahkan dari thread tampilan dengan penjaga versi agar data lokal yang lebih baru tidak tertimpa.
 - Delta staf dan cabang dibatasi ke penugasan akun; pemindahan staf menghapus data pada perangkat cabang lama. Absensi non-Owner hanya dikirim ke pemiliknya, pemilik baris diverifikasi server, dan Supervisor tidak dapat mengubah pelanggan.
 - Backup memakai PBKDF2 600.000 iterasi; workflow publik hanya memverifikasi backup secara manual dan tidak menyimpan hasil database produksi.
-- Penghapusan pelanggan dibatasi ke Owner. Komisi pada rincian Service diambil dari katalog server, sedangkan tutup kas bersifat append-only dengan ID unik per cabang.
+- Penghapusan pelanggan dibatasi ke Owner pada aplikasi dan server. Komisi rincian baru diambil dari katalog server; koreksi nota lama mempertahankan komisi historis saat layanan sudah dipensiunkan. Tutup kas bersifat append-only dengan ID unik per cabang.
 - Penanda penerapan cloud menyimpan generasi antrean sehingga edit lokal yang sudah terkirim tidak kembali dianggap sebagai perubahan baru. Restore tetap mendukung backup PBKDF2 format lama.
 
 ## 1.8.2 — 14 Sep 2026 (versionCode 14)

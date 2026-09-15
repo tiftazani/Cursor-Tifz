@@ -158,8 +158,8 @@ export function staffJournalScopes(previous: string[], next: string[]): { delete
   };
 }
 
-export function trustedCommission(serviceId: string, catalogue: Map<string, number>): number {
-  const value=catalogue.get(serviceId);
+export function trustedCommission(serviceId: string, catalogue: Map<string, number>, historical: Map<string, number> = new Map()): number {
+  const value=catalogue.get(serviceId) ?? historical.get(serviceId);
   if(value == null) throw new CommandError(422,`Layanan ${serviceId} tidak tersedia pada katalog`);
   return value;
 }
@@ -304,9 +304,11 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
     };
   });
   const serviceIds=[...new Set(parsedLines.map(line=>line.serviceId))];
-  const commissions=(await db.prepare(`SELECT id,commission_per_unit FROM services WHERE organization_id=? AND id IN (${serviceIds.map(()=>"?").join(",")})`).bind(ORG_ID,...serviceIds).all<{id:string;commission_per_unit:number}>()).results;
+  const commissions=(await db.prepare(`SELECT id,commission_per_unit FROM services WHERE organization_id=? AND active=1 AND id IN (${serviceIds.map(()=>"?").join(",")})`).bind(ORG_ID,...serviceIds).all<{id:string;commission_per_unit:number}>()).results;
   const commissionCatalogue=new Map(commissions.map(row=>[row.id,row.commission_per_unit]));
-  const lines=parsedLines.map(line=>({...line,commissionPerUnit:trustedCommission(line.serviceId,commissionCatalogue)}));
+  const storedCommissions=existing ? (await db.prepare(`SELECT service_id,commission_per_unit FROM order_lines WHERE order_id=? AND service_id IN (${serviceIds.map(()=>"?").join(",")})`).bind(id,...serviceIds).all<{service_id:string;commission_per_unit:number}>()).results : [];
+  const historicalCommissions=new Map(storedCommissions.map(row=>[row.service_id,row.commission_per_unit]));
+  const lines=parsedLines.map(line=>({...line,commissionPerUnit:trustedCommission(line.serviceId,commissionCatalogue,historicalCommissions)}));
   const total = lines.reduce((sum, line) => sum + Math.round(line.quantity * line.unitPrice), 0);
   const stockAdjustments=await retailAdjustments(db,id,lines);
   const paid = integer(p,"paid");

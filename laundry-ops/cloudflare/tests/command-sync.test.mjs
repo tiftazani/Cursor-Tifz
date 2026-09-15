@@ -6,6 +6,7 @@ import { attendanceRecordOwnedBy, canonicalHistoryPayload, cashCloseCreateAllowe
 import { applyJournalToSnapshot, legacySnapshotWriteAllowed, visibleSnapshot } from "../src/index.ts";
 
 const migration = readFileSync(new URL("../migrations/0003_command_sync.sql", import.meta.url), "utf8");
+const commandSyncSource = readFileSync(new URL("../src/command-sync.ts", import.meta.url), "utf8");
 
 test("migrasi menyediakan metadata idempotensi, journal cabang, dan penjaga stok", () => {
   for (const required of ["request_hash", "execution_token", "result_json", "branch_id", "command_id", "branch_stocks_nonnegative_update"]) {
@@ -86,7 +87,10 @@ test("otorisasi membatasi role, cabang, dan absensi orang lain", () => {
 test("komisi transaksi selalu berasal dari katalog server", () => {
   const catalogue=new Map([["cuci-kering",2500]]);
   assert.equal(trustedCommission("cuci-kering",catalogue),2500);
+  assert.equal(trustedCommission("layanan-lama",catalogue,new Map([["layanan-lama",1750]])),1750);
+  assert.equal(trustedCommission("cuci-kering",catalogue,new Map([["cuci-kering",999999]])),2500);
   assert.throws(()=>trustedCommission("layanan-palsu",catalogue),/tidak tersedia/);
+  assert.match(commandSyncSource,/FROM services WHERE organization_id=\? AND active=1 AND id IN/);
 });
 
 test("tutup kas bersifat append-only dan menolak ID yang sudah ada", () => {

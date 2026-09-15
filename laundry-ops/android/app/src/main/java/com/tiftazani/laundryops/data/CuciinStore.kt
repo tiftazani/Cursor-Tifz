@@ -543,6 +543,7 @@ object CuciinStore {
     }
 
     fun deleteCustomer(id: String): String? {
+        if (session.value?.role != Role.Owner) return "Hanya Owner yang dapat menghapus pelanggan"
         val c = customers.find { it.id == id } ?: return "Pelanggan tidak ketemu"
         customers.removeAll { it.id == id }
         if (selectedCustomer.value?.id == id) selectedCustomer.value = null

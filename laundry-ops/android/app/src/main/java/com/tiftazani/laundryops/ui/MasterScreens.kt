@@ -113,7 +113,7 @@ internal fun CustomersScreen(nav: NavHostController, toast: (String) -> Unit) {
                         creating = false
                         editing = null
                     }
-                    if (editing != null) {
+                    if (editing != null && store.session.value?.role == Role.Owner) {
                         DangerBtn("Hapus pelanggan") {
                             store.deleteCustomer(editing!!.id)?.let { toast(it) } ?: toast("Dihapus")
                             creating = false

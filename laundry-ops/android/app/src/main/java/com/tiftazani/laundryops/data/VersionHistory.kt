@@ -32,7 +32,7 @@ object VersionHistory {
                 "Perubahan akses cabang memicu bootstrap ulang; versi Service selalu naik dan kompensasi stok menunggu penghapusan berhasil.",
                 "Snapshot cloud disimpan di luar thread tampilan; kompensasi stok menunggu semua perubahan Service terkait selesai.",
                 "Akses staf, cabang, pelanggan, dan absensi diperketat; pemindahan staf menghapus data lama dan absensi hanya terkirim kepada pemiliknya.",
-                "Komisi transaksi diverifikasi dari katalog server, tutup kas dibuat append-only, dan penghapusan pelanggan dibatasi ke Owner.",
+                "Komisi transaksi diverifikasi dari katalog server dengan dukungan layanan historis, tutup kas dibuat append-only, dan penghapusan pelanggan dibatasi ke Owner.",
                 "Generasi penerapan cloud mencegah edit yang sudah terkirim diproses ulang; restore backup lama tetap didukung.",
             ),
         ),
