@@ -16,8 +16,33 @@ val releaseSigning = Properties().apply {
 val signingKeys = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
 val hasReleaseSigning = signingKeys.all { !releaseSigning.getProperty(it).isNullOrBlank() }
 fun buildConfigString(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
-val cloudUrl = providers.environmentVariable("CUCIIN_CLOUD_URL").orNull.orEmpty()
-val cloudKey = providers.environmentVariable("CUCIIN_CLOUD_KEY").orNull.orEmpty()
+// Konfigurasi cloud dibaca berurutan: environment variable menang, lalu file privat
+// di luar repo. File ini juga dipakai build lokal tanpa perlu mengekspor env var dulu,
+// supaya debug dan release sama-sama tersambung ke server yang benar.
+val cloudProperties = Properties().apply {
+    val path = providers.environmentVariable("CUCIIN_CLOUD_PROPERTIES").orNull
+        ?: listOf(
+            rootProject.file("../signing-private/cuciin-cloud.properties"),
+            file("../../../../signing-private/cuciin-cloud.properties"),
+        ).firstOrNull { it.isFile }?.absolutePath
+    path?.let { candidate -> file(candidate).takeIf { it.isFile }?.inputStream()?.use { load(it) } }
+}
+val cloudUrl = providers.environmentVariable("CUCIIN_CLOUD_URL").orNull
+    ?: cloudProperties.getProperty("cloudUrl").orEmpty()
+val cloudKey = providers.environmentVariable("CUCIIN_CLOUD_KEY").orNull
+    ?: cloudProperties.getProperty("cloudKey").orEmpty()
+
+// Build debug wajib punya alamat cloud; kalau tidak, aplikasi diam-diam jalan mode lokal
+// dan data tidak pernah naik ke server. Lebih baik gagal saat build daripada diam-diam salah.
+tasks.configureEach {
+    if (name == "preDebugBuild" || name == "preReleaseBuild") {
+        doFirst {
+            check(cloudUrl.isNotBlank()) {
+                "CUCIIN_CLOUD_URL kosong. Isi environment variable CUCIIN_CLOUD_URL atau taruh cloudUrl di signing-private/cuciin-cloud.properties."
+            }
+        }
+    }
+}
 val verifyReleaseSigning by tasks.registering {
     doLast {
         check(hasReleaseSigning) {
