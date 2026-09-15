@@ -2,6 +2,17 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.9.2 — 15 Sep 2026 (versionCode 17)
+
+- Tema tampilan bisa dipilih di Akun & profil untuk semua peran: Ikut sistem, Terang, Gelap, dan Warna-warni. Pilihan disimpan per akun di HP itu saja, terpisah dari data operasional dan sinkronisasi.
+- Tema Terang memakai palet 1.9.1 yang sama, jadi tampilan lama tidak berubah bagi yang tidak mengganti tema.
+- Setiap tema punya palet lengkap sendiri: latar, kartu, garis, teks, warna utama, dan warna status. Teks dijaga di rasio kontras minimal 4.5:1 dan batas kontrol minimal 3:1.
+- Tema gelap memakai tombol biru terang dengan teks gelap (pola Material 3 dark). Teks putih di atas biru terang hanya mencapai 3.42:1, di bawah syarat WCAG AA.
+- Token garis dipisah: batas kontrol untuk chip dan kolom isian, garis lembut untuk pemisah dekoratif. Sebelumnya satu nilai dipakai untuk keduanya sehingga batas kontrol hanya 1.24:1.
+- Teks redup pada tema terang dinaikkan dari #60718D ke #5C6C88 agar lolos 4.5:1 juga di atas latar chip dan banner.
+- Status bar dan navigation bar mengikuti tema aktif, termasuk warna ikonnya, sehingga tidak ada bilah putih di atas layar gelap.
+- Penambahan test `ThemePaletteTest` untuk aturan pemilihan tema dan palet.
+
 ## 1.9.1 — 15 Sep 2026 (versionCode 16)
 
 - Layanan retail kini memakai relasi ID produk stok, sehingga penjualan, koreksi, dan penghapusan Service selalu memutakhirkan saldo produk di cabang yang benar.

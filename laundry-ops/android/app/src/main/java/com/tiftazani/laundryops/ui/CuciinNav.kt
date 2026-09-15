@@ -45,6 +45,7 @@ import androidx.navigation.compose.rememberNavController
 import com.tiftazani.laundryops.data.CuciinStore
 import com.tiftazani.laundryops.data.Role
 import com.tiftazani.laundryops.ui.theme.Card
+import com.tiftazani.laundryops.ui.theme.OnPrim
 import com.tiftazani.laundryops.ui.theme.Foam
 import com.tiftazani.laundryops.ui.theme.Ink
 import com.tiftazani.laundryops.ui.theme.Muted
@@ -90,14 +91,14 @@ fun CuciinRoot() {
     fun toast(msg: String) { scope.launch { snack.showSnackbar(msg) } }
 
     val navColors = NavigationBarItemDefaults.colors(
-        selectedIconColor = androidx.compose.ui.graphics.Color.White,
+        selectedIconColor = OnPrim,
         selectedTextColor = Teal,
         indicatorColor = Teal,
         unselectedIconColor = Muted,
         unselectedTextColor = Muted,
     )
     val railColors = NavigationRailItemDefaults.colors(
-        selectedIconColor = androidx.compose.ui.graphics.Color.White,
+        selectedIconColor = OnPrim,
         selectedTextColor = Teal,
         indicatorColor = Teal,
         unselectedIconColor = Muted,

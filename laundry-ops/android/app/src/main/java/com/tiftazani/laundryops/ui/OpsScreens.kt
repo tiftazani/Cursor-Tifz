@@ -93,6 +93,7 @@ import com.tiftazani.laundryops.ui.theme.Green
 import com.tiftazani.laundryops.ui.theme.Ink
 import com.tiftazani.laundryops.ui.theme.Muted
 import com.tiftazani.laundryops.ui.theme.Teal
+import com.tiftazani.laundryops.ui.theme.OnPrim
 
 private val store get() = CuciinStore
 
@@ -201,10 +202,10 @@ private fun SummaryTile(label: String, value: String, icon: androidx.compose.ui.
     Surface(onClick = { tap(); onClick() }, modifier = modifier.semantics { this.selected = selected }, shape = RoundedCornerShape(20.dp), color = if (selected) Teal else Card, border = BorderStroke(1.dp, if (selected) Teal else Line)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(value, color = if (selected) Color.White else Ink, fontWeight = FontWeight.Bold, fontSize = 30.sp)
-                Icon(icon, null, tint = if (selected) Color.White.copy(alpha = .75f) else Teal, modifier = Modifier.size(24.dp))
+                Text(value, color = if (selected) OnPrim else Ink, fontWeight = FontWeight.Bold, fontSize = 30.sp)
+                Icon(icon, null, tint = if (selected) OnPrim.copy(alpha = .8f) else Teal, modifier = Modifier.size(24.dp))
             }
-            Text(label, color = if (selected) Color.White else Muted, fontSize = 12.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(label, color = if (selected) OnPrim else Muted, fontSize = 12.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }

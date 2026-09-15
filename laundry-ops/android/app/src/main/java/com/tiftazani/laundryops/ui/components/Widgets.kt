@@ -37,6 +37,9 @@ import com.tiftazani.laundryops.data.LaundryStatus
 import com.tiftazani.laundryops.data.PayStatus
 import com.tiftazani.laundryops.ui.rememberUi
 import com.tiftazani.laundryops.ui.theme.*
+import com.tiftazani.laundryops.ui.theme.OnPrim
+import com.tiftazani.laundryops.ui.theme.OnHero
+import com.tiftazani.laundryops.ui.theme.LineSoft
 
 @Composable
 fun rememberTapFeedback(): () -> Unit {
@@ -86,7 +89,7 @@ fun SelectChip(selected: Boolean, label: String, onClick: () -> Unit) {
     FilterChip(modifier = Modifier.heightIn(min = 48.dp), selected = selected, onClick = { tap(); onClick() },
         shape = RoundedCornerShape(12.dp), label = { Text(label, fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium) },
         leadingIcon = if (selected) ({ Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp)) }) else null,
-        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Teal, selectedLabelColor = Color.White, selectedLeadingIconColor = Color.White, containerColor = Card, labelColor = Muted),
+        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Teal, selectedLabelColor = OnPrim, selectedLeadingIconColor = OnPrim, containerColor = Card, labelColor = Muted),
         border = FilterChipDefaults.filterChipBorder(enabled = true, selected = selected, borderColor = Line, selectedBorderColor = Teal))
 }
 
@@ -95,23 +98,25 @@ fun SelectChip(selected: Boolean, label: String, onClick: () -> Unit) {
 @Composable
 fun Hero(title: String, value: String, pills: List<String>) {
     val ui = rememberUi()
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(listOf(TealDeep, Teal)))) {
+    // Warna diambil di luar lambda Canvas: DrawScope bukan composable, jadi token tema tidak bisa dibaca di dalamnya.
+    val heroRing = OnHero
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(listOf(LocalCuciinPalette.current.heroA, LocalCuciinPalette.current.heroB)))) {
         Canvas(Modifier.matchParentSize()) {
             val center = Offset(size.width * .94f, size.height * .52f)
-            drawCircle(Color.White.copy(alpha = .09f), size.height * .52f, center, style = Stroke(18.dp.toPx()))
-            drawCircle(Color.White.copy(alpha = .08f), size.height * .76f, center, style = Stroke(1.dp.toPx()))
+            drawCircle(heroRing.copy(alpha = .09f), size.height * .52f, center, style = Stroke(18.dp.toPx()))
+            drawCircle(heroRing.copy(alpha = .08f), size.height * .76f, center, style = Stroke(1.dp.toPx()))
         }
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, color = Color.White.copy(alpha = .8f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            Text(value, color = Color.White, fontSize = ui.heroSp, lineHeight = ui.heroSp * 1.15f, fontWeight = FontWeight.Bold)
-            if (pills.isNotEmpty()) Text(pills.joinToString("  ·  "), color = Color.White.copy(alpha = .85f), fontSize = 12.sp, lineHeight = 18.sp)
+            Text(title, color = OnHero.copy(alpha = .85f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(value, color = OnHero, fontSize = ui.heroSp, lineHeight = ui.heroSp * 1.15f, fontWeight = FontWeight.Bold)
+            if (pills.isNotEmpty()) Text(pills.joinToString("  ·  "), color = OnHero.copy(alpha = .9f), fontSize = 12.sp, lineHeight = 18.sp)
         }
     }
 }
 
 @Composable
 fun CardBlock(modifier: Modifier = Modifier, accent: Color? = null, content: @Composable ColumnScope.() -> Unit) {
-    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = Card, border = BorderStroke(1.dp, Line.copy(alpha = .8f))) {
+    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = Card, border = BorderStroke(1.dp, LineSoft)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (accent != null) Box(Modifier.width(28.dp).height(3.dp).clip(CircleShape).background(accent))
             content()
@@ -134,12 +139,12 @@ fun PrimaryBtn(text: String, modifier: Modifier = Modifier, enabled: Boolean = t
     Button(onClick = { tap(); onClick() }, enabled = enabled, modifier = modifier.fillMaxWidth().heightIn(min = 54.dp),
         shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 6.dp),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp, pressedElevation = 1.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Teal, contentColor = Color.White), contentPadding = PaddingValues(16.dp, 12.dp)) {
+        colors = ButtonDefaults.buttonColors(containerColor = Teal, contentColor = OnPrim), contentPadding = PaddingValues(16.dp, 12.dp)) {
         if (icon != null) {
-            Surface(shape = RoundedCornerShape(10.dp), color = Color.White.copy(alpha = .16f)) { Icon(icon, null, modifier = Modifier.padding(6.dp).size(18.dp)) }
+            Surface(shape = RoundedCornerShape(10.dp), color = OnPrim.copy(alpha = .16f)) { Icon(icon, null, modifier = Modifier.padding(6.dp).size(18.dp)) }
             Spacer(Modifier.width(9.dp))
         }
-        Text(text, color = if (enabled) Color.White else Muted, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(text, color = if (enabled) OnPrim else Muted, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     }
 }
 
@@ -186,8 +191,8 @@ fun StepProgress(step: Int) {
         listOf("Pelanggan", "Service", "Periksa", "Bayar").forEachIndexed { i, label ->
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 Box(Modifier.size(22.dp).background(if (i <= step) Teal else Line, CircleShape), contentAlignment = Alignment.Center) {
-                    if (i < step) Icon(Icons.Outlined.Check, null, tint = Color.White, modifier = Modifier.size(14.dp))
-                    else Text("${i + 1}", color = if (i == step) Color.White else Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    if (i < step) Icon(Icons.Outlined.Check, null, tint = OnPrim, modifier = Modifier.size(14.dp))
+                    else Text("${i + 1}", color = if (i == step) OnPrim else Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
                 Text(label, fontSize = 10.sp, maxLines = 1, color = if (i <= step) Ink else Muted, fontWeight = if (i == step) FontWeight.Bold else FontWeight.Normal)
             }

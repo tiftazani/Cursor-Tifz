@@ -22,6 +22,7 @@ import com.tiftazani.laundryops.data.FirebaseCloud
 import com.tiftazani.laundryops.data.FileExports
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -61,6 +62,10 @@ import com.tiftazani.laundryops.ui.theme.Ink
 import com.tiftazani.laundryops.ui.theme.Muted
 import com.tiftazani.laundryops.ui.theme.Teal
 import com.tiftazani.laundryops.ui.theme.Green
+import com.tiftazani.laundryops.ui.theme.CuciinThemeMode
+import com.tiftazani.laundryops.ui.theme.OnPrim
+import com.tiftazani.laundryops.ui.theme.ThemePrefs
+import com.tiftazani.laundryops.ui.theme.LineSoft
 import java.time.LocalDateTime
 
 private val store get() = CuciinStore
@@ -110,16 +115,16 @@ internal fun MoreScreen(nav: NavHostController) {
         item {
             Surface(onClick = { nav.navigate("profil") }, color = Teal, shape = RoundedCornerShape(20.dp)) {
                 Row(Modifier.fillMaxWidth().padding(18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.AccountCircle, null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(32.dp))
-                    Column(Modifier.weight(1f)) { Text("Akun & profil", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold); Text("Informasi akun dan kata sandi", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .8f), fontSize = 12.sp) }
-                    Icon(Icons.Outlined.ChevronRight, null, tint = androidx.compose.ui.graphics.Color.White)
+                    Icon(Icons.Outlined.AccountCircle, null, tint = OnPrim, modifier = Modifier.size(32.dp))
+                    Column(Modifier.weight(1f)) { Text("Akun & profil", color = OnPrim, fontWeight = FontWeight.Bold); Text("Informasi akun dan kata sandi", color = OnPrim.copy(alpha = .85f), fontSize = 12.sp) }
+                    Icon(Icons.Outlined.ChevronRight, null, tint = OnPrim)
                 }
             }
         }
         items(items.filter { it.second != "profil" }.chunked(columns)) { group ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
                 group.forEach { (label, route) ->
-                    Surface(onClick = { tap(); nav.navigate(route) }, modifier = Modifier.weight(1f).fillMaxHeight(), color = Card, shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, Line)) {
+                    Surface(onClick = { tap(); nav.navigate(route) }, modifier = Modifier.weight(1f).fillMaxHeight(), color = Card, shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, LineSoft)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Icon(when (route) {
                                 "analytics" -> Icons.Outlined.BarChart
@@ -377,7 +382,7 @@ private fun ReportCell(text: String, width: androidx.compose.ui.unit.Dp, header:
     Text(
         text,
         modifier = Modifier.width(width).fillMaxHeight().padding(horizontal = 8.dp, vertical = 8.dp),
-        color = if (header) androidx.compose.ui.graphics.Color.White else Ink,
+        color = if (header) OnPrim else Ink,
         fontSize = if (header) 11.sp else 10.sp,
         lineHeight = 14.sp,
         fontWeight = if (header) FontWeight.Bold else FontWeight.Normal,
@@ -443,12 +448,14 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val s = store.session.value ?: return
     val account = store.staff.firstOrNull { it.email.equals(s.email, true) }
     val assignedBranches = account?.branchIds.orEmpty().mapNotNull { id -> store.branches.firstOrNull { it.id == id }?.name }
+    var themeMode by remember { mutableStateOf(ThemePrefs.mode) }
     var changePassword by remember { mutableStateOf(false) }
     var changeEmail by remember { mutableStateOf(false) }
     var newEmail by remember { mutableStateOf(s.email) }
@@ -509,6 +516,18 @@ internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
         }
+        item {
+            CardBlock {
+                SectionLabel("Tema tampilan")
+                Text("Berlaku untuk akun ini di HP ini saja, tidak ikut tersinkron ke perangkat lain.", color = Muted, fontSize = 12.sp)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CuciinThemeMode.entries.forEach { option ->
+                        SelectChip(themeMode == option, option.label) { ThemePrefs.set(option); themeMode = ThemePrefs.mode }
+                    }
+                }
+                Text("Contoh teks dan kartu memakai warna tema ini: ${paletteSampleLabel(themeMode)}.", color = Muted, fontSize = 12.sp)
+            }
+        }
         item { CardBlock { InfoRow(Icons.Outlined.CloudSync, "Sinkronisasi", CloudSync.lastStatus); InfoRow(Icons.Outlined.Info, "Versi aplikasi", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") } }
         item { GhostBtn("Riwayat versi", icon = Icons.Outlined.History) { nav.navigate("versions") } }
         if (s.role != Role.Owner) item { DangerBtn("Hapus akun saya") { if (store.deleteMyAccount()) { toast("Akun dihapus"); nav.navigate("login") { popUpTo(0) } } } }
@@ -538,4 +557,12 @@ internal fun VersionScreen(nav: NavHostController) {
         }
         item { Spacer(Modifier.height(20.dp)) }
     }
+}
+
+/** Kalimat contoh supaya pengguna melihat tema mana yang sedang aktif tanpa menebak. */
+private fun paletteSampleLabel(mode: CuciinThemeMode): String = when (mode) {
+    CuciinThemeMode.Sistem -> "mengikuti pengaturan gelap/terang HP"
+    CuciinThemeMode.Terang -> "latar terang dengan aksen biru"
+    CuciinThemeMode.Gelap -> "latar gelap dengan aksen biru muda"
+    CuciinThemeMode.Warni -> "latar merah muda dengan aksen plum"
 }

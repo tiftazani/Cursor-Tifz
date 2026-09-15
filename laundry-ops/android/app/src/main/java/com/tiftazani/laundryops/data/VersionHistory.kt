@@ -12,10 +12,20 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.9.1"
-    val currentCode: Int = 16
+    val currentName: String = "1.9.2"
+    val currentCode: Int = 17
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.9.2", code = 17, date = "15 Sep 2026",
+            notes = listOf(
+                "Tema tampilan dapat dipilih di Akun & profil: Ikut sistem, Terang, Gelap, atau Warna-warni. Pilihan berlaku per akun di HP masing-masing dan tidak ikut tersinkron.",
+                "Setiap tema memakai palet sendiri. Teks memenuhi kontras WCAG AA 4.5:1 dan batas kontrol memenuhi 3:1, dihitung dengan rumus kontras, bukan perkiraan.",
+                "Tema gelap memakai tombol biru terang dengan teks gelap, mengikuti pola Material 3 dark, karena teks putih di atas biru terang gagal kontras.",
+                "Garis batas kontrol dipisahkan dari garis pemisah dekoratif supaya chip dan kolom isian tetap terlihat di semua tema.",
+                "Status bar dan navigation bar mengikuti tema; ikonnya menyesuaikan gelap atau terang.",
+            ),
+        ),
         AppRelease(
             name = "1.9.1", code = 16, date = "15 Sep 2026",
             notes = listOf(
