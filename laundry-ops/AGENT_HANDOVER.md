@@ -5,14 +5,17 @@ Dokumen ini adalah titik mulai untuk Hermes, OpenCode, Cursor, Codex, atau revie
 ## Status yang sudah diverifikasi
 
 - Branch: `codex/cuciin-1-8-1`; PR: `https://github.com/tiftazani/Cursor-Tifz/pull/18`.
-- Commit sumber terakhir saat handover: `3d25c4d`.
-- Android: `com.tiftazani.laundryops`, Kotlin + Jetpack Compose, versionName `1.9.0`, versionCode `15`.
-- Kandidat rilis: `releases/1.9.0-candidate/`. Jangan mengubah atau mengganti APK/AAB tanpa build dan checksum baru.
+- Commit sumber terakhir saat handover: `9bd026f`.
+- Android: `com.tiftazani.laundryops`, Kotlin + Jetpack Compose, versionName `1.9.2`, versionCode `17`.
+- Kandidat rilis: `releases/1.9.2-candidate/`. Jangan mengubah atau mengganti APK/AAB tanpa build dan checksum baru.
 - Worker produksi: `cuciin-api`, D1 `cuciin-db`, Firebase project `cuciin-ops-tiftazani`.
-- Worker yang aktif saat handover: `d451c581-7bb5-434a-a6ad-bb3933d13adf`; health memberi HTTP 200, database `ready`, dan request snapshot tanpa token memberi 401.
-- Validasi terakhir: 41 unit test Android debug + 41 release, lint kedua varian, APK/AAB release, serta 20 test Worker lulus. PR bersih dan seluruh check hijau.
+- Worker yang aktif saat handover: `71310107-4ec5-48f8-aedb-481be9107649`; health memberi HTTP 200 dan database `ready`.
+- Skema D1 produksi: migrasi `0001` sampai `0004_operational_links.sql` sudah diterapkan.
+- Validasi terakhir: 47 unit test Android debug + 47 release, lint kedua varian tanpa error, APK/AAB release, serta 29 test Worker lulus. PR bersih dan seluruh check hijau.
 
 Kondisi ini adalah kandidat rilis, bukan keputusan big-bang. Daftar tugas Owner yang masih tersisa ada di `android/RELEASE_READINESS.md` dan `OPERATIONS_RUNBOOK.md`.
+
+Catatan versi 1.9.2: tema tampilan dapat dipilih setiap pengguna di Akun & profil (Ikut sistem, Terang, Gelap, Warna-warni), disimpan per akun di HP masing-masing dan tidak ikut sinkronisasi. Build debug dan rilis sama-sama menyambung ke Worker; alamat cloud dibaca dari environment variable `CUCIIN_CLOUD_URL` atau berkas privat `signing-private/cuciin-cloud.properties`, dan build gagal bila keduanya kosong. Mockup web Cuciin sudah dilepas dari project Vercel `cuan-tif` dan dijalankan lokal lewat `mockup/start.sh`.
 
 ## Peta sistem
 
@@ -32,7 +35,7 @@ Firebase hanya menangani identitas. D1 adalah sumber data operasional pusat. Fot
 
 ## Endpoint dan konfigurasi
 
-- URL build Android untuk endpoint lama/snapshot: `https://cuciin-api.tiftazani-cuciin.workers.dev/api/cuciin` melalui `CUCIIN_CLOUD_URL`.
+- URL build Android untuk endpoint lama/snapshot: `https://cuciin-api.tiftazani-cuciin.workers.dev/api/cuciin` melalui `CUCIIN_CLOUD_URL`, atau `cloudUrl` pada `signing-private/cuciin-cloud.properties`.
 - Android membentuk endpoint command dan delta dari host yang sama: `/v1/me`, `/v1/sync/commands`, dan `/v1/sync/changes`.
 - Health: `GET https://cuciin-api.tiftazani-cuciin.workers.dev/health`.
 - Jangan menaruh token, password, `google-services.json`, `local.properties`, keystore, signing properties, atau secret Cloudflare/Firebase di Git atau chat.
@@ -60,7 +63,7 @@ Firebase hanya menangani identitas. D1 adalah sumber data operasional pusat. Fot
 
 ## Build dan validasi
 
-Jalankan dari sumber yang bersih dan jangan mencetak nilai signing properties.
+Jalankan dari sumber yang bersih dan jangan mencetak nilai signing properties. Alamat cloud wajib tersedia, kalau tidak build Android berhenti dengan pesan yang jelas.
 
 ```sh
 cd laundry-ops/cloudflare
@@ -68,8 +71,12 @@ npm ci
 npm run check
 
 cd ../android
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 ./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
+
+Di mesin Owner, `local.properties` sudah memuat `sdk.dir` dan berkas `signing-private/cuciin-cloud.properties` sudah menyediakan alamat cloud.
 
 Untuk rilis bertanda tangan, gunakan instruksi pada `android/RELEASE_READINESS.md`. Hanya lakukan deploy Worker, push, atau perubahan data produksi bila tugas secara eksplisit mengizinkannya.
 

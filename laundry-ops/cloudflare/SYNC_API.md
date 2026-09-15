@@ -37,7 +37,59 @@ Kontrak ini dipakai Android setelah pengguna memperoleh Firebase ID token. Semua
 
 Batch dapat berhasil sebagian. Android hanya boleh menghapus command yang ada di `acknowledgedCommandIds`. Setelah satu command gagal, command berikutnya pada batch dikembalikan sebagai `retryable` agar efek lanjutan tidak mendahului dependensinya. Kesalahan validasi, hak akses, atau konflik data memakai `status: "rejected"` dan dapat dipindahkan ke daftar konflik. Gangguan D1/Worker sementara memakai `status: "retryable"` dengan kode 5xx; command tetap berada di outbox dan dicoba lagi, bukan dipindahkan ke dead-letter.
 
-Entity yang diterima adalah `branch`, `staff`, `customer`, `service`, `product`, `branchStock`, `inventory`, `expense`, `nota`, `stockMove`, `audit`, `cashClose`, dan `attendance`, dengan operasi `upsert` atau `delete`. Payload memakai nama field Kotlin secara persis. Data `passwordHash` dibuang oleh server dan tidak dimasukkan ke journal.
+Entity yang diterima adalah `branch`, `staff`, `customer`, `service`, `product`, `branchStock`, `inventory`, `expense`, `nota`, `stockMove`, `audit`, `cashClose`, `attendance`, `accessPolicy`, dan `whatsappTemplate`, dengan operasi `upsert` atau `delete`. Payload memakai nama field Kotlin secara persis. Data `passwordHash` dibuang oleh server dan tidak dimasukkan ke journal.
+
+### Kebijakan akses pengguna
+
+`accessPolicy` menyimpan batas modul dan fungsi per pengguna. Hanya Owner yang boleh mengirim command ini; perangkat non-Owner menerima `403`. Satu email hanya punya satu baris kebijakan, jadi pengiriman ulang menimpa isi sebelumnya.
+
+```json
+{
+  "commandId": "01947e2a-...",
+  "entityType": "accessPolicy",
+  "entityId": "kasir@cuciin.id",
+  "operation": "upsert",
+  "payload": {
+    "email": "kasir@cuciin.id",
+    "modules": ["service", "customer", "stock"],
+    "functions": ["service.create", "service.correct", "stock.write"]
+  }
+}
+```
+
+Modul yang dikenal: `queue`, `service`, `customer`, `stock`, `inventory`, `attendance`, `whatsapp`, `expense`, `cash`. Fungsi yang dikenal: `service.create`, `service.correct`, `queue.status`, `stock.write`, `attendance.write`, `whatsapp.send`.
+
+Aturan yang berlaku di server:
+
+- Owner selalu lolos, apa pun isi kebijakannya.
+- Baris tanpa kebijakan berarti pengguna memakai hak role dasarnya, bukan terkunci.
+- Kebijakan berlaku langsung pada command berikutnya di request yang sama.
+- Command `order.create` tanpa baris Nota yang sudah ada memerlukan `service.create`; koreksi Nota yang sudah ada memerlukan `service.correct`.
+- Command `order.*` dengan `waSent: true` memerlukan modul `whatsapp` dan fungsi `whatsapp.send`.
+- Command stok, absensi, pelanggan, inventory, biaya, dan tutup kas memetakan ke modulnya masing-masing seperti daftar di atas.
+
+### Template pesan WhatsApp
+
+`whatsappTemplate` menyimpan tiga bagian pesan: pembuka, isi pengantar, dan penutup. Hanya Owner yang boleh mengirim command ini. ID bawaan adalah `business`, dan pengiriman ulang menimpa baris yang sama.
+
+```json
+{
+  "commandId": "01947e2b-...",
+  "entityType": "whatsappTemplate",
+  "entityId": "business",
+  "operation": "upsert",
+  "payload": {
+    "id": "business",
+    "opening": "Halo {pelanggan},",
+    "content": "Berikut rincian Service Anda dari {cabang}.",
+    "closing": "Terima kasih telah mempercayakan laundry Anda kepada {cabang}."
+  }
+}
+```
+
+Tempat penampung yang dikenali perangkat: `{pelanggan}`, `{cabang}`, `{kasir}`, dan `{nota}`. Server menyimpan isinya apa adanya dan tidak mengganti tempat penampung; penggantian dilakukan saat nota disusun di perangkat.
+
+Kedua entity memakai jalur idempotensi yang sama seperti command lain: `commandId` yang sama dengan isi yang sama diakui sebagai `duplicate`, sedangkan `commandId` lama dengan isi berbeda ditolak `409`.
 
 `branchStock` absolut diperlakukan sebagai proyeksi dan diakui tanpa menimpa saldo server. `stockMove` adalah sumber mutasi stok:
 
@@ -90,6 +142,8 @@ Simpan `revision` hanya setelah seluruh perubahan pada halaman berhasil diterapk
 - Pada Nota milik non-Owner, server memaksa kasir dan handler dari Firebase session sehingga payload perangkat tidak dapat menyamar sebagai akun lain.
 - Tarif komisi setiap rincian diambil dari master layanan server. Koreksi nota yang layanannya sudah dipensiunkan memakai komisi historis pada nota tersebut. Harga per Service tetap boleh dikoreksi, tetapi perangkat tidak dapat mengubah tarif komisi.
 - Tutup kas bersifat append-only. ID yang sudah tersimpan tidak dapat ditimpa oleh command lain, dan ID Android memuat cabang serta UUID.
+- `accessPolicy` dan `whatsappTemplate` hanya dapat diubah Owner, baik saat upsert maupun penghapusan. Keduanya pengaturan tingkat organisasi, jadi tidak terikat cabang dan tidak muncul pada delta non-Owner.
+- Kebijakan akses yang tersimpan diperiksa pada setiap command non-Owner yang memetakan ke modul tertentu. Penolakan memakai `403` dengan pesan "Akses fungsi ini dibatasi oleh Owner" dan masuk daftar konflik, bukan dicoba ulang.
 
 ## Kompatibilitas dan rollout
 
