@@ -11,12 +11,13 @@ Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **
 |---|---|---|
 | Repo lokal | `/Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz` | satu-satunya clone; `~/Cursor-Tifz` bukan clone repo ini |
 | Branch | `codex/cuciin-1-8-1` | `git status -sb` |
-| HEAD | `f21776a` — sama dengan `origin/codex/cuciin-1-8-1` (0 ahead / 0 behind) | `git rev-list --left-right --count HEAD...origin/...` |
+| HEAD | `67903dc` — sama dengan `origin/codex/cuciin-1-8-1` (0 ahead / 0 behind) | `git rev-list --left-right --count HEAD...origin/...` |
 | PR | #18, OPEN, mergeable, semua check hijau | `gh pr view 18` |
 | Android | **1.9.2 (versionCode 17)** | `app/build.gradle.kts` |
 | Worker produksi | versi `71310107-4ec5-48f8-aedb-481be9107649` (15:10 WIB) | `wrangler deployments list --name cuciin-api` |
 | Skema D1 produksi | migrasi `0003` dan `0004` sudah diterapkan | `wrangler d1 execute cuciin-db --remote --command "SELECT name FROM d1_migrations"` |
 | Health produksi | `ok`, database `ready` | `curl .../health` |
+| Test Worker | 29 lulus (20 lama + 9 baru untuk accessPolicy dan whatsappTemplate) | `cd cloudflare && npm run check` |
 | Konfigurasi cloud build | `signing-private/cuciin-cloud.properties` (di luar repo) | `app/build.gradle.kts` |
 
 Working tree bersih. Tidak ada pekerjaan setengah jadi yang menggantung.
@@ -45,11 +46,10 @@ Working tree bersih. Tidak ada pekerjaan setengah jadi yang menggantung.
 
 ## 4. Yang masih kurang (bukan bug, tapi belum lengkap)
 
-1. **`cloudflare/SYNC_API.md` belum memuat kontrak `accessPolicy` dan `whatsappTemplate`.** Dokumen itu masih pada commit `3d25c4d`. `AGENT_WORKFLOW.md` mewajibkan kontrak request/response ditulis sebelum kedua sisi diubah, jadi ini celah proses.
-2. **Belum ada test Worker untuk dua command baru.** Test tetap 20 dan tidak menyentuh `accessPolicy`/`whatsappTemplate`. Yang belum tercakup: retry tidak menggandakan policy, non-Owner ditolak 403, dan idempotensi saat `ON CONFLICT`.
-3. **`AGENT_HANDOVER.md` masih menyebut versi 1.9.0 / versionCode 15 dan commit `3d25c4d`.** Angkanya perlu disegarkan ke 1.9.2 / 17.
-4. **Sisi Vercel belum dibersihkan.** Repo sudah tidak punya route Cuciin, tapi project `cuan-tif` dan alias/custom domain-nya masih perlu ditinjau dari dashboard Vercel. Dijadwalkan Owner, belum dikerjakan.
-5. **PR #18 belum di-merge.** Halaman unduh lama tidak relevan lagi (APK dibagikan dari `releases/`), tetapi merge tetap diperlukan agar `main` memuat 1.9.2.
+1. **Sisi Vercel belum dibersihkan.** Repo sudah tidak punya route Cuciin, tapi project `cuan-tif` dan alias/custom domain-nya masih perlu ditinjau dari dashboard Vercel. Dijadwalkan Owner, belum dikerjakan.
+2. **PR #18 sedang menunggu merge.** Kontrak, test, dan dokumen sudah lengkap di cabang; `main` belum memuat 1.9.2 sampai PR di-merge.
+
+Yang sudah ditutup 15 Sep malam: kontrak `accessPolicy`/`whatsappTemplate` di `SYNC_API.md`, 9 test Worker baru, dan `AGENT_HANDOVER.md` yang kini menyebut 1.9.2 / versionCode 17 / commit `9bd026f`.
 
 ## 5. Klaim file (berlaku sampai handover berikutnya)
 
@@ -114,9 +114,7 @@ File-file itu menyimpan aturan uang, stok, komisi, otorisasi, dan protokol sinkr
 ## 6. Urutan kerja yang disarankan
 
 1. Merge PR #18 ke `main` supaya `main` memuat 1.9.2 (keputusan Owner).
-2. Tulis kontrak `accessPolicy` + `whatsappTemplate` di `SYNC_API.md`, lalu tambah test Worker untuk retry, role Owner-only, dan idempotensi.
-3. Segarkan `AGENT_HANDOVER.md` ke 1.9.2 / versionCode 17 / commit terbaru.
-4. Tinjau project Vercel `cuan-tif` dari dashboard (alias, custom domain, riwayat deploy).
+2. Tinjau project Vercel `cuan-tif` dari dashboard (alias, custom domain, riwayat deploy).
 
 ## 7. Lingkungan build di mesin ini
 
