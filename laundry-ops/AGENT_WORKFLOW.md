@@ -2,11 +2,13 @@
 
 Gunakan dokumen ini saat satu pekerjaan dibagi ke Hermes, OpenCode, Cursor, Codex, atau reviewer.
 
+Klaim file yang sedang berlaku dicatat di `AGENT_STATUS.md`. Baca file itu sebelum menyentuh kode.
+
 ## Sebelum pekerjaan dimulai
 
 1. Koordinator memilih satu branch dan menyebut commit dasar.
-2. Setiap agent mengklaim daftar file atau folder. Tidak ada dua agent mengedit berkas yang sama tanpa koordinasi.
-3. Agent membaca `AGENT_HANDOVER.md`, `CODING_AGENT_CONTEXT.md`, dan dokumen domain terkait.
+2. Setiap agent mengklaim daftar file atau folder. Tidak ada dua agent mengedit berkas yang sama tanpa koordinasi. Tulis klaimnya di `AGENT_STATUS.md`, bukan hanya di chat.
+3. Agent membaca `AGENT_HANDOVER.md`, `CODING_AGENT_CONTEXT.md`, `AGENT_STATUS.md`, dan dokumen domain terkait.
 4. Perubahan API, database, atau role harus memiliki pemilik tunggal. Agent lain boleh review, tidak mengubah kontrak secara paralel.
 
 ## Pembagian yang aman
@@ -18,6 +20,8 @@ Gunakan dokumen ini saat satu pekerjaan dibagi ke Hermes, OpenCode, Cursor, Code
 | Worker, D1, command, laporan | agent backend | `npm run check` + migration review |
 | Runbook, changelog, handover | agent dokumentasi | link, versi, dan fakta produksi konsisten |
 | Integritas dan security | reviewer terpisah | audit read-only berbasis skenario nyata |
+
+Pekerjaan yang belum di-commit wajib disebut di `AGENT_STATUS.md` sebelum agent lain masuk ke area yang sama. Jangan menyimpan perubahan setengah jadi hanya di working tree tanpa catatan.
 
 ## Urutan ketika kontrak berubah
 

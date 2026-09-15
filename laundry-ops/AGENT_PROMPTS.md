@@ -2,6 +2,15 @@
 
 Salin satu prompt di bawah, lalu tambahkan tugas spesifik Anda. Jangan menyertakan password, token, atau lokasi berkas signing privat.
 
+## Blok klaim file (tempel di awal percakapan)
+
+```text
+Repo: https://github.com/tiftazani/Cursor-Tifz, branch codex/cuciin-1-8-1, commit dasar 76545ad.
+Sebelum menyentuh kode, baca laundry-ops/AGENT_STATUS.md. Di situ ada klaim file per agent, pekerjaan yang belum di-commit, dan blocker yang sedang berjalan.
+
+Tulis di AGENT_STATUS.md daftar file yang menjadi milik pekerjaan ini sebelum mulai. Jangan mengedit file yang sedang dipegang agent lain; kalau butuh, sebutkan alasannya lebih dulu dan tunggu jawaban. Jangan menyentuh CuciinStore.kt, Models.kt, SyncProtocol.kt, ReceiptText.kt, dan MoreScreens.kt tanpa menjalankan git diff lebih dulu dan menyebut alasan perubahan.
+```
+
 ## Implementasi umum
 
 ```text

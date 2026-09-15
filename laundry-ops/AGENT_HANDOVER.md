@@ -1,6 +1,6 @@
 # Handover teknis Cuciin
 
-Dokumen ini adalah titik mulai untuk Hermes, OpenCode, Cursor, Codex, atau reviewer baru. Baca bersama `CODING_AGENT_CONTEXT.md`, lalu gunakan prompt pada `AGENT_PROMPTS.md`.
+Dokumen ini adalah titik mulai untuk Hermes, OpenCode, Cursor, Codex, atau reviewer baru. Baca bersama `CODING_AGENT_CONTEXT.md`, lalu gunakan prompt pada `AGENT_PROMPTS.md`. Untuk klaim file yang sedang berlaku dan pekerjaan yang belum di-commit, buka `AGENT_STATUS.md` lebih dulu.
 
 ## Status yang sudah diverifikasi
 
@@ -75,7 +75,7 @@ Untuk rilis bertanda tangan, gunakan instruksi pada `android/RELEASE_READINESS.m
 
 ## Handover antar-agent
 
-Sebelum mulai, setiap agent harus menyatakan file yang akan disentuh. Bila kontrak Android–Worker berubah, tulis dahulu perubahan payload, kompatibilitas versi lama, migrasi, dan strategi rollback. Sertakan pada handover:
+Sebelum mulai, setiap agent harus menyatakan file yang akan disentuh dan mencatatnya di `AGENT_STATUS.md`. Bila kontrak Android–Worker berubah, tulis dahulu perubahan payload, kompatibilitas versi lama, migrasi, dan strategi rollback. Sertakan pada handover:
 
 - tujuan dan file yang diubah;
 - aturan bisnis atau data yang dilindungi;

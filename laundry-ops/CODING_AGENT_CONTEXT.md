@@ -1,6 +1,6 @@
 # Konteks kerja bersama Cuciin
 
-Dokumen ini adalah sumber konteks ringkas untuk Hermes, OpenCode, Router, Codex, atau agen pemrograman lain. Untuk status rilis, arsitektur, batas data, dan prosedur handover yang lengkap, baca juga `AGENT_HANDOVER.md`, `AGENT_PROMPTS.md`, dan `AGENT_WORKFLOW.md`. Salin blok di bawah ke awal percakapan baru dan tambahkan tugas khusus setelahnya.
+Dokumen ini adalah sumber konteks ringkas untuk Hermes, OpenCode, Router, Codex, atau agen pemrograman lain. Untuk status rilis, arsitektur, batas data, dan prosedur handover yang lengkap, baca juga `AGENT_HANDOVER.md`, `AGENT_PROMPTS.md`, dan `AGENT_WORKFLOW.md`. Sebelum mengedit apa pun, baca `AGENT_STATUS.md`: di situ ada klaim file per agent, pekerjaan yang belum di-commit, dan blocker yang sedang berjalan. Salin blok di bawah ke awal percakapan baru dan tambahkan tugas khusus setelahnya.
 
 ```text
 Repo: https://github.com/tiftazani/Cursor-Tifz
@@ -50,7 +50,7 @@ Jelaskan file yang diubah, alasan, hasil uji, migrasi yang diperlukan, dan risik
 Gunakan tambahan berikut ketika beberapa agen bekerja serentak:
 
 ```text
-Sebelum mulai, nyatakan daftar file yang akan menjadi milik pekerjaanmu. Jangan menyunting file yang sedang dimiliki agen lain. Buat perubahan kecil dan terfokus, sertakan test untuk aturan bisnis atau sinkronisasi, lalu kirim hash commit atau diff ringkas kepada koordinator. Jika kontrak API perlu berubah, tulis request/response JSON dan strategi kompatibilitas sebelum mengubah kedua sisi.
+Sebelum mulai, nyatakan daftar file yang akan menjadi milik pekerjaanmu. Jangan menyunting file yang sedang dimiliki agen lain. Catat klaim itu di `laundry-ops/AGENT_STATUS.md` supaya agent lain bisa membacanya. Buat perubahan kecil dan terfokus, sertakan test untuk aturan bisnis atau sinkronisasi, lalu kirim hash commit atau diff ringkas kepada koordinator. Jika kontrak API perlu berubah, tulis request/response JSON dan strategi kompatibilitas sebelum mengubah kedua sisi.
 ```
 
 Router/reviewer dapat memakai instruksi ini:
