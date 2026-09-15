@@ -135,7 +135,7 @@ export function parseCommand(raw: unknown): SyncCommand {
 
 export function commandPermission(identity: SyncIdentity, type: string, branchId?: string, staffEmail?: string): { allowed: boolean; reason?: string } {
   if (identity.bootstrap) return { allowed:true };
-  if ((OWNER_ONLY.has(type) || ["branch.delete","staff.delete","service.delete","product.delete","stockMove.delete","audit.delete","cashClose.delete"].includes(type)) && identity.role !== "Owner") return { allowed:false,reason:"owner" };
+  if ((OWNER_ONLY.has(type) || ["branch.delete","staff.delete","customer.delete","service.delete","product.delete","stockMove.delete","audit.delete","cashClose.delete"].includes(type)) && identity.role !== "Owner") return { allowed:false,reason:"owner" };
   if (type === "order.delete" && identity.role !== "Owner") return { allowed:false,reason:"owner" };
   if (["expense.upsert", "expense.delete", "cashClose.upsert", "cashClose.delete"].includes(type) && identity.role === "Supervisor") return { allowed:false,reason:"role" };
   if (["order.create", "order.update", "order.put", "order.payment", "order.handover"].includes(type) && identity.role === "Supervisor") return { allowed:false,reason:"role" };
@@ -156,6 +156,16 @@ export function staffJournalScopes(previous: string[], next: string[]): { delete
     deletes:before.filter(branch=>!after.includes(branch)),
     upserts:after.length ? after : [null],
   };
+}
+
+export function trustedCommission(serviceId: string, catalogue: Map<string, number>): number {
+  const value=catalogue.get(serviceId);
+  if(value == null) throw new CommandError(422,`Layanan ${serviceId} tidak tersedia pada katalog`);
+  return value;
+}
+
+export function cashCloseCreateAllowed(existingBranch: string | null): boolean {
+  return existingBranch == null;
 }
 
 function assertBranch(identity: SyncIdentity, branchId: string): void {
@@ -284,16 +294,19 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
 
   const linesRaw = p.lines;
   if (!Array.isArray(linesRaw) || linesRaw.length < 1 || linesRaw.length > 80) throw new CommandError(422, "Service harus memiliki 1–80 rincian");
-  const lines = linesRaw.map((raw, index) => {
+  const parsedLines = linesRaw.map((raw, index) => {
     if (!isObject(raw)) throw new CommandError(422, `Rincian ${index + 1} tidak valid`);
     const handlerEmail = identity.role === "Owner" || identity.bootstrap ? firstString(raw,["handlerEmail","handledByEmail"],false,254).toLowerCase() : identity.email.toLowerCase();
     const handlerName = identity.role === "Owner" || identity.bootstrap ? firstString(raw,["handlerName","handledByName"],false,160) : identity.name;
     return {
       serviceId: requiredString(raw,"serviceId",100), serviceName: firstString(raw,["serviceName","name"],true,200), quantity: typeof raw.quantity === "number" ? finiteNumber(raw,"quantity",0.001) : finiteNumber(raw,"qty",0.001),
       unit: requiredString(raw,"unit",40), unitPrice: integer(raw,"unitPrice"), handlerEmail, handlerName,
-      commissionPerUnit: integer(raw,"commissionPerUnit"),
     };
   });
+  const serviceIds=[...new Set(parsedLines.map(line=>line.serviceId))];
+  const commissions=(await db.prepare(`SELECT id,commission_per_unit FROM services WHERE organization_id=? AND id IN (${serviceIds.map(()=>"?").join(",")})`).bind(ORG_ID,...serviceIds).all<{id:string;commission_per_unit:number}>()).results;
+  const commissionCatalogue=new Map(commissions.map(row=>[row.id,row.commission_per_unit]));
+  const lines=parsedLines.map(line=>({...line,commissionPerUnit:trustedCommission(line.serviceId,commissionCatalogue)}));
   const total = lines.reduce((sum, line) => sum + Math.round(line.quantity * line.unitPrice), 0);
   const stockAdjustments=await retailAdjustments(db,id,lines);
   const paid = integer(p,"paid");
@@ -409,8 +422,14 @@ async function planRawOperational(db:D1Database, command:SyncCommand, identity:S
     return {statements,entityType:"audit",entityId:id,branchId,changePayload:canonicalHistoryPayload(p,id,branchId,"user",identity.name)};
   }
   if(command.wireEntityType==="cashClose") {
+    const existingBranch=await existingBranchForEntity(db,"cash_closes",id);
+    if(!deleting && !cashCloseCreateAllowed(existingBranch)) throw new CommandError(409,"ID tutup kas sudah digunakan");
+    if(existingBranch) assertBranch(identity,existingBranch);
     if(deleting) statements.push(db.prepare(`DELETE FROM cash_closes WHERE id=? AND organization_id=? AND ${commandGate()}`).bind(id,ORG_ID,command.commandId,ORG_ID,token));
-    else statements.push(db.prepare(`INSERT INTO cash_closes(id,organization_id,branch_id,payload_json,occurred_at,updated_at) SELECT ?,?,?,?,?,? WHERE ${commandGate()} ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,payload_json=excluded.payload_json,occurred_at=excluded.occurred_at,updated_at=excluded.updated_at`).bind(id,ORG_ID,branchId,JSON.stringify({...p,id,branchId,by:identity.name}),typeof p.atMs === "number" ? p.atMs : now,now,command.commandId,ORG_ID,token));
+    else {
+      statements.push(db.prepare(`INSERT INTO cash_closes(id,organization_id,branch_id,payload_json,occurred_at,updated_at) SELECT ?,?,?,?,?,? WHERE ${commandGate()}`).bind(id,ORG_ID,branchId,JSON.stringify({...p,id,branchId,by:identity.name}),typeof p.atMs === "number" ? p.atMs : now,now,command.commandId,ORG_ID,token));
+      statements.push(guardPreviousMutation(db,command,token));
+    }
     return {statements,entityType:"cashClose",entityId:id,branchId,operation:deleting?"delete":"upsert",changePayload:deleting?null:{...p,id,branchId,by:identity.name}};
   }
   throw new CommandError(422,"Entity operasional tidak didukung");

@@ -131,6 +131,7 @@ data class PendingRemoteApply(
     val entities: List<SyncEntity>,
     val revision: Long,
     val scopeKey: String = "",
+    val generation: Long = -1,
 )
 
 @Serializable
@@ -297,20 +298,20 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
 
     fun prepareRemote(snapshot: Snapshot, entities: List<SyncEntity>, revision: Long, expectedGeneration: Long, scopeKey: String): Boolean {
         if (!canAcceptRemote(expectedGeneration)) return false
-        state = state.copy(pendingRemote = PendingRemoteApply(snapshot, entities, revision, scopeKey))
+        state = state.copy(pendingRemote = PendingRemoteApply(snapshot, entities, revision, scopeKey, state.generation))
         return true
     }
 
     fun prepareBootstrapRemote(snapshot: Snapshot, entities: List<SyncEntity>, revision: Long, scopeKey: String) {
         require(state.pending.isEmpty())
-        state = state.copy(pendingRemote = PendingRemoteApply(snapshot, entities, revision, scopeKey))
+        state = state.copy(pendingRemote = PendingRemoteApply(snapshot, entities, revision, scopeKey, state.generation))
     }
 
     fun completePreparedRemote(): Boolean {
         val prepared = state.pendingRemote ?: return false
         state = state.copy(
             revision = maxOf(state.revision, prepared.revision),
-            shadow = if (state.pending.isEmpty()) prepared.entities else state.shadow,
+            shadow = if (prepared.generation < 0 || state.generation == prepared.generation) prepared.entities else state.shadow,
             scopeKey = prepared.scopeKey.ifBlank { state.scopeKey },
             pendingRemote = null,
             bootstrapped = true,

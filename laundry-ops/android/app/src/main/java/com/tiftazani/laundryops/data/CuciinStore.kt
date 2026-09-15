@@ -1117,7 +1117,7 @@ object CuciinStore {
         val bid = if (s.role == Role.Owner) viewBranch.value else s.branchId
         val t = Clock.nowMs()
         val row = CashClose(
-            id = "kas-$t",
+            id = "kas-$bid-$t-${syncEventId().take(8)}",
             at = Clock.nowLabel(t),
             atMs = t,
             by = s.name,

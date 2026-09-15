@@ -88,6 +88,8 @@ Simpan `revision` hanya setelah seluruh perubahan pada halaman berhasil diterapk
 - Upsert maupun penghapusan absensi non-Owner memeriksa pemilik baris yang sudah tersimpan, sehingga ID absensi orang lain tidak dapat diambil alih dengan payload baru.
 - Penghapusan Service, master, audit, riwayat stok, dan tutup kas dibatasi ke Owner.
 - Pada Nota milik non-Owner, server memaksa kasir dan handler dari Firebase session sehingga payload perangkat tidak dapat menyamar sebagai akun lain.
+- Tarif komisi setiap rincian diambil dari master layanan server. Harga per Service tetap boleh dikoreksi, tetapi perangkat tidak dapat mengubah tarif komisi.
+- Tutup kas bersifat append-only. ID yang sudah tersimpan tidak dapat ditimpa oleh command lain, dan ID Android memuat cabang serta UUID.
 
 ## Kompatibilitas dan rollout
 

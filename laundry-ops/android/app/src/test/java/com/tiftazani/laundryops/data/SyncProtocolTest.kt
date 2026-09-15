@@ -276,6 +276,30 @@ class SyncProtocolTest {
         assertEquals(7, outbox.state.revision)
     }
 
+    @Test fun acknowledgedLocalEditIsNotReplacedWhenRemotePersistenceFinishes() {
+        val old = listOf(entity("customer", "c-1", value = 1))
+        val remote = listOf(entity("customer", "c-1", value = 2))
+        val localAfterRemote = listOf(entity("customer", "c-1", value = 3))
+        val outbox = SyncOutbox(SyncClientState(shadow = old, bootstrapped = true))
+        assertTrue(outbox.prepareRemote(Snapshot(updatedAt = 20), remote, 7, expectedGeneration = 0, scopeKey = "kasir:melati"))
+        outbox.enqueue(localAfterRemote, 21, null, null) { "local-after-remote" }
+        outbox.acknowledge(setOf("local-after-remote"), revision = 8)
+
+        assertTrue(outbox.state.pending.isEmpty())
+        assertTrue(outbox.completePreparedRemote())
+        assertEquals(localAfterRemote, outbox.state.shadow)
+    }
+
+    @Test fun legacyPreparedMarkerStillCompletesWithItsRemoteShadow() {
+        val old = listOf(entity("customer", "c-1", value = 1))
+        val remote = listOf(entity("customer", "c-1", value = 2))
+        val marker = PendingRemoteApply(Snapshot(updatedAt = 20), remote, revision = 7)
+        val outbox = SyncOutbox(SyncClientState(generation = 5, shadow = old, pendingRemote = marker, bootstrapped = true))
+
+        assertTrue(outbox.completePreparedRemote())
+        assertEquals(remote, outbox.state.shadow)
+    }
+
     @Test fun notaEditCreatedAfterPreviousAckUsesNewServerVersionWithoutSkippingPullCursor() {
         fun nota(version: Long, value: Int) = SyncEntity(
             "nota", "MEL-1", "melati",

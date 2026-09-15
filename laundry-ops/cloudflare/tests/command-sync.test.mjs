@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { attendanceRecordOwnedBy, canonicalHistoryPayload, commandFailureResult, commandPermission, nextEntityVersion, orderUpsertAllowed, parseCommand, pullChanges, pushCommands, staffJournalScopes, stockMoveOrderReferenceAllowed, syncScopeKey } from "../src/command-sync.ts";
+import { attendanceRecordOwnedBy, canonicalHistoryPayload, cashCloseCreateAllowed, commandFailureResult, commandPermission, nextEntityVersion, orderUpsertAllowed, parseCommand, pullChanges, pushCommands, staffJournalScopes, stockMoveOrderReferenceAllowed, syncScopeKey, trustedCommission } from "../src/command-sync.ts";
 import { applyJournalToSnapshot, legacySnapshotWriteAllowed, visibleSnapshot } from "../src/index.ts";
 
 const migration = readFileSync(new URL("../migrations/0003_command_sync.sql", import.meta.url), "utf8");
@@ -71,6 +71,7 @@ test("otorisasi membatasi role, cabang, dan absensi orang lain", () => {
   assert.equal(commandPermission(kasir,"order.create","b1").allowed,true);
   assert.equal(commandPermission(kasir,"order.create","b2").allowed,false);
   assert.equal(commandPermission(kasir,"service.upsert").allowed,false);
+  assert.equal(commandPermission(kasir,"customer.delete").allowed,false);
   assert.equal(commandPermission(spv,"order.payment","b1").allowed,false);
   assert.equal(commandPermission(spv,"order.status","b1").allowed,true);
   assert.equal(commandPermission(spv,"customer.upsert").allowed,false);
@@ -80,6 +81,17 @@ test("otorisasi membatasi role, cabang, dan absensi orang lain", () => {
   assert.equal(attendanceRecordOwnedBy(kasir,"KASIR@CUCIIN.ID"),true);
   assert.equal(attendanceRecordOwnedBy(owner,"oranglain@cuciin.id"),true);
   assert.equal(commandPermission(owner,"service.upsert").allowed,true);
+});
+
+test("komisi transaksi selalu berasal dari katalog server", () => {
+  const catalogue=new Map([["cuci-kering",2500]]);
+  assert.equal(trustedCommission("cuci-kering",catalogue),2500);
+  assert.throws(()=>trustedCommission("layanan-palsu",catalogue),/tidak tersedia/);
+});
+
+test("tutup kas bersifat append-only dan menolak ID yang sudah ada", () => {
+  assert.equal(cashCloseCreateAllowed(null),true);
+  assert.equal(cashCloseCreateAllowed("melati"),false);
 });
 
 test("delta staf dan cabang non-Owner dibatasi ke penugasan cabangnya", async () => {
