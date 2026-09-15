@@ -1,6 +1,6 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 15 September 2026, 14:05 WIB (oleh Hermes).
+Terakhir diperbarui: 15 September 2026, 15:35 WIB (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
@@ -11,73 +11,67 @@ Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **
 |---|---|---|
 | Repo lokal | `/Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz` | satu-satunya clone; `~/Cursor-Tifz` bukan clone repo ini |
 | Branch | `codex/cuciin-1-8-1` | `git status -sb` |
-| HEAD | `76545ad` — sama dengan `origin/codex/cuciin-1-8-1` (0 ahead / 0 behind) | `git rev-list --left-right --count HEAD...origin/...` |
-| PR | #18, OPEN, mergeable, check hijau (validate, verify, Vercel, Security Reviewer) | `gh pr checks 18` |
-| Android | 1.9.0 (versionCode 15) | `app/build.gradle.kts` |
-| Worker produksi | versi `d451c581-…`, D1 `cuciin-db` | `AGENT_HANDOVER.md` |
-| Test Worker | 20/20 lulus di HEAD | `cd cloudflare && npm run check` |
+| HEAD | `a801f0b` — sama dengan `origin/codex/cuciin-1-8-1` (0 ahead / 0 behind) | `git rev-list --left-right --count HEAD...origin/...` |
+| PR | #18, OPEN, mergeable | `gh pr view 18` |
+| Android | **1.9.1 (versionCode 16)** | `app/build.gradle.kts` |
+| Worker produksi | versi `71310107-4ec5-48f8-aedb-481be9107649` (15:10 WIB) | `wrangler deployments list --name cuciin-api` |
+| Skema D1 produksi | migrasi `0004_operational_links.sql` sudah diterapkan | `wrangler d1 execute cuciin-db --remote --command "SELECT name FROM d1_migrations"` |
+| Health produksi | `ok`, database `ready`, revision 40 | `curl .../health` |
 
-## 2. Pekerjaan yang sedang berjalan (belum di-commit)
+Working tree bersih. Tidak ada pekerjaan setengah jadi yang menggantung.
 
-Permintaan 15 Sep 12:24 WIB dikerjakan Codex di working tree dan **berhenti pukul 12:32:33 karena kuota** (`usageLimitExceeded`, jendela berikutnya 14:51). Perubahan ada di disk, belum di-commit, dan **belum bisa di-compile**.
+## 2. Riwayat singkat hari ini
 
-Bukti cadangan (dibuat Hermes, working tree tidak diubah):
-- patch: `/Users/tiftazani/Documents/ChatGPT/Laundry/cuciin-wip-backup-20260915-140612/tracked-changes.patch`
-- berkas baru: `…/untracked/laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/AttendancePhotos.kt`
-- snapshot git: `git stash list` → `stash@{0}: codex WIP 2026-09-15 12:30`
+1. Codex berhenti 12:32 karena kuota, meninggalkan perubahan belum di-commit dan 5 error compile di `ui/MasterScreens.kt`.
+2. Hermes mencatat kondisi itu, mem-backup patch-nya, dan menahan diri (tidak menyentuh kode).
+3. Codex lanjut setelah kuota terbuka, menyelesaikan 8 item permintaan 12:24, dan commit `a801f0b` pukul 15:11 lalu push.
 
-### Status tujuh item permintaan 12:24
+## 3. Status delapan item permintaan 15 Sep
 
 | # | Item | Status | Bukti |
 |---|---|---|---|
-| 1 | Retail ↔ Produk stok saling terhubung | Kode selesai, UI produk belum | `ServiceItem.productKey`, `NotaLine.productKey`, `linkedProduct()`, `retailStockShortages()` di `data/CuciinStore.kt` |
-| 2 | Akun & Profil: info cabang salah | Belum | `ui/MoreScreens.kt` masih `store.branch(s.branchId).name`; untuk Owner itu cabang pertama penugasan, bukan cabang yang sedang dilihat |
-| 3 | Inventory digabung ke Produk stok, stok bisa multi-cabang | Belum | `InventoryScreen` masih ada; `addProduct(..., initialBranchIds: Set<String>)` sudah ada tapi `ProductsScreen` belum diubah |
-| 4 | Hanya Owner boleh koreksi Service setelah nota terkirim | Selesai | `CuciinStore.kt` `correctNota`/`deleteNota` menolak `waSent` untuk non-Owner |
-| 5 | Foto absensi dari kamera + tanggal/waktu tercap di gambar | Selesai | `data/AttendancePhotos.kt` (baru), `AttendanceScreen` di `ui/BusinessScreens.kt`, `res/xml/file_paths.xml` |
-| 6 | User access control (modul + fungsi) | Setengah | `UserAccessPolicy`, `canAccess()`, `saveAccessPolicy()` ada; **belum ada layar**, dan server belum mengenal entitasnya |
-| 7 | Template WhatsApp (pembuka, isi, penutup) | Setengah | `WhatsAppTemplate`, `ReceiptText.format(…, template)`, `saveWhatsAppTemplate()` ada; **belum ada layar**, server belum mengenal entitasnya |
+| 1 | Retail ↔ Produk stok saling terhubung | Selesai | `services.product_id` di D1, `productKey` di model, `linkedProduct()`, pengurangan stok saat Nota dibuat dan dikoreksi |
+| 2 | Akun & Profil: info cabang benar | Selesai | `ProfilScreen` memakai penugasan pengguna, bukan cabang tampilan Owner |
+| 3 | Inventory digabung ke Produk stok, stok multi-cabang | Selesai | Produk stok menyatukan barang jual + bahan habis pakai; mesin/aset pindah ke menu "Aset & mesin cabang"; `addProduct` menerima `Set<String>` cabang |
+| 4 | Hanya Owner boleh koreksi Service setelah nota terkirim | Selesai | Ditegakkan di store Android **dan** di Worker |
+| 5 | Foto absensi kamera + cap tanggal/waktu di gambar | Selesai | `data/AttendancePhotos.kt`, `AttendanceScreen`, `file_paths.xml`; path foto tidak pernah dikirim ke server |
+| 6 | User access control (modul + fungsi) | Selesai | `OwnerSettingsScreen.kt`; tabel `access_policies`; Worker menegakkan policy pada command (403 "Akses fungsi ini dibatasi oleh Owner") |
+| 7 | Template WhatsApp (pembuka, isi, penutup) | Selesai | `OwnerSettingsScreen.kt`; tabel `whatsapp_templates`; `ReceiptText.format(…, template)` |
 
-### Blocker yang harus dibaca sebelum siapa pun menyentuh file itu
+## 4. Yang masih kurang (bukan bug, tapi belum lengkap)
 
-1. **Compile gagal, 5 error, semuanya di `ui/MasterScreens.kt`.** Perintah: `cd android && JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew compileDebugKotlin`.
-   - baris 400 & 404: `Unresolved reference 'ProductKind'` (file itu tidak mengimpor `com.tiftazani.laundryops.data.*`)
-   - baris 504: `addProduct` sekarang minta `Set<String>`, UI masih mengirim `String`
-   - baris 505: `updateProduct` sekarang minta `kind` dan `unit`, pemanggil belum diubah
-2. **Jangan aktifkan command `accessPolicy` / `whatsappTemplate` dulu.** `data/SyncProtocol.kt` sudah punya spec untuk keduanya, jadi Android akan mengantre command dengan `entityType` itu. Server (`cloudflare/src/command-sync.ts`) belum punya alias maupun `KNOWN_COMMANDS` untuk keduanya, jadi balasannya 422 "Tipe command tidak didukung" — dan 422 dianggap penolakan permanen, bukan retry. Artinya perubahan Owner akan mendarat di daftar konflik, bukan tersinkron.
-3. Item 6 dan 7 butuh pekerjaan server lebih dulu: alias command, tabel D1, otorisasi Owner-only, dan entri di `SYNC_API.md`.
+1. **`cloudflare/SYNC_API.md` belum memuat kontrak `accessPolicy` dan `whatsappTemplate`.** Dokumen itu masih pada commit `3d25c4d`. `AGENT_WORKFLOW.md` mewajibkan kontrak request/response ditulis sebelum kedua sisi diubah, jadi ini celah proses.
+2. **Belum ada test untuk dua command baru.** Test Worker tetap 20 dan tidak menyentuh `accessPolicy`/`whatsappTemplate`; Android juga tidak menambah test. Yang belum tercakup: retry tidak menggandakan policy, non-Owner ditolak 403, dan idempotensi saat `ON CONFLICT`.
+3. **Kandidat `releases/1.9.1-candidate/` belum lengkap.** Isinya baru APK + AAB; `README.md` dan `SHA256SUMS` seperti pada `1.9.0-candidate/` belum ada.
+4. **`android/RELEASE_READINESS.md` masih berjudul 1.9.0.** Belum diperbarui untuk 1.9.1.
+5. **`AGENT_HANDOVER.md` masih menyebut versi 1.9.0 / versionCode 15 dan commit `3d25c4d`.** Angkanya perlu disegarkan.
 
-## 3. Klaim file (berlaku sampai handover berikutnya)
+## 5. Klaim file (berlaku sampai handover berikutnya)
 
 Aturan: satu file satu pemilik. Kalau butuh mengubah file milik agent lain, minta lewat chat/PR, jangan edit langsung.
 
-### Pegangan Codex — pekerjaan 15 Sep 12:24 yang belum selesai
+### Bebas — tidak ada yang memegang
 
-Codex melanjutkan pekerjaannya sendiri. File yang jadi miliknya:
+Semua file kode dalam keadaan bersih dan ter-commit. Siapa pun boleh mengambil area berikut dengan mencatatnya di sini lebih dulu.
 
-```
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/MasterScreens.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/BusinessScreens.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/AttendancePhotos.kt
-laundry-ops/android/app/src/main/res/xml/file_paths.xml
-```
-
-Sisa tugas di pegangannya: betulkan 5 error compile, sambungkan `ProductsScreen` ke `kind`/`unit`/`Set<String>` cabang, gabungkan menu Inventory ke Produk stok, perbaiki label cabang di `ProfilScreen`, lalu buat layar **User access control** dan **Template WhatsApp**.
-
-### Pegangan Hermes
-
-Hermes tidak menyentuh UI Android di atas. Milik Hermes:
+### Pegangan Hermes (bila tugas server dilanjutkan)
 
 ```
 laundry-ops/cloudflare/SYNC_API.md
-laundry-ops/cloudflare/migrations/0004_*.sql          (baru)
-laundry-ops/cloudflare/src/command-sync.ts
-laundry-ops/cloudflare/src/index.ts
+laundry-ops/cloudflare/migrations/0005_*.sql          (bila perlu)
 laundry-ops/cloudflare/tests/*.mjs
 laundry-ops/AGENT_STATUS.md                            (dokumen ini)
 ```
 
-Isi pekerjaan Hermes: kontrak + migrasi D1 + command server untuk `accessPolicy` dan `whatsappTemplate` (alias, tabel, otorisasi Owner-only, scope cabang, idempotensi, test retry/role), plus dokumen sinkronisasi. Tujuannya supaya item 6 dan 7 punya sisi server yang siap sebelum layarnya dihidupkan.
+### Pegangan Codex (bila tugas UI/rilis dilanjutkan)
+
+```
+laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/*
+laundry-ops/android/CHANGELOG.md
+laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/VersionHistory.kt
+laundry-ops/android/RELEASE_READINESS.md
+laundry-ops/releases/
+```
 
 ### Pegangan bersama — jangan disunting tanpa bicara dulu
 
@@ -86,23 +80,19 @@ laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/CuciinStore.
 laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/Models.kt
 laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/SyncProtocol.kt
 laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/ReceiptText.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/MoreScreens.kt
-laundry-ops/android/CHANGELOG.md
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/VersionHistory.kt
+laundry-ops/cloudflare/src/command-sync.ts
+laundry-ops/cloudflare/src/index.ts
 ```
 
-`CuciinStore.kt`, `Models.kt`, dan `SyncProtocol.kt` sudah berisi perubahan Codex yang belum di-commit. Siapa pun yang menyentuhnya wajib `git diff` dulu dan menyebutkan alasannya, supaya perubahan setengah jadi itu tidak hilang.
+File-file itu menyimpan aturan uang, stok, komisi, otorisasi, dan protokol sinkronisasi. Perubahan di sana wajib lewat review dan test, bukan suntingan cepat.
 
-`MoreScreens.kt` belum tersentuh siapa pun sejak HEAD; item 2 dan layar item 6–7 kemungkinan besar mendarat di sini, jadi satu agent saja yang boleh memegangnya pada satu waktu.
+## 6. Urutan kerja yang disarankan
 
-## 4. Urutan kerja yang disarankan
+1. Hermes: tulis kontrak `accessPolicy` + `whatsappTemplate` di `SYNC_API.md`, lalu tambah test Worker untuk retry, role Owner-only, dan idempotensi.
+2. Codex: lengkapi `releases/1.9.1-candidate/` (README + SHA256SUMS) dan segarkan `RELEASE_READINESS.md` ke 1.9.1.
+3. Setelah keduanya mendarat: perbarui `AGENT_HANDOVER.md` ke 1.9.1 / versionCode 16 / commit terbaru, lalu validasi penuh dan UAT perangkat.
 
-1. Codex: betulkan 5 error compile (tanpa mengubah perilaku lain) dan pastikan `./gradlew testDebugUnitTest` hijau. Ini membuka jalan bagi semua orang.
-2. Codex: lanjutkan sisa item UI (2, 3, lalu layar 6–7).
-3. Hermes: kerjakan sisi server 6–7 (kontrak → migrasi → command → test) di jalur yang tidak bertabrakan.
-4. Setelah keduanya mendarat: naikkan versi, changelog, `VersionHistory`, lalu validasi penuh.
-
-## 5. Lingkungan build di mesin ini
+## 7. Lingkungan build di mesin ini
 
 ```sh
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17
@@ -110,4 +100,6 @@ export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 cd laundry-ops/android && ./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
 
-`android/local.properties` sudah diisi `sdk.dir=/opt/homebrew/share/android-commandlinetools` (di-gitignore, jangan di-commit). Node 26.7.0 dan npm 11.19.0 tersedia untuk `npm run check`.
+`android/local.properties` sudah diisi `sdk.dir=/opt/homebrew/share/android-commandlinetools` (di-gitignore, jangan di-commit). Node 26.7.0 dan npm 11.19.0 tersedia untuk `npm run check`. Wrangler 4.131.1 sudah terautentikasi sebagai `tiftazani.khara@gmail.com`.
+
+Catatan: macOS di mesin ini tidak punya `timeout`/`gtimeout`. Jangan pakai perintah itu untuk membatasi proses panjang.
