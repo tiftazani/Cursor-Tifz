@@ -1,6 +1,6 @@
 # Konteks kerja bersama Cuciin
 
-Dokumen ini adalah sumber konteks ringkas untuk Hermes, OpenCode, Router, Codex, atau agen pemrograman lain. Salin blok di bawah ke awal percakapan baru dan tambahkan tugas khusus setelahnya.
+Dokumen ini adalah sumber konteks ringkas untuk Hermes, OpenCode, Router, Codex, atau agen pemrograman lain. Untuk status rilis, arsitektur, batas data, dan prosedur handover yang lengkap, baca juga `AGENT_HANDOVER.md`, `AGENT_PROMPTS.md`, dan `AGENT_WORKFLOW.md`. Salin blok di bawah ke awal percakapan baru dan tambahkan tugas khusus setelahnya.
 
 ```text
 Repo: https://github.com/tiftazani/Cursor-Tifz
