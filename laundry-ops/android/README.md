@@ -2,7 +2,7 @@
 
 Package `com.tiftazani.laundryops`. Versi sekarang **1.9.0** (versionCode 15).
 
-Database toko ada di server: `https://cuan-tif.vercel.app/api/cuciin`. HP kasir/owner nge-share dokumen yang sama. Cache JSON tetap di HP kalau lagi offline.
+Database toko ada di server: `https://cuciin-api.tiftazani-cuciin.workers.dev/api/cuciin` (Cloudflare Worker + D1). HP kasir/owner nge-share dokumen yang sama. Cache JSON tetap di HP kalau lagi offline.
 
 Firebase Firestore dipakai otomatis kalau `google-services.json` ada.
 
@@ -10,7 +10,7 @@ Firebase Firestore dipakai otomatis kalau `google-services.json` ada.
 
 Debug APK (install di HP, izinkan unknown source):
 
-**[https://cuan-tif.vercel.app/cuciin/cuciin.apk](https://cuan-tif.vercel.app/cuciin/cuciin.apk)**
+**Ada di [`../releases/`](../releases)**
 
 Atau langsung: [raw GitHub](https://raw.githubusercontent.com/tiftazani/Cursor-Tifz/main/cuan-yuk-guys/public/cuciin/cuciin.apk)
 

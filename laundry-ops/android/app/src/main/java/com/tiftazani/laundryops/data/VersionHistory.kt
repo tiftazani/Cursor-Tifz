@@ -179,7 +179,7 @@ object VersionHistory {
             code = 4,
             date = "10 Sep 2026",
             notes = listOf(
-                "Database di server: HP kasir/owner nge-share lewat https://cuan-tif.vercel.app/api/cuciin.",
+                "Database di server: HP kasir/owner nge-share lewat API cuciin-api (Cloudflare Worker).",
                 "Poll 8 detik. Nota/stok/pelanggan/audit ikut ke server, cache tetap di HP.",
                 "Firebase Firestore (ops/cuciin) nyala otomatis kalau google-services.json ada.",
             ),

@@ -167,6 +167,7 @@ UI dirombak. Master data lengkap CRUD. Layout aman di banyak ukuran layar.
 Database di server. HP kasir/owner nge-share dokumen toko yang sama.
 
 - API `https://cuan-tif.vercel.app/api/cuciin` (key di APK), persist di store JSON server
+  <br>Catatan: endpoint ini dipensiunkan 15 Sep 2026. Sejak 1.9.0 aplikasi memakai Cloudflare Worker `cuciin-api`.
 - Sync pull/push + poll 8 detik; cache JSON tetap di HP (offline)
 - Firestore `ops/cuciin` kalau `google-services.json` ada (Firebase)
 
@@ -187,7 +188,7 @@ Firebase Auth + Firestore, tetap jalan lokal tanpa `google-services.json`.
 - Plugin Google Services cuma applied kalau `app/google-services.json` ada
 - Login/daftar: coba Firebase dulu, fallback akun demo lokal
 - Nota, status laundry/bayar, WA, bukti, stok, approve user, audit di-push ke Firestore
-- APK debug di `https://cuan-tif.vercel.app/cuciin/cuciin.apk`
+- APK debug dulu diunduh dari halaman web (sejak 15 Sep 2026 berkasnya ada di `laundry-ops/releases/`)
 
 ## 1.0.0 — 10 Sep 2026 (versionCode 1)
 
