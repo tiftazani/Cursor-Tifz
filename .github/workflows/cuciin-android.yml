@@ -25,6 +25,10 @@ jobs:
           packages: platform-tools
       - name: Unit test, lint, and assemble debug APK
         working-directory: laundry-ops/android
+        # Alamat cloud bukan rahasia: nilainya sudah tercatat di dokumen handover.
+        # Tanpa ini build gagal, karena build debug wajib punya alamat cloud.
+        env:
+          CUCIIN_CLOUD_URL: https://cuciin-api.tiftazani-cuciin.workers.dev/api/cuciin
         run: chmod +x gradlew && ./gradlew testDebugUnitTest lintDebug assembleDebug --no-daemon
       - uses: actions/upload-artifact@v7
         with:
