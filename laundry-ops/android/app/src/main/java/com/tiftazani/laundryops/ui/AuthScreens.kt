@@ -232,7 +232,7 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
             FirebaseCloud.sendPasswordReset(resetEmail) { error ->
                 resetBusy = false
                 resetFailed = error != null
-                resetMessage = error ?: "Link reset sudah dikirim. Periksa kotak masuk dan folder spam."
+                resetMessage = error ?: "Tautan reset sudah dikirim ke email itu. Periksa kotak masuk dan folder spam.\n\nBuka tautannya dari email yang sama. Sebagian aplikasi email dan pemindai tautan memotong bagian alamat, sehingga halaman menampilkan 'The selected page mode is invalid.'. Kalau itu terjadi, salin alamat lengkapnya ke browser, atau minta tautan baru lewat tombol di atas."
             }
         }) { Text(if (resetBusy) "Mengirim…" else "Kirim link") }
     }, dismissButton = { TextButton(enabled = !resetBusy, onClick = { loginHelp = false }) { Text("Batal") } })

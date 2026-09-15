@@ -1,26 +1,27 @@
-# Cuciin 1.9.2 — kesiapan rilis
+# Cuciin 1.9.3 — kesiapan rilis
 
 Status: kandidat rilis operasional yang sudah lulus pemeriksaan kode, build, migrasi produksi, dan uji integrasi API pada 15 September 2026. Owner tetap harus menyelesaikan validasi perangkat, rotasi akun, saldo awal, backup terjadwal pertama, dan keputusan go-live. APK bertanda tangan tidak menjamin hilangnya peringatan Play Protect pada distribusi di luar store.
 
 ## Bukti verifikasi kandidat
 
 - Android: 47 unit test debug dan 47 unit test rilis lulus, lint debug/rilis tanpa error, APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
-- APK rilis: non-debuggable, application ID `com.tiftazani.laundryops`, versionCode `17`, versionName `1.9.2`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB.
+- APK rilis: non-debuggable, application ID `com.tiftazani.laundryops`, versionCode `18`, versionName `1.9.3`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB.
 - SHA-256 sertifikat rilis cocok dengan fingerprint yang dicatat: `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`.
 - Cloudflare: migrasi `0003_command_sync.sql` dan `0004_operational_links.sql` sudah diterapkan ke D1 produksi, dan Worker versi `71310107-4ec5-48f8-aedb-481be9107649` aktif.
 - Health produksi mengembalikan database `ready`. Uji command pelanggan membuktikan retry command yang sama tidak menggandakan mutasi; penghapusan dan delta revision juga berhasil.
 - Backup sebelum migrasi sudah diuji dengan `PRAGMA integrity_check = ok`. Penyimpanan backup produksi terjadwal ke tujuan privat belum ditetapkan oleh Owner; workflow repository publik tidak menyimpan artifact database.
-- Checksum APK/AAB kandidat dicatat pada `laundry-ops/releases/1.9.2-candidate/SHA256SUMS`.
+- Checksum APK/AAB kandidat dicatat pada `laundry-ops/releases/1.9.3-candidate/SHA256SUMS`.
 
 ## Yang disiapkan
 
-- Application ID rilis `com.tiftazani.laundryops`, versi `1.9.2`, versionCode `17`, target Android 16/API 36.
+- Application ID rilis `com.tiftazani.laundryops`, versi `1.9.3`, versionCode `18`, target Android 16/API 36.
 - APK non-debuggable dan AAB dengan kunci rilis terpisah. Build rilis berhenti bila konfigurasi penandatanganan tidak tersedia.
 - Kunci privat dan kata sandi berada di luar repo, pada folder `signing-private` di sebelah folder repo; izin folder 700 dan berkas rahasia 600. Cadangkan keduanya ke penyimpanan privat yang aman sebelum dipakai untuk distribusi. Jangan mengganti kunci sembarangan setelah aplikasi terpasang.
 - Rilis menolak akun tanpa kata sandi dan tidak menampilkan masuk cepat. Sesuai konfigurasi operasional saat ini, akun awal memakai `test1234` dan wajib diubah dari Profil sebelum dipakai untuk data nyata.
 - Kegagalan Firebase tidak melewati autentikasi melalui fallback lokal pada rilis. Pendaftaran gagal tidak ditampilkan sebagai berhasil.
 - HTTPS wajib, backup Android dinonaktifkan, FileProvider tidak diekspor dan hanya membagikan direktori bukti/ekspor. Tidak meminta izin SMS, aksesibilitas, kontak, atau instal aplikasi.
 - Path dan berkas foto bukti dikeluarkan dari snapshot cloud; sinkronisasi mempertahankan foto lokal yang ada pada masing-masing HP.
+- Pemulihan kata sandi: halaman reset Firebase memakai domain `cuciin-ops-tiftazani.web.app` dan berbahasa Indonesia. Dialog di aplikasi menjelaskan cara membuka tautan bila alamatnya terpotong aplikasi email atau pemindai tautan. Isi template email masih bawaan Firebase karena perubahan isi ditolak API (`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`); rinciannya di `firebase/README.md`.
 - Tema tampilan dapat dipilih setiap pengguna di Akun & profil: Ikut sistem, Terang, Gelap, dan Warna-warni. Pilihan disimpan di preferensi HP itu saja, terpisah dari data operasional dan sinkronisasi, sehingga tiap perangkat bebas berbeda.
 - Kontras teks setiap tema dijaga minimal 4.5:1 dan batas kontrol minimal 3:1 memakai perhitungan rumus WCAG. Status bar dan navigation bar mengikuti tema aktif.
 - Penyimpanan bersifat local-first: perubahan ditulis ke file lokal atomik dan persistent outbox sebelum dikirim. Command baru dihapus setelah acknowledgement, retry mempertahankan ID yang sama, dan perangkat mengambil delta berurutan dengan pagination revision.

@@ -12,10 +12,17 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.9.2"
-    val currentCode: Int = 17
+    val currentName: String = "1.9.3"
+    val currentCode: Int = 18
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.9.3", code = 18, date = "15 Sep 2026",
+            notes = listOf(
+                "Pesan setelah meminta tautan reset kata sandi kini menjelaskan cara membuka tautannya, termasuk langkah bila tautan terpotong oleh aplikasi email atau pemindai tautan.",
+                "Halaman reset kata sandi Firebase memakai domain web.app dan bahasa Indonesia; email reset juga berbahasa Indonesia mengikuti locale project.",
+            ),
+        ),
         AppRelease(
             name = "1.9.2", code = 17, date = "15 Sep 2026",
             notes = listOf(
