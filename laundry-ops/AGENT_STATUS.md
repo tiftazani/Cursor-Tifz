@@ -66,12 +66,24 @@ laundry-ops/AGENT_STATUS.md                            (dokumen ini)
 ### Pegangan Codex (bila tugas UI/rilis dilanjutkan)
 
 ```
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/*
 laundry-ops/android/CHANGELOG.md
 laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/VersionHistory.kt
 laundry-ops/android/RELEASE_READINESS.md
 laundry-ops/releases/
 ```
+
+Catatan 15 Sep 15:45: Hermes sedang mengerjakan **fitur tema** (Terang, Gelap, Warna-warni) dan baru sampai tahap mockup. Klaimnya:
+
+```
+laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/theme/Theme.kt
+laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/theme/ThemePrefs.kt   (baru)
+laundry-ops/android/app/src/main/res/values/colors.xml
+laundry-ops/android/app/src/main/res/values/themes.xml
+laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/OwnerSettingsScreen.kt
+laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/MoreScreens.kt
+```
+
+Mockup dan angka kontrasnya ada di `~/Documents/ChatGPT/Laundry/cuciin-theme-mockup/`. Sebelum mockup disetujui Owner, belum ada perubahan kode tema, jadi file di atas masih bisa diambil alih kalau tugasnya berubah.
 
 ### Pegangan bersama — jangan disunting tanpa bicara dulu
 
