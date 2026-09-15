@@ -72,18 +72,24 @@ laundry-ops/android/RELEASE_READINESS.md
 laundry-ops/releases/
 ```
 
-Catatan 15 Sep 15:45: Hermes sedang mengerjakan **fitur tema** (Terang, Gelap, Warna-warni) dan baru sampai tahap mockup. Klaimnya:
+Catatan 15 Sep 17:00: **fitur tema selesai** di commit `72b9dbb` (Android 1.9.2 / versionCode 17). Tema Terang, Gelap, Warna-warni, dan Ikut sistem dapat dipilih semua peran di Akun & profil. File yang disentuh Hermes:
 
 ```
 laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/theme/Theme.kt
 laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/theme/ThemePrefs.kt   (baru)
 laundry-ops/android/app/src/main/res/values/colors.xml
 laundry-ops/android/app/src/main/res/values/themes.xml
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/OwnerSettingsScreen.kt
 laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/MoreScreens.kt
+laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/AuthScreens.kt
+laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/CuciinNav.kt
+laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/OpsScreens.kt
+laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/components/Widgets.kt
+laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/MainActivity.kt
+laundry-ops/android/CHANGELOG.md
+laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/VersionHistory.kt
 ```
 
-Mockup dan angka kontrasnya ada di `~/Documents/ChatGPT/Laundry/cuciin-theme-mockup/`. Sebelum mockup disetujui Owner, belum ada perubahan kode tema, jadi file di atas masih bisa diambil alih kalau tugasnya berubah.
+Mockup, skrip kontras, dan bukti tangkapan layar ada di `~/Documents/ChatGPT/Laundry/cuciin-theme-mockup/`. Perubahan tema belum di-push; kalau Codex perlu menyentuh file di atas, koordinasikan dulu karena versi dan changelog sudah naik ke 1.9.2.
 
 ### Pegangan bersama — jangan disunting tanpa bicara dulu
 
