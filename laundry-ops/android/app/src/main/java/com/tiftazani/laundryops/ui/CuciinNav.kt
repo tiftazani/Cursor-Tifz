@@ -78,7 +78,15 @@ fun CuciinRoot() {
     LaunchedEffect(mapLink, session?.role) {
         if (mapLink != null && session?.role == Role.Owner && route != "branches") nav.navigate("branches") { launchSingleTop = true }
     }
-    val visibleTabs = tabs.filter { session != null && it.show(session.role) }
+    val visibleTabs = tabs.filter { tab ->
+        session != null && tab.show(session.role) && when (tab.route) {
+            "home" -> store.canAccess("queue")
+            "nota" -> store.canAccess("service")
+            "wa" -> store.canAccess("whatsapp")
+            "stok" -> store.canAccess("stock")
+            else -> true
+        }
+    }
     fun toast(msg: String) { scope.launch { snack.showSnackbar(msg) } }
 
     val navColors = NavigationBarItemDefaults.colors(
@@ -166,6 +174,7 @@ fun CuciinRoot() {
                     composable("services") { ServicesScreen(nav, ::toast) }
                     composable("products") { ProductsScreen(nav, ::toast) }
                     composable("inventory") { InventoryScreen(nav, ::toast) }
+                    composable("ownerSettings") { OwnerSettingsScreen(nav, ::toast) }
                     composable("expenses") { ExpensesScreen(nav, ::toast) }
                     composable("attendance") { AttendanceScreen(nav, ::toast) }
                     composable("versions") { VersionScreen(nav) }

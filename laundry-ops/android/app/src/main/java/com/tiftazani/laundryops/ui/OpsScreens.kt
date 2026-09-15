@@ -752,12 +752,16 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
             item {
                 CardBlock {
                     SectionLabel("Koreksi Service")
-                    Text("Ubah layanan, jumlah, atau harga. Semua perubahan tercatat di audit trail.", color = Muted, fontSize = 12.sp)
-                    GhostBtn("Edit rincian Service", enabled = n.lines.isNotEmpty(), icon = Icons.Outlined.Edit) { nav.navigate("queueEdit/$id") }
-                    DangerBtn("Hapus Service") {
-                        store.deleteNota(id)?.let(toast) ?: run {
-                            toast("Service $id dihapus")
-                            nav.navigate("home") { popUpTo("home") { inclusive = true } }
+                    if (n.waSent && s?.role != Role.Owner) {
+                        Text("Service sudah dikirim ke pelanggan. Hanya Owner yang dapat mengoreksi atau menghapusnya.", color = Muted, fontSize = 12.sp)
+                    } else {
+                        Text("Ubah layanan, jumlah, atau harga. Semua perubahan tercatat di audit trail.", color = Muted, fontSize = 12.sp)
+                        GhostBtn("Edit rincian Service", enabled = n.lines.isNotEmpty(), icon = Icons.Outlined.Edit) { nav.navigate("queueEdit/$id") }
+                        DangerBtn("Hapus Service") {
+                            store.deleteNota(id)?.let(toast) ?: run {
+                                toast("Service $id dihapus")
+                                nav.navigate("home") { popUpTo("home") { inclusive = true } }
+                            }
                         }
                     }
                 }
@@ -862,6 +866,8 @@ internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
     var occurredAt by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE))) }
     val date = DisplayDates.parse(occurredAt) ?: LocalDateTime.now(Clock.ZONE)
     val branchId = store.selectedStockBranch()
+    val session = store.session.value ?: return
+    var targetBranches by remember { mutableStateOf(setOf(branchId)) }
     val changes = amounts.mapNotNull { (key, value) -> value.toIntOrNull()?.let { key to it } }.toMap()
     val validChanges = changes.filter { (key, qty) ->
         val current = store.stockOf(key, branchId)
@@ -869,6 +875,19 @@ internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
     }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Perubahan stok massal", store.branch(branchId).name, onBack = { nav.popBackStack() }) }
+        if (session.role == Role.Owner) item {
+            CardBlock {
+                SectionLabel("Cabang yang diperbarui")
+                ChipRow {
+                    store.branches.forEach { branch ->
+                        SelectChip(branch.id in targetBranches, branch.name.removePrefix("Cuciin ")) {
+                            targetBranches = if (branch.id in targetBranches) targetBranches - branch.id else targetBranches + branch.id
+                        }
+                    }
+                }
+                Text("Nilai yang diisi diterapkan ke setiap cabang terpilih dan tercatat sebagai mutasi terpisah.", color = Muted, fontSize = 12.sp)
+            }
+        }
         item {
             CardBlock {
                 SectionLabel("1. Jenis perubahan")
@@ -900,8 +919,10 @@ internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
         item {
             PrimaryBtn("Simpan ${validChanges.size} perubahan", enabled = validChanges.isNotEmpty() && validChanges.size == changes.size, icon = Icons.Outlined.Check) {
                 if (date.isAfter(LocalDateTime.now(Clock.ZONE))) { toast("Waktu perubahan tidak boleh di masa depan"); return@PrimaryBtn }
-                val saved = store.editStocks(validChanges, branchId, kind, date.atZone(Clock.ZONE).toInstant().toEpochMilli())
-                toast("$saved produk berhasil diperbarui")
+                val targets = if (session.role == Role.Owner) targetBranches else setOf(branchId)
+                if (targets.isEmpty()) { toast("Pilih minimal satu cabang"); return@PrimaryBtn }
+                val saved = store.editStocks(validChanges, targets, kind, date.atZone(Clock.ZONE).toInstant().toEpochMilli())
+                toast("$saved perubahan stok berhasil dicatat")
                 nav.navigate("stokHistory") { popUpTo("stok") }
             }
         }

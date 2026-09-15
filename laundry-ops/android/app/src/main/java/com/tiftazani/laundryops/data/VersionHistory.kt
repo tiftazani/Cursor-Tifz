@@ -12,10 +12,22 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.9.0"
-    val currentCode: Int = 15
+    val currentName: String = "1.9.1"
+    val currentCode: Int = 16
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.9.1", code = 16, date = "15 Sep 2026",
+            notes = listOf(
+                "Layanan retail kini memilih produk stok secara eksplisit, sehingga penjualan dan koreksi Service selalu mengubah item serta saldo cabang yang tepat.",
+                "Produk stok menampung barang dijual dan bahan habis pakai; stok awal serta pencatatan massal dapat diterapkan ke beberapa cabang sekaligus.",
+                "Aset dan mesin dipisahkan dari katalog stok agar tidak terjadi data ganda; inventory barang jual lama dimigrasikan ke Produk stok saat aplikasi dibuka.",
+                "Cabang penugasan di profil mengikuti data pengguna, bukan cabang tampilan Owner.",
+                "Kasir dan SPV tidak dapat mengoreksi atau menghapus Service yang sudah dikirim melalui WhatsApp; Owner tetap dapat melakukan koreksi tercatat.",
+                "Absensi wajib memakai foto kamera masuk dan pulang. Foto diberi cap waktu, tersimpan privat di HP, terlihat di riwayat lokal, dan tidak terkirim ke cloud.",
+                "Owner dapat membatasi modul/fungsi tiap pengguna dan menyusun pesan WhatsApp pembuka, pengantar, serta penutup. Aturan akses juga diperiksa oleh Worker.",
+            ),
+        ),
         AppRelease(
             name = "1.9.0", code = 15, date = "14 Sep 2026",
             notes = listOf(

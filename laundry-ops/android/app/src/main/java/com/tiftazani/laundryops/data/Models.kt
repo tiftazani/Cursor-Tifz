@@ -119,6 +119,8 @@ data class ServiceItem(
     val selfService: Boolean = false,
     /** Komisi petugas yang menangani layanan, dihitung per satuan pada saat Service dibuat. */
     val commissionPerUnit: Int = 0,
+    /** Produk stok yang berkurang ketika layanan retail ini masuk ke Service. */
+    val productKey: String = "",
 )
 
 data class CartLine(
@@ -139,6 +141,8 @@ data class NotaLine(
     val handledByEmail: String = "",
     val handledByName: String = "",
     val commissionPerUnit: Int = 0,
+    /** Snapshot hubungan retail agar koreksi transaksi lama tetap mengubah produk yang tepat. */
+    val productKey: String = "",
 )
 
 @Serializable
@@ -185,7 +189,17 @@ data class AttendanceRecord(
     val checkOutAtMs: Long? = null,
     val checkOutAt: String? = null,
     val note: String = "",
+    /** Lokasi lokal saja; nilainya dibuang sebelum sinkronisasi cloud. */
+    val checkInPhotoPath: String = "",
+    /** Lokasi lokal saja; nilainya dibuang sebelum sinkronisasi cloud. */
+    val checkOutPhotoPath: String = "",
 )
+
+@Serializable
+enum class ProductKind(val label: String) {
+    BarangJual("Barang dijual"),
+    BahanHabisPakai("Bahan habis pakai"),
+}
 
 @Serializable
 data class Product(
@@ -193,6 +207,8 @@ data class Product(
     var stock: Int,
     val min: Int,
     val id: String = "",
+    val kind: ProductKind = ProductKind.BahanHabisPakai,
+    val unit: String = "pcs",
 ) {
     val key: String get() = id.ifBlank { name }
 }
@@ -306,6 +322,23 @@ data class CashClose(
     val piutang: Int,
 )
 
+/** Batas modul dan fungsi tambahan milik seorang pengguna. Owner selalu memiliki akses penuh. */
+@Serializable
+data class UserAccessPolicy(
+    val email: String,
+    val modules: Set<String> = emptySet(),
+    val functions: Set<String> = emptySet(),
+)
+
+/** Pesan dapat disusun oleh Owner tanpa mengubah template nota di kode aplikasi. */
+@Serializable
+data class WhatsAppTemplate(
+    val id: String = "business",
+    val opening: String = "Halo {pelanggan},",
+    val content: String = "Berikut rincian Service Anda dari {cabang}.",
+    val closing: String = "Terima kasih telah mempercayakan laundry Anda kepada {cabang}.",
+)
+
 data class Session(
     val role: Role,
     val name: String,
@@ -336,6 +369,8 @@ data class Snapshot(
     val audit: List<AuditRow> = emptyList(),
     val cashCloses: List<CashClose> = emptyList(),
     val attendance: List<AttendanceRecord> = emptyList(),
+    val accessPolicies: List<UserAccessPolicy> = emptyList(),
+    val whatsappTemplates: List<WhatsAppTemplate> = emptyList(),
     val deletedNotaIds: List<String> = emptyList(),
     val sessionEmail: String? = null,
     val viewBranch: String = "all",

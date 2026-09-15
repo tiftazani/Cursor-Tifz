@@ -2,12 +2,21 @@ package com.tiftazani.laundryops.data
 
 /** Nota teks ringkas yang tetap terbaca rapi di WhatsApp. PDF memakai tata letak tabel tersendiri. */
 object ReceiptText {
-    fun format(nota: Nota, branch: Branch): String {
+    fun format(nota: Nota, branch: Branch, template: WhatsAppTemplate = WhatsAppTemplate()): String {
         val mapLine = mapReference(branch.mapsQuery)
         val serviceLines = nota.lines.takeIf { it.isNotEmpty() }?.mapIndexed { index, line ->
             "${index + 1}. *${line.name}*\n   ${quantity(line.qty)} ${line.unit} × ${rp(line.unitPrice)}\n   Subtotal: *${rp((line.qty * line.unitPrice).toInt())}*"
         }?.joinToString("\n\n") ?: normalizeLegacyItems(nota.items)
+        fun expand(value: String): String = value
+            .replace("{pelanggan}", nota.customer)
+            .replace("{cabang}", branch.name)
+            .replace("{kasir}", nota.kasir)
+            .replace("{nota}", nota.id)
         return """
+            ${expand(template.opening)}
+
+            ${expand(template.content)}
+
             *${branch.name.uppercase()}*
             _Nota Service ${nota.id}_
 
@@ -30,7 +39,7 @@ object ReceiptText {
             Dibayar: ${rp(nota.paid)}
             ${nota.payMethod.label} · ${nota.pay.label}
 
-            Terima kasih telah mempercayakan laundry Anda kepada ${branch.name}.
+            ${expand(template.closing)}
         """.trimIndent()
     }
 

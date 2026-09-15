@@ -1,8 +1,10 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
-const sql = readFileSync(new URL("../migrations/0001_initial.sql", import.meta.url), "utf8");
+const migrations = new URL("../migrations/", import.meta.url);
+const sql = readdirSync(migrations).filter(name => name.endsWith(".sql")).sort()
+  .map(name => readFileSync(new URL(name, migrations), "utf8")).join("\n");
 const commandSql = readFileSync(new URL("../migrations/0003_command_sync.sql", import.meta.url), "utf8");
-const required = ["branches", "staff", "staff_branches", "services", "orders", "order_lines", "attendance", "products", "branch_stocks", "inventory_items", "expenses", "audit_logs", "sync_changes", "processed_commands"];
+const required = ["branches", "staff", "staff_branches", "services", "orders", "order_lines", "attendance", "products", "branch_stocks", "inventory_items", "expenses", "audit_logs", "sync_changes", "processed_commands", "access_policies", "whatsapp_templates"];
 for (const table of required) {
   if (!new RegExp(`CREATE TABLE ${table}\\b`).test(sql)) throw new Error(`Tabel wajib belum ada: ${table}`);
 }

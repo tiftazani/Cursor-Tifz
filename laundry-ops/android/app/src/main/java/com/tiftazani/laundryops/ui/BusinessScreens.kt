@@ -1,5 +1,9 @@
 package com.tiftazani.laundryops.ui
 
+import android.graphics.BitmapFactory
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -19,6 +24,7 @@ import com.tiftazani.laundryops.data.*
 import com.tiftazani.laundryops.ui.components.*
 import com.tiftazani.laundryops.ui.theme.*
 import java.time.LocalDateTime
+import java.io.File
 
 private val businessStore get() = CuciinStore
 
@@ -41,7 +47,6 @@ internal fun InventoryScreen(nav: NavHostController, toast: (String) -> Unit) {
     var status by remember { mutableStateOf(InventoryStatus.Normal) }
     var purchaseAt by remember { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE))) }
     var notes by remember { mutableStateOf("") }
-    var sellable by remember { mutableStateOf(false) }
     var filter by remember { mutableStateOf<InventoryCategory?>(null) }
 
     fun fill(row: InventoryItem?) {
@@ -49,13 +54,14 @@ internal fun InventoryScreen(nav: NavHostController, toast: (String) -> Unit) {
         name = row?.name.orEmpty(); category = row?.category ?: InventoryCategory.MesinCuci
         brand = row?.brand.orEmpty(); serial = row?.serialNumber.orEmpty(); quantity = row?.quantity?.toString() ?: "1"
         unit = row?.unit ?: "unit"; status = row?.status ?: InventoryStatus.Normal
-        purchaseAt = row?.purchaseAt?.takeIf { DisplayDates.parse(it) != null } ?: DisplayDates.encode(LocalDateTime.now(Clock.ZONE)); notes = row?.notes.orEmpty(); sellable = row?.sellable ?: false
+        purchaseAt = row?.purchaseAt?.takeIf { DisplayDates.parse(it) != null } ?: DisplayDates.encode(LocalDateTime.now(Clock.ZONE)); notes = row?.notes.orEmpty()
         if (row != null) branchId = row.branchId
     }
 
-    val rows = businessStore.inventory.filter { it.branchId == branchId && (filter == null || it.category == filter) }
+    val assetCategories = InventoryCategory.entries.filter { it !in setOf(InventoryCategory.BarangJual, InventoryCategory.BahanHabisPakai) }
+    val rows = businessStore.inventory.filter { it.branchId == branchId && it.category in assetCategories && (filter == null || it.category == filter) }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 28.dp)) {
-        item { ScreenHeader("Inventory cabang", "Mesin, alat, bahan, dan barang jual", onBack = { nav.popBackStack() }) }
+        item { ScreenHeader("Aset & mesin cabang", "Mesin dan peralatan operasional; produk dan bahan ada di Produk stok", onBack = { nav.popBackStack() }) }
         item {
             CardBlock {
                 SectionLabel("Cabang")
@@ -63,7 +69,7 @@ internal fun InventoryScreen(nav: NavHostController, toast: (String) -> Unit) {
                 SectionLabel("Filter kategori")
                 ChipRow {
                     SelectChip(filter == null, "Semua") { filter = null }
-                    InventoryCategory.entries.forEach { value -> SelectChip(filter == value, value.label) { filter = value } }
+                    assetCategories.forEach { value -> SelectChip(filter == value, value.label) { filter = value } }
                 }
             }
         }
@@ -78,7 +84,7 @@ internal fun InventoryScreen(nav: NavHostController, toast: (String) -> Unit) {
                 SectionLabel(if (editing == null) "Inventory baru" else "Ubah inventory")
                 Field(name, { name = it }, "Nama inventory")
                 SectionLabel("Kategori")
-                ChipRow { InventoryCategory.entries.forEach { value -> SelectChip(category == value, value.label) { category = value } } }
+                ChipRow { assetCategories.forEach { value -> SelectChip(category == value, value.label) { category = value } } }
                 Field(brand, { brand = it }, "Merek / pembuat")
                 Field(serial, { serial = it }, "Nomor seri / kode aset")
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -89,11 +95,10 @@ internal fun InventoryScreen(nav: NavHostController, toast: (String) -> Unit) {
                 ChipRow { InventoryStatus.entries.forEach { value -> SelectChip(status == value, value.label) { status = value } } }
                 DateTimeFields(DisplayDates.parse(purchaseAt) ?: LocalDateTime.now(Clock.ZONE), { purchaseAt = DisplayDates.encode(it) }, "Tanggal beli / mulai dipakai")
                 Field(notes, { notes = it }, "Catatan lokasi, kapasitas, atau perawatan")
-                SelectChip(sellable, "Barang ini dapat dijual") { sellable = !sellable }
                 PrimaryBtn("Simpan inventory", enabled = name.isNotBlank() && (quantity.toIntOrNull() ?: -1) >= 0, icon = Icons.Outlined.Check) {
                     val old = editing
-                    if (old == null) businessStore.addInventory(branchId, name, category, brand, serial, quantity.toIntOrNull() ?: 0, unit, status, purchaseAt, notes, sellable)
-                    else businessStore.updateInventory(old.copy(branchId = branchId, name = name, category = category, brand = brand, serialNumber = serial, quantity = quantity.toIntOrNull() ?: 0, unit = unit, status = status, purchaseAt = purchaseAt, notes = notes, sellable = sellable))
+                    if (old == null) businessStore.addInventory(branchId, name, category, brand, serial, quantity.toIntOrNull() ?: 0, unit, status, purchaseAt, notes, sellable = false)
+                    else businessStore.updateInventory(old.copy(branchId = branchId, name = name, category = category, brand = brand, serialNumber = serial, quantity = quantity.toIntOrNull() ?: 0, unit = unit, status = status, purchaseAt = purchaseAt, notes = notes, sellable = false))
                     toast("Inventory tersimpan untuk ${businessStore.branch(branchId).name}"); creating = false; editing = null
                 }
                 if (editing != null) DangerBtn("Hapus inventory") { businessStore.deleteInventory(editing!!.id)?.let(toast) ?: run { editing = null; toast("Inventory dihapus") } }
@@ -175,12 +180,32 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
     businessStore.revision.intValue
     var branchId by rememberSaveable { mutableStateOf(session.branchId) }
     var note by rememberSaveable { mutableStateOf("") }
+    var checkInPhotoPath by rememberSaveable { mutableStateOf("") }
+    var checkOutPhotoPath by rememberSaveable { mutableStateOf("") }
+    var pendingCheckIn by remember { mutableStateOf<File?>(null) }
+    var pendingCheckOut by remember { mutableStateOf<File?>(null) }
     val allowedBranches = if (session.role == Role.Owner) businessStore.branches.toList()
     else businessStore.branches.filter { it.id == session.branchId }
     val today = businessStore.todayAttendance(session.email)
     val rows = if (session.role == Role.Owner) businessStore.visibleAttendance(branchIds = setOf(branchId))
     else businessStore.visibleAttendance()
     val tap = rememberTapFeedback()
+    val takeCheckIn = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+        val file = pendingCheckIn
+        if (taken && file != null) {
+            checkInPhotoPath = AttendancePhotos.stamp(file, "masuk", session.name, businessStore.branch(branchId).name).orEmpty()
+            if (checkInPhotoPath.isBlank()) toast("Foto belum dapat diproses. Coba ambil kembali.")
+        } else if (!taken) toast("Foto absensi masuk dibatalkan")
+        pendingCheckIn = null
+    }
+    val takeCheckOut = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+        val file = pendingCheckOut
+        if (taken && file != null) {
+            checkOutPhotoPath = AttendancePhotos.stamp(file, "pulang", session.name, businessStore.branch(branchId).name).orEmpty()
+            if (checkOutPhotoPath.isBlank()) toast("Foto belum dapat diproses. Coba ambil kembali.")
+        } else if (!taken) toast("Foto absensi pulang dibatalkan")
+        pendingCheckOut = null
+    }
 
     fun durationLabel(row: AttendanceRecord): String {
         val end = row.checkOutAtMs ?: Clock.nowMs()
@@ -217,14 +242,24 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
                 Field(note, { note = it.take(160) }, "Catatan shift (opsional)")
                 if (today == null) {
-                    PrimaryBtn("Absen masuk", icon = Icons.Outlined.Login) {
+                    GhostBtn(if (checkInPhotoPath.isBlank()) "Ambil foto masuk" else "Foto masuk siap", icon = Icons.Outlined.PhotoCamera) {
+                        val target = AttendancePhotos.createTarget(ctx, "masuk")
+                        pendingCheckIn = target.first
+                        takeCheckIn.launch(target.second)
+                    }
+                    PrimaryBtn("Absen masuk", enabled = checkInPhotoPath.isNotBlank(), icon = Icons.Outlined.Login) {
                         tap()
-                        businessStore.checkIn(branchId, note)?.let(toast) ?: run { note = ""; toast("Absen masuk berhasil dicatat") }
+                        businessStore.checkIn(branchId, note, checkInPhotoPath)?.let(toast) ?: run { note = ""; checkInPhotoPath = ""; toast("Absen masuk berhasil dicatat") }
                     }
                 } else if (today.checkOutAtMs == null) {
-                    PrimaryBtn("Absen pulang", icon = Icons.Outlined.Logout) {
+                    GhostBtn(if (checkOutPhotoPath.isBlank()) "Ambil foto pulang" else "Foto pulang siap", icon = Icons.Outlined.PhotoCamera) {
+                        val target = AttendancePhotos.createTarget(ctx, "pulang")
+                        pendingCheckOut = target.first
+                        takeCheckOut.launch(target.second)
+                    }
+                    PrimaryBtn("Absen pulang", enabled = checkOutPhotoPath.isNotBlank(), icon = Icons.Outlined.Logout) {
                         tap()
-                        businessStore.checkOut(note)?.let(toast) ?: run { note = ""; toast("Absen pulang berhasil dicatat") }
+                        businessStore.checkOut(note, checkOutPhotoPath)?.let(toast) ?: run { note = ""; checkOutPhotoPath = ""; toast("Absen pulang berhasil dicatat") }
                     }
                 } else {
                     FeedbackBanner("Absensi hari ini sudah lengkap.")
@@ -245,8 +280,20 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
                 InfoRow(Icons.Outlined.Schedule, "Jam kerja", "${row.checkInAt} — ${row.checkOutAt ?: "sekarang"}")
                 Text("Durasi ${durationLabel(row)}", color = Ink, fontWeight = FontWeight.SemiBold)
+                AttendancePhotoPreview(row.checkInPhotoPath, "Foto masuk tersimpan di perangkat")
+                if (row.checkOutPhotoPath.isNotBlank()) AttendancePhotoPreview(row.checkOutPhotoPath, "Foto pulang tersimpan di perangkat")
                 if (row.note.isNotBlank()) Text(row.note, color = Muted, fontSize = 12.sp)
             }
         }
+    }
+}
+
+@Composable
+private fun AttendancePhotoPreview(path: String, label: String) {
+    val image = remember(path) { path.takeIf { it.isNotBlank() }?.let { BitmapFactory.decodeFile(it)?.asImageBitmap() } }
+    if (image == null) Text(label, color = Muted, fontSize = 12.sp)
+    else {
+        Image(image, label, modifier = Modifier.fillMaxWidth().height(150.dp))
+        Text(label, color = Muted, fontSize = 12.sp)
     }
 }

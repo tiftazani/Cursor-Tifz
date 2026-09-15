@@ -78,9 +78,10 @@ internal fun MoreScreen(nav: NavHostController) {
             add("Pengguna · kasir · SPV" to "users")
             add("Layanan & harga" to "services")
             add("Produk stok" to "products")
+            add("Pengaturan Owner" to "ownerSettings")
             add("Riwayat aktivitas" to "audit")
         }
-        add("Inventory cabang" to "inventory")
+        if (role == Role.Owner) add("Aset & mesin cabang" to "inventory")
         add("Biaya operasional" to "expenses")
         if (role != Role.Supervisor) add("Pelanggan" to "customers")
         if (role != Role.Supervisor) {
@@ -90,6 +91,17 @@ internal fun MoreScreen(nav: NavHostController) {
         }
         add("Riwayat versi" to "versions")
         add("Profil" to "profil")
+    }.filter { (_, route) ->
+        when (route) {
+            "attendance" -> store.canAccess("attendance")
+            "analytics", "branches", "users", "services", "products", "audit", "ownerSettings" -> store.canAccess("owner")
+            "inventory" -> store.canAccess("inventory")
+            "expenses" -> store.canAccess("expense")
+            "customers" -> store.canAccess("customer")
+            "wa", "waArchive" -> store.canAccess("whatsapp")
+            "cash" -> store.canAccess("cash")
+            else -> true
+        }
     }
     val tap = rememberTapFeedback()
     val columns = if (ui.widthDp < 360 || LocalDensity.current.fontScale > 1.3f) 1 else if (ui.twoPane) 3 else 2
@@ -436,6 +448,7 @@ internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val s = store.session.value ?: return
     val account = store.staff.firstOrNull { it.email.equals(s.email, true) }
+    val assignedBranches = account?.branchIds.orEmpty().mapNotNull { id -> store.branches.firstOrNull { it.id == id }?.name }
     var changePassword by remember { mutableStateOf(false) }
     var changeEmail by remember { mutableStateOf(false) }
     var newEmail by remember { mutableStateOf(s.email) }
@@ -451,7 +464,8 @@ internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
                 Text(s.name, fontWeight = FontWeight.Bold, fontSize = 22.sp)
                 Text(s.email, color = Muted)
                 Chip(if (s.role == Role.Supervisor) "SPV" else s.role.name, Teal)
-                InfoRow(Icons.Outlined.Storefront, "Cabang", store.branch(s.branchId).name)
+                InfoRow(Icons.Outlined.Storefront, "Cabang penugasan", assignedBranches.joinToString().ifBlank { "Belum ada cabang" })
+                if (s.role == Role.Owner) InfoRow(Icons.Outlined.Visibility, "Tampilan data", if (store.viewBranch.value == "all") "Semua cabang" else store.branch(store.viewBranch.value).name)
             }
         }
         if (account != null) {

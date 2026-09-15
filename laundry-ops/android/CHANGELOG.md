@@ -2,6 +2,16 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.9.1 — 15 Sep 2026 (versionCode 16)
+
+- Layanan retail kini memakai relasi ID produk stok, sehingga penjualan, koreksi, dan penghapusan Service selalu memutakhirkan saldo produk di cabang yang benar.
+- Produk stok menyatukan barang jual serta bahan habis pakai. Stok awal maupun pencatatan massal dapat dipilih untuk lebih dari satu cabang; mesin dan aset operasional berada di menu Aset & mesin cabang.
+- Riwayat inventory lama untuk barang jual/bahan habis pakai otomatis dipindahkan ke katalog Produk stok ketika aplikasi dibuka.
+- Profil menampilkan cabang penugasan pengguna yang sebenarnya, termasuk ketika Owner sedang melihat cabang lain.
+- Sesudah WhatsApp dibuka untuk pelanggan, hanya Owner yang dapat mengoreksi atau menghapus Service. Batas ini diperiksa di aplikasi dan server.
+- Absen masuk/pulang memakai foto kamera yang diberi cap waktu, disimpan privat serta ditampilkan di perangkat; path foto tidak pernah disinkronkan ke server.
+- Owner dapat mengatur modul/fungsi per pengguna dan template WhatsApp yang terdiri dari pembuka, isi pengantar, dan penutup. Worker menyimpan serta menerapkan kebijakan akses tersebut.
+
 ## 1.9.0 — 14 Sep 2026 (versionCode 15)
 
 - Sinkronisasi snapshot global diganti dengan persistent outbox dan command per entitas. Command baru dihapus setelah acknowledgement server; retry memakai ID yang sama sehingga tidak menggandakan transaksi.

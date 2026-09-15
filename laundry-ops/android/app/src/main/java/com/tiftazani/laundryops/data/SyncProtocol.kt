@@ -390,6 +390,8 @@ object SyncProjection {
         "audit" to Spec("audit", { syncIdOrLegacyHash(it) }, text("branchId")),
         "cashClose" to Spec("cashCloses", text("id"), text("branchId")),
         "attendance" to Spec("attendance", text("id"), text("branchId")),
+        "accessPolicy" to Spec("accessPolicies", { text("email")(it).lowercase() }, { null }),
+        "whatsappTemplate" to Spec("whatsappTemplates", text("id"), { null }),
     )
 
     fun entities(snapshot: Snapshot): List<SyncEntity> {
@@ -401,6 +403,7 @@ object SyncProjection {
                 val cloudPayload = when (type) {
                     "nota" -> JsonObject(obj + ("photos" to JsonArray(emptyList())))
                     "stockMove", "audit" -> JsonObject(obj + ("syncId" to JsonPrimitive(id)))
+                    "attendance" -> JsonObject(obj + ("checkInPhotoPath" to JsonPrimitive("")) + ("checkOutPhotoPath" to JsonPrimitive("")))
                     else -> obj
                 }
                 if (id.isBlank()) null else SyncEntity(type, id, spec.branch(obj)?.ifBlank { null }, cloudPayload)
