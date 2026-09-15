@@ -11,20 +11,26 @@ on:
       - "laundry-ops/android/**"
 
 jobs:
-  assemble:
+  verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Assemble debug APK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+      - name: Unit test, lint, and assemble debug APK
         working-directory: laundry-ops/android
-        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
-      - uses: actions/upload-artifact@v4
+        # Alamat cloud bukan rahasia: nilainya sudah tercatat di dokumen handover.
+        # Tanpa ini build gagal, karena build debug wajib punya alamat cloud.
+        env:
+          CUCIIN_CLOUD_URL: https://cuciin-api.tiftazani-cuciin.workers.dev/api/cuciin
+        run: chmod +x gradlew && ./gradlew testDebugUnitTest lintDebug assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v7
         with:
           name: cuciin-debug-apk
           path: laundry-ops/android/app/build/outputs/apk/debug/*.apk

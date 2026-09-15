@@ -22,6 +22,7 @@ import com.tiftazani.laundryops.data.FirebaseCloud
 import com.tiftazani.laundryops.data.FileExports
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -61,6 +62,10 @@ import com.tiftazani.laundryops.ui.theme.Ink
 import com.tiftazani.laundryops.ui.theme.Muted
 import com.tiftazani.laundryops.ui.theme.Teal
 import com.tiftazani.laundryops.ui.theme.Green
+import com.tiftazani.laundryops.ui.theme.CuciinThemeMode
+import com.tiftazani.laundryops.ui.theme.OnPrim
+import com.tiftazani.laundryops.ui.theme.ThemePrefs
+import com.tiftazani.laundryops.ui.theme.LineSoft
 import java.time.LocalDateTime
 
 private val store get() = CuciinStore
@@ -78,9 +83,10 @@ internal fun MoreScreen(nav: NavHostController) {
             add("Pengguna · kasir · SPV" to "users")
             add("Layanan & harga" to "services")
             add("Produk stok" to "products")
+            add("Pengaturan Owner" to "ownerSettings")
             add("Riwayat aktivitas" to "audit")
         }
-        add("Inventory cabang" to "inventory")
+        if (role == Role.Owner) add("Aset & mesin cabang" to "inventory")
         add("Biaya operasional" to "expenses")
         if (role != Role.Supervisor) add("Pelanggan" to "customers")
         if (role != Role.Supervisor) {
@@ -90,6 +96,17 @@ internal fun MoreScreen(nav: NavHostController) {
         }
         add("Riwayat versi" to "versions")
         add("Profil" to "profil")
+    }.filter { (_, route) ->
+        when (route) {
+            "attendance" -> store.canAccess("attendance")
+            "analytics", "branches", "users", "services", "products", "audit", "ownerSettings" -> store.canAccess("owner")
+            "inventory" -> store.canAccess("inventory")
+            "expenses" -> store.canAccess("expense")
+            "customers" -> store.canAccess("customer")
+            "wa", "waArchive" -> store.canAccess("whatsapp")
+            "cash" -> store.canAccess("cash")
+            else -> true
+        }
     }
     val tap = rememberTapFeedback()
     val columns = if (ui.widthDp < 360 || LocalDensity.current.fontScale > 1.3f) 1 else if (ui.twoPane) 3 else 2
@@ -98,16 +115,16 @@ internal fun MoreScreen(nav: NavHostController) {
         item {
             Surface(onClick = { nav.navigate("profil") }, color = Teal, shape = RoundedCornerShape(20.dp)) {
                 Row(Modifier.fillMaxWidth().padding(18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.AccountCircle, null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(32.dp))
-                    Column(Modifier.weight(1f)) { Text("Akun & profil", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold); Text("Informasi akun dan kata sandi", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .8f), fontSize = 12.sp) }
-                    Icon(Icons.Outlined.ChevronRight, null, tint = androidx.compose.ui.graphics.Color.White)
+                    Icon(Icons.Outlined.AccountCircle, null, tint = OnPrim, modifier = Modifier.size(32.dp))
+                    Column(Modifier.weight(1f)) { Text("Akun & profil", color = OnPrim, fontWeight = FontWeight.Bold); Text("Informasi akun dan kata sandi", color = OnPrim.copy(alpha = .85f), fontSize = 12.sp) }
+                    Icon(Icons.Outlined.ChevronRight, null, tint = OnPrim)
                 }
             }
         }
         items(items.filter { it.second != "profil" }.chunked(columns)) { group ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
                 group.forEach { (label, route) ->
-                    Surface(onClick = { tap(); nav.navigate(route) }, modifier = Modifier.weight(1f).fillMaxHeight(), color = Card, shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, Line)) {
+                    Surface(onClick = { tap(); nav.navigate(route) }, modifier = Modifier.weight(1f).fillMaxHeight(), color = Card, shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, LineSoft)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Icon(when (route) {
                                 "analytics" -> Icons.Outlined.BarChart
@@ -163,12 +180,10 @@ internal fun AnalyticsScreen(nav: NavHostController) {
     val from = DisplayDates.parse(fromValue) ?: LocalDateTime.now(Clock.ZONE).withHour(0).withMinute(0)
     val until = DisplayDates.parse(untilValue) ?: LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59)
     val selectedBranches = store.reportBranchIds.value
-    val fromMs = from.atZone(Clock.ZONE).toInstant().toEpochMilli()
-    val untilMs = until.atZone(Clock.ZONE).toInstant().toEpochMilli()
-    val baseRows = if (customRange) store.notas.filter { it.createdAtMs in fromMs..untilMs && (selectedBranches.isEmpty() || it.branchId in selectedBranches) } else store.periodNotas()
+    val baseRows = if (customRange) store.notas.filter { DisplayDates.isInSelectedMinute(it.createdAtMs, from, until) && (selectedBranches.isEmpty() || it.branchId in selectedBranches) } else store.periodNotas()
     val handlers = baseRows.flatMap { nota -> nota.lines.map { it.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir } to it.handledByName.ifBlank { nota.kasir } } }.distinctBy { it.first }
     val rows = baseRows.filter { nota -> handlerFilter == "all" || nota.lines.any { it.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir } == handlerFilter } }
-    val expenseRows = if (customRange) store.expenses.filter { it.occurredAtMs in fromMs..untilMs && (selectedBranches.isEmpty() || it.branchId in selectedBranches) } else store.periodExpenses()
+    val expenseRows = if (customRange) store.expenses.filter { DisplayDates.isInSelectedMinute(it.occurredAtMs, from, until) && (selectedBranches.isEmpty() || it.branchId in selectedBranches) } else store.periodExpenses()
     val omzet = store.omzet(rows)
     val masuk = store.collected(rows)
     val biaya = expenseRows.sumOf { it.amount }
@@ -321,7 +336,7 @@ private fun TransactionReportTable(rows: List<Nota>, branchName: (String) -> Str
         Text("Geser tabel ke samping untuk melihat seluruh kolom. Ketuk baris untuk membuka Service.", color = Muted, fontSize = 11.sp)
         Column(Modifier.horizontalScroll(scroll).width(1470.dp)) {
             Surface(color = Teal, shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)) {
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(IntrinsicSize.Min)) {
                     ReportCell("No", 44.dp, true)
                     ReportCell("ID Service", 150.dp, true)
                     ReportCell("Waktu masuk", 145.dp, true)
@@ -342,7 +357,7 @@ private fun TransactionReportTable(rows: List<Nota>, branchName: (String) -> Str
                     color = if (index % 2 == 0) Card else Mist.copy(alpha = .55f),
                     border = BorderStroke(0.5.dp, Line),
                 ) {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).height(IntrinsicSize.Min), verticalAlignment = Alignment.Top) {
                         ReportCell((index + 1).toString(), 44.dp)
                         ReportCell(nota.id, 150.dp)
                         ReportCell(nota.createdAt, 145.dp)
@@ -366,13 +381,14 @@ private fun TransactionReportTable(rows: List<Nota>, branchName: (String) -> Str
 private fun ReportCell(text: String, width: androidx.compose.ui.unit.Dp, header: Boolean = false) {
     Text(
         text,
-        modifier = Modifier.width(width).padding(horizontal = 8.dp, vertical = 8.dp),
-        color = if (header) androidx.compose.ui.graphics.Color.White else Ink,
+        modifier = Modifier.width(width).fillMaxHeight().padding(horizontal = 8.dp, vertical = 8.dp),
+        color = if (header) OnPrim else Ink,
         fontSize = if (header) 11.sp else 10.sp,
         lineHeight = 14.sp,
         fontWeight = if (header) FontWeight.Bold else FontWeight.Normal,
-        maxLines = 2,
-        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        maxLines = if (header) 3 else 5,
+        softWrap = true,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
     )
 }
 
@@ -432,11 +448,14 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val s = store.session.value ?: return
     val account = store.staff.firstOrNull { it.email.equals(s.email, true) }
+    val assignedBranches = account?.branchIds.orEmpty().mapNotNull { id -> store.branches.firstOrNull { it.id == id }?.name }
+    var themeMode by remember { mutableStateOf(ThemePrefs.mode) }
     var changePassword by remember { mutableStateOf(false) }
     var changeEmail by remember { mutableStateOf(false) }
     var newEmail by remember { mutableStateOf(s.email) }
@@ -452,7 +471,8 @@ internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
                 Text(s.name, fontWeight = FontWeight.Bold, fontSize = 22.sp)
                 Text(s.email, color = Muted)
                 Chip(if (s.role == Role.Supervisor) "SPV" else s.role.name, Teal)
-                InfoRow(Icons.Outlined.Storefront, "Cabang", store.branch(s.branchId).name)
+                InfoRow(Icons.Outlined.Storefront, "Cabang penugasan", assignedBranches.joinToString().ifBlank { "Belum ada cabang" })
+                if (s.role == Role.Owner) InfoRow(Icons.Outlined.Visibility, "Tampilan data", if (store.viewBranch.value == "all") "Semua cabang" else store.branch(store.viewBranch.value).name)
             }
         }
         if (account != null) {
@@ -496,6 +516,18 @@ internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
         }
+        item {
+            CardBlock {
+                SectionLabel("Tema tampilan")
+                Text("Berlaku untuk akun ini di HP ini saja, tidak ikut tersinkron ke perangkat lain.", color = Muted, fontSize = 12.sp)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CuciinThemeMode.entries.forEach { option ->
+                        SelectChip(themeMode == option, option.label) { ThemePrefs.set(option); themeMode = ThemePrefs.mode }
+                    }
+                }
+                Text("Contoh teks dan kartu memakai warna tema ini: ${paletteSampleLabel(themeMode)}.", color = Muted, fontSize = 12.sp)
+            }
+        }
         item { CardBlock { InfoRow(Icons.Outlined.CloudSync, "Sinkronisasi", CloudSync.lastStatus); InfoRow(Icons.Outlined.Info, "Versi aplikasi", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") } }
         item { GhostBtn("Riwayat versi", icon = Icons.Outlined.History) { nav.navigate("versions") } }
         if (s.role != Role.Owner) item { DangerBtn("Hapus akun saya") { if (store.deleteMyAccount()) { toast("Akun dihapus"); nav.navigate("login") { popUpTo(0) } } } }
@@ -525,4 +557,12 @@ internal fun VersionScreen(nav: NavHostController) {
         }
         item { Spacer(Modifier.height(20.dp)) }
     }
+}
+
+/** Kalimat contoh supaya pengguna melihat tema mana yang sedang aktif tanpa menebak. */
+private fun paletteSampleLabel(mode: CuciinThemeMode): String = when (mode) {
+    CuciinThemeMode.Sistem -> "mengikuti pengaturan gelap/terang HP"
+    CuciinThemeMode.Terang -> "latar terang dengan aksen biru"
+    CuciinThemeMode.Gelap -> "latar gelap dengan aksen biru muda"
+    CuciinThemeMode.Warni -> "latar merah muda dengan aksen plum"
 }

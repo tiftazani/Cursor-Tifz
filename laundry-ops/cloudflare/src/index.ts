@@ -1,3 +1,5 @@
+import { pullChanges, pushCommands, syncScopeKey } from "./command-sync.ts";
+
 interface Env {
   DB: D1Database;
   SYNC_SECRET?: string;
@@ -61,10 +63,6 @@ async function authorize(request: Request, env: Env): Promise<Identity | null> {
   if (bearer && env.FIREBASE_PROJECT_ID) {
     const firebaseUser = await firebaseIdentity(bearer, env.FIREBASE_PROJECT_ID);
     if (firebaseUser?.email) {
-      if (firebaseUser.email.toLowerCase() === "tiftazani.khara@gmail.com") {
-        const branches = await env.DB.prepare("SELECT id FROM branches WHERE organization_id=? AND active=1 ORDER BY name").bind(ORG_ID).all<{id:string}>();
-        return { uid: firebaseUser.sub, email: firebaseUser.email, name: "Tiftazani Khara", role: "Owner", branchIds: branches.results.map((row) => row.id), bootstrap: false };
-      }
       let staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE firebase_uid=? AND approved=1 AND active=1").bind(firebaseUser.sub).first<{email:string;name:string;role:string}>();
       if (!staff) {
         staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE lower(email)=lower(?) AND approved=1 AND active=1").bind(firebaseUser.email).first<{email:string;name:string;role:string}>();
@@ -93,8 +91,8 @@ const BRANCH_DATASETS = ["branchStocks", "inventory", "expenses", "notas", "stoc
 
 function rowKey(dataset: string, row: JsonRecord): string {
   if (dataset === "branchStocks") return `${str(row,"branchId")}|${str(row,"productKey")}`;
-  if (dataset === "stockMoves") return `${str(row,"branchId")}|${num(row,"atMs")}|${str(row,"product")}|${str(row,"kind")}|${str(row,"notaId")}`;
-  if (dataset === "audit") return `${str(row,"branchId")}|${num(row,"atMs")}|${str(row,"user")}|${str(row,"action")}|${str(row,"notaId")}`;
+  if (dataset === "stockMoves") return str(row,"syncId") || `${str(row,"branchId")}|${num(row,"atMs")}|${str(row,"product")}|${str(row,"kind")}|${str(row,"notaId")}`;
+  if (dataset === "audit") return str(row,"syncId") || `${str(row,"branchId")}|${num(row,"atMs")}|${str(row,"user")}|${str(row,"action")}|${str(row,"notaId")}`;
   return str(row, "id") || `${str(row,"branchId")}|${num(row,"atMs")}|${str(row,"staffEmail")}`;
 }
 
@@ -104,7 +102,7 @@ function mergeRows(dataset: string, current: JsonRecord[], incoming: JsonRecord[
   return [...rows.values()];
 }
 
-function visibleSnapshot(snapshot: JsonRecord, identity: Identity): JsonRecord {
+export function visibleSnapshot(snapshot: JsonRecord, identity: Identity): JsonRecord {
   if (identity.role === "Owner" || identity.bootstrap) return snapshot;
   const allowed = new Set(identity.branchIds);
   const result: JsonRecord = { ...snapshot, sessionEmail: null, viewBranch: identity.branchIds[0] ?? "", viewKasir: "all" };
@@ -113,7 +111,9 @@ function visibleSnapshot(snapshot: JsonRecord, identity: Identity): JsonRecord {
     const ids = Array.isArray(row.branchIds) ? row.branchIds : [];
     return ids.some((id) => typeof id === "string" && allowed.has(id));
   });
-  for (const dataset of BRANCH_DATASETS) result[dataset] = list(snapshot, dataset).filter((row) => allowed.has(str(row,"branchId")));
+  for (const dataset of BRANCH_DATASETS) result[dataset] = list(snapshot, dataset).filter((row) =>
+    allowed.has(str(row,"branchId")) && (dataset !== "attendance" || str(row,"staffEmail").toLowerCase() === identity.email.toLowerCase())
+  );
   return result;
 }
 
@@ -123,7 +123,9 @@ function mergeRestrictedSnapshot(current: JsonRecord, incoming: JsonRecord, iden
   const merged: JsonRecord = { ...current, updatedAt: num(incoming,"updatedAt"), sessionEmail: null };
   merged.customers = mergeRows("customers", list(current,"customers"), list(incoming,"customers"));
   for (const dataset of BRANCH_DATASETS) {
-    const accepted = list(incoming, dataset).filter((row) => allowed.has(str(row,"branchId")));
+    const accepted = list(incoming, dataset).filter((row) =>
+      allowed.has(str(row,"branchId")) && (dataset !== "attendance" || str(row,"staffEmail").toLowerCase() === identity.email.toLowerCase())
+    );
     merged[dataset] = mergeRows(dataset, list(current,dataset), accepted);
   }
   const tombstones = new Set([...listOfStrings(current.deletedNotaIds), ...listOfStrings(incoming.deletedNotaIds)]);
@@ -134,6 +136,80 @@ function mergeRestrictedSnapshot(current: JsonRecord, incoming: JsonRecord, iden
 
 function listOfStrings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+export type SnapshotJournalChange = {
+  sequence: number;
+  entity_type: string;
+  entity_id: string;
+  operation: string;
+  payload_json: string | null;
+  updated_at: number;
+};
+
+const CHANGE_DATASETS:Record<string,string>={
+  branch:"branches",staff:"staff",customer:"customers",service:"services",product:"products",branchStock:"branchStocks",
+  inventory:"inventory",expense:"expenses",nota:"notas",stockMove:"stockMoves",audit:"audit",cashClose:"cashCloses",attendance:"attendance",accessPolicy:"accessPolicies",whatsappTemplate:"whatsappTemplates",
+};
+
+function journalEntityId(dataset:string,row:JsonRecord):string {
+  if(dataset==="branchStocks") return `${str(row,"branchId")}:${str(row,"productKey")}`;
+  if(dataset==="stockMoves" || dataset==="audit") return str(row,"syncId") || rowKey(dataset,row);
+  if(dataset==="staff") return str(row,"email").toLowerCase();
+  if(dataset==="products") return str(row,"id") || str(row,"name");
+  return str(row,"id");
+}
+
+export function applyJournalToSnapshot(base:JsonRecord,changes:SnapshotJournalChange[],revision:number):JsonRecord {
+  const snapshot:JsonRecord={...base};
+  for(const change of changes) {
+    const dataset=CHANGE_DATASETS[change.entity_type];
+    if(!dataset) continue;
+    const rows=list(snapshot,dataset).filter(row=>journalEntityId(dataset,row)!==change.entity_id);
+    if(change.operation!=="delete" && change.payload_json) {
+      const payload=JSON.parse(change.payload_json) as unknown;
+      if(payload && typeof payload==="object" && !Array.isArray(payload)) rows.push(payload as JsonRecord);
+    }
+    snapshot[dataset]=rows;
+    if(change.entity_type==="nota") {
+      const deleted=new Set(listOfStrings(snapshot.deletedNotaIds));
+      if(change.operation==="delete") deleted.add(change.entity_id); else deleted.delete(change.entity_id);
+      snapshot.deletedNotaIds=[...deleted];
+    }
+    snapshot.updatedAt=Math.max(num(snapshot,"updatedAt"),change.updated_at);
+  }
+  snapshot.syncRevision=revision;
+  return snapshot;
+}
+
+async function materializedSnapshot(env:Env,row?:{payload_json:string}|null):Promise<{snapshot:JsonRecord;revision:number}> {
+  const stored=row === undefined ? await env.DB.prepare("SELECT payload_json FROM sync_snapshots WHERE organization_id=?").bind(ORG_ID).first<{payload_json:string}>() : row;
+  let snapshot=stored ? withoutLocalCredentials(JSON.parse(stored.payload_json) as JsonRecord) : {};
+  const storedRevision=num(snapshot,"syncRevision");
+  let revision=storedRevision;
+  while(true) {
+    const changes=(await env.DB.prepare("SELECT sequence,entity_type,entity_id,operation,payload_json,updated_at FROM sync_changes WHERE organization_id=? AND sequence>? ORDER BY sequence ASC LIMIT 500").bind(ORG_ID,revision).all<SnapshotJournalChange>()).results;
+    if(!changes.length) break;
+    revision=changes.at(-1)?.sequence ?? revision;
+    snapshot=applyJournalToSnapshot(snapshot,changes,revision);
+    if(changes.length<500) break;
+  }
+  snapshot.syncRevision=revision;
+  if(stored && revision>storedRevision) {
+    await env.DB.prepare(`UPDATE sync_snapshots SET payload_json=?,updated_at=? WHERE organization_id=? AND COALESCE(CAST(json_extract(payload_json,'$.syncRevision') AS INTEGER),0)<=?`)
+      .bind(JSON.stringify(withoutLocalCredentials(snapshot)),Date.now(),ORG_ID,revision).run();
+  }
+  return {snapshot,revision};
+}
+
+export function legacySnapshotWriteAllowed(identity:{bootstrap:boolean}, journalRevision = 0):boolean {
+  return identity.bootstrap && journalRevision === 0;
+}
+
+function withoutLocalCredentials(snapshot:JsonRecord):JsonRecord {
+  const safe={...snapshot};
+  safe.staff=list(snapshot,"staff").map(({passwordHash: _passwordHash,...person})=>person);
+  return safe;
 }
 
 async function projectSnapshot(env: Env, snapshot: JsonRecord, updatedAt: number): Promise<void> {
@@ -148,11 +224,11 @@ async function projectSnapshot(env: Env, snapshot: JsonRecord, updatedAt: number
     const branchIds = Array.isArray(person.branchIds) ? person.branchIds : [];
     for (const branchId of branchIds) if (typeof branchId === "string") statements.push(env.DB.prepare("INSERT OR IGNORE INTO staff_branches(staff_email,branch_id) VALUES(?,?)").bind(email,branchId));
   }
-  for (const service of list(snapshot, "services")) statements.push(env.DB.prepare("INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,unit=excluded.unit,default_price=excluded.default_price,commission_per_unit=excluded.commission_per_unit,retail=excluded.retail,drop_out=excluded.drop_out,self_service=excluded.self_service,updated_at=excluded.updated_at").bind(str(service,"id"),ORG_ID,str(service,"name"),str(service,"unit"),num(service,"price"),num(service,"commissionPerUnit"),bool(service,"retail"),bool(service,"dropOut"),bool(service,"selfService"),updatedAt));
+  for (const service of list(snapshot, "services")) statements.push(env.DB.prepare("INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,product_id,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,unit=excluded.unit,default_price=excluded.default_price,commission_per_unit=excluded.commission_per_unit,retail=excluded.retail,drop_out=excluded.drop_out,self_service=excluded.self_service,product_id=excluded.product_id,updated_at=excluded.updated_at").bind(str(service,"id"),ORG_ID,str(service,"name"),str(service,"unit"),num(service,"price"),num(service,"commissionPerUnit"),bool(service,"retail"),bool(service,"dropOut"),bool(service,"selfService"),str(service,"productKey") || null,updatedAt));
   for (const customer of list(snapshot, "customers")) statements.push(env.DB.prepare("INSERT INTO customers(id,organization_id,name,phone,address,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,phone=excluded.phone,address=excluded.address,updated_at=excluded.updated_at").bind(str(customer,"id"),ORG_ID,str(customer,"name"),str(customer,"phone"),str(customer,"address"),updatedAt));
   for (const product of list(snapshot, "products")) {
     const productId = str(product,"id").trim() || str(product,"name");
-    statements.push(env.DB.prepare("INSERT INTO products(id,organization_id,name,minimum_stock,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,minimum_stock=excluded.minimum_stock,updated_at=excluded.updated_at").bind(productId,ORG_ID,str(product,"name"),num(product,"min"),updatedAt));
+    statements.push(env.DB.prepare("INSERT INTO products(id,organization_id,name,minimum_stock,kind,unit,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,minimum_stock=excluded.minimum_stock,kind=excluded.kind,unit=excluded.unit,updated_at=excluded.updated_at").bind(productId,ORG_ID,str(product,"name"),num(product,"min"),str(product,"kind","BahanHabisPakai"),str(product,"unit","pcs"),updatedAt));
   }
   for (const stock of list(snapshot, "branchStocks")) statements.push(env.DB.prepare("INSERT INTO branch_stocks(branch_id,product_id,quantity,updated_at) VALUES(?,?,?,?) ON CONFLICT(branch_id,product_id) DO UPDATE SET quantity=excluded.quantity,updated_at=excluded.updated_at").bind(str(stock,"branchId"),str(stock,"productKey"),num(stock,"stock"),updatedAt));
   for (const item of list(snapshot, "inventory")) statements.push(env.DB.prepare("INSERT INTO inventory_items(id,organization_id,branch_id,payload_json,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(item,"id"),ORG_ID,str(item,"branchId"),JSON.stringify(item),updatedAt));
@@ -165,13 +241,17 @@ async function projectSnapshot(env: Env, snapshot: JsonRecord, updatedAt: number
     lines.forEach((line, index) => statements.push(env.DB.prepare("INSERT INTO order_lines(order_id,service_id,line_no,service_name,quantity,unit,unit_price,handler_email,handler_name,commission_per_unit) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(orderId,str(line,"serviceId"),index,str(line,"name"),num(line,"qty"),str(line,"unit"),num(line,"unitPrice"),str(line,"handledByEmail"),str(line,"handledByName"),num(line,"commissionPerUnit"))));
   }
   for (const row of list(snapshot, "attendance")) statements.push(env.DB.prepare("INSERT INTO attendance(id,organization_id,branch_id,staff_email,staff_name,work_date,check_in_at,check_out_at,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET check_out_at=excluded.check_out_at,note=excluded.note,updated_at=excluded.updated_at").bind(str(row,"id"),ORG_ID,str(row,"branchId"),str(row,"staffEmail").toLowerCase(),str(row,"staffName"),str(row,"workDate"),num(row,"checkInAtMs"),typeof row.checkOutAtMs === "number" ? row.checkOutAtMs : null,str(row,"note"),updatedAt));
-  list(snapshot, "stockMoves").forEach((row, index) => statements.push(env.DB.prepare("INSERT INTO stock_moves(id,organization_id,branch_id,payload_json,occurred_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(`${str(row,"branchId")}:${num(row,"atMs")}:${str(row,"product")}:${index}`,ORG_ID,str(row,"branchId"),JSON.stringify(row),num(row,"atMs"),updatedAt)));
-  list(snapshot, "audit").forEach((row, index) => statements.push(env.DB.prepare("INSERT INTO audit_logs(id,organization_id,branch_id,actor,action,order_id,occurred_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING").bind(`${str(row,"branchId")}:${num(row,"atMs")}:${index}`,ORG_ID,str(row,"branchId"),str(row,"user"),str(row,"action"),row.notaId ?? null,num(row,"atMs"))));
+  for (const policy of list(snapshot, "accessPolicies")) statements.push(env.DB.prepare("INSERT INTO access_policies(email,organization_id,payload_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(email,organization_id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(policy,"email").toLowerCase(),ORG_ID,JSON.stringify(policy),updatedAt));
+  for (const template of list(snapshot, "whatsappTemplates")) statements.push(env.DB.prepare("INSERT INTO whatsapp_templates(id,organization_id,payload_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(id,organization_id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(template,"id","business"),ORG_ID,JSON.stringify(template),updatedAt));
+  list(snapshot, "stockMoves").forEach((row, index) => statements.push(env.DB.prepare("INSERT INTO stock_moves(id,organization_id,branch_id,payload_json,occurred_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(row,"syncId") || `${str(row,"branchId")}:${num(row,"atMs")}:${str(row,"product")}:${index}`,ORG_ID,str(row,"branchId"),JSON.stringify(row),num(row,"atMs"),updatedAt)));
+  list(snapshot, "audit").forEach((row, index) => statements.push(env.DB.prepare("INSERT INTO audit_logs(id,organization_id,branch_id,actor,action,order_id,occurred_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING").bind(str(row,"syncId") || `${str(row,"branchId")}:${num(row,"atMs")}:${index}`,ORG_ID,str(row,"branchId"),str(row,"user"),str(row,"action"),row.notaId ?? null,num(row,"atMs"))));
   for (const row of list(snapshot, "cashCloses")) statements.push(env.DB.prepare("INSERT INTO cash_closes(id,organization_id,branch_id,payload_json,occurred_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(row,"id"),ORG_ID,str(row,"branchId"),JSON.stringify(row),num(row,"atMs"),updatedAt));
   for (let i = 0; i < statements.length; i += 80) await env.DB.batch(statements.slice(i, i + 80));
 }
 
 async function putSnapshot(request: Request, env: Env, identity: Identity): Promise<Response> {
+  const journal=await env.DB.prepare("SELECT COALESCE(MAX(sequence),0) AS revision FROM sync_changes WHERE organization_id=?").bind(ORG_ID).first<{revision:number}>();
+  if(!legacySnapshotWriteAllowed(identity,journal?.revision ?? 0)) return json({error:identity.bootstrap ? "Bootstrap snapshot ditutup setelah command sync aktif" : "Versi aplikasi wajib diperbarui sebelum sinkronisasi"},identity.bootstrap ? 409 : 426);
   const length = Number(request.headers.get("content-length") ?? 0);
   if (length > MAX_BODY_BYTES) return json({ error: "Payload terlalu besar" }, 413);
   const requestText = await request.text();
@@ -182,10 +262,12 @@ async function putSnapshot(request: Request, env: Env, identity: Identity): Prom
   if (!updatedAt || !Array.isArray(incoming.branches) || !Array.isArray(incoming.staff)) return json({ error: "Snapshot tidak lengkap" }, 422);
   const current = await env.DB.prepare("SELECT revision,payload_json FROM sync_snapshots WHERE organization_id=?").bind(ORG_ID).first<{revision:number;payload_json:string}>();
   if (current && current.revision > updatedAt && (identity.role === "Owner" || identity.bootstrap)) return json({ error: "Versi server lebih baru", revision: current.revision }, 409);
-  const currentSnapshot = current ? JSON.parse(current.payload_json) as JsonRecord : {};
-  const snapshot = mergeRestrictedSnapshot(currentSnapshot, incoming, identity);
+  const materialized=await materializedSnapshot(env,current);
+  const currentSnapshot=materialized.snapshot;
+  const snapshot = withoutLocalCredentials(mergeRestrictedSnapshot(currentSnapshot, withoutLocalCredentials(incoming), identity));
   const revision = Math.max(Date.now(), updatedAt, (current?.revision ?? 0) + 1);
   snapshot.updatedAt = revision;
+  snapshot.syncRevision=materialized.revision;
   const text = JSON.stringify(snapshot);
   await projectSnapshot(env, snapshot, revision);
   await env.DB.prepare("INSERT INTO sync_snapshots(organization_id,revision,payload_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(organization_id) DO UPDATE SET revision=excluded.revision,payload_json=excluded.payload_json,updated_at=excluded.updated_at WHERE excluded.revision>=sync_snapshots.revision").bind(ORG_ID,revision,text,Date.now()).run();
@@ -206,7 +288,15 @@ async function report(request: Request, env: Env, identity: Identity): Promise<R
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname === "/health" && request.method === "GET") return json({ ok: true, service: "cuciin-api", environment: env.ENVIRONMENT });
+    if (url.pathname === "/health" && request.method === "GET") {
+      try {
+        const db=await env.DB.prepare("SELECT COALESCE(MAX(sequence),0) AS revision FROM sync_changes WHERE organization_id=?").bind(ORG_ID).first<{revision:number}>();
+        return json({ ok:true,service:"cuciin-api",environment:env.ENVIRONMENT,database:"ready",revision:db?.revision ?? 0 });
+      } catch(error) {
+        console.error("health_database_failed",error);
+        return json({ok:false,service:"cuciin-api",environment:env.ENVIRONMENT,database:"unavailable"},503);
+      }
+    }
     const identity = await authorize(request, env);
     if (!identity) return json({ error: "Tidak terautentikasi" }, 401);
     if (url.pathname === "/v1/me" && request.method === "GET") {
@@ -216,16 +306,17 @@ export default {
       if (identity.role !== "Owner") return json({ error: "Khusus Owner" }, 403);
       const row = await env.DB.prepare("SELECT revision,payload_json FROM sync_snapshots WHERE organization_id=?").bind(ORG_ID).first<{revision:number;payload_json:string}>();
       if (!row) return json({ error: "Snapshot belum tersedia" }, 404);
-      const snapshot = JSON.parse(row.payload_json) as JsonRecord;
-      await projectSnapshot(env, snapshot, row.revision);
-      return json({ ok: true, revision: row.revision });
+      const materialized=await materializedSnapshot(env,row);
+      await projectSnapshot(env, materialized.snapshot, row.revision);
+      return json({ ok: true, revision: row.revision, syncRevision:materialized.revision });
     }
     if ((url.pathname === "/api/cuciin" || url.pathname === "/v1/snapshot") && request.method === "GET") {
-      const row = await env.DB.prepare("SELECT payload_json FROM sync_snapshots WHERE organization_id=?").bind(ORG_ID).first<{payload_json:string}>();
-      if (!row) return json({}, 200);
-      return new Response(JSON.stringify(visibleSnapshot(JSON.parse(row.payload_json) as JsonRecord, identity)), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+      const materialized=await materializedSnapshot(env);
+      return new Response(JSON.stringify(visibleSnapshot(materialized.snapshot, identity)), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options":"nosniff", "X-Cuciin-Revision":String(materialized.revision), "X-Cuciin-Scope":syncScopeKey(identity) } });
     }
     if ((url.pathname === "/api/cuciin" || url.pathname === "/v1/snapshot") && request.method === "PUT") return putSnapshot(request, env, identity);
+    if (url.pathname === "/v1/sync/commands" && request.method === "POST") return pushCommands(request, env, identity);
+    if (url.pathname === "/v1/sync/changes" && request.method === "GET") return pullChanges(request, env, identity);
     if (url.pathname === "/v1/reports/cashier-services" && request.method === "GET") return report(request, env, identity);
     return json({ error: "Rute tidak ditemukan" }, 404);
   },

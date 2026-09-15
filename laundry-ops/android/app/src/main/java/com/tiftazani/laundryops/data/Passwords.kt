@@ -19,6 +19,7 @@ object Passwords {
 
     fun matches(raw: String, stored: String): Boolean {
         if (stored.isBlank()) return false
+        if (raw.isEmpty() && stored.startsWith("${PREFIX}\$")) return false
         if (!stored.startsWith("${PREFIX}\$")) return MessageDigest.isEqual(legacyHash(raw).toByteArray(), stored.toByteArray())
         val parts = stored.split('$')
         if (parts.size != 4) return false
@@ -27,7 +28,7 @@ object Passwords {
             val salt = Base64.getDecoder().decode(parts[2])
             val expected = Base64.getDecoder().decode(parts[3])
             MessageDigest.isEqual(derive(raw, salt, iterations), expected)
-        } catch (_: IllegalArgumentException) {
+        } catch (_: Exception) {
             false
         }
     }

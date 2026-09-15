@@ -13,6 +13,7 @@ class PasswordsTest {
         assertNotEquals(first, second)
         assertTrue(Passwords.matches("test1234", first))
         assertFalse(Passwords.matches("salah", first))
+        assertFalse(Passwords.matches("", first))
         assertFalse(Passwords.matches("", ""))
     }
 

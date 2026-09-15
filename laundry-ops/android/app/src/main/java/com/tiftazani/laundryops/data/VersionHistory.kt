@@ -12,10 +12,65 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.8.1"
-    val currentCode: Int = 13
+    val currentName: String = "1.9.2"
+    val currentCode: Int = 17
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.9.2", code = 17, date = "15 Sep 2026",
+            notes = listOf(
+                "Tema tampilan dapat dipilih di Akun & profil: Ikut sistem, Terang, Gelap, atau Warna-warni. Pilihan berlaku per akun di HP masing-masing dan tidak ikut tersinkron.",
+                "Setiap tema memakai palet sendiri. Teks memenuhi kontras WCAG AA 4.5:1 dan batas kontrol memenuhi 3:1, dihitung dengan rumus kontras, bukan perkiraan.",
+                "Tema gelap memakai tombol biru terang dengan teks gelap, mengikuti pola Material 3 dark, karena teks putih di atas biru terang gagal kontras.",
+                "Garis batas kontrol dipisahkan dari garis pemisah dekoratif supaya chip dan kolom isian tetap terlihat di semua tema.",
+                "Status bar dan navigation bar mengikuti tema; ikonnya menyesuaikan gelap atau terang.",
+            ),
+        ),
+        AppRelease(
+            name = "1.9.1", code = 16, date = "15 Sep 2026",
+            notes = listOf(
+                "Layanan retail kini memilih produk stok secara eksplisit, sehingga penjualan dan koreksi Service selalu mengubah item serta saldo cabang yang tepat.",
+                "Produk stok menampung barang dijual dan bahan habis pakai; stok awal serta pencatatan massal dapat diterapkan ke beberapa cabang sekaligus.",
+                "Aset dan mesin dipisahkan dari katalog stok agar tidak terjadi data ganda; inventory barang jual lama dimigrasikan ke Produk stok saat aplikasi dibuka.",
+                "Cabang penugasan di profil mengikuti data pengguna, bukan cabang tampilan Owner.",
+                "Kasir dan SPV tidak dapat mengoreksi atau menghapus Service yang sudah dikirim melalui WhatsApp; Owner tetap dapat melakukan koreksi tercatat.",
+                "Absensi wajib memakai foto kamera masuk dan pulang. Foto diberi cap waktu, tersimpan privat di HP, terlihat di riwayat lokal, dan tidak terkirim ke cloud.",
+                "Owner dapat membatasi modul/fungsi tiap pengguna dan menyusun pesan WhatsApp pembuka, pengantar, serta penutup. Aturan akses juga diperiksa oleh Worker.",
+            ),
+        ),
+        AppRelease(
+            name = "1.9.0", code = 15, date = "14 Sep 2026",
+            notes = listOf(
+                "Sinkronisasi multi-perangkat memakai antrean command persisten, acknowledgement, retry idempoten, dan delta berurutan per revision.",
+                "Perubahan stok membawa baseline dan delta agar pembaruan beberapa HP tidak saling menimpa; saldo negatif ditolak secara atomik oleh server.",
+                "Service retail dan stok diproses atomik; konflik permanen disimpan untuk ditinjau tanpa memblokir antrean perubahan lain.",
+                "Instalasi baru maupun upgrade mengambil snapshot server satu kali sebelum melanjutkan sinkronisasi delta.",
+                "Nota dan entitas yang berubah dikirim per baris; perubahan Service memakai optimistic concurrency untuk mencegah koreksi diam-diam tertimpa.",
+                "Nota PDF multi-halaman, teks panjang, batas akhir periode, dan pembacaan riwayat stok lama telah diperbaiki.",
+                "Build rilis gagal aman bila Firebase tidak tersedia dan layar login tidak lagi menampilkan kata sandi awal.",
+                "CI memeriksa Android dan Worker; health check serta verifikasi backup D1 terenkripsi disiapkan tanpa menyimpan database pada repository publik.",
+                "Cabang yang memiliki riwayat operasional dilindungi dari penghapusan agar laporan lama tetap utuh.",
+                "Pemulihan sinkronisasi dua fase mencegah delta cloud terkirim balik sebagai edit lokal setelah aplikasi berhenti mendadak.",
+                "Perubahan akses cabang memicu bootstrap ulang; versi Service selalu naik dan kompensasi stok menunggu penghapusan berhasil.",
+                "Snapshot cloud disimpan di luar thread tampilan; kompensasi stok menunggu semua perubahan Service terkait selesai.",
+                "Akses staf, cabang, pelanggan, dan absensi diperketat; pemindahan staf menghapus data lama dan absensi hanya terkirim kepada pemiliknya.",
+                "Komisi transaksi diverifikasi dari katalog server dengan dukungan layanan historis, tutup kas dibuat append-only, dan penghapusan pelanggan dibatasi ke Owner.",
+                "Generasi penerapan cloud mencegah edit yang sudah terkirim diproses ulang; restore backup lama tetap didukung.",
+            ),
+        ),
+        AppRelease(
+            name = "1.8.2", code = 14, date = "14 Sep 2026",
+            notes = listOf(
+                "Kolom laporan transaksi membungkus teks panjang agar rincian tetap terbaca tanpa terpotong.",
+                "Petugas layanan otomatis mengikuti akun aktif; hanya Owner yang dapat mengganti petugas, dan aturan ini ditegakkan saat data disimpan.",
+                "Perubahan stok dapat dicatat untuk beberapa produk sekaligus dengan satu waktu kejadian.",
+                "Laporan perubahan stok mendukung periode, multi-cabang, filter akun pelaksana, saldo setelah mutasi, serta ekspor PDF dan CSV.",
+                "Nota WhatsApp dan PDF memakai identitas cabang, informasi kasir dan pelanggan, waktu layanan, tabel rincian bernomor, dan grand total.",
+                "PDF laporan transaksi memakai baris lebih tinggi dan pembungkusan teks supaya kolom panjang tetap rapi.",
+                "Pemulihan sesi lokal lama diperkeras agar kata sandi kosong tidak menyebabkan aplikasi berhenti saat upgrade.",
+                "Kunci endpoint Vercel lama tidak lagi disimpan di source dan endpoint gagal secara aman bila secret server belum tersedia.",
+            ),
+        ),
         AppRelease(
             name = "1.8.1", code = 13, date = "13 Sep 2026",
             notes = listOf(
@@ -124,7 +179,7 @@ object VersionHistory {
             code = 4,
             date = "10 Sep 2026",
             notes = listOf(
-                "Database di server: HP kasir/owner nge-share lewat https://cuan-tif.vercel.app/api/cuciin.",
+                "Database di server: HP kasir/owner nge-share lewat API cuciin-api (Cloudflare Worker).",
                 "Poll 8 detik. Nota/stok/pelanggan/audit ikut ke server, cache tetap di HP.",
                 "Firebase Firestore (ops/cuciin) nyala otomatis kalau google-services.json ada.",
             ),

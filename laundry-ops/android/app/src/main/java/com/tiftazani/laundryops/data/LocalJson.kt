@@ -4,7 +4,9 @@ import android.app.Application
 import android.util.Log
 import kotlinx.serialization.json.Json
 import java.io.File
-import java.util.concurrent.Executors
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 object LocalJson {
     private const val TAG = "CuciinDisk"
@@ -13,13 +15,14 @@ object LocalJson {
         encodeDefaults = true
         prettyPrint = false
     }
-    private val io = Executors.newSingleThreadExecutor()
     private lateinit var file: File
     private lateinit var backup: File
+    private var latestSavedAt = Long.MIN_VALUE
 
     fun init(app: Application) {
         file = File(app.filesDir, "cuciin-data.json")
         backup = File(app.filesDir, "cuciin-data.backup.json")
+        latestSavedAt = Long.MIN_VALUE
     }
 
     fun load(): Snapshot? {
@@ -33,34 +36,48 @@ object LocalJson {
                 null
             }
         }
-        decode(file)?.let { return it }
+        decode(file)?.let {
+            latestSavedAt = it.updatedAt
+            return it
+        }
         val recovered = decode(backup) ?: return null
         try { backup.copyTo(file, overwrite = true) } catch (e: Exception) { Log.w(TAG, "pemulihan file utama gagal", e) }
         Log.w(TAG, "database lokal dipulihkan dari salinan cadangan")
+        latestSavedAt = recovered.updatedAt
         return recovered
     }
 
+    @Synchronized
     fun save(snap: Snapshot) {
         if (!::file.isInitialized) return
+        if (latestSavedAt > snap.updatedAt) return
         val text = json.encodeToString(Snapshot.serializer(), snap)
-        io.execute {
-            synchronized(this) {
-                val tmp = File(file.parentFile, "cuciin-data.json.tmp")
-                tmp.writeText(text)
-                if (file.exists()) {
-                    try {
-                        val current = json.decodeFromString<Snapshot>(file.readText())
-                        if (current.staff.isNotEmpty() && current.branches.isNotEmpty()) file.copyTo(backup, overwrite = true)
-                    } catch (e: Exception) {
-                        Log.w(TAG, "file utama lama tidak layak dijadikan cadangan", e)
-                    }
-                }
-                if (!tmp.renameTo(file)) {
-                    file.writeText(text)
-                    tmp.delete()
-                }
-                if (!backup.exists()) file.copyTo(backup, overwrite = true)
+        val tmp = File(file.parentFile, "cuciin-data.json.tmp")
+        tmp.writeText(text)
+        if (file.exists()) {
+            try {
+                val current = json.decodeFromString<Snapshot>(file.readText())
+                if (current.staff.isNotEmpty() && current.branches.isNotEmpty()) file.copyTo(backup, overwrite = true)
+            } catch (e: Exception) {
+                Log.w(TAG, "file utama lama tidak layak dijadikan cadangan", e)
             }
         }
+        try {
+            Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } catch (_: AtomicMoveNotSupportedException) {
+            Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        } catch (e: Exception) {
+            Log.w(TAG, "penggantian file atomik gagal", e)
+            file.writeText(text)
+            tmp.delete()
+        }
+        if (!backup.exists()) {
+            try {
+                file.copyTo(backup, overwrite = true)
+            } catch (e: Exception) {
+                Log.w(TAG, "pembuatan salinan cadangan gagal", e)
+            }
+        }
+        latestSavedAt = maxOf(latestSavedAt, snap.updatedAt)
     }
 }

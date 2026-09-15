@@ -2,6 +2,62 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.9.2 — 15 Sep 2026 (versionCode 17)
+
+- Tema tampilan bisa dipilih di Akun & profil untuk semua peran: Ikut sistem, Terang, Gelap, dan Warna-warni. Pilihan disimpan per akun di HP itu saja, terpisah dari data operasional dan sinkronisasi.
+- Tema Terang memakai palet 1.9.1 yang sama, jadi tampilan lama tidak berubah bagi yang tidak mengganti tema.
+- Setiap tema punya palet lengkap sendiri: latar, kartu, garis, teks, warna utama, dan warna status. Teks dijaga di rasio kontras minimal 4.5:1 dan batas kontrol minimal 3:1.
+- Tema gelap memakai tombol biru terang dengan teks gelap (pola Material 3 dark). Teks putih di atas biru terang hanya mencapai 3.42:1, di bawah syarat WCAG AA.
+- Token garis dipisah: batas kontrol untuk chip dan kolom isian, garis lembut untuk pemisah dekoratif. Sebelumnya satu nilai dipakai untuk keduanya sehingga batas kontrol hanya 1.24:1.
+- Teks redup pada tema terang dinaikkan dari #60718D ke #5C6C88 agar lolos 4.5:1 juga di atas latar chip dan banner.
+- Status bar dan navigation bar mengikuti tema aktif, termasuk warna ikonnya, sehingga tidak ada bilah putih di atas layar gelap.
+- Penambahan test `ThemePaletteTest` untuk aturan pemilihan tema dan palet.
+
+## 1.9.1 — 15 Sep 2026 (versionCode 16)
+
+- Layanan retail kini memakai relasi ID produk stok, sehingga penjualan, koreksi, dan penghapusan Service selalu memutakhirkan saldo produk di cabang yang benar.
+- Produk stok menyatukan barang jual serta bahan habis pakai. Stok awal maupun pencatatan massal dapat dipilih untuk lebih dari satu cabang; mesin dan aset operasional berada di menu Aset & mesin cabang.
+- Riwayat inventory lama untuk barang jual/bahan habis pakai otomatis dipindahkan ke katalog Produk stok ketika aplikasi dibuka.
+- Profil menampilkan cabang penugasan pengguna yang sebenarnya, termasuk ketika Owner sedang melihat cabang lain.
+- Sesudah WhatsApp dibuka untuk pelanggan, hanya Owner yang dapat mengoreksi atau menghapus Service. Batas ini diperiksa di aplikasi dan server.
+- Absen masuk/pulang memakai foto kamera yang diberi cap waktu, disimpan privat serta ditampilkan di perangkat; path foto tidak pernah disinkronkan ke server.
+- Owner dapat mengatur modul/fungsi per pengguna dan template WhatsApp yang terdiri dari pembuka, isi pengantar, dan penutup. Worker menyimpan serta menerapkan kebijakan akses tersebut.
+
+## 1.9.0 — 14 Sep 2026 (versionCode 15)
+
+- Sinkronisasi snapshot global diganti dengan persistent outbox dan command per entitas. Command baru dihapus setelah acknowledgement server; retry memakai ID yang sama sehingga tidak menggandakan transaksi.
+- Perangkat melakukan bootstrap snapshot satu kali, kemudian mengambil delta berurutan dengan pagination revision. Cache lokal dan antrean memiliki salinan cadangan atomik.
+- D1 mencatat command yang sudah diproses, jurnal perubahan per cabang, actor, optimistic concurrency Service, dan penjaga stok nonnegatif dalam transaksi atomik.
+- Mutasi stok membawa baseline dan delta agar dua HP tidak saling menimpa. Saldo canonical dikirim kembali ke perangkat lain tanpa menerapkan branch stock dan stock move dua kali.
+- Nota retail dan pengurangan/pengembalian stok diproses dalam satu transaksi D1; dua penjualan yang memperebutkan stok terakhir tidak dapat sama-sama tersimpan.
+- Command permanen yang ditolak dipindahkan ke catatan konflik persisten agar satu konflik tidak memblokir seluruh antrean; alasan konflik terlihat pada status sinkronisasi.
+- Nota PDF dengan banyak layanan tidak lagi menumpuk grand total. Token panjang dipecah sesuai lebar sel, filter periode mencakup seluruh menit terakhir, dan riwayat stok lama tersedia melalui pilihan Semua tanggal.
+- Build rilis gagal aman jika Firebase tidak terkonfigurasi. Petunjuk kata sandi awal di layar login dihapus.
+- CI Android menjalankan unit test, lint, dan build; Worker memiliki check tersendiri. Health check produksi dan pemeriksaan backup D1 terenkripsi beserta restore integrity check ditambahkan tanpa menyimpan database produksi sebagai artifact di repository publik.
+- Runbook 20 cabang, kebijakan data, dan konteks siap salin untuk beberapa coding agent ditambahkan.
+- Cabang yang sudah mempunyai riwayat Service atau data operasional tidak dapat dihapus agar laporan historis dan foreign key tetap utuh.
+- Penerapan delta cloud memakai penanda pemulihan dua fase. Jika aplikasi berhenti setelah data lokal ditulis tetapi sebelum cursor disimpan, restart menyelesaikan delta yang sama tanpa mengirimkannya kembali sebagai edit lokal.
+- Perubahan cakupan cabang terdeteksi melalui scope sinkronisasi dan memicu bootstrap ulang, sehingga cabang yang baru ditugaskan tidak kehilangan riwayat lama.
+- Versi optimistic concurrency Service selalu naik meskipun dua koreksi terjadi pada milidetik yang sama. Batch berhenti setelah command gagal agar kompensasi stok tidak berjalan bila penghapusan Service ditolak.
+- `syncId` riwayat stok dan audit dibuat unik serta divalidasi server. Bootstrap snapshot lama otomatis ditutup setelah journal command aktif.
+- Kompensasi stok menunggu seluruh command Service terkait selesai. Penulisan snapshot cloud dipindahkan dari thread tampilan dengan penjaga versi agar data lokal yang lebih baru tidak tertimpa.
+- Delta staf dan cabang dibatasi ke penugasan akun; pemindahan staf menghapus data pada perangkat cabang lama. Absensi non-Owner hanya dikirim ke pemiliknya, pemilik baris diverifikasi server, dan Supervisor tidak dapat mengubah pelanggan.
+- Backup memakai PBKDF2 600.000 iterasi; workflow publik hanya memverifikasi backup secara manual dan tidak menyimpan hasil database produksi.
+- Penghapusan pelanggan dibatasi ke Owner pada aplikasi dan server. Komisi rincian baru diambil dari katalog server; koreksi nota lama mempertahankan komisi historis saat layanan sudah dipensiunkan. Tutup kas bersifat append-only dengan ID unik per cabang.
+- Penanda penerapan cloud menyimpan generasi antrean sehingga edit lokal yang sudah terkirim tidak kembali dianggap sebagai perubahan baru. Restore tetap mendukung backup PBKDF2 format lama.
+
+## 1.8.2 — 14 Sep 2026 (versionCode 14)
+
+- Teks panjang pada kolom laporan transaksi kini membungkus ke baris berikutnya dan tidak dipotong menjadi elipsis.
+- Petugas layanan otomatis memakai identitas akun aktif. Hanya Owner yang dapat menggantinya; validasi yang sama berlaku di lapisan penyimpanan untuk Service baru maupun koreksi.
+- Pencatatan stok massal memperbarui beberapa produk sekaligus dengan jenis perubahan dan waktu kejadian yang sama.
+- Laporan perubahan stok memiliki interval tanggal/jam, filter satu atau beberapa cabang, filter akun pelaksana, saldo setelah perubahan, serta ekspor PDF/CSV.
+- Nota WhatsApp ditata ulang menjadi bagian informasi, rincian layanan bernomor, subtotal, dan grand total.
+- Nota PDF memakai header nama cabang, informasi kasir/pelanggan/waktu, tabel No.–Service–Harga, serta grand total.
+- PDF laporan transaksi memakai pembungkusan teks di dalam sel, baris yang lebih lega, header konsisten, ringkasan, dan footer halaman.
+- Pemulihan sesi dari data lokal lama tidak lagi mencoba memproses kata sandi kosong, sehingga pembaruan aplikasi dapat dibuka tanpa crash PBKDF2.
+- Kunci endpoint Vercel lama dihapus dari source; endpoint menolak penulisan bila secret environment belum dikonfigurasi.
+
 ## 1.8.1 — 13 Sep 2026 (versionCode 13)
 
 - Cloudflare Workers + D1 produksi aktif di region APAC dan menerima sinkronisasi Android melalui HTTPS.
@@ -111,6 +167,7 @@ UI dirombak. Master data lengkap CRUD. Layout aman di banyak ukuran layar.
 Database di server. HP kasir/owner nge-share dokumen toko yang sama.
 
 - API `https://cuan-tif.vercel.app/api/cuciin` (key di APK), persist di store JSON server
+  <br>Catatan: endpoint ini dipensiunkan 15 Sep 2026. Sejak 1.9.0 aplikasi memakai Cloudflare Worker `cuciin-api`.
 - Sync pull/push + poll 8 detik; cache JSON tetap di HP (offline)
 - Firestore `ops/cuciin` kalau `google-services.json` ada (Firebase)
 
@@ -131,7 +188,7 @@ Firebase Auth + Firestore, tetap jalan lokal tanpa `google-services.json`.
 - Plugin Google Services cuma applied kalau `app/google-services.json` ada
 - Login/daftar: coba Firebase dulu, fallback akun demo lokal
 - Nota, status laundry/bayar, WA, bukti, stok, approve user, audit di-push ke Firestore
-- APK debug di `https://cuan-tif.vercel.app/cuciin/cuciin.apk`
+- APK debug dulu diunduh dari halaman web (sejak 15 Sep 2026 berkasnya ada di `laundry-ops/releases/`)
 
 ## 1.0.0 — 10 Sep 2026 (versionCode 1)
 

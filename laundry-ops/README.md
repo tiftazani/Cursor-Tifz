@@ -4,11 +4,13 @@ Owner: **Tiftazani Khara**. Android Kotlin (`com.tiftazani.laundryops`) + mockup
 
 ## Android
 
-Folder: [`android/`](./android). Versi sekarang **1.4.0**. Changelog: [`android/CHANGELOG.md`](./android/CHANGELOG.md).
+Folder: [`android/`](./android). Versi sekarang **1.9.0** (versionCode 15). Changelog: [`android/CHANGELOG.md`](./android/CHANGELOG.md).
 
-**Unduh APK debug:** [https://cuan-tif.vercel.app/cuciin/cuciin.apk](https://cuan-tif.vercel.app/cuciin/cuciin.apk)
+Melanjutkan dengan coding agent lain: mulai dari [handover teknis](./AGENT_HANDOVER.md), [prompt siap-tempel](./AGENT_PROMPTS.md), dan [protokol kerja beberapa agent](./AGENT_WORKFLOW.md).
 
-Database toko di server — HP kasir/owner nge-share. Cache tetap di HP.
+**APK debug:** ada di [`releases/`](./releases), bukan lagi dari halaman web. Halaman Vercel sudah tidak menyimpan berkas Cuciin.
+
+Database toko di server Cloudflare Worker (`cuciin-api`) — HP kasir/owner nge-share. Cache tetap di HP.
 
 Kalau repo sudah di-clone:
 
@@ -17,8 +19,6 @@ cd ~/Cursor-Tifz
 git checkout main
 git pull origin main
 ```
-
-**Unduh APK debug:** [https://cuan-tif.vercel.app/cuciin/cuciin.apk](https://cuan-tif.vercel.app/cuciin/cuciin.apk)
 
 ```bash
 cd ~
@@ -33,7 +33,7 @@ Permission: INTERNET saja. Bukti foto disimpan di HP. WA lewat intent `wa.me`.
 
 ## Mockup web
 
-**[https://cuan-tif.vercel.app/cuciin](https://cuan-tif.vercel.app/cuciin)**
+Mockup dijalankan lokal, tidak di-hosting:
 
 ```bash
 cd laundry-ops/mockup

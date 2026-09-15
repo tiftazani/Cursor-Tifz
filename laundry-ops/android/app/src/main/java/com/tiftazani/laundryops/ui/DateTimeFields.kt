@@ -31,6 +31,15 @@ internal object DisplayDates {
     fun time(value: LocalDateTime): String = value.format(DateTimeFormatter.ofPattern("HH.mm"))
     fun fromMillis(value: Long): LocalDateTime = Instant.ofEpochMilli(value).atZone(Clock.ZONE).toLocalDateTime()
     fun full(value: Long): String = fromMillis(value).let { "${date(it)} · ${time(it)} WIB" }
+
+    fun reportTimestamp(atMs: Long, legacyLabel: String): Long? =
+        atMs.takeIf { it > 0 } ?: parse(legacyLabel)?.atZone(Clock.ZONE)?.toInstant()?.toEpochMilli()
+
+    fun isInSelectedMinute(timestampMs: Long, from: LocalDateTime, until: LocalDateTime): Boolean {
+        val startMs = from.atZone(Clock.ZONE).toInstant().toEpochMilli()
+        val endExclusiveMs = until.plusMinutes(1).atZone(Clock.ZONE).toInstant().toEpochMilli()
+        return timestampMs >= startMs && timestampMs < endExclusiveMs
+    }
 }
 
 /** Structured date/time controls. Stored nota strings remain compatible with older clients. */

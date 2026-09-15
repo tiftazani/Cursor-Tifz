@@ -73,6 +73,7 @@ import com.tiftazani.laundryops.ui.theme.Line
 import com.tiftazani.laundryops.ui.theme.Muted
 import com.tiftazani.laundryops.ui.theme.Teal
 import com.tiftazani.laundryops.ui.theme.TealDeep
+import com.tiftazani.laundryops.ui.theme.OnHero
 
 private val store get() = CuciinStore
 
@@ -149,11 +150,11 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
             }
             Surface(color = TealDeep, shape = RoundedCornerShape(26.dp)) {
                 Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Cucian terurus.\nPekerjaan tertata.", color = Color.White, fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold)
-                    Text("Catat pesanan, pantau proses, dan siapkan cucian pelanggan dalam satu tempat.", color = Color.White.copy(alpha = .8f), fontSize = 14.sp, lineHeight = 21.sp)
+                    Text("Cucian terurus.\nPekerjaan tertata.", color = OnHero, fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold)
+                    Text("Catat pesanan, pantau proses, dan siapkan cucian pelanggan dalam satu tempat.", color = OnHero.copy(alpha = .85f), fontSize = 14.sp, lineHeight = 21.sp)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Outlined.CheckCircle, null, tint = Color(0xFF90E6F2), modifier = Modifier.size(18.dp))
-                        Text("Dari pesanan masuk hingga selesai", color = Color.White, fontSize = 12.sp)
+                        Icon(Icons.Outlined.CheckCircle, null, tint = OnHero.copy(alpha = .9f), modifier = Modifier.size(18.dp))
+                        Text("Dari pesanan masuk hingga selesai", color = OnHero, fontSize = 12.sp)
                     }
                 }
             }
@@ -162,7 +163,7 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
                 Text("Gunakan akun yang terdaftar di laundry Anda.", color = Muted, fontSize = 13.sp)
             Field(email, { email = it }, "Email")
             Field(pass, { pass = it }, "Kata sandi", password = true)
-            Text("Akun awal memakai kata sandi test1234. Segera ubah melalui menu Profil.", color = Muted, fontSize = 12.sp)
+            Text("Gunakan kata sandi pribadi Anda. Jika lupa, kirim link pemulihan melalui tombol di bawah.", color = Muted, fontSize = 12.sp)
             PrimaryBtn(if (busy) "Memeriksa akun…" else "Masuk", enabled = !busy, icon = Icons.Outlined.Login) {
                 if (busy) return@PrimaryBtn
                 if (!BuildConfig.DEBUG && (email.isBlank() || pass.isBlank())) {
@@ -170,7 +171,8 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
                     return@PrimaryBtn
                 }
                 if (!FirebaseCloud.enabled) {
-                    localLogin()
+                    if (BuildConfig.DEBUG) localLogin()
+                    else toast("Konfigurasi identitas belum tersedia. Hubungi Owner sebelum memakai aplikasi.")
                     return@PrimaryBtn
                 }
                 busy = true

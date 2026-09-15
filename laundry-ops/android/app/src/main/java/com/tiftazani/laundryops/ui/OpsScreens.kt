@@ -93,6 +93,7 @@ import com.tiftazani.laundryops.ui.theme.Green
 import com.tiftazani.laundryops.ui.theme.Ink
 import com.tiftazani.laundryops.ui.theme.Muted
 import com.tiftazani.laundryops.ui.theme.Teal
+import com.tiftazani.laundryops.ui.theme.OnPrim
 
 private val store get() = CuciinStore
 
@@ -201,10 +202,10 @@ private fun SummaryTile(label: String, value: String, icon: androidx.compose.ui.
     Surface(onClick = { tap(); onClick() }, modifier = modifier.semantics { this.selected = selected }, shape = RoundedCornerShape(20.dp), color = if (selected) Teal else Card, border = BorderStroke(1.dp, if (selected) Teal else Line)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(value, color = if (selected) Color.White else Ink, fontWeight = FontWeight.Bold, fontSize = 30.sp)
-                Icon(icon, null, tint = if (selected) Color.White.copy(alpha = .75f) else Teal, modifier = Modifier.size(24.dp))
+                Text(value, color = if (selected) OnPrim else Ink, fontWeight = FontWeight.Bold, fontSize = 30.sp)
+                Icon(icon, null, tint = if (selected) OnPrim.copy(alpha = .8f) else Teal, modifier = Modifier.size(24.dp))
             }
-            Text(label, color = if (selected) Color.White else Muted, fontSize = 12.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(label, color = if (selected) OnPrim else Muted, fontSize = 12.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -501,15 +502,20 @@ internal fun PreviewScreen(nav: NavHostController, toast: (String) -> Unit) {
             }, onRemove = {
                 tap(); store.cartDelta(line.service.id, -line.qty); feedback = "${line.service.name} dihapus dari Service"
             })
-            HandlerPicker(
-                branchId = branchId,
-                selectedEmail = line.handledByEmail,
-                selectedName = line.handledByName,
-                commissionPerUnit = line.service.commissionPerUnit,
-                unit = line.service.unit,
-            ) { email ->
-                tap(); store.setCartHandler(line.service.id, email)
-                feedback = "Petugas ${line.service.name} diperbarui"
+            if (session.role == Role.Owner) {
+                HandlerPicker(
+                    branchId = branchId,
+                    selectedEmail = line.handledByEmail,
+                    selectedName = line.handledByName,
+                    commissionPerUnit = line.service.commissionPerUnit,
+                    unit = line.service.unit,
+                ) { email ->
+                    tap(); store.setCartHandler(line.service.id, email)
+                    feedback = "Petugas ${line.service.name} diperbarui"
+                }
+            } else {
+                InfoRow(Icons.Outlined.Badge, "Ditangani oleh", session.name)
+                Text("Petugas mengikuti akun yang sedang masuk.", color = Muted, fontSize = 12.sp)
             }
         }
         if (cart.isEmpty()) item { EmptyHint("Belum ada layanan", "Kembali dan tambahkan minimal satu layanan.") }
@@ -600,6 +606,7 @@ internal fun BayarScreen(nav: NavHostController, toast: (String) -> Unit) {
 internal fun QueueEditScreen(nav: NavHostController, id: String, toast: (String) -> Unit) {
     val ui = rememberUi()
     val nota = store.notas.firstOrNull { it.id == id } ?: return
+    val session = store.session.value ?: return
     var draft by remember(id) { mutableStateOf(nota.lines) }
     val total = draft.sumOf { (it.qty * it.unitPrice).toInt() }
     LazyColumn(
@@ -629,17 +636,21 @@ internal fun QueueEditScreen(nav: NavHostController, id: String, toast: (String)
             }, onRemove = {
                 draft = draft.filterNot { it.serviceId == line.serviceId }
             })
-            HandlerPicker(
-                branchId = nota.branchId,
-                selectedEmail = line.handledByEmail.ifBlank { nota.kasirEmail },
-                selectedName = line.handledByName.ifBlank { nota.kasir },
-                commissionPerUnit = line.commissionPerUnit,
-                unit = line.unit,
-            ) { email ->
-                val person = store.staff.firstOrNull { it.email.equals(email, true) }
-                if (person != null) draft = draft.map {
-                    if (it.serviceId == line.serviceId) it.copy(handledByEmail = person.email, handledByName = person.name) else it
+            if (session.role == Role.Owner) {
+                HandlerPicker(
+                    branchId = nota.branchId,
+                    selectedEmail = line.handledByEmail.ifBlank { nota.kasirEmail },
+                    selectedName = line.handledByName.ifBlank { nota.kasir },
+                    commissionPerUnit = line.commissionPerUnit,
+                    unit = line.unit,
+                ) { email ->
+                    val person = store.staff.firstOrNull { it.email.equals(email, true) }
+                    if (person != null) draft = draft.map {
+                        if (it.serviceId == line.serviceId) it.copy(handledByEmail = person.email, handledByName = person.name) else it
+                    }
                 }
+            } else {
+                InfoRow(Icons.Outlined.Badge, "Ditangani oleh", session.name)
             }
         }
         item { Hero("Total setelah koreksi", rp(total), listOf("${draft.size} layanan", nota.customer)) }
@@ -742,12 +753,16 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
             item {
                 CardBlock {
                     SectionLabel("Koreksi Service")
-                    Text("Ubah layanan, jumlah, atau harga. Semua perubahan tercatat di audit trail.", color = Muted, fontSize = 12.sp)
-                    GhostBtn("Edit rincian Service", enabled = n.lines.isNotEmpty(), icon = Icons.Outlined.Edit) { nav.navigate("queueEdit/$id") }
-                    DangerBtn("Hapus Service") {
-                        store.deleteNota(id)?.let(toast) ?: run {
-                            toast("Service $id dihapus")
-                            nav.navigate("home") { popUpTo("home") { inclusive = true } }
+                    if (n.waSent && s?.role != Role.Owner) {
+                        Text("Service sudah dikirim ke pelanggan. Hanya Owner yang dapat mengoreksi atau menghapusnya.", color = Muted, fontSize = 12.sp)
+                    } else {
+                        Text("Ubah layanan, jumlah, atau harga. Semua perubahan tercatat di audit trail.", color = Muted, fontSize = 12.sp)
+                        GhostBtn("Edit rincian Service", enabled = n.lines.isNotEmpty(), icon = Icons.Outlined.Edit) { nav.navigate("queueEdit/$id") }
+                        DangerBtn("Hapus Service") {
+                            store.deleteNota(id)?.let(toast) ?: run {
+                                toast("Service $id dihapus")
+                                nav.navigate("home") { popUpTo("home") { inclusive = true } }
+                            }
                         }
                     }
                 }
@@ -847,45 +862,68 @@ internal fun StockScreen(nav: NavHostController, toast: (String) -> Unit) {
 @Composable
 internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
-    var product by rememberSaveable { mutableStateOf(store.products.firstOrNull()?.key.orEmpty()) }
     var kind by rememberSaveable { mutableStateOf(StockKind.Tambah) }
-    var amount by rememberSaveable { mutableStateOf("") }
+    var amounts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var occurredAt by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE))) }
     val date = DisplayDates.parse(occurredAt) ?: LocalDateTime.now(Clock.ZONE)
-    val selected = store.products.find { it.key == product }
     val branchId = store.selectedStockBranch()
-    val qty = amount.toIntOrNull()
-    val current = selected?.let { store.stockOf(it.key, branchId) } ?: 0
-    val after = qty?.let { when (kind) { StockKind.Tambah -> current.toLong() + it; StockKind.Kurang -> current.toLong() - it; else -> it.toLong() } }
-    val valid = selected != null && qty != null && after != null && after in 0..Int.MAX_VALUE.toLong() && (qty > 0 || kind == StockKind.Update)
+    val session = store.session.value ?: return
+    var targetBranches by remember { mutableStateOf(setOf(branchId)) }
+    val changes = amounts.mapNotNull { (key, value) -> value.toIntOrNull()?.let { key to it } }.toMap()
+    val validChanges = changes.filter { (key, qty) ->
+        val current = store.stockOf(key, branchId)
+        qty >= 0 && (qty > 0 || kind == StockKind.Update) && (kind != StockKind.Kurang || qty <= current)
+    }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { ScreenHeader("Perubahan stok", store.branch(branchId).name, onBack = { nav.popBackStack() }) }
-        item {
+        item { ScreenHeader("Perubahan stok massal", store.branch(branchId).name, onBack = { nav.popBackStack() }) }
+        if (session.role == Role.Owner) item {
             CardBlock {
-                SectionLabel("1. Pilih produk")
-                if (store.products.isEmpty()) Text("Belum ada produk. Minta Owner menambahkan produk.", color = Muted)
-                ChipRow { store.products.forEach { p -> SelectChip(product == p.key, p.name) { product = p.key } } }
+                SectionLabel("Cabang yang diperbarui")
+                ChipRow {
+                    store.branches.forEach { branch ->
+                        SelectChip(branch.id in targetBranches, branch.name.removePrefix("Cuciin ")) {
+                            targetBranches = if (branch.id in targetBranches) targetBranches - branch.id else targetBranches + branch.id
+                        }
+                    }
+                }
+                Text("Nilai yang diisi diterapkan ke setiap cabang terpilih dan tercatat sebagai mutasi terpisah.", color = Muted, fontSize = 12.sp)
             }
         }
         item {
             CardBlock {
-                SectionLabel("2. Jenis perubahan")
+                SectionLabel("1. Jenis perubahan")
                 ChipRow {
-                    SelectChip(kind == StockKind.Tambah, "Barang masuk") { kind = StockKind.Tambah }
-                    SelectChip(kind == StockKind.Kurang, "Barang keluar") { kind = StockKind.Kurang }
-                    SelectChip(kind == StockKind.Update, "Hitung ulang") { kind = StockKind.Update }
+                    SelectChip(kind == StockKind.Tambah, "Barang masuk") { kind = StockKind.Tambah; amounts = emptyMap() }
+                    SelectChip(kind == StockKind.Kurang, "Barang keluar") { kind = StockKind.Kurang; amounts = emptyMap() }
+                    SelectChip(kind == StockKind.Update, "Hitung fisik") { kind = StockKind.Update; amounts = emptyMap() }
                 }
-                Text(when (kind) { StockKind.Tambah -> "Jumlah akan ditambahkan ke stok saat ini."; StockKind.Kurang -> "Jumlah akan dikurangi dari stok saat ini."; else -> "Stok diganti dengan hasil hitung fisik." }, color = Muted, fontSize = 12.sp)
-                Field(amount, { amount = it.filter(Char::isDigit).take(9) }, if (kind == StockKind.Update) "Hasil hitung fisik" else "Jumlah barang", number = true)
-                if (after != null) FeedbackBanner("Stok: $current → $after${if (after < 0) " · jumlah keluar terlalu besar" else ""}")
+                Text(when (kind) { StockKind.Tambah -> "Isi beberapa produk sekaligus. Jumlah ditambahkan ke saldo saat ini."; StockKind.Kurang -> "Isi jumlah barang keluar. Nilai tidak boleh melebihi saldo."; else -> "Isi saldo hasil hitung fisik untuk setiap produk yang diperiksa." }, color = Muted, fontSize = 12.sp)
+            }
+        }
+        item { SectionLabel("2. Produk yang diperbarui") }
+        if (store.products.isEmpty()) item { EmptyHint("Belum ada produk", "Minta Owner menambahkan produk terlebih dahulu.") }
+        items(store.products, key = { it.key }) { product ->
+            val current = store.stockOf(product.key, branchId)
+            val typed = amounts[product.key].orEmpty()
+            val qty = typed.toIntOrNull()
+            val after = qty?.let { when (kind) { StockKind.Tambah -> current + it; StockKind.Kurang -> current - it; else -> it } }
+            CardBlock(accent = if (typed.isNotBlank()) Teal else null) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) { Text(product.name, fontWeight = FontWeight.Bold); Text("Saldo saat ini $current", color = Muted, fontSize = 12.sp) }
+                    if (after != null) Text("→ $after", color = if (after < 0) Coral else Teal, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                }
+                Field(typed, { value -> amounts = amounts + (product.key to value.filter(Char::isDigit).take(9)) }, if (kind == StockKind.Update) "Saldo hasil hitung" else "Jumlah", number = true)
+                if (after != null && after < 0) Text("Jumlah keluar melebihi saldo.", color = Coral, fontSize = 12.sp)
             }
         }
         item { CardBlock { SectionLabel("3. Waktu perubahan"); DateTimeFields(date, { occurredAt = DisplayDates.encode(it) }, "Tanggal dan jam kejadian") } }
         item {
-            PrimaryBtn("Simpan perubahan stok", enabled = valid, icon = Icons.Outlined.Check) {
+            PrimaryBtn("Simpan ${validChanges.size} perubahan", enabled = validChanges.isNotEmpty() && validChanges.size == changes.size, icon = Icons.Outlined.Check) {
                 if (date.isAfter(LocalDateTime.now(Clock.ZONE))) { toast("Waktu perubahan tidak boleh di masa depan"); return@PrimaryBtn }
-                store.editStock(product, branchId, kind, qty!!, date.atZone(Clock.ZONE).toInstant().toEpochMilli())
-                toast("Stok ${selected?.name} diperbarui menjadi $after")
+                val targets = if (session.role == Role.Owner) targetBranches else setOf(branchId)
+                if (targets.isEmpty()) { toast("Pilih minimal satu cabang"); return@PrimaryBtn }
+                val saved = store.editStocks(validChanges, targets, kind, date.atZone(Clock.ZONE).toInstant().toEpochMilli())
+                toast("$saved perubahan stok berhasil dicatat")
                 nav.navigate("stokHistory") { popUpTo("stok") }
             }
         }
@@ -895,14 +933,47 @@ internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
 @Composable
 internal fun StockHistoryScreen(nav: NavHostController) {
     val ui = rememberUi()
-    var showAll by rememberSaveable { mutableStateOf(true) }
+    val ctx = LocalContext.current
+    val session = store.session.value ?: return
+    var fromValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).minusDays(30).withHour(0).withMinute(0))) }
+    var untilValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59))) }
+    var branchIds by remember { mutableStateOf(if (session.role == Role.Owner) emptySet<String>() else setOf(session.branchId)) }
+    var actor by rememberSaveable { mutableStateOf("all") }
+    var allDates by rememberSaveable { mutableStateOf(false) }
     store.revision.intValue
-    val branchId = store.selectedStockBranch()
-    val rows = store.stockMoves.filter { it.branchId == branchId && (showAll || it.atMs >= Clock.todayStartMs()) }.sortedByDescending { it.atMs }
+    val from = DisplayDates.parse(fromValue) ?: LocalDateTime.now(Clock.ZONE).minusDays(30)
+    val until = DisplayDates.parse(untilValue) ?: LocalDateTime.now(Clock.ZONE)
+    val actors = store.stockMoves.map { it.by }.filter(String::isNotBlank).distinct().sorted()
+    val rows = store.stockMoves.filter { move ->
+        val timestamp = DisplayDates.reportTimestamp(move.atMs, move.at)
+        (branchIds.isEmpty() || move.branchId in branchIds) &&
+            (allDates || timestamp?.let { DisplayDates.isInSelectedMinute(it, from, until) } == true) &&
+            (actor == "all" || move.by == actor)
+    }.sortedByDescending { DisplayDates.reportTimestamp(it.atMs, it.at) ?: Long.MIN_VALUE }
     val groups = rows.groupBy { if (it.atMs > 0) DisplayDates.date(DisplayDates.fromMillis(it.atMs)) else it.at.substringBefore(',') }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { ScreenHeader("Riwayat stok", "${store.branch(branchId).name} · ${rows.size} perubahan", onBack = { nav.popBackStack() }) }
-        item { ChipRow { SelectChip(showAll, "Semua tanggal") { showAll = true }; SelectChip(!showAll, "Hari ini") { showAll = false } } }
+        item { ScreenHeader("Laporan perubahan stok", "${rows.size} transaksi stok", onBack = { nav.popBackStack() }) }
+        item {
+            CardBlock {
+                SectionLabel("Periode laporan")
+                ChipRow { SelectChip(allDates, "Semua tanggal") { allDates = !allDates } }
+                if (!allDates) {
+                    DateTimeFields(from, { fromValue = DisplayDates.encode(it) }, "Mulai")
+                    DateTimeFields(until, { untilValue = DisplayDates.encode(it) }, "Sampai")
+                }
+            }
+        }
+        if (session.role == Role.Owner) item {
+            CardBlock { SectionLabel("Cabang"); ChipRow {
+                SelectChip(branchIds.isEmpty(), "Semua cabang") { branchIds = emptySet() }
+                store.branches.forEach { b -> SelectChip(b.id in branchIds, b.name.removePrefix("Cuciin ")) { branchIds = if (b.id in branchIds) branchIds - b.id else branchIds + b.id } }
+            } }
+        }
+        if (actors.isNotEmpty()) item { CardBlock { SectionLabel("Akun pelaksana"); ChipRow { SelectChip(actor == "all", "Semua akun") { actor = "all" }; actors.forEach { name -> SelectChip(actor == name, name) { actor = name } } } } }
+        item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PrimaryBtn("Export PDF", Modifier.weight(1f), enabled = allDates || !until.isBefore(from), icon = Icons.Outlined.PictureAsPdf) { FileExports.shareStockPdf(ctx, rows, if (allDates) "Semua tanggal" else "${DisplayDates.date(from)} — ${DisplayDates.date(until)}") }
+            GhostBtn("Export CSV", Modifier.weight(1f), enabled = allDates || !until.isBefore(from), icon = Icons.Outlined.TableView) { FileExports.shareStock(ctx, rows) }
+        } }
         if (rows.isEmpty()) item { EmptyHint("Belum ada perubahan stok", "Barang masuk dan keluar akan tampil di sini lengkap dengan hari, tanggal, dan petugas.") }
         groups.forEach { (day, moves) ->
             item { SectionLabel(day) }
@@ -914,8 +985,9 @@ internal fun StockHistoryScreen(nav: NavHostController) {
                         Column(Modifier.weight(1f)) { Text(product, fontWeight = FontWeight.Bold); Text(m.kind.label, fontSize = 12.sp, color = Muted) }
                         Text(if (m.kind == StockKind.Update) "= ${m.qty}" else if (m.qty > 0) "+${m.qty}" else "${m.qty}", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = if (m.qty > 0) Green else Ink)
                     }
-                    Text("${if (m.atMs > 0) DisplayDates.time(DisplayDates.fromMillis(m.atMs)) + " WIB" else m.at} · ${m.by}", color = Muted, fontSize = 12.sp)
-                    Text(m.notaId ?: "Pencatatan manual", color = Muted, fontSize = 12.sp)
+                    Text("${store.branch(m.branchId).name} · ${if (m.atMs > 0) DisplayDates.time(DisplayDates.fromMillis(m.atMs)) + " WIB" else m.at}", color = Muted, fontSize = 12.sp)
+                    Text("Oleh ${m.by} · ${m.note}", color = Muted, fontSize = 12.sp)
+                    m.balanceAfter?.let { Text("Saldo setelah perubahan: $it", color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
                 }
             }
         }

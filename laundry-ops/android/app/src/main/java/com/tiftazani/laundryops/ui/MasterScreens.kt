@@ -44,6 +44,7 @@ import com.tiftazani.laundryops.data.Branch
 import com.tiftazani.laundryops.data.Customer
 import com.tiftazani.laundryops.data.CuciinStore
 import com.tiftazani.laundryops.data.Product
+import com.tiftazani.laundryops.data.ProductKind
 import com.tiftazani.laundryops.data.Role
 import com.tiftazani.laundryops.data.ServiceItem
 import com.tiftazani.laundryops.data.Staff
@@ -113,7 +114,7 @@ internal fun CustomersScreen(nav: NavHostController, toast: (String) -> Unit) {
                         creating = false
                         editing = null
                     }
-                    if (editing != null) {
+                    if (editing != null && store.session.value?.role == Role.Owner) {
                         DangerBtn("Hapus pelanggan") {
                             store.deleteCustomer(editing!!.id)?.let { toast(it) } ?: toast("Dihapus")
                             creating = false
@@ -368,6 +369,7 @@ internal fun ServicesScreen(nav: NavHostController, toast: (String) -> Unit) {
     var retail by remember { mutableStateOf(false) }
     var dropOut by remember { mutableStateOf(false) }
     var selfService by remember { mutableStateOf(false) }
+    var productKey by remember { mutableStateOf("") }
     fun fill(s: ServiceItem?) {
         name = s?.name.orEmpty()
         unit = s?.unit ?: "kg"
@@ -376,6 +378,7 @@ internal fun ServicesScreen(nav: NavHostController, toast: (String) -> Unit) {
         retail = s?.retail ?: false
         dropOut = s?.dropOut ?: false
         selfService = s?.selfService ?: false
+        productKey = s?.productKey.orEmpty()
     }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), state = listState, verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Layanan & harga", "Atur layanan dan tarif laundry", onBack = { nav.popBackStack() }) }
@@ -390,6 +393,16 @@ internal fun ServicesScreen(nav: NavHostController, toast: (String) -> Unit) {
                         SelectChip(!retail && !selfService, "Full service") { retail = false; selfService = false }
                         SelectChip(selfService, "Self-service") { selfService = true; retail = false; dropOut = false; unit = "Load" }
                         SelectChip(retail, "Produk retail") { retail = true; selfService = false; unit = "pcs" }
+                    }
+                    if (retail) {
+                        SectionLabel("Produk stok yang terjual")
+                        Text("Pilih satu item Produk stok. Jumlah pada Service akan mengurangi stok cabang transaksi.", color = Muted, fontSize = 12.sp)
+                        ChipRow {
+                            store.products.filter { it.kind == ProductKind.BarangJual }.forEach { product ->
+                                SelectChip(productKey == product.key, product.name) { productKey = product.key; if (name.isBlank()) name = product.name; unit = product.unit }
+                            }
+                        }
+                        if (store.products.none { it.kind == ProductKind.BarangJual }) FeedbackBanner("Tambahkan barang dijual di Produk stok terlebih dahulu.")
                     }
                     SectionLabel("Satuan layanan")
                     if (selfService) FeedbackBanner("Self-service dihitung per 1 mesin cuci dengan satuan Load.")
@@ -410,8 +423,9 @@ internal fun ServicesScreen(nav: NavHostController, toast: (String) -> Unit) {
                             return@PrimaryBtn
                         }
                         val e = editing
-                        if (e == null) store.addService(name, unit, price, retail, dropOut, selfService, commission)
-                        else store.updateService(e.id, name, unit, price, retail, dropOut, selfService, commission)
+                        if (retail && productKey.isBlank()) { toast("Pilih produk stok untuk layanan retail"); return@PrimaryBtn }
+                        if (e == null) store.addService(name, unit, price, retail, dropOut, selfService, commission, productKey)
+                        else store.updateService(e.id, name, unit, price, retail, dropOut, selfService, commission, productKey)
                         toast("Layanan tersimpan")
                         creating = false
                         editing = null
@@ -435,7 +449,7 @@ internal fun ServicesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 Text("${rp(s.price)} / ${s.unit}", color = Muted, fontSize = 13.sp)
                 ChipRow {
                     if (s.commissionPerUnit > 0) Chip("Komisi ${rp(s.commissionPerUnit)} / ${s.unit}", Green)
-                    if (s.retail) Chip("Retail", Teal)
+                    if (s.retail) Chip("Retail · ${store.productForKey(s.productKey)?.name ?: "belum dihubungkan"}", Teal)
                     if (s.selfService) Chip("Self-service · Load", Teal)
                     if (s.dropOut) Chip("DO", Amber)
                 }
@@ -456,29 +470,39 @@ internal fun ProductsScreen(nav: NavHostController, toast: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
     var stock by remember { mutableIntStateOf(0) }
     var min by remember { mutableIntStateOf(0) }
-    var initialBranchId by rememberSaveable { mutableStateOf(store.branches.firstOrNull()?.id.orEmpty()) }
+    var kind by remember { mutableStateOf(ProductKind.BahanHabisPakai) }
+    var unit by remember { mutableStateOf("pcs") }
+    var initialBranchIds by remember { mutableStateOf(setOf(store.branches.firstOrNull()?.id.orEmpty()).filter(String::isNotBlank).toSet()) }
     fun fill(p: Product?) {
         name = p?.name.orEmpty()
         stock = p?.stock ?: 0
         min = p?.min ?: 0
+        kind = p?.kind ?: ProductKind.BahanHabisPakai
+        unit = p?.unit ?: "pcs"
     }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), state = listState, verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { ScreenHeader("Produk stok", "Sabun, softener, dll", onBack = { nav.popBackStack() }) }
+        item { ScreenHeader("Produk stok & bahan", "Barang dijual dan bahan habis pakai per cabang", onBack = { nav.popBackStack() }) }
+        if (!creating && editing == null) item { GhostBtn("Kelola aset & mesin cabang", icon = Icons.Outlined.Build) { nav.navigate("inventory") } }
         if (!creating && editing == null) item { PrimaryBtn("Produk baru", icon = Icons.Outlined.Add) { creating = true; editing = null; fill(null) } }
         if (creating || editing != null) {
             item {
                 CardBlock(accent = Teal) {
                     Text(if (editing != null) "Ubah produk" else "Produk baru", fontWeight = FontWeight.Bold)
                     Field(name, { name = it }, "Nama")
+                    SectionLabel("Jenis item")
+                    ChipRow { ProductKind.entries.forEach { value -> SelectChip(kind == value, value.label) { kind = value } } }
+                    Field(unit, { unit = it.take(20) }, "Satuan stok (pcs, botol, sachet)")
                     if (creating) {
-                        SectionLabel("Stok awal cabang")
+                        SectionLabel("Cabang penyimpanan awal")
                         ChipRow {
                             store.branches.forEach { branch ->
-                                SelectChip(initialBranchId == branch.id, branch.name.removePrefix("Cuciin ")) { initialBranchId = branch.id }
+                                SelectChip(branch.id in initialBranchIds, branch.name.removePrefix("Cuciin ")) {
+                                    initialBranchIds = if (branch.id in initialBranchIds) initialBranchIds - branch.id else initialBranchIds + branch.id
+                                }
                             }
                         }
-                        Field(stock.toString(), { stock = it.filter(Char::isDigit).toIntOrNull() ?: 0 }, "Stok awal di cabang terpilih", number = true)
-                        Text("Cabang lain dimulai dari 0 dan dapat diisi melalui menu Stok.", color = Muted, fontSize = 12.sp)
+                        Field(stock.toString(), { stock = it.filter(Char::isDigit).toIntOrNull() ?: 0 }, "Stok awal untuk setiap cabang terpilih", number = true)
+                        Text("Pilih lebih dari satu cabang bila item tersedia di beberapa lokasi. Cabang lain dimulai dari 0.", color = Muted, fontSize = 12.sp)
                     }
                     Field(min.toString(), { min = it.filter(Char::isDigit).toIntOrNull() ?: 0 }, "Minimum", number = true)
                     Spacer(Modifier.height(8.dp))
@@ -488,8 +512,8 @@ internal fun ProductsScreen(nav: NavHostController, toast: (String) -> Unit) {
                             return@PrimaryBtn
                         }
                         val e = editing
-                        if (e == null) store.addProduct(name, stock, min, initialBranchId)
-                        else store.updateProduct(e.key, name, min)
+                        if (e == null) store.addProduct(name, stock, min, initialBranchIds, kind, unit)
+                        else store.updateProduct(e.key, name, min, kind, unit)
                         toast("Produk tersimpan")
                         creating = false
                         editing = null
@@ -510,7 +534,7 @@ internal fun ProductsScreen(nav: NavHostController, toast: (String) -> Unit) {
         if (!creating && editing == null) items(store.products, key = { it.key }) { p ->
             CardBlock(Modifier.clickable { editing = p; creating = false; fill(p) }) {
                 Text(p.name, fontWeight = FontWeight.Bold)
-                Text("Batas minimum ${p.min}", color = Muted, fontSize = 13.sp)
+                Text("${p.kind.label} · ${p.unit} · batas minimum ${p.min}", color = Muted, fontSize = 13.sp)
                 store.branches.forEach { branch ->
                     Text("${branch.name}: ${store.stockOf(p.key, branch.id)}", color = Ink, fontSize = 13.sp)
                 }

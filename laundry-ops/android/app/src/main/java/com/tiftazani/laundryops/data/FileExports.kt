@@ -3,6 +3,7 @@ package com.tiftazani.laundryops.data
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
@@ -12,6 +13,15 @@ import java.io.File
 
 object FileExports {
     private fun csv(value: Any?): String = "\"${value?.toString().orEmpty().replace("\"", "\"\"")}\""
+
+    private fun wrapped(text: String, paint: Paint, width: Float, maxLines: Int = Int.MAX_VALUE): List<String> =
+        wrapMeasuredText(text, width, maxLines, paint::measureText)
+
+    private fun drawWrapped(canvas: Canvas, text: String, x: Float, y: Float, width: Float, paint: Paint, lineHeight: Float, maxLines: Int = Int.MAX_VALUE): Int {
+        val lines = wrapped(text, paint, width, maxLines)
+        lines.forEachIndexed { index, line -> canvas.drawText(line, x, y + index * lineHeight, paint) }
+        return lines.size
+    }
 
     fun copyProof(ctx: Context, notaId: String, uri: Uri): String? {
         val dir = File(ctx.filesDir, "proofs/$notaId").apply { mkdirs() }
@@ -130,13 +140,7 @@ object FileExports {
             "Kasir / Petugas" to 85f, "Rincian" to 100f, "Jml" to 42f, "Omzet" to 58f,
             "Diterima" to 58f, "Komisi" to 55f, "Biaya" to 55f, "Status" to 75f,
         )
-        fun fit(text: String, paint: Paint, width: Float): String {
-            if (paint.measureText(text) <= width - 8f) return text
-            var value = text
-            while (value.isNotEmpty() && paint.measureText("$value…") > width - 8f) value = value.dropLast(1)
-            return "$value…"
-        }
-        val rowsPerPage = 12
+        val rowsPerPage = 8
         val pages = records.chunked(rowsPerPage).ifEmpty { listOf(emptyList()) }
         pages.forEachIndexed { pageIndex, pageRows ->
             val page = pdf.startPage(PdfDocument.PageInfo.Builder(842, 595, pageIndex + 1).create())
@@ -158,22 +162,22 @@ object FileExports {
             var y = if (pageIndex == 0) 158f else 118f
             var x = 24f
             columns.forEach { (label, width) ->
-                canvas.drawRect(x, y, x + width, y + 26f, Paint().apply { color = Color.rgb(31, 91, 110) })
-                canvas.drawRect(x, y, x + width, y + 26f, gridPaint)
-                canvas.drawText(fit(label, headerPaint, width), x + 4f, y + 17f, headerPaint)
+                canvas.drawRect(x, y, x + width, y + 34f, Paint().apply { color = Color.rgb(31, 91, 110) })
+                canvas.drawRect(x, y, x + width, y + 34f, gridPaint)
+                drawWrapped(canvas, label, x + 4f, y + 14f, width - 8f, headerPaint, 11f, 2)
                 x += width
             }
-            y += 26f
+            y += 34f
             pageRows.forEachIndexed { rowIndex, row ->
                 val cells = listOf(row.no.toString(), row.type, row.id, row.time, row.branch, row.officer, row.description, row.qty, rp(row.revenue), rp(row.received), rp(row.commission), rp(row.expense), row.status)
                 x = 24f
                 columns.forEachIndexed { columnIndex, (_, width) ->
-                    if (rowIndex % 2 == 0) canvas.drawRect(x, y, x + width, y + 29f, Paint().apply { color = Color.rgb(244, 249, 250) })
-                    canvas.drawRect(x, y, x + width, y + 29f, gridPaint)
-                    canvas.drawText(fit(cells[columnIndex], bodyPaint, width), x + 4f, y + 18f, bodyPaint)
+                    if (rowIndex % 2 == 0) canvas.drawRect(x, y, x + width, y + 44f, Paint().apply { color = Color.rgb(244, 249, 250) })
+                    canvas.drawRect(x, y, x + width, y + 44f, gridPaint)
+                    drawWrapped(canvas, cells[columnIndex], x + 4f, y + 13f, width - 8f, bodyPaint, 11f, 3)
                     x += width
                 }
-                y += 29f
+                y += 44f
             }
             if (records.isEmpty()) canvas.drawText("Belum ada transaksi atau biaya pada periode ini.", 34f, y + 24f, mutedPaint)
             canvas.drawLine(24f, 564f, 818f, 564f, Paint().apply { color = line; strokeWidth = 1f })
@@ -221,6 +225,67 @@ object FileExports {
         shareGenerated(ctx, "absensi-${Clock.nowMs()}.csv", "text/csv", body)
     }
 
+    fun shareStock(ctx: Context, rows: List<StockMove>) {
+        val body = buildString {
+            appendLine("No,Waktu,Cabang,Produk,Jenis Perubahan,Jumlah,Saldo Setelah,Akun Pelaksana,Catatan,ID Service")
+            rows.forEachIndexed { index, move ->
+                val branch = CuciinStore.branches.firstOrNull { it.id == move.branchId }?.name ?: move.branchId
+                val product = CuciinStore.products.firstOrNull { it.key == move.product || it.name == move.product }?.name ?: move.product
+                appendLine(listOf(index + 1, move.at, branch, product, move.kind.label, move.qty, move.balanceAfter ?: "", move.by, move.note, move.notaId.orEmpty()).joinToString(",", transform = ::csv))
+            }
+        }
+        shareGenerated(ctx, "laporan-stok-${Clock.nowMs()}.csv", "text/csv", body)
+    }
+
+    fun shareStockPdf(ctx: Context, rows: List<StockMove>, periodLabel: String) {
+        val dir = File(ctx.cacheDir, "share").apply { mkdirs() }
+        val file = File(dir, "laporan-stok-${Clock.nowMs()}.pdf")
+        val pdf = PdfDocument()
+        val ink = Color.rgb(19, 43, 55)
+        val teal = Color.rgb(8, 117, 137)
+        val body = Paint().apply { color = ink; textSize = 8.5f; isAntiAlias = true }
+        val head = Paint(body).apply { color = Color.WHITE; isFakeBoldText = true }
+        val grid = Paint().apply { color = Color.rgb(211, 224, 228); style = Paint.Style.STROKE; strokeWidth = .8f }
+        val columns = listOf("No" to 28f, "Waktu" to 102f, "Cabang" to 85f, "Produk" to 110f, "Perubahan" to 75f, "Jumlah" to 52f, "Saldo" to 48f, "Akun" to 100f, "Catatan" to 170f)
+        val pages = rows.chunked(8).ifEmpty { listOf(emptyList()) }
+        pages.forEachIndexed { pageIndex, pageRows ->
+            val page = pdf.startPage(PdfDocument.PageInfo.Builder(842, 595, pageIndex + 1).create())
+            val canvas = page.canvas
+            canvas.drawColor(Color.WHITE)
+            canvas.drawRoundRect(24f, 20f, 818f, 92f, 14f, 14f, Paint().apply { color = teal })
+            canvas.drawText("CUCIIN · LAPORAN PERUBAHAN STOK", 42f, 48f, Paint(head).apply { textSize = 18f })
+            canvas.drawText("$periodLabel · ${rows.size} transaksi · Halaman ${pageIndex + 1}/${pages.size}", 42f, 72f, Paint(head).apply { textSize = 10f })
+            var y = 112f
+            var x = 24f
+            columns.forEach { (label, width) ->
+                canvas.drawRect(x, y, x + width, y + 30f, Paint().apply { color = Color.rgb(31, 91, 110) })
+                canvas.drawRect(x, y, x + width, y + 30f, grid)
+                drawWrapped(canvas, label, x + 4f, y + 13f, width - 8f, head, 10f, 2)
+                x += width
+            }
+            y += 30f
+            pageRows.forEachIndexed { rowIndex, move ->
+                val branch = CuciinStore.branches.firstOrNull { it.id == move.branchId }?.name ?: move.branchId
+                val product = CuciinStore.products.firstOrNull { it.key == move.product || it.name == move.product }?.name ?: move.product
+                val values = listOf((pageIndex * 8 + rowIndex + 1).toString(), move.at, branch, product, move.kind.label, move.qty.toString(), move.balanceAfter?.toString().orEmpty(), move.by, move.note)
+                x = 24f
+                columns.forEachIndexed { columnIndex, (_, width) ->
+                    if (rowIndex % 2 == 0) canvas.drawRect(x, y, x + width, y + 46f, Paint().apply { color = Color.rgb(244, 249, 250) })
+                    canvas.drawRect(x, y, x + width, y + 46f, grid)
+                    drawWrapped(canvas, values[columnIndex], x + 4f, y + 13f, width - 8f, body, 11f, 3)
+                    x += width
+                }
+                y += 46f
+            }
+            if (rows.isEmpty()) canvas.drawText("Belum ada perubahan stok pada periode ini.", 34f, y + 25f, body)
+            canvas.drawText("Dibuat oleh Cuciin · ${Clock.nowLabel()}", 24f, 578f, Paint(body).apply { color = Color.rgb(92, 112, 122) })
+            pdf.finishPage(page)
+        }
+        file.outputStream().use { pdf.writeTo(it) }
+        pdf.close()
+        shareFile(ctx, file, "application/pdf")
+    }
+
     private fun shareGenerated(ctx: Context, name: String, type: String, body: String) {
         val dir = File(ctx.cacheDir, "share").apply { mkdirs() }
         val file = File(dir, name).apply { writeText(body) }
@@ -233,26 +298,127 @@ object FileExports {
         val pdf = PdfDocument()
         val page = pdf.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
         val canvas = page.canvas
-        val title = Paint().apply {
-            color = Color.BLACK
-            textSize = 18f
-            isFakeBoldText = true
-            isAntiAlias = true
+        val branch = CuciinStore.branch(n.branchId)
+        val ink = Color.rgb(19, 43, 55)
+        val teal = Color.rgb(8, 117, 137)
+        val muted = Color.rgb(92, 112, 122)
+        val body = Paint().apply { color = ink; textSize = 10.5f; isAntiAlias = true }
+        val small = Paint(body).apply { color = muted; textSize = 9f }
+        val bold = Paint(body).apply { isFakeBoldText = true }
+        val white = Paint(bold).apply { color = Color.WHITE }
+        val grid = Paint().apply { color = Color.rgb(211, 224, 228); style = Paint.Style.STROKE; strokeWidth = 1f }
+        fun drawGrandTotal(target: Canvas, top: Float): Float {
+            target.drawRect(40f, top, 427f, top + 44f, Paint().apply { color = Color.rgb(232, 244, 246) })
+            target.drawRect(427f, top, 555f, top + 44f, Paint().apply { color = teal })
+            target.drawText("GRAND TOTAL", 300f, top + 27f, bold)
+            target.drawText(rp(n.total), 437f, top + 27f, white)
+            return top + 66f
         }
-        val body = Paint().apply {
-            color = Color.BLACK
-            textSize = 12f
-            isAntiAlias = true
+        fun drawPaymentAndStatus(target: Canvas, top: Float) {
+            target.drawText("Pembayaran", 40f, top, small)
+            target.drawText("${n.payMethod.label} · ${n.pay.label} · Dibayar ${rp(n.paid)}", 40f, top + 18f, bold)
+            target.drawText("Status Pengerjaan", 330f, top, small)
+            target.drawText(n.laundry.label, 330f, top + 18f, bold)
         }
-        var y = 56f
-        canvas.drawText("Cuciin — Nota ${n.id}", 48f, y, title)
-        y += 28f
-        CuciinStore.notaText(n).lines().forEach { line ->
-            if (y > 800f) return@forEach
-            canvas.drawText(line, 48f, y, body)
-            y += 16f
+        canvas.drawColor(Color.WHITE)
+        canvas.drawRoundRect(32f, 28f, 563f, 132f, 16f, 16f, Paint().apply { color = teal })
+        canvas.drawText(branch.name.uppercase(), 50f, 61f, Paint(white).apply { textSize = 21f })
+        canvas.drawText("NOTA SERVICE · ${n.id}", 50f, 86f, Paint(white).apply { textSize = 11f })
+        drawWrapped(canvas, branch.location.ifBlank { "Alamat cabang belum diisi" }, 50f, 108f, 480f, Paint(white).apply { textSize = 9f }, 11f, 2)
+
+        canvas.drawText("INFORMASI SERVICE", 40f, 164f, Paint(bold).apply { color = teal; textSize = 10f })
+        val info = listOf(
+            "Kasir" to n.kasir,
+            "Pelanggan" to n.customer,
+            "Waktu Masuk" to n.createdAt,
+            "Estimasi Waktu Keluar" to n.pickupAt,
+        )
+        var infoY = 186f
+        info.chunked(2).forEach { pair ->
+            pair.forEachIndexed { index, (label, value) ->
+                val x = 40f + index * 260f
+                canvas.drawText(label, x, infoY, small)
+                drawWrapped(canvas, value, x, infoY + 16f, 230f, bold, 13f, 2)
+            }
+            infoY += 45f
         }
+
+        var y = 286f
+        val columns = listOf("No." to 42f, "Service" to 345f, "Harga" to 128f)
+        var x = 40f
+        columns.forEach { (label, width) ->
+            canvas.drawRect(x, y, x + width, y + 32f, Paint().apply { color = Color.rgb(31, 91, 110) })
+            canvas.drawRect(x, y, x + width, y + 32f, grid)
+            canvas.drawText(label, x + 8f, y + 20f, white)
+            x += width
+        }
+        y += 32f
+        val legacyItems = Regex("(\\d+)\\.0\\s*([A-Za-z]+)").replace(n.items) { match -> "${match.groupValues[1]} ${match.groupValues[2]}" }
+        val lines = n.lines.ifEmpty { listOf(NotaLine("", legacyItems, 1.0, "nota", n.total, n.kasirEmail, n.kasir, 0)) }
+        val pageLineCounts = receiptPageLineCounts(lines.size)
+        lines.take(pageLineCounts.first()).forEachIndexed { index, line ->
+            val rowHeight = 52f
+            x = 40f
+            val qty = if (line.qty % 1.0 == 0.0) line.qty.toInt().toString() else line.qty.toString().replace('.', ',')
+            val serviceText = if (line.serviceId.isBlank()) line.name else "${line.name}\n$qty ${line.unit} × ${rp(line.unitPrice)}"
+            val values = listOf((index + 1).toString(), serviceText, rp((line.qty * line.unitPrice).toInt()))
+            columns.forEachIndexed { cellIndex, (_, width) ->
+                if (index % 2 == 0) canvas.drawRect(x, y, x + width, y + rowHeight, Paint().apply { color = Color.rgb(244, 249, 250) })
+                canvas.drawRect(x, y, x + width, y + rowHeight, grid)
+                drawWrapped(canvas, values[cellIndex], x + 8f, y + 18f, width - 16f, if (cellIndex == 2) bold else body, 15f, 2)
+                x += width
+            }
+            y += rowHeight
+        }
+        if (lines.size > 7) {
+            canvas.drawText("+ ${lines.size - 7} layanan dilanjutkan pada halaman berikutnya.", 48f, y + 18f, small)
+        } else {
+            y = drawGrandTotal(canvas, y)
+            drawPaymentAndStatus(canvas, y)
+        }
+        canvas.drawLine(40f, 790f, 555f, 790f, Paint().apply { color = Color.rgb(211, 224, 228) })
+        canvas.drawText("Terima kasih telah mempercayakan laundry Anda kepada ${branch.name}.", 40f, 812f, small)
         pdf.finishPage(page)
+        val continuationPages = lines.drop(pageLineCounts.first()).chunked(10)
+        continuationPages.forEachIndexed { extraPageIndex, pageLines ->
+            val extra = pdf.startPage(PdfDocument.PageInfo.Builder(595, 842, extraPageIndex + 2).create())
+            val extraCanvas = extra.canvas
+            extraCanvas.drawColor(Color.WHITE)
+            extraCanvas.drawRoundRect(32f, 28f, 563f, 104f, 16f, 16f, Paint().apply { color = teal })
+            extraCanvas.drawText(branch.name.uppercase(), 50f, 60f, Paint(white).apply { textSize = 18f })
+            extraCanvas.drawText("NOTA ${n.id} · RINCIAN LANJUTAN", 50f, 84f, Paint(white).apply { textSize = 10f })
+            var extraY = 132f
+            var extraX = 40f
+            columns.forEach { (label, width) ->
+                extraCanvas.drawRect(extraX, extraY, extraX + width, extraY + 32f, Paint().apply { color = Color.rgb(31, 91, 110) })
+                extraCanvas.drawRect(extraX, extraY, extraX + width, extraY + 32f, grid)
+                extraCanvas.drawText(label, extraX + 8f, extraY + 20f, white)
+                extraX += width
+            }
+            extraY += 32f
+            pageLines.forEachIndexed { pageLineIndex, line ->
+                val absoluteIndex = 7 + extraPageIndex * 10 + pageLineIndex
+                val qty = if (line.qty % 1.0 == 0.0) line.qty.toInt().toString() else line.qty.toString().replace('.', ',')
+                val serviceText = if (line.serviceId.isBlank()) line.name else "${line.name}\n$qty ${line.unit} × ${rp(line.unitPrice)}"
+                val values = listOf((absoluteIndex + 1).toString(), serviceText, rp((line.qty * line.unitPrice).toInt()))
+                extraX = 40f
+                columns.forEachIndexed { cellIndex, (_, width) ->
+                    if (pageLineIndex % 2 == 0) extraCanvas.drawRect(extraX, extraY, extraX + width, extraY + 52f, Paint().apply { color = Color.rgb(244, 249, 250) })
+                    extraCanvas.drawRect(extraX, extraY, extraX + width, extraY + 52f, grid)
+                    drawWrapped(extraCanvas, values[cellIndex], extraX + 8f, extraY + 18f, width - 16f, if (cellIndex == 2) bold else body, 15f, 2)
+                    extraX += width
+                }
+                extraY += 52f
+            }
+            if (extraPageIndex == continuationPages.lastIndex) {
+                extraY = drawGrandTotal(extraCanvas, extraY)
+                drawPaymentAndStatus(extraCanvas, extraY)
+            } else {
+                extraCanvas.drawText("Rincian berlanjut ke halaman berikutnya.", 48f, extraY + 18f, small)
+            }
+            extraCanvas.drawText("Halaman ${extraPageIndex + 2}", 40f, 812f, small)
+            pdf.finishPage(extra)
+        }
         file.outputStream().use { pdf.writeTo(it) }
         pdf.close()
         shareFile(ctx, file, "application/pdf")
