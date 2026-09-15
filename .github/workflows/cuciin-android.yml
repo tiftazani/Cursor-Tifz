@@ -21,6 +21,8 @@ jobs:
           java-version: "17"
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
       - name: Unit test, lint, and assemble debug APK
         working-directory: laundry-ops/android
         run: chmod +x gradlew && ./gradlew testDebugUnitTest lintDebug assembleDebug --no-daemon

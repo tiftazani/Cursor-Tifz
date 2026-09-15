@@ -12,7 +12,7 @@ encrypted_file="${plain_file}.enc"
 mkdir -p "$backup_dir"
 
 npx wrangler d1 export cuciin-db --remote --skip-confirmation --output "$plain_file"
-openssl enc -aes-256-cbc -pbkdf2 -salt \
+openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt \
   -in "$plain_file" \
   -out "$encrypted_file" \
   -pass env:CUCIIN_BACKUP_PASSPHRASE

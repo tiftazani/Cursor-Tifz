@@ -8,7 +8,7 @@ work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
 
 (cd "$(dirname "$encrypted_file")" && shasum -a 256 -c "$(basename "$checksum_file")")
-openssl enc -d -aes-256-cbc -pbkdf2 \
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
   -in "$encrypted_file" \
   -out "$work_dir/restore.sql" \
   -pass env:CUCIIN_BACKUP_PASSPHRASE

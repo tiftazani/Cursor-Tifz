@@ -102,7 +102,7 @@ function mergeRows(dataset: string, current: JsonRecord[], incoming: JsonRecord[
   return [...rows.values()];
 }
 
-function visibleSnapshot(snapshot: JsonRecord, identity: Identity): JsonRecord {
+export function visibleSnapshot(snapshot: JsonRecord, identity: Identity): JsonRecord {
   if (identity.role === "Owner" || identity.bootstrap) return snapshot;
   const allowed = new Set(identity.branchIds);
   const result: JsonRecord = { ...snapshot, sessionEmail: null, viewBranch: identity.branchIds[0] ?? "", viewKasir: "all" };
@@ -111,7 +111,9 @@ function visibleSnapshot(snapshot: JsonRecord, identity: Identity): JsonRecord {
     const ids = Array.isArray(row.branchIds) ? row.branchIds : [];
     return ids.some((id) => typeof id === "string" && allowed.has(id));
   });
-  for (const dataset of BRANCH_DATASETS) result[dataset] = list(snapshot, dataset).filter((row) => allowed.has(str(row,"branchId")));
+  for (const dataset of BRANCH_DATASETS) result[dataset] = list(snapshot, dataset).filter((row) =>
+    allowed.has(str(row,"branchId")) && (dataset !== "attendance" || str(row,"staffEmail").toLowerCase() === identity.email.toLowerCase())
+  );
   return result;
 }
 
@@ -121,7 +123,9 @@ function mergeRestrictedSnapshot(current: JsonRecord, incoming: JsonRecord, iden
   const merged: JsonRecord = { ...current, updatedAt: num(incoming,"updatedAt"), sessionEmail: null };
   merged.customers = mergeRows("customers", list(current,"customers"), list(incoming,"customers"));
   for (const dataset of BRANCH_DATASETS) {
-    const accepted = list(incoming, dataset).filter((row) => allowed.has(str(row,"branchId")));
+    const accepted = list(incoming, dataset).filter((row) =>
+      allowed.has(str(row,"branchId")) && (dataset !== "attendance" || str(row,"staffEmail").toLowerCase() === identity.email.toLowerCase())
+    );
     merged[dataset] = mergeRows(dataset, list(current,dataset), accepted);
   }
   const tombstones = new Set([...listOfStrings(current.deletedNotaIds), ...listOfStrings(incoming.deletedNotaIds)]);

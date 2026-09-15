@@ -4,12 +4,12 @@ Status: kandidat rilis operasional yang sudah lulus pemeriksaan kode, build, mig
 
 ## Bukti verifikasi kandidat
 
-- Android: 37 unit test debug dan 37 unit test rilis lulus, lint debug/rilis lulus, APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
+- Android: 39 unit test debug dan 39 unit test rilis lulus, lint debug/rilis lulus, APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
 - APK rilis: non-debuggable, application ID `com.tiftazani.laundryops`, versionCode `15`, versionName `1.9.0`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB.
 - SHA-256 sertifikat rilis cocok dengan fingerprint yang dicatat: `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`.
-- Cloudflare: migrasi `0003_command_sync.sql` sudah diterapkan ke D1 produksi dan Worker versi `e442bb2c-259f-47eb-afc4-c4fe8b4e814d` sudah aktif.
+- Cloudflare: migrasi `0003_command_sync.sql` sudah diterapkan ke D1 produksi dan Worker versi `57d455b5-daf4-4863-9b1a-4c25893c8450` sudah aktif.
 - Health produksi mengembalikan database `ready`. Uji command pelanggan membuktikan retry command yang sama tidak menggandakan mutasi; penghapusan dan delta revision juga berhasil.
-- Backup sebelum migrasi sudah diuji dengan `PRAGMA integrity_check = ok`. Backup harian terenkripsi belum aktif sampai Owner mengisi secret GitHub Actions.
+- Backup sebelum migrasi sudah diuji dengan `PRAGMA integrity_check = ok`. Penyimpanan backup produksi terjadwal ke tujuan privat belum ditetapkan oleh Owner; workflow repository publik tidak menyimpan artifact database.
 - Checksum APK/AAB kandidat dicatat pada `laundry-ops/releases/1.9.0-candidate/SHA256SUMS`.
 
 ## Yang disiapkan
@@ -30,7 +30,7 @@ Status: kandidat rilis operasional yang sudah lulus pemeriksaan kode, build, mig
 ## Tindakan tersisa yang memerlukan Owner
 
 1. Ubah kata sandi awal semua akun, pastikan alamat email karyawan benar, aktifkan MFA Owner, sesuaikan template reset Firebase, dan uji penerima nyata.
-2. Isi secret workflow backup, jalankan backup manual pertama, lalu simpan passphrase dan keystore pada dua media terenkripsi yang dikuasai Owner.
+2. Pilih tujuan backup privat, atur jadwal dan retensi, jalankan backup serta restore test pertama, lalu simpan passphrase dan keystore pada dua media terenkripsi yang dikuasai Owner.
 3. Setujui kebijakan master pelanggan bersama lintas cabang pada `DATA_GOVERNANCE.md` atau minta perubahan aturan sebelum data pelanggan nyata dimasukkan.
 4. Rekonsiliasi saldo awal, daftar mesin/inventory, harga, komisi, biaya rutin, hak role, dan penugasan cabang.
 5. Jalankan UAT fisik pada tipe HP operasional untuk offline/retry, haptic, kamera/bukti, Google Maps share, WhatsApp, PDF, printer bila dipakai, dan upgrade tanpa menghapus data.
@@ -43,7 +43,7 @@ Cloudflare Workers + D1 dapat dimulai dari paket gratis dan dinaikkan ke paket b
 
 Worker memverifikasi Firebase ID token menggunakan kunci publik Google, mendukung secret bootstrap melalui Cloudflare Secrets, memakai query terparameter, dan tidak menyimpan kata sandi. Command per entitas dicatat idempoten, delta dibatasi cabang, koreksi Service memakai optimistic concurrency, dan stok dijaga nonnegatif secara atomik. Foto bukti tetap disimpan di perangkat. QRIS tetap pencatatan metode pembayaran.
 
-Resource produksi aktif: Worker `cuciin-api` versi `e442bb2c-259f-47eb-afc4-c4fe8b4e814d`, D1 `cuciin-db` di APAC, dan proyek Firebase `cuciin-ops-tiftazani`. Health check produksi lulus pada 15 September 2026 dengan revision 2; snapshot privat mengembalikan `X-Cuciin-Scope: owner`. Petunjuk migrasi, deploy, pemulihan, dan build ada di `laundry-ops/cloudflare/README.md`.
+Resource produksi aktif: Worker `cuciin-api` versi `57d455b5-daf4-4863-9b1a-4c25893c8450`, D1 `cuciin-db` di APAC, dan proyek Firebase `cuciin-ops-tiftazani`. Health check produksi lulus pada 15 September 2026 dengan revision 2; endpoint snapshot tanpa autentikasi mengembalikan 401. Petunjuk migrasi, deploy, pemulihan, dan build ada di `laundry-ops/cloudflare/README.md`.
 
 ## Build ulang
 

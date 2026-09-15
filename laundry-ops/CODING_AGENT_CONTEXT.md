@@ -14,6 +14,7 @@ Endpoint produksi: https://cuciin-api.tiftazani-cuciin.workers.dev
 
 Sumber data utama adalah D1. Android wajib local-first: perubahan disimpan lokal dan masuk persistent outbox, dikirim sebagai command idempoten, lalu mengambil delta berdasarkan revision. Foto bukti hanya berada di perangkat dan tidak boleh dikirim ke cloud.
 Penerapan delta memakai pending-remote marker yang persisten; jangan menulis snapshot lokal sebelum marker tersimpan atau memajukan cursor sebelum snapshot lokal selesai. Scope role+cabang berasal dari server; perubahan scope wajib bootstrap ulang sebelum cursor dilanjutkan.
+Kompensasi stok yang bergantung pada penghapusan Service tidak boleh dikirim selama command Service dengan ID yang sama masih antre. Delta staff/branch untuk non-Owner harus dijurnal per cabang lama/baru; absensi hanya boleh terkirim kepada pemiliknya dan harus memeriksa pemilik baris server, bukan hanya email payload. Scope sinkronisasi non-Owner wajib membedakan role, email, dan daftar cabang.
 
 Peran:
 - Owner: semua cabang dan modul; boleh mengganti petugas Service.

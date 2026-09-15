@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { canonicalHistoryPayload, commandFailureResult, commandPermission, nextEntityVersion, orderUpsertAllowed, parseCommand, pushCommands, stockMoveOrderReferenceAllowed, syncScopeKey } from "../src/command-sync.ts";
-import { applyJournalToSnapshot, legacySnapshotWriteAllowed } from "../src/index.ts";
+import { attendanceRecordOwnedBy, canonicalHistoryPayload, commandFailureResult, commandPermission, nextEntityVersion, orderUpsertAllowed, parseCommand, pullChanges, pushCommands, staffJournalScopes, stockMoveOrderReferenceAllowed, syncScopeKey } from "../src/command-sync.ts";
+import { applyJournalToSnapshot, legacySnapshotWriteAllowed, visibleSnapshot } from "../src/index.ts";
 
 const migration = readFileSync(new URL("../migrations/0003_command_sync.sql", import.meta.url), "utf8");
 
@@ -73,8 +73,43 @@ test("otorisasi membatasi role, cabang, dan absensi orang lain", () => {
   assert.equal(commandPermission(kasir,"service.upsert").allowed,false);
   assert.equal(commandPermission(spv,"order.payment","b1").allowed,false);
   assert.equal(commandPermission(spv,"order.status","b1").allowed,true);
+  assert.equal(commandPermission(spv,"customer.upsert").allowed,false);
   assert.equal(commandPermission(kasir,"attendance.upsert","b1","oranglain@cuciin.id").allowed,false);
+  assert.equal(commandPermission(kasir,"attendance.upsert","b1","kasir@cuciin.id").allowed,true);
+  assert.equal(attendanceRecordOwnedBy(kasir,"oranglain@cuciin.id"),false);
+  assert.equal(attendanceRecordOwnedBy(kasir,"KASIR@CUCIIN.ID"),true);
+  assert.equal(attendanceRecordOwnedBy(owner,"oranglain@cuciin.id"),true);
   assert.equal(commandPermission(owner,"service.upsert").allowed,true);
+});
+
+test("delta staf dan cabang non-Owner dibatasi ke penugasan cabangnya", async () => {
+  const statements=[];
+  const env={DB:{prepare(sql) {
+    statements.push(sql);
+    return {bind() { return sql.includes("MAX(sequence)")
+      ? {first:async()=>({revision:0})}
+      : {all:async()=>({results:[]})}; }};
+  }}};
+  const identity={email:"kasir@cuciin.id",name:"Kasir",role:"Kasir",branchIds:["melati"],bootstrap:false};
+  const result=await pullChanges(new Request("https://cuciin.example/v1/sync/changes?after=0"),env,identity);
+  assert.equal(result.status,200);
+  assert.match(statements[0],/entity_type NOT IN \('staff','branch','attendance'\)/);
+  assert.match(statements[0],/json_extract\(payload_json,'\$\.staffEmail'\)/);
+  assert.match(statements[0],/entity_type='branch' AND entity_id IN/);
+});
+
+test("pemindahan staf mengirim delete ke cabang lama dan upsert ke cabang baru", () => {
+  assert.deepEqual(staffJournalScopes(["a","b"],["b","c"]),{deletes:["a"],upserts:["b","c"]});
+  assert.deepEqual(staffJournalScopes(["a"],[]),{deletes:["a"],upserts:[null]});
+});
+
+test("snapshot absensi non-Owner hanya memuat catatan akun sendiri", () => {
+  const snapshot={branches:[{id:"melati"}],staff:[],attendance:[
+    {id:"own",branchId:"melati",staffEmail:"kasir@cuciin.id"},
+    {id:"other",branchId:"melati",staffEmail:"rekan@cuciin.id"},
+  ]};
+  const identity={email:"kasir@cuciin.id",name:"Kasir",role:"Kasir",branchIds:["melati"],bootstrap:false};
+  assert.deepEqual(visibleSnapshot(snapshot,identity).attendance.map(row=>row.id),["own"]);
 });
 
 test("envelope Android dipetakan tanpa mengganti nama entity Kotlin", () => {
@@ -153,8 +188,8 @@ test("versi OCC Service selalu naik walau jam berada pada milidetik sama", () =>
 });
 
 test("scope sinkronisasi stabil dan berubah saat akses cabang berubah", () => {
-  assert.equal(syncScopeKey({email:"a",name:"A",role:"Kasir",branchIds:["b2","b1","b1"],bootstrap:false}),"kasir:b1,b2");
-  assert.equal(syncScopeKey({email:"a",name:"A",role:"Kasir",branchIds:["b1"],bootstrap:false}),"kasir:b1");
+  assert.equal(syncScopeKey({email:"a",name:"A",role:"Kasir",branchIds:["b2","b1","b1"],bootstrap:false}),"kasir:a:b1,b2");
+  assert.equal(syncScopeKey({email:"a",name:"A",role:"Kasir",branchIds:["b1"],bootstrap:false}),"kasir:a:b1");
   assert.equal(syncScopeKey({email:"o",name:"O",role:"Owner",branchIds:[],bootstrap:false}),"owner");
 });
 

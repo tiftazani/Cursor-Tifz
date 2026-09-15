@@ -17,10 +17,12 @@ object LocalJson {
     }
     private lateinit var file: File
     private lateinit var backup: File
+    private var latestSavedAt = Long.MIN_VALUE
 
     fun init(app: Application) {
         file = File(app.filesDir, "cuciin-data.json")
         backup = File(app.filesDir, "cuciin-data.backup.json")
+        latestSavedAt = Long.MIN_VALUE
     }
 
     fun load(): Snapshot? {
@@ -34,16 +36,21 @@ object LocalJson {
                 null
             }
         }
-        decode(file)?.let { return it }
+        decode(file)?.let {
+            latestSavedAt = it.updatedAt
+            return it
+        }
         val recovered = decode(backup) ?: return null
         try { backup.copyTo(file, overwrite = true) } catch (e: Exception) { Log.w(TAG, "pemulihan file utama gagal", e) }
         Log.w(TAG, "database lokal dipulihkan dari salinan cadangan")
+        latestSavedAt = recovered.updatedAt
         return recovered
     }
 
     @Synchronized
     fun save(snap: Snapshot) {
         if (!::file.isInitialized) return
+        if (latestSavedAt > snap.updatedAt) return
         val text = json.encodeToString(Snapshot.serializer(), snap)
         val tmp = File(file.parentFile, "cuciin-data.json.tmp")
         tmp.writeText(text)
@@ -71,5 +78,6 @@ object LocalJson {
                 Log.w(TAG, "pembuatan salinan cadangan gagal", e)
             }
         }
+        latestSavedAt = maxOf(latestSavedAt, snap.updatedAt)
     }
 }

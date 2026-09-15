@@ -236,6 +236,46 @@ class SyncProtocolTest {
         assertEquals(listOf("nota-edit-2"), outbox.nextBatch(100).map { it.commandId })
     }
 
+    @Test fun stockCompensationWaitsUntilNotaCreateAndDeleteAreAcknowledged() {
+        val compensation = SyncCommand(
+            commandId = "stock-compensation",
+            entityType = "stockMove",
+            entityId = "move-1",
+            operation = "upsert",
+            branchId = "melati",
+            occurredAt = 12,
+            payload = buildJsonObject {
+                put("notaId", "MEL-1")
+                put("requiresDeletedNota", true)
+            },
+        )
+        val create = SyncCommand("nota-create", "nota", "MEL-1", "upsert", "melati", 10)
+        val delete = SyncCommand("nota-delete", "nota", "MEL-1", "delete", "melati", 11)
+        val outbox = SyncOutbox(SyncClientState(pending = listOf(create, delete, compensation), bootstrapped = true))
+
+        assertEquals(listOf("nota-create"), outbox.nextBatch(100).map { it.commandId })
+        outbox.acknowledge(setOf("nota-create"), revision = 1)
+        assertEquals(listOf("nota-delete"), outbox.nextBatch(100).map { it.commandId })
+        outbox.acknowledge(setOf("nota-delete"), revision = 2)
+        assertEquals(listOf("stock-compensation"), outbox.nextBatch(100).map { it.commandId })
+    }
+
+    @Test fun localEditDuringRemotePersistenceUsesPreparedRemoteAsItsBaseline() {
+        val old = listOf(entity("customer", "c-1", value = 1))
+        val remote = listOf(entity("customer", "c-1", value = 2))
+        val localAfterRemote = listOf(entity("customer", "c-1", value = 3))
+        val outbox = SyncOutbox(SyncClientState(shadow = old, bootstrapped = true))
+        assertTrue(outbox.prepareRemote(Snapshot(updatedAt = 20), remote, 7, expectedGeneration = 0, scopeKey = "kasir:melati"))
+
+        val commands = outbox.enqueue(localAfterRemote, 21, null, null) { "local-after-remote" }
+        assertEquals(listOf("local-after-remote"), commands.map { it.commandId })
+        assertEquals("3", commands.single().payload.jsonObject["value"].toString())
+        assertTrue(outbox.completePreparedRemote())
+        assertEquals(localAfterRemote, outbox.state.shadow)
+        assertEquals(listOf("local-after-remote"), outbox.state.pending.map { it.commandId })
+        assertEquals(7, outbox.state.revision)
+    }
+
     @Test fun notaEditCreatedAfterPreviousAckUsesNewServerVersionWithoutSkippingPullCursor() {
         fun nota(version: Long, value: Int) = SyncEntity(
             "nota", "MEL-1", "melati",

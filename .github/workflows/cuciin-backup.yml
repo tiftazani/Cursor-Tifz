@@ -1,9 +1,7 @@
-name: Cuciin encrypted D1 backup
+name: Cuciin D1 backup verification
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "15 18 * * *"
 
 permissions:
   contents: read
@@ -33,11 +31,13 @@ jobs:
         env:
           CUCIIN_BACKUP_PASSPHRASE: ${{ secrets.CUCIIN_BACKUP_PASSPHRASE }}
         run: ./scripts/verify-backup.sh backups/*.sql.enc
-      - uses: actions/upload-artifact@v7
+      - name: Upload only when repository is private
+        if: github.event.repository.private
+        uses: actions/upload-artifact@v7
         with:
           name: cuciin-d1-backup-${{ github.run_id }}
           path: |
             laundry-ops/cloudflare/backups/*.sql.enc
             laundry-ops/cloudflare/backups/*.sha256
-          retention-days: 30
+          retention-days: 7
           if-no-files-found: error

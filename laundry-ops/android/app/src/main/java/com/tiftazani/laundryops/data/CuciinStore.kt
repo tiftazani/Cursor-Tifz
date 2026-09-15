@@ -187,22 +187,36 @@ object CuciinStore {
         fill(attendance, s.attendance)
     }
 
-    fun applyCloud(s: Snapshot) {
-        if (s.updatedAt < localUpdatedAt && !CloudSync.hasPreparedRemote()) return
+    fun applyCloud(s: Snapshot, onPersisted: (() -> Unit)? = null) {
+        if (s.updatedAt < localUpdatedAt && !CloudSync.hasPreparedRemote()) {
+            onPersisted?.invoke()
+            return
+        }
         if (s.staff.isEmpty() && branches.isNotEmpty()) {
             CloudSync.push(cloudSnapshot())
             revision.intValue++
+            onPersisted?.invoke()
             return
         }
+        val prepared = CloudSync.hasPreparedRemote()
+        var localSnapshot: Snapshot? = null
+        var remoteSnapshot: Snapshot? = null
         applyingCloud = true
         try {
             applyBusiness(s)
             localUpdatedAt = s.updatedAt
-            persist()
-            CloudSync.acceptRemoteSnapshot(cloudSnapshot())
+            localSnapshot = snapshot()
+            remoteSnapshot = cloudSnapshot()
             revision.intValue++
         } finally {
             applyingCloud = false
+        }
+        if (prepared || onPersisted != null) {
+            CloudSync.persistAppliedRemote(localSnapshot!!, remoteSnapshot!!, onPersisted)
+        } else {
+            LocalJson.save(localSnapshot!!)
+            CloudSync.acceptRemoteSnapshot(remoteSnapshot!!)
+            onPersisted?.invoke()
         }
     }
 
@@ -233,11 +247,11 @@ object CuciinStore {
         staff = staff.toList(),
         customers = customers.toList(),
         services = services.toList(),
-        products = products.toList(),
-        branchStocks = branchStocks.toList(),
+        products = products.map { it.copy() },
+        branchStocks = branchStocks.map { it.copy() },
         inventory = inventory.toList(),
         expenses = expenses.toList(),
-        notas = notas.toList(),
+        notas = notas.map { it.copy(photos = it.photos.toMutableList()) },
         stockMoves = stockMoves.toList(),
         audit = audit.toList(),
         cashCloses = cashCloses.toList(),

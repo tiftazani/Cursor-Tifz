@@ -92,7 +92,7 @@ export function nextEntityVersion(now: number, current?: number | null): number 
 
 export function syncScopeKey(identity: SyncIdentity): string {
   if (identity.bootstrap || identity.role === "Owner") return "owner";
-  return `${identity.role.toLowerCase()}:${[...new Set(identity.branchIds)].sort().join(",")}`;
+  return `${identity.role.toLowerCase()}:${identity.email.toLowerCase()}:${[...new Set(identity.branchIds)].sort().join(",")}`;
 }
 
 export function orderUpsertAllowed(orderExists: boolean, hasDeleteTombstone: boolean): boolean {
@@ -139,9 +139,23 @@ export function commandPermission(identity: SyncIdentity, type: string, branchId
   if (type === "order.delete" && identity.role !== "Owner") return { allowed:false,reason:"owner" };
   if (["expense.upsert", "expense.delete", "cashClose.upsert", "cashClose.delete"].includes(type) && identity.role === "Supervisor") return { allowed:false,reason:"role" };
   if (["order.create", "order.update", "order.put", "order.payment", "order.handover"].includes(type) && identity.role === "Supervisor") return { allowed:false,reason:"role" };
+  if (["customer.upsert", "customer.delete"].includes(type) && identity.role === "Supervisor") return { allowed:false,reason:"role" };
   if (branchId && identity.role !== "Owner" && !identity.branchIds.includes(branchId)) return { allowed:false,reason:"branch" };
   if (type === "attendance.upsert" && identity.role !== "Owner" && staffEmail?.toLowerCase() !== identity.email.toLowerCase()) return { allowed:false,reason:"self" };
   return { allowed:true };
+}
+
+export function attendanceRecordOwnedBy(identity: SyncIdentity, staffEmail: string): boolean {
+  return identity.bootstrap || identity.role === "Owner" || staffEmail.toLowerCase() === identity.email.toLowerCase();
+}
+
+export function staffJournalScopes(previous: string[], next: string[]): { deletes: string[]; upserts: (string|null)[] } {
+  const before=[...new Set(previous)];
+  const after=[...new Set(next)];
+  return {
+    deletes:before.filter(branch=>!after.includes(branch)),
+    upserts:after.length ? after : [null],
+  };
 }
 
 function assertBranch(identity: SyncIdentity, branchId: string): void {
@@ -150,7 +164,8 @@ function assertBranch(identity: SyncIdentity, branchId: string): void {
 }
 function assertRole(identity: SyncIdentity, command: SyncCommand): void {
   if(identity.role==="Supervisor" && command.type==="order.put" && command.wireEntityType==="nota") return;
-  const permission=commandPermission(identity,command.type,command.branchId);
+  const staffEmail=command.type==="attendance.upsert" ? optionalString(command.payload,"staffEmail",254) : undefined;
+  const permission=commandPermission(identity,command.type,command.branchId,staffEmail);
   if (!permission.allowed) throw new CommandError(403, permission.reason === "owner" ? "Command khusus Owner" : "Role tidak diizinkan");
 }
 
@@ -176,7 +191,7 @@ function guardPreviousMutation(db:D1Database, command:SyncCommand, token:string)
     .bind(token,command.commandId,ORG_ID,token);
 }
 
-type Plan = { statements: D1PreparedStatement[]; entityType: string; entityId: string; branchId: string | null; operation?: "upsert"|"delete"; changePayload?: unknown; updatedAt?: number };
+type Plan = { statements: D1PreparedStatement[]; entityType: string; entityId: string; branchId: string | null; operation?: "upsert"|"delete"; changePayload?: unknown; updatedAt?: number; journaled?: boolean };
 
 type RetailAdjustment={productId:string;productName:string;delta:number};
 async function retailAdjustments(db:D1Database, orderId:string, lines:Array<{serviceId:string;serviceName:string;quantity:number}>):Promise<RetailAdjustment[]> {
@@ -427,20 +442,29 @@ async function planGeneric(db:D1Database, command:SyncCommand, identity:SyncIden
   let branchId=command.branchId || optionalString(p,"branchId",100) || null;
   if(!config.branch) branchId=null;
   const existingBranch=config.branch ? await existingBranchForEntity(db,config.table,id) : null;
+  const previousStaffBranches=kind==="staff" ? (await db.prepare("SELECT branch_id FROM staff_branches WHERE lower(staff_email)=lower(?) ORDER BY branch_id").bind(id).all<{branch_id:string}>()).results.map(row=>row.branch_id) : [];
+  const existingAttendance=kind==="attendance" ? await db.prepare("SELECT staff_email,branch_id FROM attendance WHERE id=? AND organization_id=?").bind(id,ORG_ID).first<{staff_email:string;branch_id:string}>() : null;
   if(deleting && config.branch && !branchId) branchId=existingBranch;
   if(config.branch) assertBranch(identity,branchId || "");
   if(existingBranch) assertBranch(identity,existingBranch);
   if(command.type==="attendance.upsert" && !commandPermission(identity,command.type,branchId || undefined,optionalString(p,"staffEmail",254)).allowed) throw new CommandError(403,"Karyawan hanya dapat mengubah absensinya sendiri");
+  if(existingAttendance) {
+      assertBranch(identity,existingAttendance.branch_id);
+      if(!attendanceRecordOwnedBy(identity,existingAttendance.staff_email)) throw new CommandError(403,"Karyawan hanya dapat mengubah absensinya sendiri");
+  }
   const gate=commandGate(); const statements:D1PreparedStatement[]=[];
   if(deleting) {
     if(kind==="attendance" && identity.role!=="Owner") {
-      const row=await db.prepare("SELECT staff_email FROM attendance WHERE id=? AND organization_id=?").bind(id,ORG_ID).first<{staff_email:string}>();
-      if(!row || row.staff_email.toLowerCase()!==identity.email.toLowerCase()) throw new CommandError(403,"Karyawan hanya dapat menghapus absensinya sendiri");
+      if(!existingAttendance || !attendanceRecordOwnedBy(identity,existingAttendance.staff_email)) throw new CommandError(403,"Karyawan hanya dapat menghapus absensinya sendiri");
     }
     statements.push(db.prepare(`DELETE FROM ${config.table} WHERE ${config.idColumn ?? "id"}=? AND organization_id=? AND ${gate}`).bind(id,ORG_ID,command.commandId,ORG_ID,token));
     statements.push(guardPreviousMutation(db,command,token));
+    if(kind==="staff") {
+      const targets=previousStaffBranches.length ? previousStaffBranches : [null];
+      targets.forEach(target=>statements.push(journal(db,command,identity,token,"staff",id,"delete",target,null,now)));
+    }
     if(branchId) statements.push(audit(db,command,identity,token,branchId,command.type,null,now));
-    return {statements,entityType:config.entity,entityId:id,branchId,operation:"delete",changePayload:null};
+    return {statements,entityType:config.entity,entityId:id,branchId,operation:"delete",changePayload:kind==="attendance"?{staffEmail:existingAttendance?.staff_email ?? ""}:null,journaled:kind==="staff"};
   }
   if(kind==="expense") statements.push(db.prepare(`INSERT INTO expenses(id,organization_id,branch_id,category,amount,occurred_at,officer,note,updated_at) SELECT ?,?,?,?,?,?,?,?,? WHERE ${gate} ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,category=excluded.category,amount=excluded.amount,occurred_at=excluded.occurred_at,officer=excluded.officer,note=excluded.note,updated_at=excluded.updated_at`).bind(id,ORG_ID,branchId,requiredString(p,"category",100),integer(p,"amount",1),typeof p.occurredAt === "number"?integer(p,"occurredAt",1):integer(p,"occurredAtMs",1),identity.email.toLowerCase(),optionalString(p,"note",500),now,command.commandId,ORG_ID,token));
   else if(kind==="attendance") statements.push(db.prepare(`INSERT INTO attendance(id,organization_id,branch_id,staff_email,staff_name,work_date,check_in_at,check_out_at,note,updated_at) SELECT ?,?,?,?,?,?,?,?,?,? WHERE ${gate} ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,check_out_at=excluded.check_out_at,note=excluded.note,updated_at=excluded.updated_at`).bind(id,ORG_ID,branchId,requiredString(p,"staffEmail",254).toLowerCase(),requiredString(p,"staffName",160),requiredString(p,"workDate",20),typeof p.checkInAt === "number"?integer(p,"checkInAt",1):integer(p,"checkInAtMs",1),p.checkOutAt ?? p.checkOutAtMs ?? null,optionalString(p,"note",500),now,command.commandId,ORG_ID,token));
@@ -460,7 +484,16 @@ async function planGeneric(db:D1Database, command:SyncCommand, identity:SyncIden
   const { passwordHash: _passwordHash, ...withoutLocalPassword } = p;
   const safePayload=kind==="staff" ? withoutLocalPassword : p;
   const actorPayload=kind==="expense" ? {...safePayload,by:identity.name} : safePayload;
-  return {statements,entityType:command.wireEntityType ?? config.entity,entityId:id,branchId,changePayload:{...actorPayload,id,...(config.branch?{branchId}:{}),updatedAt:now}};
+  const changePayload={...actorPayload,id,...(config.branch?{branchId}:{}),updatedAt:now};
+  let journaled=false;
+  if(kind==="staff") {
+    const nextStaffBranches=Array.isArray(p.branchIds)?[...new Set(p.branchIds.filter((x):x is string=>typeof x==="string"&&x.length>0))]:[];
+    const scopes=staffJournalScopes(previousStaffBranches,nextStaffBranches);
+    scopes.deletes.forEach(old=>statements.push(journal(db,command,identity,token,"staff",id,"delete",old,null,now)));
+    scopes.upserts.forEach(target=>statements.push(journal(db,command,identity,token,"staff",id,"upsert",target,changePayload,now)));
+    journaled=true;
+  }
+  return {statements,entityType:command.wireEntityType ?? config.entity,entityId:id,branchId,changePayload,journaled};
 }
 
 async function executeCommand(env:CommandEnv, command:SyncCommand, identity:SyncIdentity):Promise<JsonRecord> {
@@ -484,7 +517,7 @@ async function executeCommand(env:CommandEnv, command:SyncCommand, identity:Sync
   const updatedAt=plan.updatedAt ?? now;
   const organization=env.DB.prepare("INSERT OR IGNORE INTO organizations(id,name,owner_email,created_at,updated_at) VALUES(?,?,?,?,?)").bind(ORG_ID,"Cuciin","tiftazani.khara@gmail.com",now,now);
   const all=[organization,initial,...plan.statements];
-  if(!["stock-batch","derived-noop"].includes(plan.entityType)) all.push(journal(env.DB,command,identity,token,plan.entityType,plan.entityId,operation,plan.branchId,plan.changePayload,updatedAt));
+  if(!plan.journaled && !["stock-batch","derived-noop"].includes(plan.entityType)) all.push(journal(env.DB,command,identity,token,plan.entityType,plan.entityId,operation,plan.branchId,plan.changePayload,updatedAt));
   const result={commandId:command.commandId,accepted:true,replayed:false,entityType:plan.entityType,entityId:plan.entityId,updatedAt};
   all.push(env.DB.prepare(`UPDATE processed_commands SET result_json=? WHERE command_id=? AND organization_id=? AND execution_token=?`).bind(JSON.stringify(result),command.commandId,ORG_ID,token));
   all.push(env.DB.prepare("DELETE FROM sync_command_guards WHERE execution_token=?").bind(token));
@@ -541,8 +574,11 @@ export async function pullChanges(request:Request, env:CommandEnv, identity:Sync
   let query="SELECT sequence,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id FROM sync_changes WHERE organization_id=? AND sequence>?";
   const binds:unknown[]=[ORG_ID,after];
   if(!identity.bootstrap && identity.role!=="Owner") {
-    if(identity.branchIds.length) { query+=` AND (branch_id IS NULL OR branch_id IN (${identity.branchIds.map(()=>"?").join(",")}))`; binds.push(...identity.branchIds); }
-    else query+=" AND branch_id IS NULL";
+    if(identity.branchIds.length) {
+      const slots=identity.branchIds.map(()=>"?").join(",");
+      query+=` AND ((branch_id IN (${slots}) AND (entity_type!='attendance' OR lower(json_extract(payload_json,'$.staffEmail'))=lower(?))) OR (branch_id IS NULL AND entity_type NOT IN ('staff','branch','attendance')) OR (entity_type='branch' AND entity_id IN (${slots})))`;
+      binds.push(...identity.branchIds,identity.email,...identity.branchIds);
+    } else query+=" AND branch_id IS NULL AND entity_type NOT IN ('staff','branch','attendance')";
   }
   query+=" ORDER BY sequence ASC LIMIT ?"; binds.push(limit+1);
   const rows=(await env.DB.prepare(query).bind(...binds).all<{sequence:number;entity_type:string;entity_id:string;operation:string;payload_json:string|null;updated_at:number;branch_id:string|null;actor_email:string|null;command_id:string|null}>()).results;

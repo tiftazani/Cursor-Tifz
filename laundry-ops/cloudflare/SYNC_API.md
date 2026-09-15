@@ -78,13 +78,14 @@ Untuk integrasi baru yang tidak berasal dari proyeksi Snapshot, endpoint yang sa
 }
 ```
 
-Simpan `revision` hanya setelah seluruh perubahan pada halaman berhasil diterapkan ke database lokal. Sebelum menulis snapshot lokal, simpan pending-remote marker; hapus marker setelah snapshot dan cursor selesai. Owner menerima semua cabang. Role lain hanya menerima data global dan cabang yang tercantum di `staff_branches`. `scopeKey` juga tersedia pada header snapshot `X-Cuciin-Scope`; jika nilainya berubah, kosongkan cursor dan lakukan bootstrap ulang agar riwayat cabang yang baru diberikan ikut masuk.
+Simpan `revision` hanya setelah seluruh perubahan pada halaman berhasil diterapkan ke database lokal. Sebelum menulis snapshot lokal, simpan pending-remote marker; hapus marker setelah snapshot dan cursor selesai. Owner menerima semua cabang. Role lain hanya menerima data global yang diperlukan, cabang yang ditugaskan, serta data staf yang memiliki penugasan pada cabang tersebut; daftar staf dan cabang global tidak ikut bocor melalui delta. Perubahan staf dijurnal per cabang sehingga perangkat lama menerima delete saat staf dipindahkan. Absensi non-Owner hanya memuat catatan email akun sendiri. `scopeKey` memuat role, email, dan cabang pada non-Owner; jika nilainya berubah, kosongkan cursor dan lakukan bootstrap ulang agar data sesi sebelumnya tidak tertinggal.
 
 ## Otorisasi server
 
 - Owner dapat mengubah seluruh entity dan cabang.
 - Kasir dapat membuat/mengubah Service, pembayaran, serah terima, pelanggan, stok, biaya, inventory, tutup kas, dan absensinya pada cabang yang ditugaskan.
-- Supervisor dapat mengubah status pengerjaan, stok, inventory, dan absensinya pada cabang yang ditugaskan; tidak dapat membuat Service, membayar, menyerahkan, atau mengubah biaya/kas.
+- Supervisor dapat mengubah status pengerjaan, stok, inventory, dan absensinya pada cabang yang ditugaskan; tidak dapat membuat Service, membayar, menyerahkan, mengubah pelanggan, atau mengubah biaya/kas.
+- Upsert maupun penghapusan absensi non-Owner memeriksa pemilik baris yang sudah tersimpan, sehingga ID absensi orang lain tidak dapat diambil alih dengan payload baru.
 - Penghapusan Service, master, audit, riwayat stok, dan tutup kas dibatasi ke Owner.
 - Pada Nota milik non-Owner, server memaksa kasir dan handler dari Firebase session sehingga payload perangkat tidak dapat menyamar sebagai akun lain.
 

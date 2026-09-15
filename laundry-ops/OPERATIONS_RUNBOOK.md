@@ -9,8 +9,8 @@ Firebase hanya menangani identitas pengguna. Hak role dan cabang tetap diambil d
 ## Sebelum big-bang
 
 1. Jalankan migrasi D1 dan deploy Worker dari commit rilis yang sama.
-2. Isi secret GitHub `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, dan `CUCIIN_BACKUP_PASSPHRASE`; jalankan workflow backup manual. Workflow memverifikasi checksum, dekripsi, impor SQLite, dan integritas hasil secara otomatis.
-3. Aktifkan notifikasi kegagalan GitHub Actions untuk workflow health dan backup.
+2. Siapkan tujuan backup privat di luar repository source publik. Jalankan `cloudflare/scripts/backup-d1.sh`, simpan berkas terenkripsi serta checksum ke tujuan itu, lalu uji dengan `verify-backup.sh`. Workflow GitHub publik hanya boleh dipakai untuk verifikasi manual dan tidak menyimpan artifact database.
+3. Aktifkan notifikasi kegagalan untuk health check dan proses backup privat yang dipilih.
 4. Simpan keystore, signing properties, backup passphrase, dan recovery Firebase/Cloudflare di dua media terenkripsi terpisah.
 5. Buat 20 cabang, tetapkan setiap akun ke cabang yang benar, lalu ganti seluruh password awal.
 6. Rekonsiliasi saldo stok awal, mesin, barang jual, biaya rutin, harga layanan, dan komisi. Owner menandatangani hasil per cabang.
@@ -29,7 +29,7 @@ Firebase hanya menangani identitas pengguna. Hak role dan cabang tetap diambil d
 
 ## Pemantauan harian
 
-- Pastikan workflow health dan backup berhasil.
+- Pastikan workflow health berhasil dan backup privat terbaru dapat diverifikasi.
 - Owner memeriksa Service belum selesai, pembayaran belum lunas, stok di bawah minimum, absensi terbuka, dan selisih tutup kas.
 - Cocokkan jumlah transaksi dan omzet per cabang dengan kasir yang bertugas.
 - Tindak lanjuti outbox yang tertahan atau pesan sinkronisasi gagal sebelum pergantian shift.
@@ -45,5 +45,6 @@ Jika migrasi atau deploy Worker gagal, jangan meneruskan distribusi APK. Pulihka
 - Mengubah password awal, email, penerima reset, dan mengaktifkan MFA untuk Owner.
 - Menentukan kebijakan akses pelanggan lintas cabang dan persetujuan privasi pelanggan.
 - Menyimpan salinan keystore serta passphrase backup di lokasi yang hanya pemilik kuasai.
+- Menetapkan tujuan backup privat, jadwal, retensi, serta menjalankan uji pemulihan pertama sebelum pilot.
 - Menguji WhatsApp ke penerima nyata, haptic, kamera, share lokasi, printer, dan perilaku APK pada setiap tipe HP operasional.
 - Menyetujui saldo awal, komisi, biaya, hak akses karyawan, dan keputusan go/no-go.

@@ -12,13 +12,16 @@ Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `ve
 - Command permanen yang ditolak dipindahkan ke catatan konflik persisten agar satu konflik tidak memblokir seluruh antrean; alasan konflik terlihat pada status sinkronisasi.
 - Nota PDF dengan banyak layanan tidak lagi menumpuk grand total. Token panjang dipecah sesuai lebar sel, filter periode mencakup seluruh menit terakhir, dan riwayat stok lama tersedia melalui pilihan Semua tanggal.
 - Build rilis gagal aman jika Firebase tidak terkonfigurasi. Petunjuk kata sandi awal di layar login dihapus.
-- CI Android menjalankan unit test, lint, dan build; Worker memiliki check tersendiri. Health check produksi dan backup D1 harian terenkripsi beserta restore integrity check ditambahkan.
+- CI Android menjalankan unit test, lint, dan build; Worker memiliki check tersendiri. Health check produksi dan pemeriksaan backup D1 terenkripsi beserta restore integrity check ditambahkan tanpa menyimpan database produksi sebagai artifact di repository publik.
 - Runbook 20 cabang, kebijakan data, dan konteks siap salin untuk beberapa coding agent ditambahkan.
 - Cabang yang sudah mempunyai riwayat Service atau data operasional tidak dapat dihapus agar laporan historis dan foreign key tetap utuh.
 - Penerapan delta cloud memakai penanda pemulihan dua fase. Jika aplikasi berhenti setelah data lokal ditulis tetapi sebelum cursor disimpan, restart menyelesaikan delta yang sama tanpa mengirimkannya kembali sebagai edit lokal.
 - Perubahan cakupan cabang terdeteksi melalui scope sinkronisasi dan memicu bootstrap ulang, sehingga cabang yang baru ditugaskan tidak kehilangan riwayat lama.
 - Versi optimistic concurrency Service selalu naik meskipun dua koreksi terjadi pada milidetik yang sama. Batch berhenti setelah command gagal agar kompensasi stok tidak berjalan bila penghapusan Service ditolak.
 - `syncId` riwayat stok dan audit dibuat unik serta divalidasi server. Bootstrap snapshot lama otomatis ditutup setelah journal command aktif.
+- Kompensasi stok menunggu seluruh command Service terkait selesai. Penulisan snapshot cloud dipindahkan dari thread tampilan dengan penjaga versi agar data lokal yang lebih baru tidak tertimpa.
+- Delta staf dan cabang dibatasi ke penugasan akun; pemindahan staf menghapus data pada perangkat cabang lama. Absensi non-Owner hanya dikirim ke pemiliknya, pemilik baris diverifikasi server, dan Supervisor tidak dapat mengubah pelanggan.
+- Backup memakai PBKDF2 600.000 iterasi; workflow publik hanya memverifikasi backup secara manual dan tidak menyimpan hasil database produksi.
 
 ## 1.8.2 — 14 Sep 2026 (versionCode 14)
 

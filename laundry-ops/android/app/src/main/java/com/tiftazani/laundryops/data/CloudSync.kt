@@ -17,6 +17,7 @@ object CloudSync {
     private const val TAG = "CuciinCloud"
     private const val BATCH_LIMIT = 100
     private val io = Executors.newSingleThreadExecutor()
+    private val disk = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private val poll = Handler(Looper.getMainLooper())
 
@@ -54,6 +55,17 @@ object CloudSync {
         latestSnapshot = snapshot
         hadPersistedLocalData = hadPersistedData
         outbox.state.pendingRemote?.let { prepared ->
+            if (snapshot.updatedAt > prepared.snapshot.updatedAt) {
+                outbox.completePreparedRemote()
+                outbox.restoreLocal(
+                    SyncProjection.entities(snapshot), snapshot.updatedAt,
+                    CuciinStore.session.value?.branchId,
+                    allowedSyncBranches(CuciinStore.session.value, CuciinStore.staff),
+                    actorRole = CuciinStore.session.value?.role,
+                )
+                saveState()
+                return null
+            }
             latestSnapshot = prepared.snapshot
             return prepared.snapshot
         }
@@ -150,6 +162,19 @@ object CloudSync {
     @Synchronized fun acceptRemoteSnapshot(snapshot: Snapshot) {
         latestSnapshot = snapshot
         if (outbox.completePreparedRemote() || outbox.acceptRemote(SyncProjection.entities(snapshot), outbox.state.revision)) saveState()
+    }
+
+    fun persistAppliedRemote(localSnapshot: Snapshot, cloudSnapshot: Snapshot, onDone: (() -> Unit)? = null) {
+        disk.execute {
+            LocalJson.save(localSnapshot)
+            synchronized(this) {
+                if ((latestSnapshot?.updatedAt ?: Long.MIN_VALUE) <= cloudSnapshot.updatedAt) {
+                    latestSnapshot = cloudSnapshot
+                }
+                if (outbox.completePreparedRemote()) saveState()
+            }
+            main.post { onDone?.invoke() }
+        }
     }
 
     @Synchronized fun completeRecoveredRemote(snapshot: Snapshot) {
@@ -341,13 +366,17 @@ object CloudSync {
                         }
                         saveState()
                     }
-                    CuciinStore.applyCloud(canonical)
+                    CuciinStore.applyCloud(canonical) {
+                        result = EndpointResult.OK
+                        completed.countDown()
+                    }
+                    return@post
                 }
                 result = EndpointResult.OK
             }
             completed.countDown()
         }
-        if (!completed.await(10, TimeUnit.SECONDS)) {
+        if (!completed.await(30, TimeUnit.SECONDS)) {
             markOffline("Bootstrap database melewati batas waktu")
             return EndpointResult.FAILED
         }

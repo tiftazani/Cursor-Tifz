@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.intOrNull
@@ -176,7 +177,9 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
         actorRole: Role? = null,
         commandId: () -> String = { UUID.randomUUID().toString() },
     ): List<SyncCommand> {
-        val before = state.shadow.associateBy { it.key }
+        val before = if (state.pendingRemote != null && state.pending.isEmpty()) {
+            state.pendingRemote!!.entities.associateBy { it.key }
+        } else state.shadow.associateBy { it.key }
         val after = entities.associateBy { it.key }
         val created = mutableListOf<SyncCommand>()
 
@@ -260,7 +263,18 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
 
     fun nextBatch(limit: Int): List<SyncCommand> {
         val entities = hashSetOf<String>()
-        return state.pending.filter { entities.add("${it.entityType}\u0000${it.entityId}") }.take(limit)
+        val pendingNotaIds = state.pending.asSequence()
+            .filter { it.entityType == "nota" }
+            .mapTo(hashSetOf()) { it.entityId }
+        return state.pending.asSequence()
+            .filterNot { command ->
+                command.entityType == "stockMove" &&
+                    (command.payload as? JsonObject)?.get("requiresDeletedNota")?.jsonPrimitive?.booleanOrNull == true &&
+                    (command.payload as? JsonObject)?.get("notaId")?.jsonPrimitive?.content in pendingNotaIds
+            }
+            .filter { entities.add("${it.entityType}\u0000${it.entityId}") }
+            .take(limit)
+            .toList()
     }
 
     fun reject(reasons: Map<String, String>, rejectedAt: Long, limit: Int = 200): Int {
@@ -296,7 +310,7 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
         val prepared = state.pendingRemote ?: return false
         state = state.copy(
             revision = maxOf(state.revision, prepared.revision),
-            shadow = prepared.entities,
+            shadow = if (state.pending.isEmpty()) prepared.entities else state.shadow,
             scopeKey = prepared.scopeKey.ifBlank { state.scopeKey },
             pendingRemote = null,
             bootstrapped = true,
