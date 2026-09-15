@@ -62,8 +62,8 @@ android {
         applicationId = "com.tiftazani.laundryops"
         minSdk = 26
         targetSdk = 36
-        versionCode = 17
-        versionName = "1.9.2"
+        versionCode = 18
+        versionName = "1.9.3"
         buildConfigField("String", "CUCIIN_CLOUD_URL", buildConfigString(cloudUrl))
         buildConfigField("String", "CUCIIN_CLOUD_KEY", buildConfigString(cloudKey))
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

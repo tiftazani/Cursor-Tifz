@@ -6,8 +6,8 @@ Dokumen ini adalah titik mulai untuk Hermes, OpenCode, Cursor, Codex, atau revie
 
 - Branch: `codex/cuciin-1-8-1`; PR: `https://github.com/tiftazani/Cursor-Tifz/pull/18`.
 - Commit sumber terakhir saat handover: `9bd026f`.
-- Android: `com.tiftazani.laundryops`, Kotlin + Jetpack Compose, versionName `1.9.2`, versionCode `17`.
-- Kandidat rilis: `releases/1.9.2-candidate/`. Jangan mengubah atau mengganti APK/AAB tanpa build dan checksum baru.
+- Android: `com.tiftazani.laundryops`, Kotlin + Jetpack Compose, versionName `1.9.3`, versionCode `18`.
+- Kandidat rilis: `releases/1.9.3-candidate/`. Jangan mengubah atau mengganti APK/AAB tanpa build dan checksum baru.
 - Worker produksi: `cuciin-api`, D1 `cuciin-db`, Firebase project `cuciin-ops-tiftazani`.
 - Worker yang aktif saat handover: `71310107-4ec5-48f8-aedb-481be9107649`; health memberi HTTP 200 dan database `ready`.
 - Skema D1 produksi: migrasi `0001` sampai `0004_operational_links.sql` sudah diterapkan.
@@ -15,7 +15,7 @@ Dokumen ini adalah titik mulai untuk Hermes, OpenCode, Cursor, Codex, atau revie
 
 Kondisi ini adalah kandidat rilis, bukan keputusan big-bang. Daftar tugas Owner yang masih tersisa ada di `android/RELEASE_READINESS.md` dan `OPERATIONS_RUNBOOK.md`.
 
-Catatan versi 1.9.2: tema tampilan dapat dipilih setiap pengguna di Akun & profil (Ikut sistem, Terang, Gelap, Warna-warni), disimpan per akun di HP masing-masing dan tidak ikut sinkronisasi. Build debug dan rilis sama-sama menyambung ke Worker; alamat cloud dibaca dari environment variable `CUCIIN_CLOUD_URL` atau berkas privat `signing-private/cuciin-cloud.properties`, dan build gagal bila keduanya kosong. Mockup web Cuciin sudah dilepas dari project Vercel `cuan-tif` dan dijalankan lokal lewat `mockup/start.sh`.
+Catatan versi 1.9.3: pemulihan kata sandi memakai domain web.app dan bahasa Indonesia, pesan di aplikasi menjelaskan tautan yang terpotong. Catatan versi 1.9.2: tema tampilan dapat dipilih setiap pengguna di Akun & profil (Ikut sistem, Terang, Gelap, Warna-warni), disimpan per akun di HP masing-masing dan tidak ikut sinkronisasi. Build debug dan rilis sama-sama menyambung ke Worker; alamat cloud dibaca dari environment variable `CUCIIN_CLOUD_URL` atau berkas privat `signing-private/cuciin-cloud.properties`, dan build gagal bila keduanya kosong. Mockup web Cuciin sudah dilepas dari project Vercel `cuan-tif` dan dijalankan lokal lewat `mockup/start.sh`.
 
 ## Peta sistem
 

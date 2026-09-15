@@ -2,6 +2,12 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.9.3 — 15 Sep 2026 (versionCode 18)
+
+- Pesan di dialog reset kata sandi menjelaskan bahwa tautan harus dibuka dari email yang sama, dan memberi langkah bila alamatnya terpotong oleh aplikasi email atau pemindai tautan. Sebelumnya pengguna hanya diberi tahu tautan sudah dikirim.
+- Halaman reset kata sandi Firebase kini memakai domain `cuciin-ops-tiftazani.web.app`, bukan `firebaseapp.com`, dan tampil berbahasa Indonesia. Email reset juga berbahasa Indonesia mengikuti locale project.
+- Tautan reset wajib membawa `mode`, `oobCode`, `apiKey`, dan `lang`. Bila salah satu hilang, Firebase menampilkan "The selected page mode is invalid." sebelum memproses kode.
+
 ## 1.9.2 — 15 Sep 2026 (versionCode 17)
 
 - Tema tampilan bisa dipilih di Akun & profil untuk semua peran: Ikut sistem, Terang, Gelap, dan Warna-warni. Pilihan disimpan per akun di HP itu saja, terpisah dari data operasional dan sinkronisasi.

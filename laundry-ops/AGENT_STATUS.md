@@ -13,7 +13,7 @@ Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **
 | Branch | `codex/cuciin-1-8-1` | `git status -sb` |
 | HEAD | `67903dc` — sama dengan `origin/codex/cuciin-1-8-1` (0 ahead / 0 behind) | `git rev-list --left-right --count HEAD...origin/...` |
 | PR | #18, OPEN, mergeable, semua check hijau | `gh pr view 18` |
-| Android | **1.9.2 (versionCode 17)** | `app/build.gradle.kts` |
+| Android | **1.9.3 (versionCode 18)** | `app/build.gradle.kts` |
 | Worker produksi | versi `71310107-4ec5-48f8-aedb-481be9107649` (15:10 WIB) | `wrangler deployments list --name cuciin-api` |
 | Skema D1 produksi | migrasi `0003` dan `0004` sudah diterapkan | `wrangler d1 execute cuciin-db --remote --command "SELECT name FROM d1_migrations"` |
 | Health produksi | `ok`, database `ready` | `curl .../health` |
@@ -31,6 +31,8 @@ Working tree bersih. Tidak ada pekerjaan setengah jadi yang menggantung.
 5. Hermes menyiapkan kandidat `releases/1.9.2-candidate/` dan menyegarkan `RELEASE_READINESS.md`.
 6. Ketahuan build debug tidak pernah memuat alamat cloud. Diperbaiki di `46154d1`: konfigurasi dibaca dari file privat di luar repo, dan build gagal bila alamat kosong.
 7. Seluruh jejak Cuciin dihapus dari project Vercel `cuan-yuk-guys` (`f21776a`), karena Cuciin menumpang di sana.
+8. PR #18 di-merge ke `main` (`47cfd8d`). Halaman Cuciin di Vercel mati: `/cuciin/cuciin.apk` kini 404.
+9. Owner melaporkan tautan reset kata sandi menampilkan "The selected page mode is invalid.". Penyebabnya tautan kehilangan parameter `apiKey` di jalan. Host tautan dipindah ke `web.app`, locale project diubah ke `id`, pesan di aplikasi diperjelas, dan kandidat 1.9.3 disiapkan.
 
 ## 3. Status delapan item permintaan 15 Sep
 
