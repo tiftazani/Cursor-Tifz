@@ -5,25 +5,27 @@ Dokumen ini adalah titik mulai untuk Hermes, OpenCode, Cursor, Codex, atau revie
 ## Status yang sudah diverifikasi
 
 - Branch: `codex/cuciin-1-8-1`; PR: `https://github.com/tiftazani/Cursor-Tifz/pull/18`.
-- Commit sumber terakhir saat handover: `9bd026f`.
-- Android: `com.tiftazani.laundryops`, Kotlin + Jetpack Compose, versionName `1.9.3`, versionCode `18`.
-- Kandidat rilis: `releases/1.9.3-candidate/`. Jangan mengubah atau mengganti APK/AAB tanpa build dan checksum baru.
-- Worker produksi: `cuciin-api`, D1 `cuciin-db`, Firebase project `cuciin-ops-tiftazani`.
-- Worker yang aktif saat handover: `71310107-4ec5-48f8-aedb-481be9107649`; health memberi HTTP 200 dan database `ready`.
+- Commit sumber terakhir saat handover: `2f47351` (lihat `AGENT_STATUS.md` untuk pekerjaan 1.10.0).
+- Android: `com.cuciin.laundryops`, Kotlin + Jetpack Compose, versionName `1.10.0`, versionCode `19`.
+- Kandidat rilis: `releases/1.10.0-candidate/`. Jangan mengubah atau mengganti APK/AAB tanpa build dan checksum baru.
+- Worker produksi: `cuciin-api`, D1 `cuciin-db`, Firebase project `cuciin-ops` (project lama `cuciin-ops-tiftazani` masih diterima selama masa peralihan).
+- Worker yang aktif saat handover: `5a2741cc-96b8-423a-8de1-8b2e1ea66f35`; health memberi HTTP 200 dan database `ready`.
 - Skema D1 produksi: migrasi `0001` sampai `0004_operational_links.sql` sudah diterapkan.
-- Validasi terakhir: 47 unit test Android debug + 47 release, lint kedua varian tanpa error, APK/AAB release, serta 29 test Worker lulus. PR bersih dan seluruh check hijau.
+- Validasi terakhir: 47 unit test Android debug + 47 release, lint kedua varian tanpa error, APK/AAB release, serta 35 test Worker lulus.
 
 Kondisi ini adalah kandidat rilis, bukan keputusan big-bang. Daftar tugas Owner yang masih tersisa ada di `android/RELEASE_READINESS.md` dan `OPERATIONS_RUNBOOK.md`.
 
-Catatan versi 1.9.3: pemulihan kata sandi memakai domain web.app dan bahasa Indonesia, pesan di aplikasi menjelaskan tautan yang terpotong. Catatan versi 1.9.2: tema tampilan dapat dipilih setiap pengguna di Akun & profil (Ikut sistem, Terang, Gelap, Warna-warni), disimpan per akun di HP masing-masing dan tidak ikut sinkronisasi. Build debug dan rilis sama-sama menyambung ke Worker; alamat cloud dibaca dari environment variable `CUCIIN_CLOUD_URL` atau berkas privat `signing-private/cuciin-cloud.properties`, dan build gagal bila keduanya kosong. Mockup web Cuciin sudah dilepas dari project Vercel `cuan-tif` dan dijalankan lokal lewat `mockup/start.sh`.
+Catatan versi 1.10.0: paket aplikasi berpindah ke `com.cuciin.laundryops` dan Firebase berpindah ke project `cuciin-ops`. **Versi baru tidak menimpa versi lama** karena Android menganggapnya aplikasi berbeda, jadi APK lama harus dicopot manual dari tiap perangkat. Worker menerima ID token dari dua project selama peralihan (`FIREBASE_PROJECT_IDS`), supaya HP yang belum diperbarui tetap bekerja. Jangan hapus project lama dari daftar itu sebelum seluruh perangkat pindah. Data operasional di D1 tidak terpengaruh.
+
+Catatan versi 1.9.3: pemulihan kata sandi memakai domain `cuciin-ops.web.app` dan bahasa Indonesia, pesan di aplikasi menjelaskan tautan yang terpotong. Catatan versi 1.9.2: tema tampilan dapat dipilih setiap pengguna di Akun & profil (Ikut sistem, Terang, Gelap, Warna-warni), disimpan per akun di HP masing-masing dan tidak ikut sinkronisasi. Build debug dan rilis sama-sama menyambung ke Worker; alamat cloud dibaca dari environment variable `CUCIIN_CLOUD_URL` atau berkas privat `signing-private/cuciin-cloud.properties`, dan build gagal bila keduanya kosong. Mockup web Cuciin sudah dilepas dari project Vercel `cuan-tif` dan dijalankan lokal lewat `mockup/start.sh`.
 
 ## Peta sistem
 
 | Bagian | Lokasi | Tanggung jawab |
 |---|---|---|
-| Aplikasi Android | `android/app/src/main/java/com/tiftazani/laundryops/` | UI Compose, aturan operasional lokal, ekspor, outbox |
-| UI | `android/app/src/main/java/com/tiftazani/laundryops/ui/` | navigasi, role-based UI, formulir, laporan, PDF/WA |
-| Penyimpanan dan sync Android | `android/app/src/main/java/com/tiftazani/laundryops/data/` | `CuciinStore`, local snapshot, `CloudSync`, `SyncProtocol` |
+| Aplikasi Android | `android/app/src/main/java/com/cuciin/laundryops/` | UI Compose, aturan operasional lokal, ekspor, outbox |
+| UI | `android/app/src/main/java/com/cuciin/laundryops/ui/` | navigasi, role-based UI, formulir, laporan, PDF/WA |
+| Penyimpanan dan sync Android | `android/app/src/main/java/com/cuciin/laundryops/data/` | `CuciinStore`, local snapshot, `CloudSync`, `SyncProtocol` |
 | Worker | `cloudflare/src/` | Firebase token, role/cabang, command, D1, delta, laporan |
 | Skema D1 | `cloudflare/migrations/` | tabel, index, trigger stok, journal command |
 | Kontrak API | `cloudflare/SYNC_API.md` | endpoint, payload, retry, otorisasi |
@@ -61,6 +63,8 @@ Firebase hanya menangani identitas. D1 adalah sumber data operasional pusat. Fot
 | Kasir | Service, pelanggan, stok, kas, biaya, inventory, dan absensi sendiri pada cabang tugas |
 | SPV | Antrian/status pengerjaan, stok, inventory, dan absensi sendiri pada cabang tugas; tanpa Service, pembayaran, WA, pelanggan, biaya, dan kas |
 
+Akun operasional di project Firebase `cuciin-ops`: dua Owner, tiga Kasir, dan dua Supervisor. Kata sandi awal `test1234` dan wajib diubah dari Profil sebelum data nyata dipakai.
+
 ## Build dan validasi
 
 Jalankan dari sumber yang bersih dan jangan mencetak nilai signing properties. Alamat cloud wajib tersedia, kalau tidak build Android berhenti dengan pesan yang jelas.
@@ -73,7 +77,7 @@ npm run check
 cd ../android
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
-./gradlew testDebugUnitTest lintDebug assembleDebug
+./gradlew testDebugUnitTest testReleaseUnitTest lintDebug lintRelease assembleDebug
 ```
 
 Di mesin Owner, `local.properties` sudah memuat `sdk.dir` dan berkas `signing-private/cuciin-cloud.properties` sudah menyediakan alamat cloud.

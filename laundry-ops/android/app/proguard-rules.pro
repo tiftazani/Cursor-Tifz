@@ -1,5 +1,5 @@
 -keepattributes SourceFile,LineNumberTable
--keep class com.tiftazani.laundryops.** { *; }
+-keep class com.cuciin.laundryops.** { *; }
 
 # Do not retain diagnostic messages containing operational data in release builds.
 -assumenosideeffects class android.util.Log {

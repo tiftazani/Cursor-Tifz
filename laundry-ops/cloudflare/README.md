@@ -6,7 +6,7 @@ Endpoint produksi saat ini: `https://cuciin-api.tiftazani-cuciin.workers.dev/api
 
 ## Pengamanan
 
-- Produksi sebaiknya memakai Firebase Authentication. Worker memverifikasi ID token Firebase dengan kunci publik Google dan `FIREBASE_PROJECT_ID`.
+- Produksi sebaiknya memakai Firebase Authentication. Worker memverifikasi ID token Firebase dengan kunci publik Google dan daftar project di `FIREBASE_PROJECT_IDS` (dipisah koma). Selama masa peralihan identitas aplikasi, dua project diterima sekaligus supaya HP yang belum diperbarui tetap dapat bekerja.
 - `SYNC_SECRET` tersedia sebagai jalur bootstrap tertutup. Secret dipasang melalui `wrangler secret put`, tidak ditulis ke repository. Jangan menganggap nilai di APK sebagai rahasia permanen.
 - Semua query memakai parameter binding, payload dibatasi 4 MB, respons tidak boleh di-cache, dan kata sandi tidak memiliki kolom di D1.
 - Staf ditautkan ke Firebase UID pada login pertama. UID tetap sama saat alamat email akun diperbarui.
@@ -20,7 +20,7 @@ Endpoint produksi saat ini: `https://cuciin-api.tiftazani-cuciin.workers.dev/api
 3. Buat D1: `npx wrangler d1 create cuciin-db`.
 4. Isi `database_id` pada `wrangler.toml` dari hasil langkah 3.
 5. Pasang secret bootstrap dengan `npx wrangler secret put SYNC_SECRET`.
-6. Isi `FIREBASE_PROJECT_ID` sebagai environment variable Worker.
+6. Isi `FIREBASE_PROJECT_IDS` sebagai environment variable Worker (satu project atau beberapa dipisah koma).
 7. Jalankan migrasi: `npm run db:remote`.
 8. Deploy: `npm run deploy`.
 9. Build Android dengan environment `CUCIIN_CLOUD_URL=https://<worker>.workers.dev/api/cuciin`. Jangan memasukkan `SYNC_SECRET` atau `CUCIIN_CLOUD_KEY` ke APK produksi; aplikasi memakai Firebase ID token.
@@ -31,7 +31,7 @@ Resource aktif saat ini:
 
 - Worker: `cuciin-api`
 - D1: `cuciin-db` (`7152b13e-f23a-4576-a6bc-f38d67ac2146`)
-- Firebase project: `cuciin-ops-tiftazani`
+- Firebase project: `cuciin-ops` (project lama `cuciin-ops-tiftazani` masih diterima selama masa peralihan)
 
 Gunakan satu proyek produksi dan satu proyek staging terpisah. Aktifkan export/backup terjadwal sebelum big bang 20 cabang. Uji pemulihan, transaksi bersamaan, pergantian perangkat, dan pencabutan akses karyawan sebelum hari operasional.
 

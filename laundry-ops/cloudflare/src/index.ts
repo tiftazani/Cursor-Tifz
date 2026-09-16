@@ -3,8 +3,25 @@ import { pullChanges, pushCommands, syncScopeKey } from "./command-sync.ts";
 interface Env {
   DB: D1Database;
   SYNC_SECRET?: string;
+  /** Satu project ID (format lama) atau beberapa dipisah koma. */
   FIREBASE_PROJECT_ID?: string;
+  FIREBASE_PROJECT_IDS?: string;
   ENVIRONMENT: string;
+}
+
+/**
+ * Daftar project Firebase yang tokennya diterima.
+ *
+ * Dipisah koma supaya masa peralihan identitas aplikasi tidak memutus perangkat
+ * yang masih memakai project lama. `FIREBASE_PROJECT_ID` tetap dibaca agar
+ * konfigurasi lama tidak langsung mati.
+ */
+export function firebaseProjectIds(env: { FIREBASE_PROJECT_ID?: string; FIREBASE_PROJECT_IDS?: string }): string[] {
+  const raw = env.FIREBASE_PROJECT_IDS ?? env.FIREBASE_PROJECT_ID ?? "";
+  return raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -60,8 +77,13 @@ type Identity = { uid?: string; email: string; name: string; role: "Owner" | "Ka
 
 async function authorize(request: Request, env: Env): Promise<Identity | null> {
   const bearer = request.headers.get("authorization")?.match(/^Bearer (.+)$/i)?.[1];
-  if (bearer && env.FIREBASE_PROJECT_ID) {
-    const firebaseUser = await firebaseIdentity(bearer, env.FIREBASE_PROJECT_ID);
+  const projectIds = firebaseProjectIds(env);
+  if (bearer && projectIds.length > 0) {
+    let firebaseUser: { sub: string; email: string } | null = null;
+    for (const projectId of projectIds) {
+      firebaseUser = await firebaseIdentity(bearer, projectId);
+      if (firebaseUser) break;
+    }
     if (firebaseUser?.email) {
       let staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE firebase_uid=? AND approved=1 AND active=1").bind(firebaseUser.sub).first<{email:string;name:string;role:string}>();
       if (!staff) {

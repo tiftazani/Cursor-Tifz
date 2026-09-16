@@ -12,7 +12,10 @@ migrations_dir = "migrations"
 
 [vars]
 ENVIRONMENT = "production"
-FIREBASE_PROJECT_ID = "cuciin-ops-tiftazani"
+# Masa peralihan identitas aplikasi: APK lama memakai project lama, APK baru
+# (paket com.cuciin.laundryops) memakai project baru. Keduanya diterima sampai
+# seluruh perangkat berpindah, lalu project lama boleh dihapus dari daftar ini.
+FIREBASE_PROJECT_IDS = "cuciin-ops,cuciin-ops-tiftazani"
 
 [observability]
 enabled = true

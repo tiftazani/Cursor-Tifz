@@ -1,6 +1,6 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 15 September 2026, 19:05 WIB (oleh Hermes).
+Terakhir diperbarui: 16 September 2026, 10:35 WIB (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
@@ -11,121 +11,116 @@ Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **
 |---|---|---|
 | Repo lokal | `/Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz` | satu-satunya clone; `~/Cursor-Tifz` bukan clone repo ini |
 | Branch | `codex/cuciin-1-8-1` | `git status -sb` |
-| HEAD | `67903dc` — sama dengan `origin/codex/cuciin-1-8-1` (0 ahead / 0 behind) | `git rev-list --left-right --count HEAD...origin/...` |
-| PR | #18, OPEN, mergeable, semua check hijau | `gh pr view 18` |
-| Android | **1.9.3 (versionCode 18)** | `app/build.gradle.kts` |
-| Worker produksi | versi `71310107-4ec5-48f8-aedb-481be9107649` (15:10 WIB) | `wrangler deployments list --name cuciin-api` |
-| Skema D1 produksi | migrasi `0003` dan `0004` sudah diterapkan | `wrangler d1 execute cuciin-db --remote --command "SELECT name FROM d1_migrations"` |
+| Android | **1.10.0 (versionCode 19)** | `app/build.gradle.kts` |
+| Paket aplikasi | `com.cuciin.laundryops` (+ `.debug`) | `app/build.gradle.kts` |
+| Firebase project | **`cuciin-ops`** (lama: `cuciin-ops-tiftazani`) | `firebase/README.md` |
+| Worker produksi | versi `5a2741cc-96b8-423a-8de1-8b2e1ea66f35` | `wrangler deployments list` |
 | Health produksi | `ok`, database `ready` | `curl .../health` |
-| Test Worker | 29 lulus (20 lama + 9 baru untuk accessPolicy dan whatsappTemplate) | `cd cloudflare && npm run check` |
-| Konfigurasi cloud build | `signing-private/cuciin-cloud.properties` (di luar repo) | `app/build.gradle.kts` |
+| Test Worker | 35 lulus | `cd cloudflare && npm run check` |
+| Test Android | 94 lulus (47 debug + 47 rilis), lint 0 error | `./gradlew testDebugUnitTest testReleaseUnitTest lintDebug` |
+| Kandidat rilis | `releases/1.10.0-candidate/` | folder + `SHA256SUMS` |
 
-Working tree bersih. Tidak ada pekerjaan setengah jadi yang menggantung.
+## 2. Perpindahan identitas aplikasi (16 September 2026)
 
-## 2. Riwayat singkat 15 September
+Ini perubahan besar yang mengubah banyak hal sekaligus. Ringkasannya:
 
-1. Codex berhenti 12:32 karena kuota, meninggalkan perubahan belum di-commit dan 5 error compile di `ui/MasterScreens.kt`.
-2. Hermes mencatat kondisi itu, mem-backup patch-nya, dan menahan diri (tidak menyentuh kode).
-3. Codex lanjut setelah kuota terbuka, menyelesaikan 8 item permintaan 12:24, dan commit `a801f0b` pukul 15:11 lalu push.
-4. Hermes menambah **fitur tema** (1.9.2): Terang, Gelap, Warna-warni, dan Ikut sistem, dapat dipilih semua peran di Akun & profil. Commit `72b9dbb`.
-5. Hermes menyiapkan kandidat `releases/1.9.2-candidate/` dan menyegarkan `RELEASE_READINESS.md`.
-6. Ketahuan build debug tidak pernah memuat alamat cloud. Diperbaiki di `46154d1`: konfigurasi dibaca dari file privat di luar repo, dan build gagal bila alamat kosong.
-7. Seluruh jejak Cuciin dihapus dari project Vercel `cuan-yuk-guys` (`f21776a`), karena Cuciin menumpang di sana.
-8. PR #18 di-merge ke `main` (`47cfd8d`). Halaman Cuciin di Vercel mati: `/cuciin/cuciin.apk` kini 404.
-9. Owner melaporkan tautan reset kata sandi menampilkan "The selected page mode is invalid.". Penyebabnya tautan kehilangan parameter `apiKey` di jalan. Host tautan dipindah ke `web.app`, locale project diubah ke `id`, pesan di aplikasi diperjelas, dan kandidat 1.9.3 disiapkan.
+| Sebelum | Sesudah |
+|---|---|
+| Paket `com.tiftazani.laundryops` | Paket `com.cuciin.laundryops` |
+| Firebase project `cuciin-ops-tiftazani` | Firebase project `cuciin-ops` |
+| Domain reset `cuciin-ops-tiftazani.web.app` | Domain reset `cuciin-ops.web.app` |
+| Nama Owner `Tiftazani Khara` | Nama Owner `Cuciin` |
+| Worker menerima 1 project | Worker menerima **2 project** selama peralihan |
 
-## 3. Status delapan item permintaan 15 Sep
+Yang **tidak** berubah: Worker URL, D1, skema database, signing key, dan seluruh data operasional.
 
-| # | Item | Status | Bukti |
-|---|---|---|---|
-| 1 | Retail ↔ Produk stok saling terhubung | Selesai | `services.product_id` di D1, `productKey` di model, `linkedProduct()`, pengurangan stok saat Nota dibuat dan dikoreksi |
-| 2 | Akun & Profil: info cabang benar | Selesai | `ProfilScreen` memakai penugasan pengguna, bukan cabang tampilan Owner |
-| 3 | Inventory digabung ke Produk stok, stok multi-cabang | Selesai | Produk stok menyatukan barang jual + bahan habis pakai; mesin/aset pindah ke menu "Aset & mesin cabang"; `addProduct` menerima `Set<String>` cabang |
-| 4 | Hanya Owner boleh koreksi Service setelah nota terkirim | Selesai | Ditegakkan di store Android **dan** di Worker |
-| 5 | Foto absensi kamera + cap tanggal/waktu di gambar | Selesai | `data/AttendancePhotos.kt`, `AttendanceScreen`, `file_paths.xml`; path foto tidak pernah dikirim ke server |
-| 6 | User access control (modul + fungsi) | Selesai | `OwnerSettingsScreen.kt`; tabel `access_policies`; Worker menegakkan policy pada command (403 "Akses fungsi ini dibatasi oleh Owner") |
-| 7 | Template WhatsApp (pembuka, isi, penutup) | Selesai | `OwnerSettingsScreen.kt`; tabel `whatsapp_templates`; `ReceiptText.format(…, template)` |
+Konsekuensi yang wajib diketahui siapa pun yang menyentuh repo ini:
 
-## 4. Yang masih kurang (bukan bug, tapi belum lengkap)
+1. **APK baru tidak menimpa APK lama.** Paket berbeda berarti aplikasi berbeda di mata Android. Versi lama tetap terpasang dan harus dicopot manual.
+2. **Data lokal tidak berpindah.** Foto absensi, cache, dan outbox versi lama tetap di aplikasi lama.
+3. **Jangan hapus project lama dari `FIREBASE_PROJECT_IDS`** sampai seluruh perangkat 20 cabang sudah pindah. Menghapusnya terlalu cepat akan memutus HP yang belum diperbarui.
+4. **Konfigurasi Firebase API punya quirk.** Endpoint `config` selalu mengembalikan app pertama untuk semua permintaan, jadi konfigurasi app debug disusun manual dari `mobilesdk_app_id` yang sebenarnya. Rinciannya di `firebase/README.md`.
 
-1. **Sisi Vercel belum dibersihkan.** Repo sudah tidak punya route Cuciin, tapi project `cuan-tif` dan alias/custom domain-nya masih perlu ditinjau dari dashboard Vercel. Dijadwalkan Owner, belum dikerjakan.
-2. **PR #18 sedang menunggu merge.** Kontrak, test, dan dokumen sudah lengkap di cabang; `main` belum memuat 1.9.2 sampai PR di-merge.
-
-Yang sudah ditutup 15 Sep malam: kontrak `accessPolicy`/`whatsappTemplate` di `SYNC_API.md`, 9 test Worker baru, dan `AGENT_HANDOVER.md` yang kini menyebut 1.9.2 / versionCode 17 / commit `9bd026f`.
-
-## 5. Klaim file (berlaku sampai handover berikutnya)
+## 3. Klaim file (berlaku sampai handover berikutnya)
 
 Aturan: satu file satu pemilik. Kalau butuh mengubah file milik agent lain, minta lewat chat/PR, jangan edit langsung.
 
-### Bebas — tidak ada yang memegang
-
-Semua file kode dalam keadaan bersih dan ter-commit. Siapa pun boleh mengambil area berikut dengan mencatatnya di sini lebih dulu.
-
-### Pegangan Hermes (bila tugas server dilanjutkan)
+### Pegangan Hermes (selesai 16 Sep 10:35, sudah di-commit lokal)
 
 ```
-laundry-ops/cloudflare/SYNC_API.md
-laundry-ops/cloudflare/migrations/0005_*.sql          (bila perlu)
-laundry-ops/cloudflare/tests/*.mjs
-laundry-ops/AGENT_STATUS.md                            (dokumen ini)
-```
-
-### Pegangan Codex (bila tugas UI/rilis dilanjutkan)
-
-```
+laundry-ops/cloudflare/src/index.ts              (FIREBASE_PROJECT_IDS + firebaseProjectIds)
+laundry-ops/cloudflare/wrangler.toml             (dua project selama peralihan)
+laundry-ops/cloudflare/tests/firebase-project-migration.test.mjs   (baru, 6 test)
+laundry-ops/cloudflare/README.md
+laundry-ops/firebase/README.md
+laundry-ops/firebase/.firebaserc
+laundry-ops/android/app/build.gradle.kts         (paket, versi 1.10.0)
+laundry-ops/android/app/proguard-rules.pro
+laundry-ops/android/app/google-services.json.example
 laundry-ops/android/CHANGELOG.md
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/VersionHistory.kt
 laundry-ops/android/RELEASE_READINESS.md
-laundry-ops/releases/
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/CuciinStore.kt   (nama Owner)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/VersionHistory.kt
+laundry-ops/releases/1.10.0-candidate/           (baru)
+laundry-ops/releases/cuciin-release.apk
+laundry-ops/releases/cuciin-debug.apk
+laundry-ops/README.md
+laundry-ops/AGENT_STATUS.md                      (dokumen ini)
 ```
 
-Catatan 15 Sep 19:05: **pekerjaan Hermes selesai dan sudah di-push** (`f21776a`). Android 1.9.2 / versionCode 17, kandidat rilis lengkap, jejak Vercel dihapus. Tidak ada pekerjaan setengah jadi di working tree. File yang disentuh Hermes:
+Skrip migrasi dan backup ada di luar repo: `~/Documents/ChatGPT/Laundry/cuciin-theme-mockup/` dan `~/Documents/ChatGPT/Laundry/firebase-migration/`.
+
+### Pegangan Codex (area UI/rilis)
 
 ```
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/theme/Theme.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/theme/ThemePrefs.kt   (baru)
-laundry-ops/android/app/src/main/res/values/colors.xml
-laundry-ops/android/app/src/main/res/values/themes.xml
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/MoreScreens.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/AuthScreens.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/CuciinNav.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/OpsScreens.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/components/Widgets.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/MainActivity.kt
-laundry-ops/android/CHANGELOG.md
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/VersionHistory.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/**
+laundry-ops/android/app/src/test/java/com/cuciin/laundryops/ui/**
+laundry-ops/android/app/src/main/res/**
 ```
 
-Mockup, skrip kontras, dan bukti tangkapan layar ada di `~/Documents/ChatGPT/Laundry/cuciin-theme-mockup/`.
-
-Sebelum menyentuh file di atas, jalankan `git diff` dan `git log --oneline -5` lebih dulu: versi, changelog, dan `VersionHistory` sudah naik ke 1.9.2, dan berkas kandidat rilis sudah diperbarui. APK kandidat lama (1.5.1 sampai 1.7.1) **sengaja dibiarkan** sebagai arsip meski masih memuat alamat Vercel lama; jangan hapus tanpa izin Owner.
+Hermes tidak menyentuh area itu pada pekerjaan ini kecuali dua baris nama Owner di `CuciinStore.kt` dan `VersionHistory.kt`.
 
 ### Pegangan bersama — jangan disunting tanpa bicara dulu
 
 ```
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/CuciinStore.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/Models.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/SyncProtocol.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/ReceiptText.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/CuciinStore.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/Models.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/SyncProtocol.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/ReceiptText.kt
 laundry-ops/cloudflare/src/command-sync.ts
 laundry-ops/cloudflare/src/index.ts
+laundry-ops/cloudflare/SYNC_API.md
 ```
 
 File-file itu menyimpan aturan uang, stok, komisi, otorisasi, dan protokol sinkronisasi. Perubahan di sana wajib lewat review dan test, bukan suntingan cepat.
 
-## 6. Urutan kerja yang disarankan
+## 4. Yang masih kurang
 
-1. Merge PR #18 ke `main` supaya `main` memuat 1.9.2 (keputusan Owner).
-2. Tinjau project Vercel `cuan-tif` dari dashboard (alias, custom domain, riwayat deploy).
+1. **Seluruh perangkat 20 cabang belum pindah ke paket baru.** Setelah semua pindah, `cuciin-ops-tiftazani` boleh dihapus dari `FIREBASE_PROJECT_IDS` lalu project lama dinonaktifkan.
+2. **Nama "tiftazani" masih ada di tiga tempat yang terkunci eksternal** dan tidak bisa diubah tanpa biaya besar:
+   - URL Worker `cuciin-api.tiftazani-cuciin.workers.dev` (subdomain akun Cloudflare)
+   - Repo GitHub `tiftazani/Cursor-Tifz`
+   - Email Owner `tiftazani.khara@gmail.com` (dipertahankan atas permintaan Owner)
+3. **Isi template email reset** masih bawaan Firebase (`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`).
+4. **PR #18 dan #19** masih terbuka; `main` belum memuat 1.9.2 sampai 1.10.0.
+5. **Kata sandi awal `test1234`** wajib diubah semua akun sebelum data nyata dipakai.
 
-## 7. Lingkungan build di mesin ini
+## 5. Urutan kerja yang disarankan
+
+1. Merge PR ke `main` supaya `main` memuat 1.10.0 (keputusan Owner).
+2. Pilot 1.10.0 di dua perangkat, cocokkan laporan dengan server.
+3. Setelah pilot bersih, distribusikan ke 20 cabang dan copot APK lama dari tiap perangkat.
+4. Setelah seluruh perangkat melapor versi 1.10.0, hapus project lama dari `FIREBASE_PROJECT_IDS`, deploy Worker, lalu nonaktifkan project Firebase lama.
+
+## 6. Lingkungan build di mesin ini
 
 ```sh
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+export CUCIIN_SIGNING_PROPERTIES=/Users/tiftazani/Documents/ChatGPT/Laundry/signing-private/cuciin-signing.properties
 cd laundry-ops/android && ./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
 
-`android/local.properties` sudah diisi `sdk.dir=/opt/homebrew/share/android-commandlinetools` (di-gitignore, jangan di-commit). Node 26.7.0 dan npm 11.19.0 tersedia untuk `npm run check`. Wrangler 4.131.1 sudah terautentikasi sebagai `tiftazani.khara@gmail.com`.
+`android/local.properties` sudah diisi `sdk.dir=/opt/homebrew/share/android-commandlinetools` (di-gitignore, jangan di-commit). Node 26.7.0 dan npm 11.19.0 tersedia untuk `npm run check`. Wrangler 4.131.1 sudah terautentikasi.
 
 Catatan: macOS di mesin ini tidak punya `timeout`/`gtimeout`. Jangan pakai perintah itu untuk membatasi proses panjang.

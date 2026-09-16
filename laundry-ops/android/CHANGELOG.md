@@ -2,6 +2,14 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.0 — 16 Sep 2026 (versionCode 19)
+
+- Identitas aplikasi berpindah ke paket `com.cuciin.laundryops`. Android menganggap paket ini aplikasi berbeda, jadi versi lama tetap terpasang dan harus dicopot manual setelah versi ini masuk. Data lokal lama (foto absensi, cache, outbox) tidak berpindah; data operasional di server tidak terpengaruh.
+- Firebase Authentication berpindah dari project `cuciin-ops-tiftazani` ke `cuciin-ops`. Kedua app Android (`com.cuciin.laundryops` dan `.debug`) terdaftar di project baru, sidik jari sertifikat rilis dan debug sudah ditambahkan.
+- Worker menerima ID token dari **kedua** project selama masa peralihan (`FIREBASE_PROJECT_IDS`). HP yang belum diperbarui tetap dapat bekerja seperti biasa, sehingga tidak ada pemutusan serentak di 20 cabang.
+- Halaman reset kata sandi memakai domain `cuciin-ops.web.app`, locale project `id`, dan `callbackUri` diarahkan ke domain itu.
+- Nama Owner di aplikasi dan di seluruh data server menjadi `Cuciin`; alamat email Owner tidak diubah.
+
 ## 1.9.3 — 15 Sep 2026 (versionCode 18)
 
 - Pesan di dialog reset kata sandi menjelaskan bahwa tautan harus dibuka dari email yang sama, dan memberi langkah bila alamatnya terpotong oleh aplikasi email atau pemindai tautan. Sebelumnya pengguna hanya diberi tahu tautan sudah dikirim.

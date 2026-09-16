@@ -56,14 +56,14 @@ tasks.configureEach {
 }
 
 android {
-    namespace = "com.tiftazani.laundryops"
+    namespace = "com.cuciin.laundryops"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.tiftazani.laundryops"
+        applicationId = "com.cuciin.laundryops"
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.9.3"
+        versionCode = 19
+        versionName = "1.10.0"
         buildConfigField("String", "CUCIIN_CLOUD_URL", buildConfigString(cloudUrl))
         buildConfigField("String", "CUCIIN_CLOUD_KEY", buildConfigString(cloudKey))
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
