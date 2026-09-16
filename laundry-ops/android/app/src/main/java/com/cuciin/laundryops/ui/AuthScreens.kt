@@ -129,7 +129,7 @@ internal fun Field(
 internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val palette = LocalCuciinPalette.current
-    var email by remember { mutableStateOf(if (BuildConfig.DEBUG) store.ownerEmail else "") }
+    var email by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var loginHelp by remember { mutableStateOf(false) }
@@ -153,85 +153,63 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
             modifier = Modifier.fillMaxSize(),
         )
         Box(Modifier.fillMaxSize().background(Color(0xA80D164B)))
+        // Satu layar penuh tanpa gulir: seluruh isi dibagi ruang, bukan ditumpuk.
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(ui.pad),
+            Modifier.fillMaxSize().padding(horizontal = ui.pad, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Column(Modifier.widthIn(max = 460.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    BrandMark()
-                    Column {
-                        Text("cuciin", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = OnHero)
-                        Text("Laundry dan perawatan", fontSize = 12.sp, color = OnHero.copy(alpha = .82f))
-                    }
-                }
-            Surface(color = palette.heroA, shape = RoundedCornerShape(26.dp)) {
-                Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Cucian terurus.\nPekerjaan tertata.", color = OnHero, fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold)
-                    Text("Catat pesanan, pantau proses, dan siapkan cucian pelanggan dalam satu tempat.", color = OnHero.copy(alpha = .85f), fontSize = 14.sp, lineHeight = 21.sp)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Outlined.CheckCircle, null, tint = OnHero.copy(alpha = .9f), modifier = Modifier.size(18.dp))
-                        Text("Dari pesanan masuk hingga selesai", color = OnHero, fontSize = 12.sp)
-                    }
-                }
-            }
-            CardBlock {
-                Text("Masuk ke akun Anda", color = Ink, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                Text("Gunakan akun yang terdaftar di laundry Anda.", color = Muted, fontSize = 13.sp)
-            Field(email, { email = it }, "Email")
-            Field(pass, { pass = it }, "Kata sandi", password = true)
-            Text("Gunakan kata sandi pribadi Anda. Jika lupa, kirim link pemulihan melalui tombol di bawah.", color = Muted, fontSize = 12.sp)
-            PrimaryBtn(if (busy) "Memeriksa akun…" else "Masuk", enabled = !busy, icon = Icons.Outlined.Login) {
-                if (busy) return@PrimaryBtn
-                if (!BuildConfig.DEBUG && (email.isBlank() || pass.isBlank())) {
-                    toast("Email dan kata sandi wajib diisi.")
-                    return@PrimaryBtn
-                }
-                if (!FirebaseCloud.enabled) {
-                    if (BuildConfig.DEBUG) localLogin()
-                    else toast("Konfigurasi identitas belum tersedia. Hubungi Owner sebelum memakai aplikasi.")
-                    return@PrimaryBtn
-                }
-                busy = true
-                FirebaseCloud.signIn(email, pass) { ok, pending, msg ->
-                    busy = false
-                    when {
-                        ok -> goHome()
-                        pending -> nav.navigate("pending")
-                        else -> {
-                            if (BuildConfig.DEBUG && store.login(email, pass)) goHome()
-                            else if (store.pendingName.value != null) nav.navigate("pending")
-                            else toast(msg)
+            Column(
+                Modifier.widthIn(max = 460.dp).fillMaxWidth().weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                BrandMark(size = 104.dp)
+                Text("Cuciin", fontSize = 32.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold, color = OnHero)
+                Text("Laundry dan perawatan", fontSize = 12.sp, color = OnHero.copy(alpha = .85f))
+                CardBlock {
+                    Text("Masuk ke akun Anda", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    Text("Pakai email dan kata sandi akun Anda. Peran akun ditentukan dari akses yang diberikan Owner.", color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
+                    Field(email, { email = it }, "Email")
+                    Field(pass, { pass = it }, "Kata sandi", password = true)
+                    PrimaryBtn(if (busy) "Memeriksa akun…" else "Masuk", enabled = !busy, icon = Icons.Outlined.Login) {
+                        if (busy) return@PrimaryBtn
+                        if (email.isBlank() || pass.isBlank()) {
+                            toast("Email dan kata sandi wajib diisi.")
+                            return@PrimaryBtn
+                        }
+                        if (!FirebaseCloud.enabled) {
+                            if (BuildConfig.DEBUG) localLogin()
+                            else toast("Konfigurasi identitas belum tersedia. Hubungi Owner sebelum memakai aplikasi.")
+                            return@PrimaryBtn
+                        }
+                        busy = true
+                        FirebaseCloud.signIn(email, pass) { ok, pending, msg ->
+                            busy = false
+                            when {
+                                ok -> goHome()
+                                pending -> nav.navigate("pending")
+                                else -> {
+                                    if (BuildConfig.DEBUG && store.login(email, pass)) goHome()
+                                    else if (store.pendingName.value != null) nav.navigate("pending")
+                                    else toast(msg)
+                                }
+                            }
                         }
                     }
-                }
-            }
-            if (busy) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Teal)
-                }
-            }
-                TextButton(onClick = { resetEmail = email; resetMessage = ""; resetFailed = false; loginHelp = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Lupa kata sandi?", color = Teal) }
-            }
-            GhostBtn("Daftar sebagai Kasir / SPV", icon = Icons.Outlined.PersonAdd) { nav.navigate("register") }
-            if (BuildConfig.DEBUG) {
-                Text("Masuk cepat", color = OnHero, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    store.staff.map { it.role }.distinct().forEach { role ->
-                        val label = if (role == Role.Supervisor) "SPV" else role.name
-                        GhostBtn(label, modifier = Modifier.weight(1f)) {
-                            if (store.demoLogin(role)) goHome() else toast("Akun demo tidak tersedia")
+                    if (busy) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Teal)
                         }
                     }
+                    TextButton(onClick = { resetEmail = email; resetMessage = ""; resetFailed = false; loginHelp = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Lupa kata sandi?", color = Teal) }
                 }
+                GhostBtn("Daftar sebagai Kasir / SPV", icon = Icons.Outlined.PersonAdd) { nav.navigate("register") }
             }
-            Text("Dikelola oleh ${store.ownerName}", color = OnHero.copy(alpha = .82f), fontSize = 12.sp)
-            Text(CloudSync.lastStatus, color = OnHero.copy(alpha = .82f), fontSize = 12.sp)
             TextButton(onClick = { nav.navigate("versions") }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                 Text("Versi ${BuildConfig.VERSION_NAME}", color = OnHero)
             }
         }
-    }
     }
     if (loginHelp) AlertDialog(onDismissRequest = { if (!resetBusy) loginHelp = false }, title = { Text("Reset kata sandi") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

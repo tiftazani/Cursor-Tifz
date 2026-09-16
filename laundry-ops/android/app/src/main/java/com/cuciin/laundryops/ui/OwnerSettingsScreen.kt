@@ -1,13 +1,17 @@
 package com.cuciin.laundryops.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,6 +28,8 @@ import com.cuciin.laundryops.data.CuciinStore
 import com.cuciin.laundryops.data.Role
 import com.cuciin.laundryops.ui.components.CardBlock
 import com.cuciin.laundryops.ui.components.ChipRow
+import com.cuciin.laundryops.ui.components.FilterBar
+import com.cuciin.laundryops.ui.components.FilterSheetRow
 import com.cuciin.laundryops.ui.components.GhostBtn
 import com.cuciin.laundryops.ui.components.PrimaryBtn
 import com.cuciin.laundryops.ui.components.ScreenHeader
@@ -31,10 +37,12 @@ import com.cuciin.laundryops.ui.components.SectionLabel
 import com.cuciin.laundryops.ui.components.SelectChip
 import com.cuciin.laundryops.ui.theme.Muted
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun OwnerSettingsScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val session = CuciinStore.session.value ?: return
+    var showUserSheet by remember { mutableStateOf(false) }
     if (session.role != Role.Owner) { nav.popBackStack(); return }
     val users = CuciinStore.staff.filter { it.role != Role.Owner && it.approved }
     var selectedEmail by remember { mutableStateOf(users.firstOrNull()?.email.orEmpty()) }
@@ -73,7 +81,14 @@ internal fun OwnerSettingsScreen(nav: NavHostController, toast: (String) -> Unit
                 Text("Role dasar tetap berlaku. Pilihan di bawah membatasi modul dan fungsi pengguna terpilih.", color = Muted, fontSize = 12.sp)
                 if (users.isEmpty()) Text("Belum ada Kasir atau SPV aktif.", color = Muted)
                 else {
-                    ChipRow { users.forEach { user -> SelectChip(selectedEmail.equals(user.email, true), "${user.name} · ${if (user.role == Role.Supervisor) "SPV" else user.role.name}") { selectedEmail = user.email } } }
+                    val selectedUser = users.firstOrNull { it.email.equals(selectedEmail, true) }
+                    FilterBar(
+                        label = "User yang diatur",
+                        value = selectedUser?.name ?: "Pilih user",
+                        detail = selectedUser?.let { "${if (it.role == Role.Supervisor) "SPV" else it.role.name} · ${it.email}" } ?: "Pilih satu user untuk mengatur aksesnya",
+                        icon = Icons.Outlined.AdminPanelSettings,
+                        onClick = { showUserSheet = true },
+                    )
                     SectionLabel("Modul")
                     val choices = listOf("queue" to "Antrian", "service" to "Service", "customer" to "Pelanggan", "stock" to "Produk & stok", "inventory" to "Aset", "attendance" to "Absensi", "whatsapp" to "WhatsApp", "expense" to "Biaya", "cash" to "Kas")
                     ChipRow { choices.forEach { (key, label) -> SelectChip(key in modules, label) { modules = if (key in modules) modules - key else modules + key } } }
@@ -91,6 +106,18 @@ internal fun OwnerSettingsScreen(nav: NavHostController, toast: (String) -> Unit
                         }
                     }
                 }
+            }
+        }
+    }
+    if (showUserSheet && users.isNotEmpty()) ModalBottomSheet(onDismissRequest = { showUserSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih user", color = com.cuciin.laundryops.ui.theme.Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            users.forEach { user ->
+                FilterSheetRow(
+                    selected = selectedEmail.equals(user.email, true),
+                    label = user.name,
+                    detail = "${if (user.role == Role.Supervisor) "SPV" else user.role.name} · ${user.email}",
+                ) { selectedEmail = user.email; showUserSheet = false }
             }
         }
     }

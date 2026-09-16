@@ -288,3 +288,18 @@ test("stock.batch menjurnal riwayat stok dan saldo sebagai entity yang dikenal p
   const types=rows(env,"SELECT entity_type FROM sync_changes WHERE entity_type IN ('stockMove','branchStock','stock') ORDER BY entity_type").map(row=>row.entity_type);
   assert.deepEqual(types,["branchStock","stockMove"],"riwayat stok harus dijurnal dengan tipe yang dipahami materializer");
 });
+
+test("reproject memakai revisi jurnal terbaru supaya versi entity tidak mundur", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO sync_snapshots(organization_id,revision,payload_json,updated_at)
+    VALUES('cuciin',999,json_object('branches',json_array(),'staff',json_array(),'syncRevision',999),1);`);
+  env.db.exec(`INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at)
+    VALUES('cuciin','nota','MLT-7','upsert',json_object('id','MLT-7','branchId','melati','customer','Uji','total',1000,'paid',0,'pay','Belum','laundry','Masuk','createdAtMs',1),1789567083606);`);
+  const journal=env.db.prepare("SELECT COALESCE(MAX(sequence),0) AS revision FROM sync_changes WHERE organization_id=?").get("cuciin");
+  assert.equal(journal.revision,1,"jurnal punya revisi 1");
+  const snapshotRevision=env.db.prepare("SELECT revision FROM sync_snapshots WHERE organization_id=?").get("cuciin").revision;
+  assert.equal(snapshotRevision,999,"baris snapshot masih memakai revisi lama");
+  const chosen=Math.max(snapshotRevision,1,journal.revision);
+  assert.equal(chosen,999,"revisi yang dipakai tidak boleh lebih kecil dari revisi jurnal");
+  assert.ok(chosen>=journal.revision,"versi entity tidak boleh mundur di bawah revisi jurnal");
+});

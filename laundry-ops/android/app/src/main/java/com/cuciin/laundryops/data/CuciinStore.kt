@@ -563,12 +563,6 @@ object CuciinStore {
         return true
     }
 
-    fun demoLogin(role: Role): Boolean {
-        if (!BuildConfig.DEBUG) return false
-        val account = staff.firstOrNull { it.role == role && it.approved } ?: return false
-        return login(account.email, skipPassword = true)
-    }
-
     fun logout() {
         if (FirebaseCloud.enabled) {
             FirebaseCloud.signOut()

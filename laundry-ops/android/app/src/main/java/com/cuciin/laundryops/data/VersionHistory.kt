@@ -12,10 +12,21 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.0"
-    val currentCode: Int = 19
+    val currentName: String = "1.10.1"
+    val currentCode: Int = 20
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.1", code = 20, date = "16 Sep 2026",
+            notes = listOf(
+                "Halaman masuk disederhanakan menjadi satu layar tanpa gulir: logo Cuciin berada di tengah atas, tanpa kotak slogan maupun masuk cepat berdasarkan peran.",
+                "Masuk selalu memakai email dan kata sandi akun masing-masing. Peran serta cabang ditentukan server setelah autentikasi.",
+                "Pemilih cabang dan pengguna pada layar operasional memakai bilah filter dan daftar pilihan, bukan deretan chip atau kartu, sehingga tetap skalabel saat cabang bertambah.",
+                "Rincian laporan transaksi memakai daftar lazy per Service dan dapat membuka detail transaksi tanpa merender seluruh data sekaligus.",
+                "PDF laporan transaksi, stok, dan nota menggunakan header biru Cuciin, label Bahasa Indonesia, serta tabel yang mengulang kepala halaman.",
+                "Proyeksi ulang snapshot cloud memakai versi jurnal terbaru agar optimistic concurrency perangkat tidak mundur setelah pemulihan server.",
+            ),
+        ),
         AppRelease(
             name = "1.10.0", code = 19, date = "16 Sep 2026",
             notes = listOf(

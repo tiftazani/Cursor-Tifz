@@ -11,7 +11,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -32,11 +34,13 @@ import java.io.File
 
 private val businessStore get() = CuciinStore
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun InventoryScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val ctx = LocalContext.current
     val session = businessStore.session.value ?: return
+    var showBranchSheet by rememberSaveable { mutableStateOf(false) }
     businessStore.revision.intValue
     val allowedBranches = if (session.role == Role.Owner) businessStore.branches.toList() else businessStore.branches.filter { it.id == session.branchId }
     var branchId by rememberSaveable { mutableStateOf(session.branchId) }
@@ -66,10 +70,17 @@ internal fun InventoryScreen(nav: NavHostController, toast: (String) -> Unit) {
     val rows = businessStore.inventory.filter { it.branchId == branchId && it.category in assetCategories && (filter == null || it.category == filter) }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 28.dp)) {
         item { ScreenHeader("Aset & mesin cabang", "Mesin dan peralatan operasional; produk dan bahan ada di Produk stok", onBack = { nav.popBackStack() }) }
+        if (allowedBranches.size > 1) item {
+            FilterBar(
+                label = "Cabang",
+                value = businessStore.branch(branchId).name.removePrefix("Cuciin "),
+                detail = "Saring aset dan mesin berdasarkan satu cabang",
+                icon = Icons.Outlined.Storefront,
+                onClick = { showBranchSheet = true },
+            )
+        }
         item {
             CardBlock {
-                SectionLabel("Cabang")
-                ChipRow { allowedBranches.forEach { b -> SelectChip(branchId == b.id, b.name.removePrefix("Cuciin ")) { branchId = b.id; editing = null; creating = false } } }
                 SectionLabel("Filter kategori")
                 ChipRow {
                     SelectChip(filter == null, "Semua") { filter = null }
@@ -140,13 +151,25 @@ internal fun InventoryScreen(nav: NavHostController, toast: (String) -> Unit) {
             }
         }
     }
+    if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            allowedBranches.forEach { branch ->
+                FilterSheetRow(branch.id == branchId, branch.name, "${businessStore.inventory.count { it.branchId == branch.id }} aset tercatat") {
+                    branchId = branch.id; editing = null; creating = false; showBranchSheet = false
+                }
+            }
+        }
+    }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val ctx = LocalContext.current
     val session = businessStore.session.value ?: return
+    var showBranchSheet by rememberSaveable { mutableStateOf(false) }
     businessStore.revision.intValue
     val allowedBranches = if (session.role == Role.Owner) businessStore.branches.toList() else businessStore.branches.filter { it.id == session.branchId }
     var branchId by rememberSaveable { mutableStateOf(session.branchId) }
@@ -159,7 +182,15 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
     val rows = businessStore.expenses.filter { it.branchId == branchId }.sortedByDescending { it.occurredAtMs }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 28.dp)) {
         item { ScreenHeader("Biaya operasional", "Semua pengeluaran tercatat per cabang", onBack = { nav.popBackStack() }) }
-        item { CardBlock { SectionLabel("Cabang"); ChipRow { allowedBranches.forEach { b -> SelectChip(branchId == b.id, b.name.removePrefix("Cuciin ")) { branchId = b.id; creating = false } } } } }
+        if (allowedBranches.size > 1) item {
+            FilterBar(
+                label = "Cabang",
+                value = businessStore.branch(branchId).name.removePrefix("Cuciin "),
+                detail = "Saring biaya operasional berdasarkan satu cabang",
+                icon = Icons.Outlined.Storefront,
+                onClick = { showBranchSheet = true },
+            )
+        }
         item { Hero("Total biaya cabang", rp(rows.sumOf { it.amount }), listOf("${rows.size} transaksi biaya", businessStore.branch(branchId).name)) }
         if (!creating) item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -211,13 +242,25 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
             }
         }
     }
+    if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            allowedBranches.forEach { branch ->
+                FilterSheetRow(branch.id == branchId, branch.name, "${businessStore.expenses.count { it.branchId == branch.id }} biaya tercatat") {
+                    branchId = branch.id; creating = false; showBranchSheet = false
+                }
+            }
+        }
+    }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val ctx = LocalContext.current
     val session = businessStore.session.value ?: return
+    var showBranchSheet by rememberSaveable { mutableStateOf(false) }
     businessStore.revision.intValue
     var branchId by rememberSaveable { mutableStateOf(session.branchId) }
     var note by rememberSaveable { mutableStateOf("") }
@@ -276,11 +319,13 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
         item {
             CardBlock {
                 SectionLabel("Lokasi kerja")
-                ChipRow {
-                    allowedBranches.forEach { branch ->
-                        SelectChip(branchId == branch.id, branch.name.removePrefix("Cuciin ")) { branchId = branch.id }
-                    }
-                }
+                FilterBar(
+                    label = "Cabang",
+                    value = businessStore.branch(branchId).name.removePrefix("Cuciin "),
+                    detail = "Pilih cabang tempat Anda bekerja hari ini",
+                    icon = Icons.Outlined.Storefront,
+                    onClick = { if (allowedBranches.size > 1) showBranchSheet = true },
+                )
                 Field(note, { note = it.take(160) }, "Catatan shift (opsional)")
                 if (today == null) {
                     GhostBtn(if (checkInPhotoPath.isBlank()) "Ambil foto masuk" else "Foto masuk siap", icon = Icons.Outlined.PhotoCamera) {
@@ -324,6 +369,14 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
                 AttendancePhotoPreview(row.checkInPhotoPath, "Foto masuk tersimpan di perangkat")
                 if (row.checkOutPhotoPath.isNotBlank()) AttendancePhotoPreview(row.checkOutPhotoPath, "Foto pulang tersimpan di perangkat")
                 if (row.note.isNotBlank()) Text(row.note, color = Muted, fontSize = 12.sp)
+            }
+        }
+    }
+    if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih cabang kerja", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            allowedBranches.forEach { branch ->
+                FilterSheetRow(branch.id == branchId, branch.name, null) { branchId = branch.id; showBranchSheet = false }
             }
         }
     }

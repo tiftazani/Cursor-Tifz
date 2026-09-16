@@ -2,6 +2,15 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.1 — 16 Sep 2026 (versionCode 20)
+
+- Layar masuk kini satu layar tanpa gulir dengan logo Cuciin di tengah atas. Kotak slogan dan masuk cepat berdasarkan peran dihapus.
+- Autentikasi hanya menggunakan email dan kata sandi akun. Server menentukan peran dan cakupan cabang setelah login.
+- Pemilih cabang dan user di layar operasional memakai FilterBar dan daftar di bottom sheet, bukan deretan chip atau kartu.
+- Rincian laporan transaksi memakai `LazyColumn` per Service dan membuka detail transaksi, sehingga laporan besar tidak merender seluruh baris sekaligus.
+- PDF laporan transaksi, stok, dan nota diselaraskan dengan palet biru Cuciin dan label Bahasa Indonesia.
+- Reproject snapshot Worker memakai versi jurnal terbaru agar versi optimistic concurrency tidak mundur.
+
 ## 1.10.0 — 16 Sep 2026 (versionCode 19)
 
 ### Tampilan

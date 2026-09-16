@@ -98,13 +98,15 @@ import com.cuciin.laundryops.ui.theme.OnPrim
 
 private val store get() = CuciinStore
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun HomeScreen(nav: NavHostController) {
     val ui = rememberUi()
     val s = store.session.value ?: return
     var completed by rememberSaveable { mutableStateOf(false) }
     var unpaid by rememberSaveable { mutableStateOf(false) }
-    var showFilters by rememberSaveable { mutableStateOf(false) }
+    var showBranchSheet by rememberSaveable { mutableStateOf(false) }
+    var showCashierSheet by rememberSaveable { mutableStateOf(false) }
     store.revision.intValue
     val all = store.visibleNotas().map { it.copy() }
     val working = all.count { it.laundry != LaundryStatus.Selesai }
@@ -165,26 +167,25 @@ internal fun HomeScreen(nav: NavHostController) {
                     Text(if (bid == "all") "Semua cabang" else store.branch(bid).name, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Text("${rows.size} pesanan${if (store.viewKasir.value != "all" && s.role == Role.Owner) " · ${store.viewKasir.value}" else ""}", color = Muted, fontSize = 12.sp)
                 }
-                if (s.role == Role.Owner) FilledTonalIconButton(onClick = { showFilters = !showFilters }) {
-                    Icon(Icons.Outlined.Tune, "Filter cabang dan kasir", tint = Teal)
-                }
             }
         }
-        if (showFilters && s.role == Role.Owner) {
-            item {
-                CardBlock {
-                    Text("Cabang", color = Muted, fontSize = 12.sp)
-                    ChipRow {
-                        SelectChip(bid == "all", "Semua") { store.viewBranch.value = "all"; store.touchStatus() }
-                        store.branches.forEach { b -> SelectChip(bid == b.id, b.name.removePrefix("Cuciin ")) { store.viewBranch.value = b.id; store.touchStatus() } }
-                    }
-                    Text("Kasir", color = Muted, fontSize = 12.sp)
-                    ChipRow {
-                        SelectChip(store.viewKasir.value == "all", "Semua kasir") { store.viewKasir.value = "all"; store.touchStatus() }
-                        store.staff.filter { it.role == Role.Kasir && it.approved }.forEach { k -> SelectChip(store.viewKasir.value == k.name, k.name) { store.viewKasir.value = k.name; store.touchStatus() } }
-                    }
-                }
-            }
+        if (s.role == Role.Owner) item {
+            FilterBar(
+                label = "Cabang",
+                value = if (bid == "all") "Semua cabang" else store.branch(bid).name.removePrefix("Cuciin "),
+                detail = "Saring antrean berdasarkan satu cabang",
+                icon = Icons.Outlined.Storefront,
+                onClick = { showBranchSheet = true },
+            )
+        }
+        if (s.role == Role.Owner) item {
+            FilterBar(
+                label = "Kasir",
+                value = store.viewKasir.value.ifBlank { "Semua kasir" }.let { if (it == "all") "Semua kasir" else it },
+                detail = "Saring antrean berdasarkan kasir pencatat",
+                icon = Icons.Outlined.Person,
+                onClick = { showCashierSheet = true },
+            )
         }
         item { SyncNotice() }
         item { ChipRow { SelectChip(!unpaid, "Semua pembayaran") { unpaid = false }; SelectChip(unpaid, "Belum lunas") { unpaid = true } } }
@@ -193,6 +194,24 @@ internal fun HomeScreen(nav: NavHostController) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 chunk.forEach { n -> Box(Modifier.weight(1f)) { NotaCard(n) { nav.navigate("queue/${n.id}") } } }
                 if (ui.twoPane && chunk.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+    if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            FilterSheetRow(bid == "all", "Semua cabang", "${store.branches.size} cabang") { store.viewBranch.value = "all"; store.touchStatus(); showBranchSheet = false }
+            store.branches.forEach { branch ->
+                FilterSheetRow(bid == branch.id, branch.name, null) { store.viewBranch.value = branch.id; store.touchStatus(); showBranchSheet = false }
+            }
+        }
+    }
+    if (showCashierSheet) ModalBottomSheet(onDismissRequest = { showCashierSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih kasir", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            FilterSheetRow(store.viewKasir.value == "all", "Semua kasir", null) { store.viewKasir.value = "all"; store.touchStatus(); showCashierSheet = false }
+            store.staff.filter { it.role == Role.Kasir && it.approved }.forEach { cashier ->
+                FilterSheetRow(store.viewKasir.value == cashier.name, cashier.name, cashier.email) { store.viewKasir.value = cashier.name; store.touchStatus(); showCashierSheet = false }
             }
         }
     }
@@ -832,10 +851,12 @@ internal fun WaListScreen(nav: NavHostController, archive: Boolean) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun StockScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val s = store.session.value ?: return
+    var showBranchSheet by rememberSaveable { mutableStateOf(false) }
     store.revision.intValue
     val products = store.products.map { it.copy() }
     val branchId = store.selectedStockBranch()
@@ -843,17 +864,13 @@ internal fun StockScreen(nav: NavHostController, toast: (String) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Persediaan", "${store.branch(branchId).name} · ${DisplayDates.date(LocalDateTime.now(Clock.ZONE))}") }
         if (s.role == Role.Owner) item {
-            CardBlock {
-                SectionLabel("Stok cabang")
-                ChipRow {
-                    store.branches.forEach { branch ->
-                        SelectChip(branchId == branch.id, branch.name.removePrefix("Cuciin ")) {
-                            store.stockBranchId.value = branch.id
-                            store.touchStatus()
-                        }
-                    }
-                }
-            }
+            FilterBar(
+                label = "Cabang",
+                value = store.branch(branchId).name.removePrefix("Cuciin "),
+                detail = "Pilih satu cabang untuk melihat saldo dan mutasi stok",
+                icon = Icons.Outlined.Storefront,
+                onClick = { showBranchSheet = true },
+            )
         }
         item {
             Hero("Pantau kebutuhan laundry", "${products.size} produk", listOf(if (low == 0) "Stok di atas batas minimum" else "$low produk perlu diisi"))
@@ -887,11 +904,25 @@ internal fun StockScreen(nav: NavHostController, toast: (String) -> Unit) {
         }
         if (s.role == Role.Owner) item { GhostBtn("Kelola produk", icon = Icons.Outlined.Edit) { nav.navigate("products") } }
     }
+    if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            store.branches.forEach { branch ->
+                FilterSheetRow(branch.id == branchId, branch.name, "${store.stockMoves.count { it.branchId == branch.id }} perubahan stok") {
+                    store.stockBranchId.value = branch.id
+                    store.touchStatus()
+                    showBranchSheet = false
+                }
+            }
+        }
+    }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
+    var showTargetBranchSheet by rememberSaveable { mutableStateOf(false) }
     var kind by rememberSaveable { mutableStateOf(StockKind.Tambah) }
     var amounts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var occurredAt by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE))) }
@@ -907,17 +938,13 @@ internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Perubahan stok massal", store.branch(branchId).name, onBack = { nav.popBackStack() }) }
         if (session.role == Role.Owner) item {
-            CardBlock {
-                SectionLabel("Cabang yang diperbarui")
-                ChipRow {
-                    store.branches.forEach { branch ->
-                        SelectChip(branch.id in targetBranches, branch.name.removePrefix("Cuciin ")) {
-                            targetBranches = if (branch.id in targetBranches) targetBranches - branch.id else targetBranches + branch.id
-                        }
-                    }
-                }
-                Text("Nilai yang diisi diterapkan ke setiap cabang terpilih dan tercatat sebagai mutasi terpisah.", color = Muted, fontSize = 12.sp)
-            }
+            FilterBar(
+                label = "Cabang yang diperbarui",
+                value = if (targetBranches.size == 1) store.branch(targetBranches.first()).name.removePrefix("Cuciin ") else "${targetBranches.size} cabang dipilih",
+                detail = "Pilih satu atau beberapa cabang. Mutasi dicatat terpisah per cabang.",
+                icon = Icons.Outlined.Storefront,
+                onClick = { showTargetBranchSheet = true },
+            )
         }
         item {
             CardBlock {
@@ -958,13 +985,28 @@ internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
             }
         }
     }
+    if (showTargetBranchSheet) ModalBottomSheet(onDismissRequest = { showTargetBranchSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            Text("Bisa memilih lebih dari satu. Setiap cabang akan menerima mutasi sendiri.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp))
+            store.branches.forEach { branch ->
+                FilterSheetRow(branch.id in targetBranches, branch.name, null) {
+                    targetBranches = if (branch.id in targetBranches) targetBranches - branch.id else targetBranches + branch.id
+                }
+            }
+            PrimaryBtn("Selesai", Modifier.padding(horizontal = 18.dp, vertical = 8.dp)) { showTargetBranchSheet = false }
+        }
+    }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun StockHistoryScreen(nav: NavHostController) {
     val ui = rememberUi()
     val ctx = LocalContext.current
     val session = store.session.value ?: return
+    var showBranchSheet by rememberSaveable { mutableStateOf(false) }
+    var showActorSheet by rememberSaveable { mutableStateOf(false) }
     var fromValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).minusDays(30).withHour(0).withMinute(0))) }
     var untilValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59))) }
     var branchIds by remember { mutableStateOf(if (session.role == Role.Owner) emptySet<String>() else setOf(session.branchId)) }
@@ -994,12 +1036,23 @@ internal fun StockHistoryScreen(nav: NavHostController) {
             }
         }
         if (session.role == Role.Owner) item {
-            CardBlock { SectionLabel("Cabang"); ChipRow {
-                SelectChip(branchIds.isEmpty(), "Semua cabang") { branchIds = emptySet() }
-                store.branches.forEach { b -> SelectChip(b.id in branchIds, b.name.removePrefix("Cuciin ")) { branchIds = if (b.id in branchIds) branchIds - b.id else branchIds + b.id } }
-            } }
+            FilterBar(
+                label = "Cabang",
+                value = if (branchIds.isEmpty()) "Semua cabang" else "${branchIds.size} cabang dipilih",
+                detail = "Pilih satu atau beberapa cabang untuk laporan ini",
+                icon = Icons.Outlined.Storefront,
+                onClick = { showBranchSheet = true },
+            )
         }
-        if (actors.isNotEmpty()) item { CardBlock { SectionLabel("Akun pelaksana"); ChipRow { SelectChip(actor == "all", "Semua akun") { actor = "all" }; actors.forEach { name -> SelectChip(actor == name, name) { actor = name } } } } }
+        if (actors.isNotEmpty()) item {
+            FilterBar(
+                label = "Akun pelaksana",
+                value = if (actor == "all") "Semua akun" else actor,
+                detail = "Saring riwayat berdasarkan akun yang mencatat perubahan",
+                icon = Icons.Outlined.Person,
+                onClick = { showActorSheet = true },
+            )
+        }
         item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PrimaryBtn("Ekspor PDF", Modifier.weight(1f), enabled = allDates || !until.isBefore(from), icon = Icons.Outlined.PictureAsPdf) { FileExports.shareStockPdf(ctx, rows, if (allDates) "Semua tanggal" else "${DisplayDates.date(from)} sampai ${DisplayDates.date(until)}") }
             GhostBtn("Ekspor CSV", Modifier.weight(1f), enabled = allDates || !until.isBefore(from), icon = Icons.Outlined.TableView) { FileExports.shareStock(ctx, rows) }
@@ -1036,6 +1089,23 @@ internal fun StockHistoryScreen(nav: NavHostController) {
                     }
                 }
             }
+        }
+    }
+    if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            FilterSheetRow(branchIds.isEmpty(), "Semua cabang", "${store.branches.size} cabang") { branchIds = emptySet(); showBranchSheet = false }
+            store.branches.forEach { branch ->
+                FilterSheetRow(branch.id in branchIds, branch.name, null) { branchIds = if (branch.id in branchIds) branchIds - branch.id else branchIds + branch.id }
+            }
+            PrimaryBtn("Selesai", Modifier.padding(horizontal = 18.dp, vertical = 8.dp)) { showBranchSheet = false }
+        }
+    }
+    if (showActorSheet) ModalBottomSheet(onDismissRequest = { showActorSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih akun pelaksana", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            FilterSheetRow(actor == "all", "Semua akun", null) { actor = "all"; showActorSheet = false }
+            actors.forEach { name -> FilterSheetRow(actor == name, name, null) { actor = name; showActorSheet = false } }
         }
     }
 }

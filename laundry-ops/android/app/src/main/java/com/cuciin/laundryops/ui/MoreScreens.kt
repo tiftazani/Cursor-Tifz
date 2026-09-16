@@ -263,6 +263,7 @@ private fun PeriodSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AnalyticsScreen(nav: NavHostController) {
     val ui = rememberUi()
@@ -273,6 +274,8 @@ internal fun AnalyticsScreen(nav: NavHostController) {
     var untilValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59))) }
     var handlerFilter by rememberSaveable { mutableStateOf("all") }
     var showPeriodSheet by rememberSaveable { mutableStateOf(false) }
+    var showBranchSheet by rememberSaveable { mutableStateOf(false) }
+    var showHandlerSheet by rememberSaveable { mutableStateOf(false) }
     val from = DisplayDates.parse(fromValue) ?: LocalDateTime.now(Clock.ZONE).withHour(0).withMinute(0)
     val until = DisplayDates.parse(untilValue) ?: LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59)
     val selectedBranches = store.reportBranchIds.value
@@ -299,6 +302,16 @@ internal fun AnalyticsScreen(nav: NavHostController) {
             append(" · petugas $nama")
         }
     }
+    // Laporan dipecah per bagian supaya pengguna tidak menggulir seluruh isi
+    // ketika transaksinya ribuan. Satu bagian tampil pada satu waktu.
+    val sections = listOf(
+        "ringkasan" to "Ringkasan",
+        "cabang" to "Per cabang",
+        "kasir" to "Per kasir",
+        "petugas" to "Komisi petugas",
+        "rincian" to "Rincian",
+    )
+    var section by rememberSaveable { mutableStateOf("ringkasan") }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(ui.gap)) {
         item {
             ScreenHeader("Laporan transaksi", null, onBack = { nav.popBackStack() }) {
@@ -307,20 +320,38 @@ internal fun AnalyticsScreen(nav: NavHostController) {
         }
         item {
             // Header menyebut data yang benar-benar diambil, bukan hanya judul.
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Eyebrow("Ringkasan keuangan")
-                Text(rangeLabel, fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.4).sp, color = Ink)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(rangeLabel, fontSize = 19.sp, lineHeight = 25.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.4).sp, color = Ink)
                 Text(summaryLine, color = Muted, fontSize = 13.sp, lineHeight = 18.sp)
             }
         }
         item {
-            PeriodBar(
-                label = if (customRange) "Rentang sendiri" else periodLabel,
-                detail = rangeLabel,
-                trailingLabel = if (selectedBranches.isEmpty()) "Semua cabang" else "${selectedBranches.size} dipilih",
-                onPickPeriod = { showPeriodSheet = true },
-                onPickTrailing = { showPeriodSheet = true },
-            )
+            // Filter periode, cabang, dan petugas dalam satu bilah, bukan deretan kartu.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterBar(
+                    label = "Periode",
+                    value = if (customRange) "Rentang sendiri" else periodLabel,
+                    detail = rangeLabel,
+                    icon = Icons.Outlined.CalendarMonth,
+                    onClick = { showPeriodSheet = true },
+                )
+                FilterBar(
+                    label = "Cabang",
+                    value = if (selectedBranches.isEmpty()) "Semua cabang" else "${selectedBranches.size} cabang dipilih",
+                    detail = if (selectedBranches.isEmpty()) "${store.branches.size} cabang tersedia" else selectedBranches.joinToString { branchName(it) },
+                    icon = Icons.Outlined.Storefront,
+                    onClick = { showBranchSheet = true },
+                )
+                if (handlers.size > 1) {
+                    FilterBar(
+                        label = "Petugas layanan",
+                        value = if (handlerFilter == "all") "Semua petugas" else (handlers.firstOrNull { it.first == handlerFilter }?.second ?: handlerFilter),
+                        detail = "${handlers.size} petugas menangani periode ini",
+                        icon = Icons.Outlined.Badge,
+                        onClick = { showHandlerSheet = true },
+                    )
+                }
+            }
         }
         if (showPeriodSheet) item {
             PeriodSheet(
@@ -347,133 +378,171 @@ internal fun AnalyticsScreen(nav: NavHostController) {
                 if (until.isBefore(from)) Text("Waktu akhir harus setelah waktu mulai.", color = com.cuciin.laundryops.ui.theme.Coral, fontSize = 12.sp)
             }
         }
-        if (handlers.isNotEmpty()) item {
-            // Petugas tetap memakai chip karena jumlahnya sedikit dan sering diganti.
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionLabel("Petugas layanan")
-                ChipRow {
-                    SelectChip(handlerFilter == "all", "Semua") { handlerFilter = "all" }
-                    handlers.forEach { (key, name) -> SelectChip(handlerFilter == key, name) { handlerFilter = key } }
+        item {
+            // Pemilih bagian laporan: satu bagian tampil, sisanya tidak menumpuk di bawah.
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                sections.forEach { (id, label) ->
+                    SelectChip(section == id, label) { section = id }
                 }
             }
         }
-        item { Hero("Omzet Service", rp(omzet), listOf("masuk kas ${rp(masuk)}", "biaya ${rp(biaya)}", "hasil kas ${rp(labaKas)}")) }
-        item { RevenueChart(points) }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                AnalyticsKpi("Rata-rata transaksi", if (rows.isEmpty()) "Rp 0" else rp(omzet / rows.size), Modifier.weight(1f))
-                AnalyticsKpi("Kas tertagih", if (omzet == 0) "0%" else "${(masuk.toLong() * 100 / omzet).coerceIn(0, 100)}%", Modifier.weight(1f))
+
+        when (section) {
+            "cabang" -> {
+                if (rows.isEmpty()) item { EmptyHint("Belum ada transaksi", "Tidak ada Service pada cabang dan periode yang dipilih.") }
+                else item {
+                    // Daftar baris, bukan tumpukan kartu, supaya puluhan cabang tetap terbaca.
+                    val groups = rows.groupBy { it.branchId }.toList()
+                    ListCard {
+                        groups.forEachIndexed { index, (branchId, branchRows) ->
+                            val branchCost = expenseRows.filter { it.branchId == branchId }.sumOf { it.amount }
+                            val namaCabang = store.branches.firstOrNull { it.id == branchId }?.name ?: "Cabang $branchId"
+                            ListRow(
+                                mark = namaCabang.removePrefix("Cuciin ").take(3),
+                                title = namaCabang,
+                                detail = "${branchRows.size} Service · omzet ${rp(branchRows.sumOf { it.total })} · masuk ${rp(branchRows.sumOf { it.paid })} · biaya ${rp(branchCost)}",
+                                trailing = {
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text(rp(branchRows.sumOf { it.paid } - branchCost), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Ink)
+                                        Text("hasil kas", color = Muted, fontSize = 11.sp)
+                                    }
+                                },
+                                showChevron = false,
+                            )
+                            if (index < groups.lastIndex) RowDivider()
+                        }
+                    }
+                }
             }
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                AnalyticsKpi("Biaya operasional", rp(biaya), Modifier.weight(1f))
-                AnalyticsKpi("Hasil kas", rp(labaKas), Modifier.weight(1f))
+            "kasir" -> {
+                if (rows.isEmpty()) item { EmptyHint("Belum ada transaksi", "Tidak ada Service pada cabang dan periode yang dipilih.") }
+                else item {
+                    // Dikelompokkan per email kasir: nama bisa berubah, email tidak.
+                    val kasirGroups = rows.groupBy { it.kasirEmail.ifBlank { it.kasir } }.toList()
+                    ListCard {
+                        kasirGroups.forEachIndexed { index, (key, kasirRows) ->
+                            val namaKasir = kasirRows.first().kasir
+                            val cabangKasir = kasirRows.map { branchName(it.branchId) }.distinct()
+                            ListRow(
+                                mark = namaKasir,
+                                title = namaKasir,
+                                detail = "${kasirRows.size} Service · ${cabangKasir.joinToString()} · masuk ${rp(kasirRows.sumOf { it.paid })}",
+                                trailing = { Text(rp(store.omzet(kasirRows)), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Ink) },
+                                showChevron = false,
+                            )
+                            if (index < kasirGroups.lastIndex) RowDivider()
+                        }
+                    }
+                }
             }
-        }
-        item {
-            CardBlock {
-                SectionLabel("Kondisi operasional")
-                Text("${operations.overdue} terlambat · ${operations.dueToday} jatuh tempo hari ini", color = if (operations.overdue > 0) com.cuciin.laundryops.ui.theme.Coral else Muted)
-                Text("${operations.readyForPickup} siap diambil · ${operations.unpaid} belum lunas", color = Muted)
+            "petugas" -> {
+                val handledRows = rows.flatMap { nota -> nota.lines.map { line -> Triple(nota, line, (line.qty * line.commissionPerUnit).toInt()) } }
+                if (handledRows.isEmpty()) item { EmptyHint("Rincian petugas belum tersedia", "Service lama tetap masuk laporan transaksi, tetapi belum memiliki petugas per layanan.") }
+                else item {
+                    val handlerGroups = handledRows.groupBy { (nota, line, _) -> "${nota.branchId}|${line.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir }}" }.toList()
+                    ListCard {
+                        handlerGroups.forEachIndexed { index, (_, group) ->
+                            val first = group.first()
+                            val nota = first.first
+                            val petugas = first.second.handledByName.ifBlank { nota.kasir }
+                            val services = group.groupBy { it.second.name }.map { (service, serviceRows) ->
+                                val qty = serviceRows.sumOf { it.second.qty }
+                                val unit = serviceRows.first().second.unit
+                                val omzetLayanan = serviceRows.sumOf { (it.second.qty * it.second.unitPrice).toInt() }
+                                "$service ${if (qty % 1.0 == 0.0) qty.toInt() else qty} $unit (${rp(omzetLayanan)})"
+                            }.joinToString(", ")
+                            ListRow(
+                                mark = petugas,
+                                title = petugas,
+                                detail = listOf(
+                                    branchName(nota.branchId),
+                                    services,
+                                    "${group.map { it.first.id }.distinct().size} Service ditangani",
+                                ).filter { it.isNotBlank() }.joinToString(" · "),
+                                showChevron = false,
+                                trailing = { Chip("Komisi ${rp(group.sumOf { it.third })}", Green) },
+                            )
+                            if (index < handlerGroups.lastIndex) RowDivider()
+                        }
+                    }
+                }
             }
-        }
-        item {
-            CardBlock {
-                SectionLabel("Penerimaan per metode")
-                PayMethod.entries.forEach { method ->
-                    val amount = rows.filter { it.payMethod == method }.sumOf { it.paid }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(method.label, color = Muted)
-                        Text(rp(amount), fontWeight = FontWeight.Bold)
+            "rincian" -> {
+                if (rows.isEmpty()) item { EmptyHint("Belum ada transaksi", "Tidak ada Service pada cabang dan periode yang dipilih.") }
+                else items(rows.sortedByDescending { it.createdAtMs }, key = { it.id }) { nota ->
+                    TransactionReportRow(nota, ::branchName) { nav.navigate("queue/$it") }
+                }
+            }
+            else -> {
+                item { Hero("Omzet Service", rp(omzet), listOf("masuk kas ${rp(masuk)}", "biaya ${rp(biaya)}", "hasil kas ${rp(labaKas)}")) }
+                item { RevenueChart(points) }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        AnalyticsKpi("Transaksi", rows.size.toString(), Modifier.weight(1f))
+                        AnalyticsKpi("Rata-rata", if (rows.isEmpty()) "Rp 0" else rp(omzet / rows.size), Modifier.weight(1f))
+                    }
+                }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        AnalyticsKpi("Kas tertagih", if (omzet == 0) "0%" else "${(masuk.toLong() * 100 / omzet).coerceIn(0, 100)}%", Modifier.weight(1f))
+                        AnalyticsKpi("Biaya operasional", rp(biaya), Modifier.weight(1f))
+                    }
+                }
+                item {
+                    CardBlock {
+                        SectionLabel("Kondisi operasional")
+                        Text("${operations.overdue} terlambat · ${operations.dueToday} jatuh tempo hari ini", color = if (operations.overdue > 0) com.cuciin.laundryops.ui.theme.Coral else Muted)
+                        Text("${operations.readyForPickup} siap diambil · ${operations.unpaid} belum lunas", color = Muted)
+                    }
+                }
+                item {
+                    CardBlock {
+                        SectionLabel("Penerimaan per metode")
+                        PayMethod.entries.forEach { method ->
+                            val amount = rows.filter { it.payMethod == method }.sumOf { it.paid }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(method.label, color = Muted)
+                                Text(rp(amount), fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
         }
-        item { SectionLabel("Ringkasan per cabang") }
         item {
-            // Daftar baris, bukan tumpukan kartu, supaya puluhan cabang tetap terbaca.
-            ListCard {
-                val groups = rows.groupBy { it.branchId }.toList()
-                groups.forEachIndexed { index, (branchId, branchRows) ->
-                    val branchCost = expenseRows.filter { it.branchId == branchId }.sumOf { it.amount }
-                    val branchName = store.branches.firstOrNull { it.id == branchId }?.name ?: "Cabang $branchId"
-                    ListRow(
-                        mark = branchName.removePrefix("Cuciin ").take(3),
-                        title = branchName,
-                        detail = "${branchRows.size} Service · omzet ${rp(branchRows.sumOf { it.total })} · masuk ${rp(branchRows.sumOf { it.paid })}",
-                        trailing = {
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(rp(branchRows.sumOf { it.paid } - branchCost), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Ink)
-                                Text("hasil kas", color = Muted, fontSize = 11.sp)
-                            }
-                        },
-                        showChevron = false,
-                    )
-                    if (index < groups.lastIndex) RowDivider()
-                }
-            }
-        }
-        item { SectionLabel("Ringkasan per kasir") }
-        item {
-            ListCard {
-                val kasirGroups = rows.groupBy { it.kasir }.toList()
-                kasirGroups.forEachIndexed { index, (kasir, kasirRows) ->
-                    ListRow(
-                        mark = kasir,
-                        title = kasir,
-                        detail = "${kasirRows.size} Service · ${kasirRows.map { branchName(it.branchId) }.distinct().joinToString()}",
-                        trailing = { Text(rp(store.omzet(kasirRows)), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Ink) },
-                        showChevron = false,
-                    )
-                    if (index < kasirGroups.lastIndex) RowDivider()
-                }
-            }
-        }
-        item { SectionLabel("Komisi & layanan per petugas") }
-        val handledRows = rows.flatMap { nota ->
-            nota.lines.map { line -> Triple(nota, line, (line.qty * line.commissionPerUnit).toInt()) }
-        }
-        if (handledRows.isEmpty()) item { EmptyHint("Rincian petugas belum tersedia", "Service lama tetap masuk laporan transaksi, tetapi belum memiliki petugas per layanan.") }
-        else item {
-            val handlerGroups = handledRows.groupBy { (nota, line, _) -> "${nota.branchId}|${line.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir }}" }.toList()
-            ListCard {
-                handlerGroups.forEachIndexed { index, (_, group) ->
-                    val first = group.first()
-                    val nota = first.first
-                    val handler = first.second.handledByName.ifBlank { nota.kasir }
-                    val services = group.groupBy { it.second.name }.map { (service, serviceRows) ->
-                        val qty = serviceRows.sumOf { it.second.qty }
-                        val unit = serviceRows.first().second.unit
-                        val omzet = serviceRows.sumOf { (it.second.qty * it.second.unitPrice).toInt() }
-                        "$service ${if (qty % 1.0 == 0.0) qty.toInt() else qty} $unit (${rp(omzet)})"
-                    }.joinToString(", ")
-                    ListRow(
-                        mark = handler,
-                        title = handler,
-                        detail = listOf(
-                            branchName(nota.branchId),
-                            services,
-                            "${group.map { it.first.id }.distinct().size} Service ditangani",
-                        ).filter { it.isNotBlank() }.joinToString(" · "),
-                        showChevron = false,
-                        trailing = { Chip("Komisi ${rp(group.sumOf { it.third })}", Green) },
-                    )
-                    if (index < handlerGroups.lastIndex) RowDivider()
-                }
-            }
-        }
-        item { SectionLabel("Rincian transaksi") }
-        if (rows.isEmpty()) item { EmptyHint("Belum ada transaksi", "Tidak ada Service pada cabang dan periode yang dipilih.") }
-        else item { TransactionReportTable(rows.sortedByDescending { it.createdAtMs }, ::branchName) { nav.navigate("queue/$it") } }
-        item {
-            val rangeLabel = if (customRange) "${DisplayDates.date(from)} sampai ${DisplayDates.date(until)}" else period.replaceFirstChar { it.uppercase() }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PrimaryBtn("Ekspor PDF", Modifier.weight(1f), enabled = !customRange || !until.isBefore(from), icon = Icons.Outlined.PictureAsPdf) { FileExports.shareFinancialPdf(ctx, rows, expenseRows, rangeLabel) }
                 GhostBtn("Ekspor CSV", Modifier.weight(1f), enabled = !customRange || !until.isBefore(from), icon = Icons.Outlined.TableView) { FileExports.shareFinancial(ctx, rows, expenseRows) }
             }
         }
         item { Spacer(Modifier.height(16.dp)) }
+    }
+    if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih cabang", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            Text("Bisa pilih lebih dari satu. Kosong berarti semua cabang.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp))
+            FilterSheetRow(selectedBranches.isEmpty(), "Semua cabang", "${store.branches.size} cabang") { store.reportBranchIds.value = emptySet(); store.touchStatus(); showBranchSheet = false }
+            ListDivider()
+            store.branches.forEach { b ->
+                val jumlah = store.notas.count { it.branchId == b.id }
+                FilterSheetRow(b.id in selectedBranches, b.name, "$jumlah Service tercatat") {
+                    val current = store.reportBranchIds.value
+                    store.reportBranchIds.value = if (b.id in current) current - b.id else current + b.id
+                    store.touchStatus()
+                }
+            }
+            PrimaryBtn("Selesai", Modifier.padding(horizontal = 18.dp, vertical = 8.dp)) { showBranchSheet = false }
+        }
+    }
+    if (showHandlerSheet) ModalBottomSheet(onDismissRequest = { showHandlerSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih petugas", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            FilterSheetRow(handlerFilter == "all", "Semua petugas", "${handlers.size} petugas") { handlerFilter = "all"; showHandlerSheet = false }
+            ListDivider()
+            handlers.forEach { (key, name) ->
+                FilterSheetRow(handlerFilter == key, name, null) { handlerFilter = key; showHandlerSheet = false }
+            }
+        }
     }
 }
 
@@ -488,32 +557,26 @@ private fun AnalyticsKpi(label: String, value: String, modifier: Modifier = Modi
 }
 
 @Composable
-private fun TransactionReportTable(rows: List<Nota>, branchName: (String) -> String, onOpen: (String) -> Unit) {
-    // Tabel 12 kolom tidak layak di layar sempit dan font besar. Setiap Service
-    // ditampilkan sebagai kartu bertingkat supaya semua angka tetap terbaca.
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        rows.forEach { nota ->
-            CardBlock(Modifier.clickable { onOpen(nota.id) }) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(nota.id, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink, modifier = Modifier.weight(1f))
-                    Chip(nota.pay.label, if (nota.pay == PayStatus.Lunas) Green else Amber)
-                }
-                Text(nota.customer, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Ink)
-                Text(
-                    listOf(nota.createdAt, branchName(nota.branchId), nota.kasir).filter { it.isNotBlank() }.joinToString(" · "),
-                    color = Muted,
-                    fontSize = 12.sp,
-                    lineHeight = 17.sp,
-                )
-                if (nota.lines.isNotEmpty()) {
-                    Text(nota.lines.joinToString { "${it.name} ${if (it.qty % 1.0 == 0.0) it.qty.toInt() else it.qty} ${it.unit}" }, color = Ink, fontSize = 13.sp, lineHeight = 18.sp)
-                    val handlers = nota.lines.map { it.handledByName.ifBlank { nota.kasir } }.distinct().joinToString()
-                    val commission = nota.lines.sumOf { (it.qty * it.commissionPerUnit).toInt() }
-                    Text("Petugas $handlers · komisi ${rp(commission)}", color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
-                }
-                Text("Omzet ${rp(nota.total)} · diterima ${rp(nota.paid)} · ${nota.laundry.label}", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, lineHeight = 18.sp)
-            }
+private fun TransactionReportRow(nota: Nota, branchName: (String) -> String, onOpen: (String) -> Unit) {
+    CardBlock(Modifier.clickable { onOpen(nota.id) }) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(nota.id, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink, modifier = Modifier.weight(1f))
+            Chip(nota.pay.label, if (nota.pay == PayStatus.Lunas) Green else Amber)
         }
+        Text(nota.customer, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Ink)
+        Text(
+            listOf(nota.createdAt, branchName(nota.branchId), nota.kasir).filter { it.isNotBlank() }.joinToString(" · "),
+            color = Muted,
+            fontSize = 12.sp,
+            lineHeight = 17.sp,
+        )
+        if (nota.lines.isNotEmpty()) {
+            Text(nota.lines.joinToString { "${it.name} ${if (it.qty % 1.0 == 0.0) it.qty.toInt() else it.qty} ${it.unit}" }, color = Ink, fontSize = 13.sp, lineHeight = 18.sp)
+            val handlers = nota.lines.map { it.handledByName.ifBlank { nota.kasir } }.distinct().joinToString()
+            val commission = nota.lines.sumOf { (it.qty * it.commissionPerUnit).toInt() }
+            Text("Petugas $handlers · komisi ${rp(commission)}", color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
+        }
+        Text("Omzet ${rp(nota.total)} · diterima ${rp(nota.paid)} · ${nota.laundry.label}", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, lineHeight = 18.sp)
     }
 }
 

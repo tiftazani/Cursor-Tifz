@@ -109,8 +109,67 @@ fun Chip(text: String, color: Color) {
 @Composable fun PayChip(status: PayStatus) { Chip(status.label, if (status == PayStatus.Lunas) Green else Amber) }
 @Composable fun LaundryChip(status: LaundryStatus) { Chip(status.label, if (status == LaundryStatus.Selesai) Green else Teal) }
 
+/**
+ * Pemilih satu nilai berbentuk bilah: label kecil, nilai aktif, dan pintasan
+ * membuka lembar pilihan. Dipakai untuk cabang, kasir, periode, atau kategori
+ * supaya tidak ada deretan kartu yang memakan ruang saat pilihannya banyak.
+ */
 @Composable
-fun ChipRow(content: @Composable RowScope.() -> Unit) {
+fun FilterBar(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    detail: String? = null,
+    icon: ImageVector = Icons.Outlined.Tune,
+    onClick: () -> Unit,
+) {
+    val tap = rememberTapFeedback()
+    Surface(
+        modifier = modifier,
+        shape = CuciinShape.field,
+        color = Card,
+        border = BorderStroke(1.dp, Line),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().clickable { tap(); onClick() }.padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Muted)
+                Text(value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (detail != null) Text(detail, fontSize = 11.sp, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Surface(onClick = { tap(); onClick() }, shape = CircleShape, color = Surface2, modifier = Modifier.size(36.dp)) {
+                Box(contentAlignment = Alignment.Center) { Icon(icon, null, tint = Ink, modifier = Modifier.size(18.dp)) }
+            }
+        }
+    }
+}
+
+/** Isi lembar pilihan untuk [FilterBar]: satu pilihan atau banyak pilihan. */
+@Composable
+fun FilterSheetRow(selected: Boolean, label: String, detail: String? = null, onClick: () -> Unit) {
+    val tap = rememberTapFeedback()
+    Row(
+        Modifier.fillMaxWidth().clickable { tap(); onClick() }.padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            if (selected) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+            null,
+            tint = if (selected) TealDeep else Line,
+            modifier = Modifier.size(20.dp),
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(label, fontSize = 15.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, color = Ink)
+            if (detail != null) Text(detail, fontSize = 12.sp, color = Muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable fun ChipRow(content: @Composable RowScope.() -> Unit) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, content = content)
 }
 

@@ -1,6 +1,6 @@
-# Cuciin 1.10.0 — kesiapan rilis
+# Cuciin 1.10.1 — kesiapan rilis
 
-Status: kandidat rilis operasional yang sudah lulus pemeriksaan kode, build, migrasi produksi, dan uji integrasi API pada 16 September 2026. Owner tetap harus menyelesaikan validasi perangkat, rotasi akun, saldo awal, backup terjadwal pertama, dan keputusan go-live. APK bertanda tangan tidak menjamin hilangnya peringatan Play Protect pada distribusi di luar store.
+Status: kandidat rilis operasional yang menjalani ulang pemeriksaan kode, build, dan verifikasi cloud pada 16 September 2026. Owner tetap harus menyelesaikan validasi perangkat, rotasi akun, saldo awal, backup terjadwal pertama, dan keputusan go-live. APK bertanda tangan tidak menjamin hilangnya peringatan Play Protect pada distribusi di luar store.
 
 ## Perpindahan identitas aplikasi (16 September 2026)
 
@@ -17,7 +17,7 @@ Konsekuensi yang perlu diketahui sebelum distribusi:
 ## Bukti verifikasi kandidat
 
 - Android: 47 unit test debug dan 47 unit test rilis lulus, lint debug/rilis tanpa error, APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
-- APK rilis: non-debuggable, application ID `com.cuciin.laundryops`, versionCode `19`, versionName `1.10.0`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB.
+- APK rilis: non-debuggable, application ID `com.cuciin.laundryops`, versionCode `20`, versionName `1.10.1`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB.
 - SHA-256 sertifikat rilis cocok dengan fingerprint yang dicatat: `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`.
 - Firebase: 7 akun (2 Owner, 3 Kasir, 2 Supervisor) login berhasil di project `cuciin-ops`; kedua app Android terdaftar dengan sidik jari SHA-1 dan SHA-256.
 - Worker: 35 test lulus (29 lama + 6 baru untuk penerimaan dua project Firebase).
@@ -26,7 +26,7 @@ Konsekuensi yang perlu diketahui sebelum distribusi:
 
 ## Yang disiapkan
 
-- Application ID rilis `com.cuciin.laundryops`, versi `1.10.0`, versionCode `19`, target Android 16/API 36.
+- Application ID rilis `com.cuciin.laundryops`, versi `1.10.1`, versionCode `20`, target Android 16/API 36.
 - APK non-debuggable dan AAB dengan kunci rilis terpisah. Build rilis berhenti bila konfigurasi penandatanganan tidak tersedia.
 - Kunci privat dan kata sandi berada di luar repo, pada folder `signing-private` di sebelah folder repo; izin folder 700 dan berkas rahasia 600. Cadangkan keduanya ke penyimpanan privat yang aman sebelum dipakai untuk distribusi. Jangan mengganti kunci sembarangan setelah aplikasi terpasang.
 - Rilis menolak akun tanpa kata sandi dan tidak menampilkan masuk cepat. Sesuai konfigurasi operasional saat ini, akun awal memakai `test1234` dan wajib diubah dari Profil sebelum dipakai untuk data nyata.
