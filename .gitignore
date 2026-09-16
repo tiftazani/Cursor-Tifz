@@ -25,3 +25,8 @@ npm-debug.log*
 **/cuciin-signing.properties
 **/signing-private/
 laundry-ops/cloudflare/backups/
+
+# Aset referensi desain lokal (gambar lampiran besar, bukan bagian aplikasi)
+laundry-ops/Image/
+laundry-ops/Design airbnb.md
+laundry-ops/LAUNDRY_APP_UI_UX_GUIDELINE.md
