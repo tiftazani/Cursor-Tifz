@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { attendanceRecordOwnedBy, canonicalHistoryPayload, cashCloseCreateAllowed, commandFailureResult, commandPermission, nextEntityVersion, orderUpsertAllowed, parseCommand, pullChanges, pushCommands, staffJournalScopes, stockMoveOrderReferenceAllowed, syncScopeKey, trustedCommission } from "../src/command-sync.ts";
 import { applyJournalToSnapshot, legacySnapshotWriteAllowed, visibleSnapshot } from "../src/index.ts";
+import { commandRequest, fakeD1, identities, rows, seedBaseline } from "./support/d1-harness.mjs";
 
 const migration = readFileSync(new URL("../migrations/0003_command_sync.sql", import.meta.url), "utf8");
 const commandSyncSource = readFileSync(new URL("../src/command-sync.ts", import.meta.url), "utf8");
@@ -231,4 +232,59 @@ test("snapshot PUT lama hanya tersedia untuk bootstrap privat", () => {
   assert.equal(legacySnapshotWriteAllowed({bootstrap:true},0),true);
   assert.equal(legacySnapshotWriteAllowed({bootstrap:true},1),false);
   assert.equal(legacySnapshotWriteAllowed({bootstrap:false},0),false);
+});
+
+test("entri jurnal bertipe order tetap masuk ke notas saat materialisasi", () => {
+  const base={notas:[],deletedNotaIds:[],updatedAt:1};
+  const materialized=applyJournalToSnapshot(base,[
+    {sequence:1,entity_type:"order",entity_id:"MLT-9",operation:"upsert",payload_json:JSON.stringify({id:"MLT-9",customer:"Baru"}),updated_at:2},
+  ],1);
+  assert.deepEqual(materialized.notas.map(row=>row.id),["MLT-9"]);
+  const removed=applyJournalToSnapshot(materialized,[
+    {sequence:2,entity_type:"order",entity_id:"MLT-9",operation:"delete",payload_json:null,updated_at:3},
+  ],2);
+  assert.deepEqual(removed.notas,[]);
+  assert.deepEqual(removed.deletedNotaIds,["MLT-9"]);
+});
+
+test("order.payment tidak menghapus rincian Nota pada payload tersimpan", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  const created=await (await pushCommands(commandRequest([{
+    commandId:"nota-create-0001",type:"order.create",entityId:"MLT-1",branchId:"melati",
+    payload:{id:"MLT-1",branchId:"melati",customerName:"Pelanggan Uji",phone:"0812",total:20000,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:2,unit:"kg",unitPrice:10000}]},
+  }]),env,identities.kasir)).json();
+  assert.equal(created.results[0].accepted,true);
+
+  const paid=await (await pushCommands(commandRequest([{
+    commandId:"nota-pay-0001",type:"order.payment",entityId:"MLT-1",branchId:"melati",
+    payload:{paid:20000,paymentStatus:"Lunas",paymentMethod:"Tunai"},
+  }]),env,identities.kasir)).json();
+  assert.equal(paid.results[0].accepted,true);
+
+  const stored=JSON.parse(rows(env,"SELECT payload_json FROM orders WHERE id='MLT-1'")[0].payload_json);
+  assert.equal(stored.customer,"Pelanggan Uji","nama pelanggan tidak boleh hilang");
+  assert.equal(stored.lines.length,1,"rincian layanan tidak boleh hilang");
+  assert.equal(stored.paid,20000);
+  assert.equal(stored.pay,"Lunas");
+
+  const journal=rows(env,"SELECT entity_type,payload_json FROM sync_changes WHERE entity_type IN ('nota','order') ORDER BY sequence");
+  assert.equal(journal.length,2);
+  assert.equal(JSON.parse(journal[1].payload_json).customer,"Pelanggan Uji");
+});
+
+test("stock.batch menjurnal riwayat stok dan saldo sebagai entity yang dikenal perangkat", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO products(id,organization_id,name,minimum_stock,kind,unit,updated_at)
+    VALUES('detergen','cuciin','Detergen',1,'BahanHabisPakai','pcs',1);`);
+  const response=await pushCommands(commandRequest([{
+    commandId:"stock-batch-0001",type:"stock.batch",entityId:"batch-1",branchId:"melati",
+    payload:{branchId:"melati",items:[{productId:"detergen",productName:"Detergen",mode:"delta",quantity:5}]},
+  }]),env,identities.kasir);
+  const body=await response.json();
+  assert.equal(body.results[0].accepted,true);
+  assert.equal(rows(env,"SELECT quantity FROM branch_stocks WHERE branch_id='melati' AND product_id='detergen'")[0].quantity,5);
+  const types=rows(env,"SELECT entity_type FROM sync_changes WHERE entity_type IN ('stockMove','branchStock','stock') ORDER BY entity_type").map(row=>row.entity_type);
+  assert.deepEqual(types,["branchStock","stockMove"],"riwayat stok harus dijurnal dengan tipe yang dipahami materializer");
 });

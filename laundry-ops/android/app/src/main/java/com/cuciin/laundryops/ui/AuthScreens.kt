@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.LocalLaundryService
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +51,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -57,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.cuciin.laundryops.BuildConfig
+import com.cuciin.laundryops.R
 import com.cuciin.laundryops.data.CloudSync
 import com.cuciin.laundryops.data.CuciinStore
 import com.cuciin.laundryops.data.FirebaseCloud
@@ -70,6 +74,7 @@ import com.cuciin.laundryops.ui.theme.Card
 import com.cuciin.laundryops.ui.theme.Coral
 import com.cuciin.laundryops.ui.theme.Ink
 import com.cuciin.laundryops.ui.theme.Line
+import com.cuciin.laundryops.ui.theme.LocalCuciinPalette
 import com.cuciin.laundryops.ui.theme.Muted
 import com.cuciin.laundryops.ui.theme.Teal
 import com.cuciin.laundryops.ui.theme.TealDeep
@@ -123,6 +128,7 @@ internal fun Field(
 @Composable
 internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
+    val palette = LocalCuciinPalette.current
     var email by remember { mutableStateOf(if (BuildConfig.DEBUG) store.ownerEmail else "") }
     var pass by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -139,16 +145,27 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
         else if (store.pendingName.value != null) nav.navigate("pending")
         else toast("Email atau kata sandi salah, atau akun belum ada.")
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(ui.pad), horizontalAlignment = Alignment.CenterHorizontally) {
-        Column(Modifier.widthIn(max = 460.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                BrandMark()
-                Column {
-                    Text("cuciin", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    Text("LAUNDRY & PERAWATAN", fontSize = 10.sp, letterSpacing = 1.sp, color = Muted)
+    Box(Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(R.drawable.login_laundry),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+        Box(Modifier.fillMaxSize().background(Color(0xA80D164B)))
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(ui.pad),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Column(Modifier.widthIn(max = 460.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    BrandMark()
+                    Column {
+                        Text("cuciin", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = OnHero)
+                        Text("Laundry dan perawatan", fontSize = 12.sp, color = OnHero.copy(alpha = .82f))
+                    }
                 }
-            }
-            Surface(color = TealDeep, shape = RoundedCornerShape(26.dp)) {
+            Surface(color = palette.heroA, shape = RoundedCornerShape(26.dp)) {
                 Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Cucian terurus.\nPekerjaan tertata.", color = OnHero, fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold)
                     Text("Catat pesanan, pantau proses, dan siapkan cucian pelanggan dalam satu tempat.", color = OnHero.copy(alpha = .85f), fontSize = 14.sp, lineHeight = 21.sp)
@@ -198,22 +215,23 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
             }
             GhostBtn("Daftar sebagai Kasir / SPV", icon = Icons.Outlined.PersonAdd) { nav.navigate("register") }
             if (BuildConfig.DEBUG) {
-                Text("MASUK CEPAT", color = Teal, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Text("Masuk cepat", color = OnHero, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    listOf(Role.Owner to "Owner", Role.Kasir to "Kasir", Role.Supervisor to "SPV").forEach { (role, label) ->
+                    store.staff.map { it.role }.distinct().forEach { role ->
+                        val label = if (role == Role.Supervisor) "SPV" else role.name
                         GhostBtn(label, modifier = Modifier.weight(1f)) {
-                            store.demoLogin(role)
-                            goHome()
+                            if (store.demoLogin(role)) goHome() else toast("Akun demo tidak tersedia")
                         }
                     }
                 }
             }
-            Text("Dikelola oleh ${store.ownerName}", color = Muted, fontSize = 12.sp)
-            Text(CloudSync.lastStatus, color = Muted, fontSize = 12.sp)
+            Text("Dikelola oleh ${store.ownerName}", color = OnHero.copy(alpha = .82f), fontSize = 12.sp)
+            Text(CloudSync.lastStatus, color = OnHero.copy(alpha = .82f), fontSize = 12.sp)
             TextButton(onClick = { nav.navigate("versions") }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text("Versi ${BuildConfig.VERSION_NAME}", color = Muted)
+                Text("Versi ${BuildConfig.VERSION_NAME}", color = OnHero)
             }
         }
+    }
     }
     if (loginHelp) AlertDialog(onDismissRequest = { if (!resetBusy) loginHelp = false }, title = { Text("Reset kata sandi") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

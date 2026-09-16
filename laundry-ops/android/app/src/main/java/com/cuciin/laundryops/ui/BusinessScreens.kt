@@ -75,14 +75,14 @@ internal fun InventoryScreen(nav: NavHostController, toast: (String) -> Unit) {
         }
         if (!creating && editing == null) item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PrimaryBtn("Tambah inventory", Modifier.weight(1f), icon = Icons.Outlined.Add) { creating = true; fill(null) }
-                GhostBtn("Export", Modifier.weight(.65f), icon = Icons.Outlined.FileDownload) { FileExports.shareInventory(ctx, rows) }
+                PrimaryBtn("Tambah aset", Modifier.weight(1f), icon = Icons.Outlined.Add) { creating = true; fill(null) }
+                GhostBtn("Ekspor", Modifier.weight(.65f), icon = Icons.Outlined.FileDownload) { FileExports.shareInventory(ctx, rows) }
             }
         }
         if (creating || editing != null) item {
             CardBlock(accent = Teal) {
-                SectionLabel(if (editing == null) "Inventory baru" else "Ubah inventory")
-                Field(name, { name = it }, "Nama inventory")
+                SectionLabel(if (editing == null) "Aset baru" else "Ubah aset")
+                Field(name, { name = it }, "Nama aset")
                 SectionLabel("Kategori")
                 ChipRow { assetCategories.forEach { value -> SelectChip(category == value, value.label) { category = value } } }
                 Field(brand, { brand = it }, "Merek / pembuat")
@@ -99,13 +99,13 @@ internal fun InventoryScreen(nav: NavHostController, toast: (String) -> Unit) {
                     val old = editing
                     if (old == null) businessStore.addInventory(branchId, name, category, brand, serial, quantity.toIntOrNull() ?: 0, unit, status, purchaseAt, notes, sellable = false)
                     else businessStore.updateInventory(old.copy(branchId = branchId, name = name, category = category, brand = brand, serialNumber = serial, quantity = quantity.toIntOrNull() ?: 0, unit = unit, status = status, purchaseAt = purchaseAt, notes = notes, sellable = false))
-                    toast("Inventory tersimpan untuk ${businessStore.branch(branchId).name}"); creating = false; editing = null
+                    toast("Aset tersimpan untuk ${businessStore.branch(branchId).name}"); creating = false; editing = null
                 }
-                if (editing != null) DangerBtn("Hapus inventory") { businessStore.deleteInventory(editing!!.id)?.let(toast) ?: run { editing = null; toast("Inventory dihapus") } }
+                if (editing != null) DangerBtn("Hapus aset") { businessStore.deleteInventory(editing!!.id)?.let(toast) ?: run { editing = null; toast("Aset dihapus") } }
                 GhostBtn("Batal") { creating = false; editing = null }
             }
         }
-        if (!creating && editing == null && rows.isEmpty()) item { EmptyHint("Inventory belum dicatat", "Tambahkan mesin cuci, mesin pengering, peralatan, bahan, atau barang jual untuk cabang ini.") }
+        if (!creating && editing == null && rows.isEmpty()) item { EmptyHint("Aset belum dicatat", "Tambahkan mesin cuci, mesin pengering, peralatan, bahan, atau barang jual untuk cabang ini.") }
         if (!creating && editing == null) items(rows, key = { it.id }) { row ->
             CardBlock(Modifier.clickable { fill(row) }, accent = when (row.status) { InventoryStatus.Normal -> Green; InventoryStatus.PerluPerbaikan -> Amber; InventoryStatus.Rusak -> Coral }) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -141,7 +141,7 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
         if (!creating) item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PrimaryBtn("Catat biaya", Modifier.weight(1f), icon = Icons.Outlined.Add) { creating = true }
-                GhostBtn("Export", Modifier.weight(.65f), icon = Icons.Outlined.FileDownload) { FileExports.shareExpenses(ctx, rows) }
+                GhostBtn("Ekspor", Modifier.weight(.65f), icon = Icons.Outlined.FileDownload) { FileExports.shareExpenses(ctx, rows) }
             }
         }
         if (creating) item {
@@ -267,7 +267,7 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
             }
         }
         item { SectionLabel(if (session.role == Role.Owner) "Riwayat cabang" else "Riwayat saya") }
-        item { GhostBtn("Export absensi CSV", icon = Icons.Outlined.FileDownload) { FileExports.shareAttendance(ctx, rows) } }
+        item { GhostBtn("Ekspor absensi CSV", icon = Icons.Outlined.FileDownload) { FileExports.shareAttendance(ctx, rows) } }
         if (rows.isEmpty()) item { EmptyHint("Belum ada absensi", "Riwayat absen masuk dan pulang akan tampil di sini.") }
         items(rows, key = { it.id }) { row ->
             CardBlock {
@@ -278,7 +278,7 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
                     }
                     Chip(if (row.checkOutAtMs == null) "Aktif" else "Lengkap", if (row.checkOutAtMs == null) Amber else Green)
                 }
-                InfoRow(Icons.Outlined.Schedule, "Jam kerja", "${row.checkInAt} — ${row.checkOutAt ?: "sekarang"}")
+                InfoRow(Icons.Outlined.Schedule, "Jam kerja", "${row.checkInAt} sampai ${row.checkOutAt ?: "sekarang"}")
                 Text("Durasi ${durationLabel(row)}", color = Ink, fontWeight = FontWeight.SemiBold)
                 AttendancePhotoPreview(row.checkInPhotoPath, "Foto masuk tersimpan di perangkat")
                 if (row.checkOutPhotoPath.isNotBlank()) AttendancePhotoPreview(row.checkOutPhotoPath, "Foto pulang tersimpan di perangkat")

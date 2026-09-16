@@ -45,6 +45,9 @@ import androidx.navigation.compose.rememberNavController
 import com.cuciin.laundryops.data.CuciinStore
 import com.cuciin.laundryops.data.Role
 import com.cuciin.laundryops.ui.theme.Card
+import com.cuciin.laundryops.ui.theme.Gold
+import com.cuciin.laundryops.ui.theme.LocalCuciinPalette
+import com.cuciin.laundryops.ui.theme.OnHero
 import com.cuciin.laundryops.ui.theme.OnPrim
 import com.cuciin.laundryops.ui.theme.Foam
 import com.cuciin.laundryops.ui.theme.Ink
@@ -90,19 +93,22 @@ fun CuciinRoot() {
     }
     fun toast(msg: String) { scope.launch { snack.showSnackbar(msg) } }
 
+    val palette = LocalCuciinPalette.current
+    val navSurface = palette.heroA
+    val navSelected = palette.navSelected
     val navColors = NavigationBarItemDefaults.colors(
-        selectedIconColor = OnPrim,
-        selectedTextColor = Teal,
-        indicatorColor = Teal,
-        unselectedIconColor = Muted,
-        unselectedTextColor = Muted,
+        selectedIconColor = navSelected,
+        selectedTextColor = navSelected,
+        indicatorColor = OnHero.copy(alpha = 0.14f),
+        unselectedIconColor = OnHero.copy(alpha = 0.76f),
+        unselectedTextColor = OnHero.copy(alpha = 0.76f),
     )
     val railColors = NavigationRailItemDefaults.colors(
-        selectedIconColor = OnPrim,
-        selectedTextColor = Teal,
-        indicatorColor = Teal,
-        unselectedIconColor = Muted,
-        unselectedTextColor = Muted,
+        selectedIconColor = navSelected,
+        selectedTextColor = navSelected,
+        indicatorColor = OnHero.copy(alpha = 0.14f),
+        unselectedIconColor = OnHero.copy(alpha = 0.76f),
+        unselectedTextColor = OnHero.copy(alpha = 0.76f),
     )
 
     fun go(r: String) {
@@ -112,7 +118,7 @@ fun CuciinRoot() {
 
     Row(Modifier.fillMaxSize()) {
         if (showBar && ui.useRail) {
-            NavigationRail(modifier = Modifier.verticalScroll(rememberScrollState()), containerColor = Card, header = { com.cuciin.laundryops.ui.components.BrandMark(Modifier.padding(vertical = 16.dp)) }) {
+            NavigationRail(modifier = Modifier.verticalScroll(rememberScrollState()), containerColor = navSurface, header = { com.cuciin.laundryops.ui.components.BrandMark(Modifier.padding(vertical = 16.dp)) }) {
                 visibleTabs.forEach { t ->
                     NavigationRailItem(
                         selected = route == t.route,
@@ -129,7 +135,7 @@ fun CuciinRoot() {
             snackbarHost = { SnackbarHost(snack) },
             bottomBar = {
                 if (showBar && ui.compact) {
-                    NavigationBar(containerColor = Card, contentColor = Ink) {
+                    NavigationBar(containerColor = navSurface, contentColor = OnHero) {
                         visibleTabs.forEach { t ->
                             NavigationBarItem(
                                 selected = route == t.route,

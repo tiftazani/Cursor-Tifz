@@ -72,19 +72,41 @@ object CuciinStore {
         branches.clear()
         branches.addAll(
             listOf(
-                Branch("melati", "MEL", "Cuciin Melati", "Jl. Melati 12, Bandung", "-6.9175,107.6191"),
-                Branch("cibaduyut", "CIB", "Cuciin Cibaduyut", "Jl. Cibaduyut Raya 88, Bandung", "-6.9590,107.5920"),
+                Branch(
+                    "bunayya",
+                    "BNY",
+                    "Bunayya",
+                    "Jalan Cibeureum Rawa Ilat, Cileungsi Kidul, Cileungsi, Kabupaten Bogor, Jawa Barat 16820",
+                    "https://maps.google.com/maps/place//data=!4m2!3m1!1s0x2e6995002659ac83:0x97836acda1141d3d?entry=s&sa=X&ved=2ahUKEwjpor2slPKWAxWeleEIHUYbIGsQ4kB6BAgWEAA&hl=en",
+                ),
+                Branch(
+                    "laupay-kirab",
+                    "LPK",
+                    "Laupay Kirab",
+                    "Cileungsi Kidul, Cileungsi, Kabupaten Bogor, Jawa Barat 16820",
+                    "https://maps.google.com/maps/place//data=!4m2!3m1!1s0x2e6995005dfaa28f:0xfd6a4729e6bc1203?entry=s&sa=X&ved=2ahUKEwifxbTLlPKWAxXt-DgGHZPhIyYQ4kB6BAgEEAA&hl=en",
+                ),
+                Branch(
+                    "laupay-dayeuh",
+                    "LPD",
+                    "Laupay Dayeuh",
+                    "Jalan Cibeureum Rawa Ilat, Dayeuh, Cileungsi, Kabupaten Bogor, Jawa Barat 16820",
+                    "https://maps.google.com/maps/place//data=!4m2!3m1!1s0x2e6995004d56ad6b:0xcd7900f039b63334?entry=s&sa=X&ved=2ahUKEwjB-YvAlPKWAxVn3TgGHeHiM_wQ4kB6BAgEEAA&hl=en",
+                ),
+                Branch("shelly", "SHL", "Shelly", "Alamat belum tersedia", ""),
             ),
         )
         staff.clear()
         staff.addAll(
             listOf(
-                Staff(ownerName, ownerEmail, Role.Owner, listOf("melati", "cibaduyut"), passwordHash = Passwords.hash("test1234")),
-                Staff("Rina", "rina@cuciin.id", Role.Kasir, listOf("melati"), passwordHash = Passwords.hash("test1234")),
-                Staff("Dedi", "dedi@cuciin.id", Role.Kasir, listOf("melati"), passwordHash = Passwords.hash("test1234")),
-                Staff("Andi", "andi@cuciin.id", Role.Supervisor, listOf("melati"), passwordHash = Passwords.hash("test1234")),
-                Staff("Salsa", "salsa@cuciin.id", Role.Kasir, listOf("cibaduyut"), passwordHash = Passwords.hash("test1234")),
-                Staff("Yoga", "yoga@cuciin.id", Role.Supervisor, listOf("cibaduyut"), passwordHash = Passwords.hash("test1234")),
+                Staff(ownerName, ownerEmail, Role.Owner, branches.map(Branch::id), passwordHash = Passwords.hash("test1234")),
+                Staff("Ustutifa", "Us.archuleta1207@gmail.com", Role.Owner, branches.map(Branch::id), passwordHash = Passwords.hash("test1234")),
+                Staff("titahdamaiteratera243", "titahdamaiteratera243@gmail.com", Role.Kasir, listOf("bunayya"), passwordHash = Passwords.hash("test1234")),
+                Staff("fiasvia2301", "fiasvia2301@gmail.com", Role.Kasir, listOf("bunayya"), passwordHash = Passwords.hash("test1234")),
+                Staff("widadalhusaini10", "widadalhusaini10@gmail.com", Role.Kasir, listOf("laupay-kirab"), passwordHash = Passwords.hash("test1234")),
+                Staff("aidanurita25", "aidanurita25@gmail.com", Role.Kasir, listOf("laupay-kirab"), passwordHash = Passwords.hash("test1234")),
+                Staff("deccintaaulia180", "deccintaaulia180@gmail.com", Role.Kasir, listOf("laupay-dayeuh"), passwordHash = Passwords.hash("test1234")),
+                Staff("salsabilayumna2006", "salsabilayumna2006@gmail.com", Role.Kasir, listOf("shelly"), passwordHash = Passwords.hash("test1234")),
             ),
         )
         customers.clear()
@@ -126,7 +148,7 @@ object CuciinStore {
         whatsappTemplates.add(WhatsAppTemplate())
         val t = Clock.nowMs()
         localUpdatedAt = t
-        audit.add(AuditRow(Clock.nowLabel(t), t, ownerName, "melati", "Data awal: 2 cabang, antrian kosong. Isi stok & pelanggan sebelum nota pertama.", null, syncEventId()))
+        audit.add(AuditRow(Clock.nowLabel(t), t, ownerName, "bunayya", "Data awal: 4 cabang, antrian kosong. Isi stok dan pelanggan sebelum Service pertama.", null, syncEventId()))
     }
 
     private fun isPristineSeed(snapshot: Snapshot): Boolean =
@@ -541,13 +563,10 @@ object CuciinStore {
         return true
     }
 
-    fun demoLogin(role: Role) {
-        if (!BuildConfig.DEBUG) return
-        when (role) {
-            Role.Owner -> login(ownerEmail, skipPassword = true)
-            Role.Kasir -> login("rina@cuciin.id", skipPassword = true)
-            Role.Supervisor -> login("andi@cuciin.id", skipPassword = true)
-        }
+    fun demoLogin(role: Role): Boolean {
+        if (!BuildConfig.DEBUG) return false
+        val account = staff.firstOrNull { it.role == role && it.approved } ?: return false
+        return login(account.email, skipPassword = true)
     }
 
     fun logout() {

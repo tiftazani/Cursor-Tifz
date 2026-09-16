@@ -171,7 +171,7 @@ export type SnapshotJournalChange = {
 
 const CHANGE_DATASETS:Record<string,string>={
   branch:"branches",staff:"staff",customer:"customers",service:"services",product:"products",branchStock:"branchStocks",
-  inventory:"inventory",expense:"expenses",nota:"notas",stockMove:"stockMoves",audit:"audit",cashClose:"cashCloses",attendance:"attendance",accessPolicy:"accessPolicies",whatsappTemplate:"whatsappTemplates",
+  inventory:"inventory",expense:"expenses",nota:"notas",order:"notas",stockMove:"stockMoves",audit:"audit",cashClose:"cashCloses",attendance:"attendance",accessPolicy:"accessPolicies",whatsappTemplate:"whatsappTemplates",
 };
 
 function journalEntityId(dataset:string,row:JsonRecord):string {
@@ -193,7 +193,7 @@ export function applyJournalToSnapshot(base:JsonRecord,changes:SnapshotJournalCh
       if(payload && typeof payload==="object" && !Array.isArray(payload)) rows.push(payload as JsonRecord);
     }
     snapshot[dataset]=rows;
-    if(change.entity_type==="nota") {
+    if(change.entity_type==="nota" || change.entity_type==="order") {
       const deleted=new Set(listOfStrings(snapshot.deletedNotaIds));
       if(change.operation==="delete") deleted.add(change.entity_id); else deleted.delete(change.entity_id);
       snapshot.deletedNotaIds=[...deleted];

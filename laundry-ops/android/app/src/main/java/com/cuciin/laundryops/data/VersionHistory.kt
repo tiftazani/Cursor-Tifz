@@ -2,7 +2,7 @@ package com.cuciin.laundryops.data
 
 /**
  * Sumber versi di app. Selaras dengan `versionName` / `versionCode` di Gradle.
- * Tambah entri di sini setiap bump APK — layar Riwayat versi membacanya.
+ * Tambah entri di sini setiap bump APK, lalu layar Riwayat versi membacanya.
  */
 data class AppRelease(
     val name: String,
@@ -19,11 +19,14 @@ object VersionHistory {
         AppRelease(
             name = "1.10.0", code = 19, date = "16 Sep 2026",
             notes = listOf(
-                "Tampilan seluruh aplikasi memakai sistem desain baru: kanvas putih bersih, teks near-black, satu warna aksen, tombol utama gelap, dan sudut membulat 8 sampai 20 piksel.",
+                "Tampilan seluruh aplikasi memakai sistem desain Jemur: struktur navy, aksi utama pink, aksen kuning pada navigasi, permukaan putih, dan sudut membulat 14 sampai 26 piksel.",
                 "Pemilih periode laporan menjadi satu bilah ringkas berisi periode aktif dan jumlah cabang, dengan lembar pilihan. Deretan kartu periode dihapus.",
                 "Header laporan menyebut data yang diambil: rentang tanggal, jumlah cabang, dan jumlah Service, jadi angka di bawahnya jelas asalnya.",
                 "Ringkasan per cabang dan per kasir menjadi daftar baris, bukan tumpukan kartu, sehingga puluhan cabang tetap terbaca.",
                 "Daftar cabang memakai baris ringkas dengan kolom pencarian nama, kode, atau alamat, plus keterangan jumlah kasir dan SPV tiap cabang.",
+                "Daftar User menampilkan Owner, Kasir, dan SPV sekaligus, dengan pencarian nama atau email dan penyaring peran.",
+                "Layar masuk memakai latar ilustrasi laundry dengan panel navy, dan ikon tiap jenis layanan kini mewakili pekerjaannya.",
+                "Data awal berisi empat cabang nyata (Bunayya, Laupay Kirab, Laupay Dayeuh, Shelly) beserta enam akun kasir dan dua Owner.",
                 "Ikon aplikasi baru: mesin cuci dengan tumpukan lipatan laundry, tiga lapis yang mengecil ke atas.",
                 "Identitas aplikasi berpindah ke paket com.cuciin.laundryops. Aplikasi lama tetap ada di HP dan harus dicopot manual setelah versi ini dipasang, karena Android menganggap keduanya aplikasi berbeda.",
                 "Firebase Authentication berpindah ke project cuciin-ops. Seluruh akun operasional dibuat ulang di project itu dengan kata sandi awal yang sama seperti data awal aplikasi.",

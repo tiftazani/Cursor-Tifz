@@ -206,7 +206,7 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
         item {
             ScreenHeader("Cabang", null, onBack = { nav.popBackStack() }) {
                 if (!creating && editing == null) {
-                    Surface(onClick = { creating = true; editingId = null; fill(null) }, modifier = Modifier.size(40.dp), shape = CircleShape, color = Surface2) {
+                    Surface(onClick = { creating = true; editingId = null; fill(null) }, modifier = Modifier.size(44.dp), shape = CircleShape, color = Surface2) {
                         Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Add, "Cabang baru", tint = Ink, modifier = Modifier.size(20.dp)) }
                     }
                 }
@@ -317,6 +317,8 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
 @Composable
 internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
+    val session = store.session.value ?: return
+    if (session.role != Role.Owner) { nav.popBackStack(); return }
     var editing by remember { mutableStateOf<Staff?>(null) }
     var creating by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -327,6 +329,8 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
     var pass by remember { mutableStateOf("") }
     var role by remember { mutableStateOf(Role.Kasir) }
     var branches by remember { mutableStateOf(setOf<String>()) }
+    var userQuery by rememberSaveable { mutableStateOf("") }
+    var roleFilter by rememberSaveable { mutableStateOf<Role?>(null) }
     fun fill(u: Staff?) {
         name = u?.name.orEmpty()
         email = u?.email.orEmpty()
@@ -335,8 +339,19 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
         branches = u?.branchIds?.toSet() ?: setOf(store.branches.first().id)
     }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), state = listState, verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { ScreenHeader("Pengguna", "Akun, peran, dan akses cabang", onBack = { nav.popBackStack() }) }
-        if (!creating && editing == null) item { PrimaryBtn("Pengguna baru", icon = Icons.Outlined.Add) { creating = true; editing = null; fill(null) } }
+        item { ScreenHeader("Daftar User", "Owner, kasir, SPV, dan akses cabang", onBack = { nav.popBackStack() }) }
+        if (!creating && editing == null) {
+            item { PrimaryBtn("Tambah user", icon = Icons.Outlined.Add) { creating = true; editing = null; fill(null) } }
+            item { SearchField(userQuery, { userQuery = it }, "Cari nama atau email") }
+            item {
+                ChipRow {
+                    SelectChip(roleFilter == null, "Semua") { roleFilter = null }
+                    SelectChip(roleFilter == Role.Owner, "Owner") { roleFilter = Role.Owner }
+                    SelectChip(roleFilter == Role.Kasir, "Kasir") { roleFilter = Role.Kasir }
+                    SelectChip(roleFilter == Role.Supervisor, "SPV") { roleFilter = Role.Supervisor }
+                }
+            }
+        }
         if (creating || editing != null) {
             item {
                 CardBlock(accent = Teal) {
@@ -372,6 +387,19 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
                             editing = null
                         }
                     }
+                    if (editing != null && !editing!!.approved) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            PrimaryBtn("Setujui", modifier = Modifier.weight(1f)) {
+                                store.approve(editing!!.name, true)
+                                toast("User disetujui")
+                                editing = null
+                            }
+                            GhostBtn("Tolak", modifier = Modifier.weight(1f)) {
+                                store.deleteStaff(editing!!.email)?.let { toast(it) } ?: toast("Permohonan ditolak")
+                                editing = null
+                            }
+                        }
+                    }
                     if (editing != null) {
                         DangerBtn("Hapus pengguna") {
                             store.deleteStaff(editing!!.email)?.let { toast(it) } ?: run {
@@ -385,23 +413,33 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
         }
-        if (!creating && editing == null) items(store.staff.toList(), key = { it.email }) { u ->
-            CardBlock(Modifier.clickable { editing = u; creating = false; fill(u) }) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AvatarMark(u.name)
-                    Column(Modifier.weight(1f)) {
-                        Text(u.name, fontWeight = FontWeight.Bold)
-                        Text("${u.role} · ${u.email}", color = Muted, fontSize = 12.sp)
-                        Text(u.branchIds.joinToString { id -> store.branches.find { it.id == id }?.name ?: id }, color = Muted, fontSize = 12.sp)
-                        Chip(if (u.approved) "Aktif" else "Menunggu", if (u.approved) Green else Amber)
+        if (!creating && editing == null) {
+            val shown = store.staff
+                .filter { user ->
+                    (roleFilter == null || user.role == roleFilter) &&
+                        (userQuery.isBlank() || user.name.contains(userQuery, true) || user.email.contains(userQuery, true))
+                }
+                .sortedWith(compareBy<Staff> { when (it.role) { Role.Owner -> 0; Role.Supervisor -> 1; Role.Kasir -> 2 } }.thenBy { it.name.lowercase() })
+            if (shown.isEmpty()) {
+                item { EmptyHint("User tidak ditemukan", "Ubah kata kunci atau pilih filter peran lain.") }
+            } else {
+                item {
+                    ListCard {
+                        shown.forEachIndexed { index, user ->
+                            val roleLabel = if (user.role == Role.Supervisor) "SPV" else user.role.name
+                            val branchLabel = user.branchIds.joinToString { id -> store.branches.find { it.id == id }?.name ?: id }
+                            ListRow(
+                                mark = user.name,
+                                title = user.name,
+                                detail = "$roleLabel · ${user.email}\n${branchLabel.ifBlank { "Belum ada cabang" }}",
+                                trailing = { Chip(if (user.approved) "Aktif" else "Menunggu", if (user.approved) Green else Amber) },
+                                onClick = { editing = user; creating = false; fill(user) },
+                            )
+                            if (index < shown.lastIndex) RowDivider()
+                        }
                     }
                 }
-                if (!u.approved) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp).fillMaxWidth()) {
-                        PrimaryBtn("Setujui", modifier = Modifier.weight(1f)) { store.approve(u.name, true); toast("Disetujui") }
-                        GhostBtn("Tolak", modifier = Modifier.weight(1f)) { store.approve(u.name, false); toast("Ditolak") }
-                    }
-                }
+                item { Text("${shown.size} dari ${store.staff.size} user ditampilkan", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp)) }
             }
         }
         item { Spacer(Modifier.height(20.dp)) }

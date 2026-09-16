@@ -307,22 +307,32 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
 
   if (["order.status", "order.payment", "order.handover"].includes(command.type)) {
     if (!existing) throw new CommandError(404, "Service tidak ditemukan");
+    // Snapshot materializer mengganti seluruh entity saat upsert, jadi payload parsial
+    // akan menghapus field lain. Susun ulang payload lengkap dari baris tersimpan.
+    const storedPayload=existing.payload_json ? JSON.parse(existing.payload_json) as JsonRecord : null;
+    const storedLines=(await db.prepare("SELECT service_id,service_name,quantity,unit,unit_price,handler_email,handler_name,commission_per_unit FROM order_lines WHERE order_id=? ORDER BY line_no").bind(id).all<{service_id:string;service_name:string;quantity:number;unit:string;unit_price:number;handler_email:string;handler_name:string;commission_per_unit:number}>()).results;
+    const canonicalFull:JsonRecord={...(storedPayload ?? {}),id,branchId:existing.branch_id,kasirEmail:existing.cashier_email,kasir:existing.cashier_name,customer:existing.customer_name,phone:existing.phone,total:existing.total,paid:existing.paid,pay:existing.payment_status,laundry:existing.work_status,payMethod:existing.payment_method,createdAt:typeof storedPayload?.createdAt==="string"?storedPayload.createdAt:String(existing.created_at),createdAtMs:existing.created_at,pickupAt:existing.estimated_finish,completedAt:existing.completed_at,pickedUpAt:existing.picked_up_at,waSent:existing.wa_sent===1,photos:[],lines:storedLines.map(line=>({serviceId:line.service_id,name:line.service_name,qty:line.quantity,unit:line.unit,unitPrice:line.unit_price,handledByEmail:line.handler_email,handledByName:line.handler_name,commissionPerUnit:line.commission_per_unit})),updatedAtMs:now};
+    delete (canonicalFull as JsonRecord).syncIntent;
     if (command.type === "order.status") {
       const status = requiredString(p, "workStatus", 80);
+      canonicalFull.laundry=status; canonicalFull.completedAt=p.completedAt ?? null;
       statements.push(db.prepare(`UPDATE orders SET work_status=?,completed_at=?,updated_at=? WHERE id=? AND organization_id=? AND updated_at=? AND ${gate}`).bind(status, p.completedAt ?? null, now, id, ORG_ID, existing.updated_at, command.commandId, ORG_ID, token));
     } else if (command.type === "order.payment") {
       const paid = integer(p, "paid");
       if (paid > existing.total) throw new CommandError(422,"Pembayaran melebihi grand total");
       const status = requiredString(p, "paymentStatus", 50);
       const method = requiredString(p, "paymentMethod", 50);
+      canonicalFull.paid=paid; canonicalFull.pay=status; canonicalFull.payMethod=method;
       statements.push(db.prepare(`UPDATE orders SET paid=?,payment_status=?,payment_method=?,updated_at=? WHERE id=? AND organization_id=? AND updated_at=? AND ?<=total AND ${gate}`).bind(paid,status,method,now,id,ORG_ID,existing.updated_at,paid,command.commandId,ORG_ID,token));
     } else {
       const pickedUpAt = requiredString(p, "pickedUpAt", 80);
+      canonicalFull.pickedUpAt=pickedUpAt;
       statements.push(db.prepare(`UPDATE orders SET picked_up_at=?,updated_at=? WHERE id=? AND organization_id=? AND updated_at=? AND ${gate}`).bind(pickedUpAt,now,id,ORG_ID,existing.updated_at,command.commandId,ORG_ID,token));
     }
+    statements.push(db.prepare(`UPDATE orders SET payload_json=? WHERE id=? AND organization_id=? AND ${gate}`).bind(JSON.stringify(canonicalFull),id,ORG_ID,command.commandId,ORG_ID,token));
     statements.push(guardPreviousMutation(db,command,token));
     statements.push(audit(db, command, identity, token, branchId, command.type, id, now));
-    return { statements, entityType: "order", entityId: id, branchId, changePayload: { ...p, id, branchId, updatedAt: now }, updatedAt:now };
+    return { statements, entityType: command.wireEntityType ?? "nota", entityId: id, branchId, changePayload: canonicalFull, updatedAt:now };
   }
 
   const linesRaw = p.lines;
@@ -404,7 +414,13 @@ async function planStock(db: D1Database, command: SyncCommand, identity: SyncIde
     const payload={ id:moveId,branchId,productId:item.productId,product:item.productName,kind:item.mode,qty:item.quantity,by:identity.email.toLowerCase(),note:item.note,atMs:now };
     statements.push(db.prepare(`INSERT INTO stock_moves(id,organization_id,branch_id,payload_json,occurred_at,updated_at)
       SELECT ?,?,?,?,?,? WHERE ${commandGate()}`).bind(moveId,ORG_ID,branchId,JSON.stringify(payload),now,now,command.commandId,ORG_ID,token));
-    statements.push(journal(db,command,identity,token,"stock",`${branchId}:${item.productId}`,"upsert",branchId,payload,now));
+    // Riwayat stok dan saldo dijurnal sebagai entity yang dikenal materializer snapshot.
+    // Tipe "stock" tidak ada di CHANGE_DATASETS sehingga perubahan tidak sampai ke perangkat.
+    statements.push(db.prepare(`INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id)
+      SELECT ?,'stockMove',?,'upsert',?,?,?,?,? WHERE ${commandGate()}`).bind(ORG_ID,moveId,JSON.stringify(payload),now,branchId,identity.email.toLowerCase(),command.commandId,command.commandId,ORG_ID,token));
+    const balanceId=`${branchId}:${item.productId}`;
+    statements.push(db.prepare(`INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id)
+      SELECT ?,'branchStock',?,'upsert',json_object('branchId',?,'productKey',?,'stock',(SELECT quantity FROM branch_stocks WHERE branch_id=? AND product_id=?)),?,?,?,? WHERE ${commandGate()}`).bind(ORG_ID,balanceId,branchId,item.productId,branchId,item.productId,now,branchId,identity.email.toLowerCase(),command.commandId,command.commandId,ORG_ID,token));
   }
   statements.push(audit(db,command,identity,token,branchId,`Stok batch: ${items.length} produk`,null,now));
   return { statements,entityType:"stock-batch",entityId:command.commandId,branchId,changePayload:null };

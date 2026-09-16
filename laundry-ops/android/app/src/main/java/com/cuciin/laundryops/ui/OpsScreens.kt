@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextAlign
@@ -312,7 +313,7 @@ internal fun NotaScreen(nav: NavHostController, toast: (String) -> Unit) {
                             DropdownMenuItem(
                                 text = { Column { Text(service.name, fontWeight = FontWeight.Bold); Text("${rp(service.price)} / ${service.unit}", color = Muted, fontSize = 12.sp) } },
                                 onClick = { selectedServiceId = service.id; serviceMenuOpen = false },
-                                leadingIcon = { Icon(if (service.selfService) Icons.Outlined.LocalLaundryService else if (service.retail) Icons.Outlined.Inventory2 else Icons.Outlined.DryCleaning, null) },
+                                leadingIcon = { Icon(serviceIcon(service), null) },
                             )
                         }
                     }
@@ -366,6 +367,21 @@ internal fun NotaScreen(nav: NavHostController, toast: (String) -> Unit) {
     }
 }
 
+private fun serviceIcon(service: ServiceItem): ImageVector {
+    val label = "${service.id} ${service.name}".lowercase()
+    return when {
+        service.retail -> Icons.Outlined.Inventory2
+        service.selfService -> Icons.Outlined.LocalLaundryService
+        "setrika" in label || "iron" in label -> Icons.Outlined.Iron
+        "dry" in label || "kering" in label || "curing" in label -> Icons.Outlined.DryCleaning
+        "karpet" in label -> Icons.Outlined.Texture
+        "kasur" in label -> Icons.Outlined.Bed
+        "sepatu" in label || "tas" in label -> Icons.Outlined.Checkroom
+        "lipat" in label -> Icons.Outlined.Checkroom
+        else -> Icons.Outlined.LocalLaundryService
+    }
+}
+
 @Composable
 private fun ServiceTile(svc: ServiceItem, qty: Double, unitPrice: Int, onAdd: () -> Unit, onChange: (Double) -> Unit, onPriceChange: (Int) -> Unit, onRemove: () -> Unit) {
     var editingQty by remember { mutableStateOf(false) }
@@ -376,7 +392,7 @@ private fun ServiceTile(svc: ServiceItem, qty: Double, unitPrice: Int, onAdd: ()
     Surface(shape = RoundedCornerShape(18.dp), color = Card, border = BorderStroke(1.dp, border), modifier = Modifier.fillMaxWidth().animateContentSize()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Surface(shape = RoundedCornerShape(13.dp), color = Mist) { Icon(if (svc.retail) Icons.Outlined.Inventory2 else Icons.Outlined.LocalLaundryService, null, tint = Teal, modifier = Modifier.padding(10.dp).size(24.dp)) }
+                Surface(shape = RoundedCornerShape(13.dp), color = Mist) { Icon(serviceIcon(svc), null, tint = Teal, modifier = Modifier.padding(10.dp).size(24.dp)) }
                 Column(Modifier.weight(1f)) {
                     Text(svc.name, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Text("${rp(unitPrice)} / ${svc.unit}${if (unitPrice != svc.price) " · harga Service" else ""}", color = Muted, fontSize = 12.sp)
@@ -971,8 +987,8 @@ internal fun StockHistoryScreen(nav: NavHostController) {
         }
         if (actors.isNotEmpty()) item { CardBlock { SectionLabel("Akun pelaksana"); ChipRow { SelectChip(actor == "all", "Semua akun") { actor = "all" }; actors.forEach { name -> SelectChip(actor == name, name) { actor = name } } } } }
         item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PrimaryBtn("Export PDF", Modifier.weight(1f), enabled = allDates || !until.isBefore(from), icon = Icons.Outlined.PictureAsPdf) { FileExports.shareStockPdf(ctx, rows, if (allDates) "Semua tanggal" else "${DisplayDates.date(from)} — ${DisplayDates.date(until)}") }
-            GhostBtn("Export CSV", Modifier.weight(1f), enabled = allDates || !until.isBefore(from), icon = Icons.Outlined.TableView) { FileExports.shareStock(ctx, rows) }
+            PrimaryBtn("Ekspor PDF", Modifier.weight(1f), enabled = allDates || !until.isBefore(from), icon = Icons.Outlined.PictureAsPdf) { FileExports.shareStockPdf(ctx, rows, if (allDates) "Semua tanggal" else "${DisplayDates.date(from)} sampai ${DisplayDates.date(until)}") }
+            GhostBtn("Ekspor CSV", Modifier.weight(1f), enabled = allDates || !until.isBefore(from), icon = Icons.Outlined.TableView) { FileExports.shareStock(ctx, rows) }
         } }
         if (rows.isEmpty()) item { EmptyHint("Belum ada perubahan stok", "Barang masuk dan keluar akan tampil di sini lengkap dengan hari, tanggal, dan petugas.") }
         groups.forEach { (day, moves) ->

@@ -85,7 +85,7 @@ internal fun MoreScreen(nav: NavHostController) {
         if (role == Role.Owner) {
             add("Laporan transaksi" to "analytics")
             add("Cabang" to "branches")
-            add("Pengguna · kasir · SPV" to "users")
+            add("Daftar User" to "users")
             add("Layanan & harga" to "services")
             add("Produk stok" to "products")
             add("Pengaturan Owner" to "ownerSettings")
@@ -168,7 +168,7 @@ internal fun MoreScreen(nav: NavHostController) {
                 repeat(columns - group.size) { Spacer(Modifier.weight(1f)) }
             }
         }
-        if (role == Role.Owner) item { GhostBtn("Export semua data (JSON)", icon = Icons.Outlined.FileDownload) { FileExports.shareAllData(ctx, store.exportSnapshot()) } }
+        if (role == Role.Owner) item { GhostBtn("Ekspor semua data (JSON)", icon = Icons.Outlined.FileDownload) { FileExports.shareAllData(ctx, store.exportSnapshot()) } }
         item { GhostBtn("Keluar dari akun", icon = Icons.Outlined.Logout) { store.logout(); nav.navigate("login") { popUpTo(0) } } }
     }
 }
@@ -460,10 +460,10 @@ internal fun AnalyticsScreen(nav: NavHostController) {
         if (rows.isEmpty()) item { EmptyHint("Belum ada transaksi", "Tidak ada Service pada cabang dan periode yang dipilih.") }
         else item { TransactionReportTable(rows.sortedByDescending { it.createdAtMs }, ::branchName) { nav.navigate("queue/$it") } }
         item {
-            val rangeLabel = if (customRange) "${DisplayDates.date(from)} — ${DisplayDates.date(until)}" else period.replaceFirstChar { it.uppercase() }
+            val rangeLabel = if (customRange) "${DisplayDates.date(from)} sampai ${DisplayDates.date(until)}" else period.replaceFirstChar { it.uppercase() }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PrimaryBtn("Export PDF", Modifier.weight(1f), enabled = !customRange || !until.isBefore(from), icon = Icons.Outlined.PictureAsPdf) { FileExports.shareFinancialPdf(ctx, rows, expenseRows, rangeLabel) }
-                GhostBtn("Export CSV", Modifier.weight(1f), enabled = !customRange || !until.isBefore(from), icon = Icons.Outlined.TableView) { FileExports.shareFinancial(ctx, rows, expenseRows) }
+                PrimaryBtn("Ekspor PDF", Modifier.weight(1f), enabled = !customRange || !until.isBefore(from), icon = Icons.Outlined.PictureAsPdf) { FileExports.shareFinancialPdf(ctx, rows, expenseRows, rangeLabel) }
+                GhostBtn("Ekspor CSV", Modifier.weight(1f), enabled = !customRange || !until.isBefore(from), icon = Icons.Outlined.TableView) { FileExports.shareFinancial(ctx, rows, expenseRows) }
             }
         }
         item { Spacer(Modifier.height(16.dp)) }
@@ -549,13 +549,16 @@ internal fun AuditScreen(nav: NavHostController) {
     val ctx = LocalContext.current
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(ui.gap)) {
         item { ScreenHeader("Riwayat aktivitas", "Semua transaksi", onBack = { nav.popBackStack() }) }
-        item { GhostBtn("Export audit trail", icon = Icons.Outlined.FileDownload) { FileExports.shareAudit(ctx, store.audit.toList()) } }
+        item { GhostBtn("Ekspor riwayat perubahan", icon = Icons.Outlined.FileDownload) { FileExports.shareAudit(ctx, store.audit.toList()) } }
         items(store.audit) { a ->
-            CardBlock(Modifier.clickable { a.notaId?.let { nav.navigate("queue/$it") } }) {
-                Text(a.action, fontWeight = FontWeight.Bold)
-                Text("${a.at} · ${a.user}", color = Muted, fontSize = 12.sp)
-            }
+            ListRow(
+                mark = a.user,
+                title = a.action,
+                detail = "${a.at} · ${a.user}",
+                onClick = a.notaId?.let { id -> { nav.navigate("queue/$id") } },
+            )
         }
+        if (store.audit.isEmpty()) item { EmptyHint("Belum ada aktivitas", "Setiap perubahan pesanan, stok, dan kas akan tercatat di sini.") }
         item { Spacer(Modifier.height(16.dp)) }
     }
 }
@@ -713,7 +716,7 @@ internal fun VersionScreen(nav: NavHostController) {
 /** Kalimat contoh supaya pengguna melihat tema mana yang sedang aktif tanpa menebak. */
 private fun paletteSampleLabel(mode: CuciinThemeMode): String = when (mode) {
     CuciinThemeMode.Sistem -> "mengikuti pengaturan gelap/terang HP"
-    CuciinThemeMode.Terang -> "latar terang dengan aksen biru"
-    CuciinThemeMode.Gelap -> "latar gelap dengan aksen biru muda"
-    CuciinThemeMode.Warni -> "latar merah muda dengan aksen plum"
+    CuciinThemeMode.Terang -> "latar terang dengan aksen pink dan navy"
+    CuciinThemeMode.Gelap -> "latar gelap dengan aksen pink muda"
+    CuciinThemeMode.Warni -> "latar merah muda dengan aksen ungu"
 }

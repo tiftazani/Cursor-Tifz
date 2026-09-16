@@ -1,37 +1,49 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 16 September 2026, 12:05 WIB (oleh Hermes).
+Terakhir diperbarui: 16 September 2026, 17:05 WIB (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
 ## 0. Pekerjaan yang sedang berjalan (16 Sep, Hermes)
 
-**Tujuan:** menerapkan sistem desain bergaya Airbnb ke seluruh aplikasi, mengganti ikon, dan memperbaiki tiga layar yang dikeluhkan Owner.
+**Tujuan:** menerapkan sistem desain Jemur ke seluruh aplikasi, mengganti ikon, memigrasikan data cabang dan akun operasional, serta memperbaiki tiga layar yang dikeluhkan Owner.
 
 **Klaim file Hermes untuk pekerjaan ini:**
 
 ```
-laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/theme/Theme.kt        (palet + CuciinShape)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/theme/Theme.kt        (palet Jemur + CuciinShape + navSelected)
 laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/components/Widgets.kt (komponen bersama)
 laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/UiMetrics.kt
-laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MoreScreens.kt        (laporan + periode)
-laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MasterScreens.kt      (daftar cabang)
-laundry-ops/android/app/src/main/res/drawable/ic_launcher_foreground.xml             (ikon baru)
-laundry-ops/android/app/src/main/res/drawable/cuciin_mark.xml
-laundry-ops/android/app/src/main/res/values/colors.xml
-laundry-ops/android/app/src/test/java/com/cuciin/laundryops/ui/theme/ThemePaletteTest.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MoreScreens.kt        (laporan, periode, riwayat aktivitas)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MasterScreens.kt      (daftar cabang, Daftar User)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/AuthScreens.kt        (latar login, masuk cepat)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/CuciinNav.kt          (navigasi bawah navy + kuning)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/BusinessScreens.kt    (istilah aset, absensi)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/OpsScreens.kt         (ikon layanan, ekspor)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/CuciinStore.kt      (seed 4 cabang + 6 kasir, demoLogin)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/VersionHistory.kt
+laundry-ops/android/app/src/main/res/mipmap-*/                                        (ikon launcher dari zip)
+laundry-ops/android/app/src/main/res/drawable-nodpi/                                  (logo + latar login)
+laundry-ops/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher*.xml
+laundry-ops/cloudflare/src/command-sync.ts                                            (payload penuh order.*, jurnal stock.batch)
+laundry-ops/cloudflare/src/index.ts                                                   (CHANGE_DATASETS order, tombstone)
+laundry-ops/cloudflare/tests/command-sync.test.mjs                                    (3 test baru)
 ```
 
-**Codex: jangan menyunting file di atas sampai pekerjaan ini selesai dan dicatat di sini.** Area `ui/AuthScreens.kt`, `ui/OpsScreens.kt`, `ui/BusinessScreens.kt`, dan `ui/OwnerSettingsScreen.kt` **tidak** dipegang Hermes dan tetap milik Codex, tetapi tampilannya ikut berubah karena memakai komponen bersama.
+**Codex: jangan menyunting file di atas sampai pekerjaan ini selesai dan dicatat di sini.**
 
 **Aturan yang berubah dan wajib dipatuhi siapa pun:**
 
-1. **Warna aksen bukan biru lagi.** Token `Teal` sekarang berisi merah aksen tema. Jangan menulis warna biru literal di layar baru; pakai token tema.
-2. **Tombol utama memakai near-black**, bukan warna aksen. Gunakan `PrimaryBtn` untuk pekerja utama dan `AccentBtn` hanya untuk satu aksi paling utama per layar.
-3. **Radius mengikuti `CuciinShape`**, bukan angka bebas: tombol 8, kartu 20, lencana 14, pil 9999.
-4. **Daftar panjang memakai `ListCard` + `ListRow` + `RowDivider`**, bukan tumpukan `CardBlock`. Tumpukan kartu hanya untuk beberapa item.
-5. **Semua pasangan warna wajib lolos WCAG.** Rausch Red asli (#ff385c) gagal 4.5:1, jadi jangan dipakai sebagai teks atau latar tombol. Jalankan `verifikasi-palet.py` di `~/Documents/ChatGPT/Laundry/cuciin-airbnb-mockup/` setelah mengubah palet.
+1. **Arah visual adalah Jemur, bukan Airbnb.** Struktur navy (`heroA` #0D164B), aksi utama pink (`prim` #C1358F), aksen kuning hanya untuk item navigasi aktif (`navSelected` #F7CA3A), permukaan putih, sudut membulat 14 sampai 26.
+2. **Tombol utama memakai navy** (`PrimaryBtn`, `TealDeep`), bukan near-black. `AccentBtn` pink hanya untuk satu aksi paling utama per layar.
+3. **Radius mengikuti `CuciinShape`**, bukan angka bebas: tombol 14, kartu 20, lencana 14, pil 9999.
+4. **Target sentuh minimum 44dp.** Tombol kembali, `SelectChip`, dan tombol tambah cabang sudah dinaikkan; jangan dikembalikan ke 40dp.
+5. **Daftar panjang memakai `ListCard` + `ListRow` + `RowDivider`**, bukan tumpukan `CardBlock`. Cabang, user, dan riwayat aktivitas sudah memakai pola ini.
+6. **Semua pasangan warna wajib lolos WCAG.** Pink asli gagal sebagai teks kecil; teks kecil memakai `TealDeep` navy atau `primDeep`. Jalankan `contrast-check.py` setelah mengubah palet.
+7. **Metadata minimum 12sp dan tanpa all-caps.** `Chip` dan `Eyebrow` tidak lagi mengubah teks menjadi huruf kapital.
+8. **Nama menu pengguna adalah "Daftar User"** dan menampilkan Owner, Kasir, serta SPV dengan pencarian dan penyaring peran.
+
 
 ## 1. Titik berangkat yang sudah diverifikasi
 
@@ -42,11 +54,12 @@ laundry-ops/android/app/src/test/java/com/cuciin/laundryops/ui/theme/ThemePalett
 | Android | **1.10.0 (versionCode 19)** | `app/build.gradle.kts` |
 | Paket aplikasi | `com.cuciin.laundryops` (+ `.debug`) | `app/build.gradle.kts` |
 | Firebase project | **`cuciin-ops`** (lama: `cuciin-ops-tiftazani`) | `firebase/README.md` |
-| Worker produksi | versi `5a2741cc-96b8-423a-8de1-8b2e1ea66f35` | `wrangler deployments list` |
-| Health produksi | `ok`, database `ready` | `curl .../health` |
-| Test Worker | 35 lulus | `cd cloudflare && npm run check` |
+| Worker produksi | versi `09ce0c80-70eb-4655-994f-a8cece811921` | `wrangler deployments list` |
+| Health produksi | `ok`, database `ready`, revision 286 | `curl .../health` |
+| Test Worker | 38 lulus | `cd cloudflare && npm run check` |
 | Test Android | 94 lulus (47 debug + 47 rilis), lint 0 error | `./gradlew testDebugUnitTest testReleaseUnitTest lintDebug` |
 | Kandidat rilis | `releases/1.10.0-candidate/` | folder + `SHA256SUMS` |
+| Data produksi | 4 cabang, 8 akun (2 Owner + 6 Kasir), 0 data operasional dummy | `wrangler d1 execute cuciin-db --remote` |
 
 ## 2. Perpindahan identitas aplikasi (16 September 2026)
 
@@ -125,13 +138,20 @@ File-file itu menyimpan aturan uang, stok, komisi, otorisasi, dan protokol sinkr
 ## 4. Yang masih kurang
 
 1. **Seluruh perangkat 20 cabang belum pindah ke paket baru.** Setelah semua pindah, `cuciin-ops-tiftazani` boleh dihapus dari `FIREBASE_PROJECT_IDS` lalu project lama dinonaktifkan.
-2. **Nama "tiftazani" masih ada di tiga tempat yang terkunci eksternal** dan tidak bisa diubah tanpa biaya besar:
+2. **APK lama tidak bisa lagi menulis ke server.** Sejak jurnal command aktif, PUT snapshot ditolak 426 untuk pengguna biasa, jadi APK 1.8.1 hanya bisa membaca. Perangkat lama harus dicopot setelah 1.10.0 dipasang.
+3. **Data lokal perangkat yang sudah terpasang tidak ikut berubah.** Seed 4 cabang dan 6 kasir hanya berlaku untuk instalasi bersih; perangkat yang sudah menyimpan snapshot lama akan menerima data server saat sinkronisasi. Migrasi seed berversi belum dibuat.
+4. **Nama "tiftazani" masih ada di tiga tempat yang terkunci eksternal** dan tidak bisa diubah tanpa biaya besar:
    - URL Worker `cuciin-api.tiftazani-cuciin.workers.dev` (subdomain akun Cloudflare)
    - Repo GitHub `tiftazani/Cursor-Tifz`
    - Email Owner `tiftazani.khara@gmail.com` (dipertahankan atas permintaan Owner)
-3. **Isi template email reset** masih bawaan Firebase (`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`).
-4. **PR #18 dan #19** masih terbuka; `main` belum memuat 1.9.2 sampai 1.10.0.
-5. **Kata sandi awal `test1234`** wajib diubah semua akun sebelum data nyata dipakai.
+5. **Isi template email reset** masih bawaan Firebase (`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`).
+6. **PR #18 dan #19** masih terbuka; `main` belum memuat 1.9.2 sampai 1.10.0.
+7. **Kata sandi awal `test1234`** wajib diubah semua akun sebelum data nyata dipakai.
+8. **State loading dan error di layar data belum lengkap.** Hanya layar masuk yang menampilkan indikator proses; sebagian besar layar belum membedakan "belum ada data" dari "sinkronisasi gagal".
+9. **Sebagian daftar panjang masih berupa tumpukan kartu**: pelanggan, layanan, produk, persediaan, riwayat stok, biaya, absensi, dan ringkasan petugas laporan. Pola `ListCard` + `ListRow` sudah dipakai di cabang, user, dan riwayat aktivitas.
+10. **Tabel laporan keuangan masih memaksa lebar 1470dp** dan digeser horizontal dengan teks 10sp; perlu reflow untuk layar sempit dan font besar.
+11. **Alamat lengkap Shelly belum ada**, jadi kolom alamat dan tautan peta cabang itu masih kosong.
+12. **Backup pascamigrasi sudah dibuat** di `firebase-migration/backup-d1/post-migration-rev286-20260916.sql` (revision 286, 4 cabang, 8 akun, integrity ok). Backup lama `pre-real-data-20260916.sql` adalah kondisi sebelum migrasi dan tidak bisa direstore sendirian.
 
 ## 5. Urutan kerja yang disarankan
 

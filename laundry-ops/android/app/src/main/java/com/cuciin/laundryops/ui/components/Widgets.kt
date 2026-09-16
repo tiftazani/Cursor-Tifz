@@ -50,8 +50,8 @@ fun rememberTapFeedback(): () -> Unit {
 }
 
 /**
- * Kepala layar: tombol kembali bulat abu (pola Circular Navigation Airbnb),
- * judul tebal dengan tracking negatif, dan baris aksi di kanan.
+ * Kepala layar: tombol kembali bulat abu, judul tebal dengan tracking negatif,
+ * dan baris aksi di kanan.
  */
 @Composable
 fun ScreenHeader(title: String, subtitle: String? = null, onBack: (() -> Unit)? = null, actions: @Composable RowScope.() -> Unit = {}) {
@@ -61,7 +61,7 @@ fun ScreenHeader(title: String, subtitle: String? = null, onBack: (() -> Unit)? 
         if (onBack != null) {
             Surface(
                 onClick = { tap(); onBack() },
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(44.dp),
                 shape = CircleShape,
                 color = Surface2,
             ) {
@@ -86,19 +86,16 @@ fun ScreenHeader(title: String, subtitle: String? = null, onBack: (() -> Unit)? 
     }
 }
 
-/**
- * Lencana status: radius 14px, teks kapital kecil dengan jarak huruf, mengikuti
- * pola Status Badge Airbnb. Titik penanda dihapus karena status sudah dibawa teks.
- */
+/** Lencana status: radius 14px, teks 12sp. Titik penanda dihapus karena status sudah dibawa teks. */
 @Composable
 fun Chip(text: String, color: Color) {
     Surface(shape = CuciinShape.badge, color = color.copy(alpha = if (LocalCuciinPalette.current.dark) 0.22f else 0.10f)) {
         Text(
-            text.uppercase(),
-            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+            text,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
             color = color,
-            fontSize = 10.sp,
-            lineHeight = 13.sp,
+            fontSize = 12.sp,
+            lineHeight = 15.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.5.sp,
         )
@@ -114,31 +111,31 @@ fun ChipRow(content: @Composable RowScope.() -> Unit) {
 }
 
 /**
- * Pilihan tunggal bergaya Airbnb: isian near-black saat terpilih, putih dengan
- * garis tipis saat tidak. Tinggi tetap 40dp supaya deretan sejajar rapi.
+ * Pilihan tunggal: isian navy saat terpilih, putih dengan garis tipis saat tidak.
+ * Tinggi minimum 44dp supaya deretan sejajar rapi dan tetap nyaman disentuh.
  */
 @Composable
 fun SelectChip(selected: Boolean, label: String, onClick: () -> Unit) {
     val tap = rememberTapFeedback()
-    val ink = Ink
+    val selectedFill = TealDeep
     Surface(
         onClick = { tap(); onClick() },
-        shape = CuciinShape.pill,
-        color = if (selected) ink else Card,
+        shape = CuciinShape.field,
+        color = if (selected) selectedFill else Card,
         border = if (selected) null else BorderStroke(1.dp, Line),
-        modifier = Modifier.heightIn(min = 40.dp),
+        modifier = Modifier.heightIn(min = 44.dp),
     ) {
         Row(
             Modifier.padding(horizontal = 15.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            if (selected) Icon(Icons.Outlined.Check, null, tint = Card, modifier = Modifier.size(15.dp))
+            if (selected) Icon(Icons.Outlined.Check, null, tint = OnHero, modifier = Modifier.size(15.dp))
             Text(
                 label,
                 fontSize = 13.sp,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = if (selected) Card else Ink,
+                color = if (selected) OnHero else Ink,
             )
         }
     }
@@ -168,7 +165,7 @@ fun PeriodBar(
     val tap = rememberTapFeedback()
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = CuciinShape.pill,
+        shape = CuciinShape.field,
         color = Card,
         border = BorderStroke(1.dp, Line),
         shadowElevation = 1.dp,
@@ -207,8 +204,8 @@ fun PeriodBar(
 }
 
 /**
- * Kotak angka utama. Menggantikan gradien lama dengan permukaan near-black polos
- * sesuai aturan Airbnb: warna aksen tidak dipakai untuk bidang luas.
+ * Kotak angka utama: permukaan navy polos. Warna aksen tidak dipakai untuk bidang luas
+ * supaya pink tetap menjadi penanda aksi, bukan latar.
  */
 @Composable
 fun Hero(title: String, value: String, pills: List<String>) {
@@ -229,8 +226,8 @@ fun Hero(title: String, value: String, pills: List<String>) {
 }
 
 /**
- * Kartu isi: radius 20px dengan bayangan berlapis tiga, mengikuti Listing Card
- * Airbnb. Saat bayangan terasa berat, garis tipis dipakai sebagai gantinya.
+ * Kartu isi: radius 20px dengan garis tipis sebagai pemisah utama.
+ * Bayangan hanya dipakai saat kartu perlu benar-benar terangkat.
  */
 @Composable
 fun CardBlock(modifier: Modifier = Modifier, accent: Color? = null, content: @Composable ColumnScope.() -> Unit) {
@@ -258,29 +255,11 @@ fun EmptyHint(title: String, body: String) {
 }
 
 /**
- * Tombol utama: near-black sebagai pekerja utama (Primary Dark Airbnb) dengan
- * radius 8px. Varian merah hanya dipakai untuk aksi yang benar-benar utama.
+ * Tombol utama: isian navy dengan teks putih, radius 14px.
+ * Pink dipakai untuk aksi paling utama, bukan untuk setiap tombol.
  */
 @Composable
 fun PrimaryBtn(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, icon: ImageVector? = null, onClick: () -> Unit) {
-    val tap = rememberTapFeedback()
-    Button(
-        onClick = { tap(); onClick() },
-        enabled = enabled,
-        modifier = modifier.fillMaxWidth().heightIn(min = 52.dp),
-        shape = CuciinShape.button,
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Ink, contentColor = Card, disabledContainerColor = LineSoft, disabledContentColor = Muted),
-        contentPadding = PaddingValues(16.dp, 12.dp),
-    ) {
-        if (icon != null) { Icon(icon, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(9.dp)) }
-        Text(text, fontSize = 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-    }
-}
-
-/** Tombol merah: hanya untuk aksi paling utama, sesuai aturan satu aksen Airbnb. */
-@Composable
-fun AccentBtn(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, icon: ImageVector? = null, onClick: () -> Unit) {
     val tap = rememberTapFeedback()
     Button(
         onClick = { tap(); onClick() },
@@ -296,7 +275,25 @@ fun AccentBtn(text: String, modifier: Modifier = Modifier, enabled: Boolean = tr
     }
 }
 
-/** Tombol garis: radius 8px, garis near-black, isian putih. */
+/** Tombol pink: hanya untuk aksi paling utama, satu aksen per layar. */
+@Composable
+fun AccentBtn(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, icon: ImageVector? = null, onClick: () -> Unit) {
+    val tap = rememberTapFeedback()
+    Button(
+        onClick = { tap(); onClick() },
+        enabled = enabled,
+        modifier = modifier.fillMaxWidth().heightIn(min = 52.dp),
+        shape = CuciinShape.button,
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = TealDeep, contentColor = OnPrim, disabledContainerColor = LineSoft, disabledContentColor = Muted),
+        contentPadding = PaddingValues(16.dp, 12.dp),
+    ) {
+        if (icon != null) { Icon(icon, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(9.dp)) }
+        Text(text, fontSize = 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+    }
+}
+
+/** Tombol garis: radius 14px, garis navy tipis, isian putih. */
 @Composable
 fun GhostBtn(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, icon: ImageVector? = null, onClick: () -> Unit) {
     val tap = rememberTapFeedback()
@@ -343,20 +340,19 @@ fun DangerBtn(text: String, onClick: () -> Unit) {
     )
 }
 
-/** Judul kecil di atas judul besar, pola eyebrow Airbnb. */
+/** Label konteks singkat di atas judul utama. */
 @Composable fun Eyebrow(text: String) {
     Text(
-        text.uppercase(),
-        color = Muted,
-        fontSize = 11.sp,
+        text,
+        color = TealDeep,
+        fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
-        letterSpacing = 0.6.sp,
     )
 }
 
 @Composable fun ListDivider() { HorizontalDivider(color = LineSoft, thickness = 1.dp) }
 
-/** Penanda kode di daftar: bulat, abu, teks tebal. Mengikuti Avatar Airbnb. */
+/** Penanda kode di daftar: bulat, abu, teks tebal. */
 @Composable fun AvatarMark(text: String, tint: Color = Teal) {
     Box(Modifier.size(42.dp).clip(CircleShape).background(tint.copy(alpha = if (LocalCuciinPalette.current.dark) .22f else .10f)), contentAlignment = Alignment.Center) {
         Text(text.take(3).uppercase(), color = tint, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 0.3.sp)
@@ -365,7 +361,7 @@ fun DangerBtn(text: String, onClick: () -> Unit) {
 
 @Composable fun BrandMark(modifier: Modifier = Modifier) {
     Surface(modifier.size(52.dp), shape = RoundedCornerShape(14.dp), color = Ink) {
-        Icon(painterResource(R.drawable.cuciin_mark), null, tint = Color.Unspecified, modifier = Modifier.padding(3.dp))
+        Icon(painterResource(R.drawable.cuciin_logo), null, tint = Color.Unspecified, modifier = Modifier.padding(2.dp))
     }
 }
 
@@ -399,14 +395,14 @@ fun StepProgress(step: Int) {
 fun FeedbackBanner(text: String) {
     Surface(color = Mist, shape = CuciinShape.badge, modifier = Modifier.fillMaxWidth().animateContentSize().semantics { liveRegion = LiveRegionMode.Polite }) {
         Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.CheckCircle, null, tint = Teal, modifier = Modifier.size(18.dp))
-            Text(text, fontSize = 12.sp, color = Teal, lineHeight = 16.sp)
+            Icon(Icons.Outlined.CheckCircle, null, tint = TealDeep, modifier = Modifier.size(18.dp))
+            Text(text, fontSize = 12.sp, color = TealDeep, lineHeight = 16.sp)
         }
     }
 }
 
 /**
- * Baris daftar bergaya Airbnb: satu baris per entitas dengan penanda, judul,
+ * Baris daftar: satu baris per entitas dengan penanda, judul,
  * keterangan, dan tanda panah. Dipakai untuk daftar panjang seperti cabang
  * supaya puluhan baris tetap terbaca tanpa menggulir jauh.
  */
@@ -432,7 +428,7 @@ fun ListRow(
             AvatarMark(mark)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.1).sp, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (detail != null) Text(detail, fontSize = 13.sp, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (detail != null) Text(detail, fontSize = 13.sp, color = Muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             trailing?.invoke()
             if (showChevron) Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = Line, modifier = Modifier.size(16.dp))
@@ -461,7 +457,7 @@ fun ListCard(content: @Composable ColumnScope.() -> Unit) {
 fun SearchField(value: String, onValueChange: (String) -> Unit, placeholder: String) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = CuciinShape.pill,
+        shape = CuciinShape.field,
         color = Card,
         border = BorderStroke(1.dp, Line),
         shadowElevation = 1.dp,
@@ -480,7 +476,8 @@ private fun BasicField(value: String, onValueChange: (String) -> Unit, placehold
         onValueChange = onValueChange,
         singleLine = true,
         textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = Ink),
-        modifier = Modifier.fillMaxWidth(),
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+        modifier = Modifier.fillMaxWidth().semantics { contentDescription = placeholder },
         decorationBox = { inner ->
             if (value.isEmpty()) Text(placeholder, fontSize = 14.sp, color = Muted)
             inner()

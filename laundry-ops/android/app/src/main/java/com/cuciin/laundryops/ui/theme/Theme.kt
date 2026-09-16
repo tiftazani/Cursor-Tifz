@@ -25,10 +25,9 @@ import androidx.core.view.WindowCompat
  * Setiap tema memakai nama token yang sama supaya seluruh layar tidak perlu diubah.
  * Nilainya dijaga agar teks lolos WCAG AA 4.5:1 dan batas kontrol lolos 3:1.
  *
- * Bentuk visual mengikuti sistem desain Airbnb: kanvas putih bersih, teks near-black
- * (bukan hitam pekat), satu warna aksen, sudut membulat, dan bayangan berlapis tiga.
- * Warnanya disesuaikan agar lolos kontras: Rausch Red asli (#ff385c) hanya 3.52:1
- * di atas putih, jadi aksen memakai varian yang lebih dalam (#d92e4a, 4.73:1).
+ * Bentuk visual mengikuti guideline Jemur: struktur navy, aksi utama pink,
+ * aksen kuning untuk navigasi aktif, surface putih, serta sudut membulat terukur.
+ * Pink terang tidak dipakai untuk teks kecil bila kontrasnya tidak memenuhi WCAG AA.
  */
 enum class CuciinThemeMode(val label: String) {
     Sistem("Ikut sistem"),
@@ -60,9 +59,10 @@ data class CuciinPalette(
     val heroA: Color,
     val heroB: Color,
     val onHero: Color,
-    /** Latar abu untuk elemen sekunder, mengikuti token surface Airbnb. */
+    val navSelected: Color,
+    /** Latar abu untuk elemen sekunder. */
     val surface: Color = card,
-    /** Latar halaman; sama dengan bg pada tema Airbnb yang berkanvas putih. */
+    /** Latar halaman utama. */
     val canvas: Color = bg,
 ) {
     val foam: Color get() = bg
@@ -73,49 +73,48 @@ data class CuciinPalette(
 
 private val Terang = CuciinPalette(
     dark = false,
-    bg = Color(0xFFFFFFFF),
+    bg = Color(0xFFF7F7F9),
     card = Color(0xFFFFFFFF),
-    // Batas kontrol harus 3:1 di atas latar; border Airbnb #c1c1c1 hanya 1.80:1.
-    line = Color(0xFF767676),
-    lineSoft = Color(0xFFDDDDDD),
-    ink = Color(0xFF222222),
-    muted = Color(0xFF6B6B6B),
-    prim = Color(0xFFD92E4A),
-    primDeep = Color(0xFFA81F38),
-    primSoft = Color(0xFFFDECEF),
+    line = Color(0xFF757784),
+    lineSoft = Color(0xFFECECF1),
+    ink = Color(0xFF15151F),
+    muted = Color(0xFF5F6373),
+    prim = Color(0xFFC1358F),
+    primDeep = Color(0xFF0D164B),
+    primSoft = Color(0xFFFBEAF5),
     onPrim = Color(0xFFFFFFFF),
-    coral = Color(0xFFC13515),
-    green = Color(0xFF0A7D47),
-    amber = Color(0xFF8F5A10),
-    gold = Color(0xFF8F5A10),
-    heroA = Color(0xFF222222),
-    heroB = Color(0xFF3D3D3D),
+    coral = Color(0xFFB3261E),
+    green = Color(0xFF1F7A4D),
+    amber = Color(0xFF8A5A00),
+    gold = Color(0xFFF7CA3A),
+    heroA = Color(0xFF0D164B),
+    heroB = Color(0xFF19245F),
     onHero = Color(0xFFFFFFFF),
-    surface = Color(0xFFF2F2F2),
+    navSelected = Color(0xFFF7CA3A),
+    surface = Color(0xFFFBEAF5),
 )
 
 private val Gelap = CuciinPalette(
     dark = true,
-    bg = Color(0xFF1A1A1A),
-    card = Color(0xFF2A2A2A),
-    line = Color(0xFF7A7A7A),
-    lineSoft = Color(0xFF3A3A3A),
-    ink = Color(0xFFF0F0F0),
-    muted = Color(0xFFB0B0B0),
-    // Rausch Red di kartu gelap hanya 4.08:1; versi terang ini mencapai 6.01:1.
-    prim = Color(0xFFFF8098),
-    primDeep = Color(0xFFFF5A75),
-    primSoft = Color(0xFF3A2028),
-    // Merah terang tidak bisa dipasangkan teks putih; pola Material 3 dark memakai teks gelap.
-    onPrim = Color(0xFF1A1A1A),
-    coral = Color(0xFFFF9B8A),
-    green = Color(0xFF5BD3A0),
-    amber = Color(0xFFEFB04F),
-    gold = Color(0xFFEFB04F),
-    heroA = Color(0xFF2A2A2A),
-    heroB = Color(0xFF4A2A32),
+    bg = Color(0xFF10132A),
+    card = Color(0xFF171B38),
+    line = Color(0xFF8A8D9B),
+    lineSoft = Color(0xFF303653),
+    ink = Color(0xFFF4F3FA),
+    muted = Color(0xFFC4C5CE),
+    prim = Color(0xFFF08AC8),
+    primDeep = Color(0xFFFFB1DD),
+    primSoft = Color(0xFF3D2340),
+    onPrim = Color(0xFF0D164B),
+    coral = Color(0xFFFFB4AB),
+    green = Color(0xFF70D6A0),
+    amber = Color(0xFFFFD180),
+    gold = Color(0xFFF7CA3A),
+    heroA = Color(0xFF0D164B),
+    heroB = Color(0xFF232F70),
     onHero = Color(0xFFFFFFFF),
-    surface = Color(0xFF232323),
+    navSelected = Color(0xFFF7CA3A),
+    surface = Color(0xFF242947),
 )
 
 private val Warni = CuciinPalette(
@@ -137,6 +136,7 @@ private val Warni = CuciinPalette(
     heroA = Color(0xFF3B1E6E),
     heroB = Color(0xFFC2185B),
     onHero = Color(0xFFFFFFFF),
+    navSelected = Color(0xFFF7CA3A),
     surface = Color(0xFFFCE4EE),
 )
 
@@ -226,7 +226,7 @@ internal fun materialScheme(p: CuciinPalette) = if (p.dark) darkColorScheme(
 )
 
 /**
- * Skala huruf mengikuti DESIGN.md Airbnb: judul memakai tracking negatif supaya
+ * Skala huruf mengikuti guideline Jemur: judul memakai tracking negatif supaya
  * terasa rapat dan ramah, bobot 600 sampai 800 pada judul, dan teks badan 14 sampai 16.
  */
 internal val CuciinTypography = Typography(
@@ -274,8 +274,8 @@ internal val CuciinTypography = Typography(
  * memakai bahasa bentuk yang sama: tombol 8, kartu 20, dan bayangan berlapis tiga.
  */
 object CuciinShape {
-    val button = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-    val field = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+    val button = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
+    val field = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
     val badge = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
     val card = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
     val hero = androidx.compose.foundation.shape.RoundedCornerShape(32.dp)
