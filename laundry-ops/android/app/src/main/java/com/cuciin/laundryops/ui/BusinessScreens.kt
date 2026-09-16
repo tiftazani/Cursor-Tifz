@@ -10,9 +10,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -106,14 +110,33 @@ internal fun InventoryScreen(nav: NavHostController, toast: (String) -> Unit) {
             }
         }
         if (!creating && editing == null && rows.isEmpty()) item { EmptyHint("Aset belum dicatat", "Tambahkan mesin cuci, mesin pengering, peralatan, bahan, atau barang jual untuk cabang ini.") }
-        if (!creating && editing == null) items(rows, key = { it.id }) { row ->
-            CardBlock(Modifier.clickable { fill(row) }, accent = when (row.status) { InventoryStatus.Normal -> Green; InventoryStatus.PerluPerbaikan -> Amber; InventoryStatus.Rusak -> Coral }) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(Modifier.weight(1f)) { Text(row.name, fontWeight = FontWeight.Bold); Text("${row.category.label} · ${row.brand.ifBlank { "Tanpa merek" }}", color = Muted, fontSize = 12.sp) }
-                    Chip(row.status.label, when (row.status) { InventoryStatus.Normal -> Green; InventoryStatus.PerluPerbaikan -> Amber; InventoryStatus.Rusak -> Coral })
+        if (!creating && editing == null && rows.isNotEmpty()) item {
+            ListCard {
+                rows.forEachIndexed { index, row ->
+                    ListRow(
+                        mark = row.name,
+                        title = row.name,
+                        detail = listOf(
+                            row.category.label,
+                            row.brand.ifBlank { "tanpa merek" },
+                            "${row.quantity} ${row.unit}",
+                            row.serialNumber.takeIf(String::isNotBlank).orEmpty(),
+                            row.notes,
+                        ).filter { it.isNotBlank() }.joinToString(" · "),
+                        trailing = {
+                            Chip(
+                                row.status.label,
+                                when (row.status) {
+                                    InventoryStatus.Normal -> Green
+                                    InventoryStatus.PerluPerbaikan -> Amber
+                                    InventoryStatus.Rusak -> Coral
+                                },
+                            )
+                        },
+                        onClick = { fill(row) },
+                    )
+                    if (index < rows.lastIndex) RowDivider()
                 }
-                Text("${row.quantity} ${row.unit}${row.serialNumber.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()}", color = Ink)
-                if (row.notes.isNotBlank()) Text(row.notes, color = Muted, fontSize = 12.sp)
             }
         }
     }
@@ -159,14 +182,32 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
             }
         }
         if (rows.isEmpty()) item { EmptyHint("Belum ada biaya", "Gaji, sewa, listrik, perawatan mesin, dan biaya lain akan tampil di sini.") }
-        items(rows, key = { it.id }) { row ->
-            CardBlock {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(Modifier.weight(1f)) { Text(row.category.label, fontWeight = FontWeight.Bold); Text("${row.occurredAt} · ${row.by}", color = Muted, fontSize = 12.sp) }
-                    Text(rp(row.amount), color = Coral, fontWeight = FontWeight.Bold)
+        if (rows.isNotEmpty()) item {
+            ListCard {
+                rows.forEachIndexed { index, row ->
+                    ListRow(
+                        mark = row.category.label,
+                        title = row.category.label,
+                        detail = listOf(row.occurredAt, row.by, row.note).filter { it.isNotBlank() }.joinToString(" · "),
+                        showChevron = false,
+                        trailing = {
+                            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(rp(row.amount), color = Coral, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Surface(
+                                    onClick = { businessStore.deleteExpense(row.id)?.let(toast) ?: toast("Biaya dihapus") },
+                                    shape = CircleShape,
+                                    color = Surface2,
+                                    modifier = Modifier.size(44.dp),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Outlined.Delete, "Hapus biaya", tint = Coral, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                        },
+                    )
+                    if (index < rows.lastIndex) RowDivider()
                 }
-                Text(row.note, color = Ink)
-                DangerBtn("Hapus biaya") { businessStore.deleteExpense(row.id)?.let(toast) ?: toast("Biaya dihapus") }
             }
         }
     }

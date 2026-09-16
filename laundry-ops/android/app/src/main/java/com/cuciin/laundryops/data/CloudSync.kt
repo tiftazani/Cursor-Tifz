@@ -33,8 +33,10 @@ object CloudSync {
         private set
     @Volatile var lastRejectedReason: String? = null
         private set
+    @Volatile var started: Boolean = false
+        private set
 
-    private var started = false
+    private var startedInternal = false
     private var syncing = false
     private var rerunRequested = false
     private var latestSnapshot: Snapshot? = null
@@ -115,7 +117,8 @@ object CloudSync {
     }
 
     fun start() {
-        if (started) return
+        if (startedInternal) return
+        startedInternal = true
         started = true
         if (!endpointConfigured) {
             lastStatus = "Mode lokal · server cloud belum dikonfigurasi"

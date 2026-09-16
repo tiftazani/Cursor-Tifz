@@ -50,6 +50,7 @@ import com.cuciin.laundryops.data.Clock
 import java.time.format.DateTimeFormatter
 import com.cuciin.laundryops.data.CuciinStore
 import com.cuciin.laundryops.data.PayMethod
+import com.cuciin.laundryops.data.PayStatus
 import com.cuciin.laundryops.data.Nota
 import com.cuciin.laundryops.data.Role
 import com.cuciin.laundryops.data.VersionHistory
@@ -67,6 +68,7 @@ import com.cuciin.laundryops.ui.theme.Ink
 import com.cuciin.laundryops.ui.theme.Muted
 import com.cuciin.laundryops.ui.theme.Teal
 import com.cuciin.laundryops.ui.theme.Green
+import com.cuciin.laundryops.ui.theme.Amber
 import com.cuciin.laundryops.ui.theme.CuciinThemeMode
 import com.cuciin.laundryops.ui.theme.OnPrim
 import com.cuciin.laundryops.ui.theme.ThemePrefs
@@ -433,27 +435,32 @@ internal fun AnalyticsScreen(nav: NavHostController) {
             nota.lines.map { line -> Triple(nota, line, (line.qty * line.commissionPerUnit).toInt()) }
         }
         if (handledRows.isEmpty()) item { EmptyHint("Rincian petugas belum tersedia", "Service lama tetap masuk laporan transaksi, tetapi belum memiliki petugas per layanan.") }
-        else items(
-            handledRows.groupBy { (nota, line, _) -> "${nota.branchId}|${line.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir }}" }.toList(),
-            key = { it.first },
-        ) { (_, group) ->
-            val first = group.first()
-            val nota = first.first
-            val handler = first.second.handledByName.ifBlank { nota.kasir }
-            CardBlock {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(Modifier.weight(1f)) {
-                        Text(handler, fontWeight = FontWeight.Bold)
-                        Text(branchName(nota.branchId), color = Muted, fontSize = 12.sp)
-                    }
-                    Chip("Komisi ${rp(group.sumOf { it.third })}", Green)
+        else item {
+            val handlerGroups = handledRows.groupBy { (nota, line, _) -> "${nota.branchId}|${line.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir }}" }.toList()
+            ListCard {
+                handlerGroups.forEachIndexed { index, (_, group) ->
+                    val first = group.first()
+                    val nota = first.first
+                    val handler = first.second.handledByName.ifBlank { nota.kasir }
+                    val services = group.groupBy { it.second.name }.map { (service, serviceRows) ->
+                        val qty = serviceRows.sumOf { it.second.qty }
+                        val unit = serviceRows.first().second.unit
+                        val omzet = serviceRows.sumOf { (it.second.qty * it.second.unitPrice).toInt() }
+                        "$service ${if (qty % 1.0 == 0.0) qty.toInt() else qty} $unit (${rp(omzet)})"
+                    }.joinToString(", ")
+                    ListRow(
+                        mark = handler,
+                        title = handler,
+                        detail = listOf(
+                            branchName(nota.branchId),
+                            services,
+                            "${group.map { it.first.id }.distinct().size} Service ditangani",
+                        ).filter { it.isNotBlank() }.joinToString(" · "),
+                        showChevron = false,
+                        trailing = { Chip("Komisi ${rp(group.sumOf { it.third })}", Green) },
+                    )
+                    if (index < handlerGroups.lastIndex) RowDivider()
                 }
-                group.groupBy { it.second.name }.forEach { (service, serviceRows) ->
-                    val qty = serviceRows.sumOf { it.second.qty }
-                    val unit = serviceRows.first().second.unit
-                    Text("$service · ${if (qty % 1.0 == 0.0) qty.toInt() else qty} $unit · omzet ${rp(serviceRows.sumOf { (it.second.qty * it.second.unitPrice).toInt() })}", color = Ink, fontSize = 13.sp)
-                }
-                Text("${group.map { it.first.id }.distinct().size} Service ditangani", color = Muted, fontSize = 12.sp)
             }
         }
         item { SectionLabel("Rincian transaksi") }
@@ -482,65 +489,32 @@ private fun AnalyticsKpi(label: String, value: String, modifier: Modifier = Modi
 
 @Composable
 private fun TransactionReportTable(rows: List<Nota>, branchName: (String) -> String, onOpen: (String) -> Unit) {
-    val scroll = rememberScrollState()
-    CardBlock {
-        Text("Geser tabel ke samping untuk melihat seluruh kolom. Ketuk baris untuk membuka Service.", color = Muted, fontSize = 11.sp)
-        Column(Modifier.horizontalScroll(scroll).width(1470.dp)) {
-            Surface(color = Teal, shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)) {
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(IntrinsicSize.Min)) {
-                    ReportCell("No", 44.dp, true)
-                    ReportCell("ID Service", 150.dp, true)
-                    ReportCell("Waktu masuk", 145.dp, true)
-                    ReportCell("Cabang", 130.dp, true)
-                    ReportCell("Kasir", 110.dp, true)
-                    ReportCell("Pelanggan", 130.dp, true)
-                    ReportCell("Layanan ditangani", 190.dp, true)
-                    ReportCell("Petugas", 120.dp, true)
-                    ReportCell("Komisi", 100.dp, true)
-                    ReportCell("Omzet", 100.dp, true)
-                    ReportCell("Diterima", 100.dp, true)
-                    ReportCell("Status", 145.dp, true)
+    // Tabel 12 kolom tidak layak di layar sempit dan font besar. Setiap Service
+    // ditampilkan sebagai kartu bertingkat supaya semua angka tetap terbaca.
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        rows.forEach { nota ->
+            CardBlock(Modifier.clickable { onOpen(nota.id) }) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(nota.id, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink, modifier = Modifier.weight(1f))
+                    Chip(nota.pay.label, if (nota.pay == PayStatus.Lunas) Green else Amber)
                 }
-            }
-            rows.forEachIndexed { index, nota ->
-                Surface(
-                    onClick = { onOpen(nota.id) },
-                    color = if (index % 2 == 0) Card else Mist.copy(alpha = .55f),
-                    border = BorderStroke(0.5.dp, Line),
-                ) {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).height(IntrinsicSize.Min), verticalAlignment = Alignment.Top) {
-                        ReportCell((index + 1).toString(), 44.dp)
-                        ReportCell(nota.id, 150.dp)
-                        ReportCell(nota.createdAt, 145.dp)
-                        ReportCell(branchName(nota.branchId), 130.dp)
-                        ReportCell(nota.kasir, 110.dp)
-                        ReportCell(nota.customer, 130.dp)
-                        ReportCell(nota.lines.joinToString { it.name }, 190.dp)
-                        ReportCell(nota.lines.map { it.handledByName.ifBlank { nota.kasir } }.distinct().joinToString(), 120.dp)
-                        ReportCell(rp(nota.lines.sumOf { (it.qty * it.commissionPerUnit).toInt() }), 100.dp)
-                        ReportCell(rp(nota.total), 100.dp)
-                        ReportCell(rp(nota.paid), 100.dp)
-                        ReportCell("${nota.pay.label} · ${nota.laundry.label}", 145.dp)
-                    }
+                Text(nota.customer, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Ink)
+                Text(
+                    listOf(nota.createdAt, branchName(nota.branchId), nota.kasir).filter { it.isNotBlank() }.joinToString(" · "),
+                    color = Muted,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                )
+                if (nota.lines.isNotEmpty()) {
+                    Text(nota.lines.joinToString { "${it.name} ${if (it.qty % 1.0 == 0.0) it.qty.toInt() else it.qty} ${it.unit}" }, color = Ink, fontSize = 13.sp, lineHeight = 18.sp)
+                    val handlers = nota.lines.map { it.handledByName.ifBlank { nota.kasir } }.distinct().joinToString()
+                    val commission = nota.lines.sumOf { (it.qty * it.commissionPerUnit).toInt() }
+                    Text("Petugas $handlers · komisi ${rp(commission)}", color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
                 }
+                Text("Omzet ${rp(nota.total)} · diterima ${rp(nota.paid)} · ${nota.laundry.label}", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, lineHeight = 18.sp)
             }
         }
     }
-}
-
-@Composable
-private fun ReportCell(text: String, width: androidx.compose.ui.unit.Dp, header: Boolean = false) {
-    Text(
-        text,
-        modifier = Modifier.width(width).fillMaxHeight().padding(horizontal = 8.dp, vertical = 8.dp),
-        color = if (header) OnPrim else Ink,
-        fontSize = if (header) 11.sp else 10.sp,
-        lineHeight = 14.sp,
-        fontWeight = if (header) FontWeight.Bold else FontWeight.Normal,
-        maxLines = if (header) 3 else 5,
-        softWrap = true,
-        overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
-    )
 }
 
 @Composable
@@ -549,6 +523,7 @@ internal fun AuditScreen(nav: NavHostController) {
     val ctx = LocalContext.current
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(ui.gap)) {
         item { ScreenHeader("Riwayat aktivitas", "Semua transaksi", onBack = { nav.popBackStack() }) }
+        item { SyncNotice() }
         item { GhostBtn("Ekspor riwayat perubahan", icon = Icons.Outlined.FileDownload) { FileExports.shareAudit(ctx, store.audit.toList()) } }
         items(store.audit) { a ->
             ListRow(

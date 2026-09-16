@@ -1,6 +1,5 @@
 <resources>
-    <!-- Latar ikon adaptif: near-black, bukan hitam pekat, mengikuti identitas baru. -->
-    <color name="navy">#222222</color>
-    <color name="pink">#222222</color>
+    <!-- Latar ikon adaptif mengikuti struktur navy Jemur. -->
+    <color name="navy">#0D164B</color>
     <color name="foam">#FFFFFF</color>
 </resources>

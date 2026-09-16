@@ -137,29 +137,32 @@ internal fun CustomersScreen(nav: NavHostController, toast: (String) -> Unit) {
         }
         if (!creating && editing == null && store.customers.isEmpty()) item { EmptyHint("Belum ada pelanggan", "Tambahkan kontak pelanggan sebelum membuat nota pertama.") }
         if (!creating && editing == null) item { Field(search, { search = it }, "Cari nama atau nomor telepon") }
-        if (!creating && editing == null) items(store.customers.filter { it.name.contains(search, true) || it.phone.contains(search) }, key = { it.id }) { c ->
-            CardBlock(
-                Modifier.clickable {
-                    if (pickMode && !creating && editing == null) {
-                        store.selectedCustomer.value = c
-                        nav.popBackStack()
-                    } else {
-                        editing = c
-                        creating = false
-                        fill(c)
+        if (!creating && editing == null) {
+            val shown = store.customers.filter { it.name.contains(search, true) || it.phone.contains(search) }
+            if (shown.isNotEmpty()) item {
+                ListCard {
+                    shown.forEachIndexed { index, c ->
+                        ListRow(
+                            mark = c.name,
+                            title = c.name,
+                            detail = listOf(c.phone, c.address).filter { it.isNotBlank() }.joinToString(" · "),
+                            showChevron = !pickMode,
+                            onClick = {
+                                if (pickMode) {
+                                    store.selectedCustomer.value = c
+                                    nav.popBackStack()
+                                } else {
+                                    editing = c
+                                    creating = false
+                                    fill(c)
+                                }
+                            },
+                        )
+                        if (index < shown.lastIndex) RowDivider()
                     }
-                },
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AvatarMark(c.name)
-                    Column(Modifier.weight(1f)) {
-                        Text(c.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text(c.phone, color = Muted, fontSize = 13.sp)
-                    }
-                    Icon(if (pickMode) Icons.Outlined.CheckCircle else Icons.Outlined.Edit, if (pickMode) "Pilih pelanggan" else "Ubah pelanggan", tint = Teal, modifier = Modifier.size(20.dp))
                 }
-                if (c.address.isNotBlank()) Text(c.address, color = Muted, fontSize = 12.sp)
             }
+            if (shown.isEmpty() && search.isNotBlank()) item { EmptyHint("Pelanggan tidak ditemukan", "Tidak ada nama atau nomor yang cocok dengan \"$search\".") }
         }
         item { Spacer(Modifier.height(20.dp)) }
     }
@@ -535,15 +538,24 @@ internal fun ServicesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
         }
-        if (!creating && editing == null) items(store.services, key = { it.id }) { s ->
-            CardBlock(Modifier.clickable { editing = s; creating = false; fill(s) }) {
-                Text(s.name, fontWeight = FontWeight.Bold)
-                Text("${rp(s.price)} / ${s.unit}", color = Muted, fontSize = 13.sp)
-                ChipRow {
-                    if (s.commissionPerUnit > 0) Chip("Komisi ${rp(s.commissionPerUnit)} / ${s.unit}", Green)
-                    if (s.retail) Chip("Retail · ${store.productForKey(s.productKey)?.name ?: "belum dihubungkan"}", Teal)
-                    if (s.selfService) Chip("Self-service · Load", Teal)
-                    if (s.dropOut) Chip("DO", Amber)
+        if (!creating && editing == null && store.services.isEmpty()) item { EmptyHint("Belum ada layanan", "Tambahkan layanan dan tarifnya supaya kasir bisa membuat nota.") }
+        if (!creating && editing == null) item {
+            ListCard {
+                store.services.forEachIndexed { index, s ->
+                    val flags = buildList {
+                        add("${rp(s.price)} / ${s.unit}")
+                        if (s.commissionPerUnit > 0) add("komisi ${rp(s.commissionPerUnit)}")
+                        if (s.retail) add("retail")
+                        if (s.selfService) add("mandiri")
+                        if (s.dropOut) add("DO")
+                    }.joinToString(" · ")
+                    ListRow(
+                        mark = s.name,
+                        title = s.name,
+                        detail = flags,
+                        onClick = { editing = s; creating = false; fill(s) },
+                    )
+                    if (index < store.services.lastIndex) RowDivider()
                 }
             }
         }
@@ -623,12 +635,18 @@ internal fun ProductsScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
         }
-        if (!creating && editing == null) items(store.products, key = { it.key }) { p ->
-            CardBlock(Modifier.clickable { editing = p; creating = false; fill(p) }) {
-                Text(p.name, fontWeight = FontWeight.Bold)
-                Text("${p.kind.label} · ${p.unit} · batas minimum ${p.min}", color = Muted, fontSize = 13.sp)
-                store.branches.forEach { branch ->
-                    Text("${branch.name}: ${store.stockOf(p.key, branch.id)}", color = Ink, fontSize = 13.sp)
+        if (!creating && editing == null && store.products.isEmpty()) item { EmptyHint("Belum ada produk", "Tambahkan bahan habis pakai atau barang jual supaya stok bisa dilacak.") }
+        if (!creating && editing == null) item {
+            ListCard {
+                store.products.forEachIndexed { index, p ->
+                    val perBranch = store.branches.joinToString(" · ") { branch -> "${branch.code} ${store.stockOf(p.key, branch.id)}" }
+                    ListRow(
+                        mark = p.name,
+                        title = p.name,
+                        detail = "${p.kind.label} · ${p.unit} · minimum ${p.min}\n$perBranch",
+                        onClick = { editing = p; creating = false; fill(p) },
+                    )
+                    if (index < store.products.lastIndex) RowDivider()
                 }
             }
         }

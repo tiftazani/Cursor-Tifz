@@ -186,6 +186,7 @@ internal fun HomeScreen(nav: NavHostController) {
                 }
             }
         }
+        item { SyncNotice() }
         item { ChipRow { SelectChip(!unpaid, "Semua pembayaran") { unpaid = false }; SelectChip(unpaid, "Belum lunas") { unpaid = true } } }
         if (rows.isEmpty()) item { EmptyHint(if (completed) "Belum ada pesanan selesai" else "Antrian sudah tertangani", if (unpaid) "Tidak ada pesanan belum lunas pada pilihan ini." else if (s.role == Role.Supervisor) "Pesanan dari kasir akan muncul di sini." else "Pesanan baru akan muncul setelah Anda membuat nota.") }
         items(rows.chunked(if (ui.twoPane) 2 else 1), key = { chunk -> chunk.joinToString { it.id } }) { chunk ->
@@ -819,10 +820,12 @@ internal fun WaListScreen(nav: NavHostController, archive: Boolean) {
             }
         }
         items(rows, key = { it.id }) { n ->
-            CardBlock(Modifier.clickable { nav.navigate("queue/${n.id}") }) {
-                Text("${n.id} · ${n.customer}", fontWeight = FontWeight.Bold)
-                Text(if (archive) "Terkirim ${n.waAt}" else n.phone, color = Muted, fontSize = 12.sp)
-            }
+            ListRow(
+                mark = n.customer,
+                title = "${n.id} · ${n.customer}",
+                detail = if (archive) "Terkirim ${n.waAt}" else n.phone,
+                onClick = { nav.navigate("queue/${n.id}") },
+            )
         }
         if (rows.isEmpty()) item { EmptyHint(if (archive) "Arsip masih kosong" else "Tidak ada WA menunggu", "Nota baru muncul di sini sampai WA dikirim.") }
         item { Spacer(Modifier.height(16.dp)) }
@@ -858,17 +861,28 @@ internal fun StockScreen(nav: NavHostController, toast: (String) -> Unit) {
         if (s.role != Role.Supervisor) item { PrimaryBtn("Catat perubahan stok", icon = Icons.Outlined.Add) { nav.navigate("stokEdit") } }
         item { GhostBtn("Riwayat perubahan stok", icon = Icons.Outlined.History) { nav.navigate("stokHistory") } }
         if (products.isEmpty()) item { EmptyHint("Belum ada produk", "Tambahkan produk untuk mulai memantau persediaan laundry.") }
-        items(products, key = { it.key }) { p ->
-            val balance = store.stockOf(p.key, branchId)
-            CardBlock {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(Icons.Outlined.Inventory2, null, tint = Teal, modifier = Modifier.size(28.dp))
-                    Column(Modifier.weight(1f)) { Text(p.name, fontWeight = FontWeight.Bold, fontSize = 16.sp); Text("Batas minimum ${p.min}", color = Muted, fontSize = 12.sp) }
-                    Text(balance.toString(), color = if (balance <= p.min) Coral else Ink, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        if (products.isNotEmpty()) item {
+            ListCard {
+                products.forEachIndexed { index, p ->
+                    val balance = store.stockOf(p.key, branchId)
+                    val last = store.stockMoves.firstOrNull { it.branchId == branchId && (it.product == p.name || it.product == p.key) }
+                    ListRow(
+                        mark = p.name,
+                        title = p.name,
+                        detail = listOf(
+                            "minimum ${p.min}",
+                            if (last != null) "terakhir ${if (last.atMs > 0) DisplayDates.full(last.atMs) else last.at}" else "",
+                        ).filter { it.isNotBlank() }.joinToString(" · "),
+                        showChevron = false,
+                        trailing = {
+                            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(balance.toString(), color = if (balance <= p.min) Coral else Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                if (balance <= p.min) Chip("Perlu diisi", Coral)
+                            }
+                        },
+                    )
+                    if (index < products.lastIndex) RowDivider()
                 }
-                if (balance <= p.min) Chip("Perlu diisi kembali", Coral)
-                val last = store.stockMoves.firstOrNull { it.branchId == branchId && (it.product == p.name || it.product == p.key) }
-                if (last != null) Text("Terakhir diperbarui\n${if (last.atMs > 0) DisplayDates.full(last.atMs) else last.at}", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
             }
         }
         if (s.role == Role.Owner) item { GhostBtn("Kelola produk", icon = Icons.Outlined.Edit) { nav.navigate("products") } }
@@ -993,17 +1007,33 @@ internal fun StockHistoryScreen(nav: NavHostController) {
         if (rows.isEmpty()) item { EmptyHint("Belum ada perubahan stok", "Barang masuk dan keluar akan tampil di sini lengkap dengan hari, tanggal, dan petugas.") }
         groups.forEach { (day, moves) ->
             item { SectionLabel(day) }
-            items(moves) { m ->
-                val product = store.products.find { it.key == m.product || it.name == m.product }?.name ?: m.product
-                CardBlock {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Icon(if (m.kind == StockKind.Tambah) Icons.Outlined.SouthWest else if (m.kind == StockKind.Update) Icons.Outlined.Sync else Icons.Outlined.NorthEast, null, tint = if (m.kind == StockKind.Tambah) Green else Teal)
-                        Column(Modifier.weight(1f)) { Text(product, fontWeight = FontWeight.Bold); Text(m.kind.label, fontSize = 12.sp, color = Muted) }
-                        Text(if (m.kind == StockKind.Update) "= ${m.qty}" else if (m.qty > 0) "+${m.qty}" else "${m.qty}", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = if (m.qty > 0) Green else Ink)
+            item {
+                ListCard {
+                    moves.forEachIndexed { index, m ->
+                        val product = store.products.find { it.key == m.product || it.name == m.product }?.name ?: m.product
+                        ListRow(
+                            mark = product,
+                            title = product,
+                            detail = listOf(
+                                m.kind.label,
+                                store.branch(m.branchId).name,
+                                if (m.atMs > 0) DisplayDates.time(DisplayDates.fromMillis(m.atMs)) + " WIB" else m.at,
+                                "oleh ${m.by}",
+                                m.note,
+                                m.balanceAfter?.let { "saldo $it" }.orEmpty(),
+                            ).filter { it.isNotBlank() }.joinToString(" · "),
+                            showChevron = false,
+                            trailing = {
+                                Text(
+                                    if (m.kind == StockKind.Update) "= ${m.qty}" else if (m.qty > 0) "+${m.qty}" else "${m.qty}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 18.sp,
+                                    color = if (m.qty > 0) Green else Ink,
+                                )
+                            },
+                        )
+                        if (index < moves.lastIndex) RowDivider()
                     }
-                    Text("${store.branch(m.branchId).name} · ${if (m.atMs > 0) DisplayDates.time(DisplayDates.fromMillis(m.atMs)) + " WIB" else m.at}", color = Muted, fontSize = 12.sp)
-                    Text("Oleh ${m.by} · ${m.note}", color = Muted, fontSize = 12.sp)
-                    m.balanceAfter?.let { Text("Saldo setelah perubahan: $it", color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
                 }
             }
         }

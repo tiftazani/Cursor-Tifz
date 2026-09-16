@@ -34,6 +34,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cuciin.laundryops.R
+import com.cuciin.laundryops.data.CloudSync
+import com.cuciin.laundryops.data.CuciinStore
 import com.cuciin.laundryops.data.LaundryStatus
 import com.cuciin.laundryops.data.PayStatus
 import com.cuciin.laundryops.ui.rememberUi
@@ -251,6 +253,43 @@ fun EmptyHint(title: String, body: String) {
         Surface(shape = CircleShape, color = Surface2) { Icon(Icons.Outlined.LocalLaundryService, null, tint = Teal, modifier = Modifier.padding(18.dp).size(30.dp)) }
         Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp, color = Ink, textAlign = TextAlign.Center)
         Text(body, color = Muted, fontSize = 14.sp, lineHeight = 21.sp, textAlign = TextAlign.Center)
+    }
+}
+
+/**
+ * Pemberitahuan keadaan data: membedakan "belum ada data" dari "data belum tersinkron".
+ * Hanya tampil saat server tidak terhubung atau masih ada perubahan tertahan, supaya
+ * pengguna tidak menyangka layar kosong berarti tidak ada pesanan.
+ */
+@Composable
+fun SyncNotice(modifier: Modifier = Modifier) {
+    val store = CuciinStore
+    store.revision.intValue
+    if (!CloudSync.started || CloudSync.online) return
+    val pending = CloudSync.pendingCount
+    val rejected = CloudSync.rejectedCount
+    val title = when {
+        rejected > 0 -> "$rejected perubahan perlu ditinjau"
+        pending > 0 -> "$pending perubahan belum terkirim"
+        else -> "Data belum tersinkron"
+    }
+    val body = when {
+        rejected > 0 -> CloudSync.lastRejectedReason?.take(160) ?: "Buka Profil untuk melihat konflik yang ditolak server."
+        pending > 0 -> "Perubahan aman di perangkat ini dan akan dikirim saat koneksi pulih. Angka di layar bisa belum sama dengan server."
+        else -> CloudSync.lastStatus
+    }
+    Surface(
+        modifier = modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+        shape = CuciinShape.badge,
+        color = Amber.copy(alpha = if (LocalCuciinPalette.current.dark) .22f else .12f),
+    ) {
+        Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.CloudOff, null, tint = Amber, modifier = Modifier.size(18.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
+                Text(body, fontSize = 12.sp, lineHeight = 17.sp, color = Muted)
+            }
+        }
     }
 }
 
