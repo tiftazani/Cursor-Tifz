@@ -39,7 +39,7 @@ fun rememberUi(): UiMetrics {
                 else -> 20.dp
             },
             gap = 12.dp,
-            radius = 22.dp,
+            radius = 20.dp,
             titleSp = when {
                 w < 340 -> 22.sp
                 h < 640 -> 24.sp

@@ -1,8 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FFFFFF" android:pathData="M37,28 L68,28 Q77,28 77,37 L77,72 Q77,80 68,80 L37,80 Q29,80 29,72 L29,37 Q29,28 37,28 Z" />
-    <path android:fillColor="#2859DB" android:pathData="M37,35 L50,35 L50,39 L37,39 Z M68,35 A2,2 0,1 0,68 39 A2,2 0,1 0,68 35" />
-    <path android:fillColor="#E9EFFF" android:pathData="M53,44 A15,15 0,1 0,53 74 A15,15 0,1 0,53 44" />
-    <path android:fillColor="#2859DB" android:pathData="M39,58 C45,52 51,65 59,58 C62,55 65,55 67,57 L67,61 C66,69 59,73 53,73 C46,73 39,67 39,60 Z" />
-    <path android:fillColor="#90E6F2" android:pathData="M76,22 L78,29 L85,31 L78,33 L76,40 L74,33 L67,31 L74,29 Z" />
+<!--
+  Tanda Cuciin: mesin cuci dengan tumpukan lipatan laundry di bawahnya.
+
+  Digambar dengan garis, bukan bidang penuh, supaya tetap terbaca di ukuran 48
+  piksel dan tetap benar saat Android memakai versi monokrom untuk ikon bertema.
+
+  Kanvas 108x108 dengan zona aman 66x66 di tengah, mengikuti aturan adaptive icon.
+
+  Bentuk tumpukan: tiga lapis yang mengecil ke atas, dengan tepi atas bergelombang
+  pada lapisan tertinggi. Lapisan memberi kesan tumpukan, gelombang memberi kesan
+  kain. Mesin dan tumpukan diberi jarak agar tidak menyatu di ukuran kecil.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Badan mesin cuci -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M41,17 L67,17 A6,6 0 0 1 73,23 L73,44 A6,6 0 0 1 67,50 L41,50 A6,6 0 0 1 35,44 L35,23 A6,6 0 0 1 41,17 Z" />
+
+    <!-- Pintu drum -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="6"
+        android:fillColor="#00000000"
+        android:pathData="M45,33.5 A9,9 0 1 0 63,33.5 A9,9 0 1 0 45,33.5 Z" />
+
+    <!-- Lapisan bawah: paling lebar, dasar tumpukan -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M29,72 L79,72 A3.5,3.5 0 0 1 82.5,75.5 L82.5,77 A3.5,3.5 0 0 1 79,80.5 L29,80.5 A3.5,3.5 0 0 1 25.5,77 L25.5,75.5 A3.5,3.5 0 0 1 29,72 Z" />
+
+    <!-- Lapisan tengah -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M33,65 L75,65 A3.5,3.5 0 0 1 78.5,68.5 L78.5,70 A3.5,3.5 0 0 1 75,73.5 L33,73.5 A3.5,3.5 0 0 1 29.5,70 L29.5,68.5 A3.5,3.5 0 0 1 33,65 Z" />
+
+    <!-- Lapisan atas: tepi bergelombang supaya terbaca sebagai kain, bukan alas -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,59 C43,56.5 48,61.5 54,59 C60,56.5 65,61 70,59.5 L72.5,61 L72.5,63 A3.5,3.5 0 0 1 69,66.5 L39,66.5 A3.5,3.5 0 0 1 35.5,63 L35.5,61 Z" />
 </vector>

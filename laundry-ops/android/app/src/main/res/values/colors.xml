@@ -1,5 +1,6 @@
 <resources>
-    <color name="navy">#172B4D</color>
-    <color name="pink">#2859DB</color>
-    <color name="foam">#F4F7FC</color>
+    <!-- Latar ikon adaptif: near-black, bukan hitam pekat, mengikuti identitas baru. -->
+    <color name="navy">#222222</color>
+    <color name="pink">#222222</color>
+    <color name="foam">#FFFFFF</color>
 </resources>

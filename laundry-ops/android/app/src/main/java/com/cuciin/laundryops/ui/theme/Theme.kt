@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 
@@ -23,6 +24,11 @@ import androidx.core.view.WindowCompat
  *
  * Setiap tema memakai nama token yang sama supaya seluruh layar tidak perlu diubah.
  * Nilainya dijaga agar teks lolos WCAG AA 4.5:1 dan batas kontrol lolos 3:1.
+ *
+ * Bentuk visual mengikuti sistem desain Airbnb: kanvas putih bersih, teks near-black
+ * (bukan hitam pekat), satu warna aksen, sudut membulat, dan bayangan berlapis tiga.
+ * Warnanya disesuaikan agar lolos kontras: Rausch Red asli (#ff385c) hanya 3.52:1
+ * di atas putih, jadi aksen memakai varian yang lebih dalam (#d92e4a, 4.73:1).
  */
 enum class CuciinThemeMode(val label: String) {
     Sistem("Ikut sistem"),
@@ -54,6 +60,10 @@ data class CuciinPalette(
     val heroA: Color,
     val heroB: Color,
     val onHero: Color,
+    /** Latar abu untuk elemen sekunder, mengikuti token surface Airbnb. */
+    val surface: Color = card,
+    /** Latar halaman; sama dengan bg pada tema Airbnb yang berkanvas putih. */
+    val canvas: Color = bg,
 ) {
     val foam: Color get() = bg
     val mist: Color get() = primSoft
@@ -63,57 +73,59 @@ data class CuciinPalette(
 
 private val Terang = CuciinPalette(
     dark = false,
-    bg = Color(0xFFF4F7FC),
+    bg = Color(0xFFFFFFFF),
     card = Color(0xFFFFFFFF),
-    // Batas kontrol dinaikkan dari 0xE0E7F2 supaya chip dan kolom isian punya batas 3:1.
-    line = Color(0xFF8090AE),
-    lineSoft = Color(0xFFE0E7F2),
-    ink = Color(0xFF172B4D),
-    // Dinaikkan dari 0x60718D: teks redup di atas Mist tadinya hanya 4.30:1.
-    muted = Color(0xFF5C6C88),
-    prim = Color(0xFF2859DB),
-    primDeep = Color(0xFF16327B),
-    primSoft = Color(0xFFE9EFFF),
+    // Batas kontrol harus 3:1 di atas latar; border Airbnb #c1c1c1 hanya 1.80:1.
+    line = Color(0xFF767676),
+    lineSoft = Color(0xFFDDDDDD),
+    ink = Color(0xFF222222),
+    muted = Color(0xFF6B6B6B),
+    prim = Color(0xFFD92E4A),
+    primDeep = Color(0xFFA81F38),
+    primSoft = Color(0xFFFDECEF),
     onPrim = Color(0xFFFFFFFF),
-    coral = Color(0xFFB83E32),
-    green = Color(0xFF16734E),
+    coral = Color(0xFFC13515),
+    green = Color(0xFF0A7D47),
     amber = Color(0xFF8F5A10),
-    gold = Color(0xFF956414),
-    heroA = Color(0xFF16327B),
-    heroB = Color(0xFF2859DB),
+    gold = Color(0xFF8F5A10),
+    heroA = Color(0xFF222222),
+    heroB = Color(0xFF3D3D3D),
     onHero = Color(0xFFFFFFFF),
+    surface = Color(0xFFF2F2F2),
 )
 
 private val Gelap = CuciinPalette(
     dark = true,
-    bg = Color(0xFF0B1020),
-    card = Color(0xFF161E33),
-    line = Color(0xFF5C6A9C),
-    lineSoft = Color(0xFF2E3A5C),
-    ink = Color(0xFFE8EDF9),
-    muted = Color(0xFF93A2C0),
-    prim = Color(0xFF7C9BFF),
-    primDeep = Color(0xFF16265C),
-    primSoft = Color(0xFF1E2942),
-    // Biru terang tidak bisa dipasangkan teks putih; pola Material 3 dark memakai teks gelap.
-    onPrim = Color(0xFF0B1020),
-    coral = Color(0xFFFF8F7D),
-    green = Color(0xFF48C99B),
+    bg = Color(0xFF1A1A1A),
+    card = Color(0xFF2A2A2A),
+    line = Color(0xFF7A7A7A),
+    lineSoft = Color(0xFF3A3A3A),
+    ink = Color(0xFFF0F0F0),
+    muted = Color(0xFFB0B0B0),
+    // Rausch Red di kartu gelap hanya 4.08:1; versi terang ini mencapai 6.01:1.
+    prim = Color(0xFFFF8098),
+    primDeep = Color(0xFFFF5A75),
+    primSoft = Color(0xFF3A2028),
+    // Merah terang tidak bisa dipasangkan teks putih; pola Material 3 dark memakai teks gelap.
+    onPrim = Color(0xFF1A1A1A),
+    coral = Color(0xFFFF9B8A),
+    green = Color(0xFF5BD3A0),
     amber = Color(0xFFEFB04F),
     gold = Color(0xFFEFB04F),
-    heroA = Color(0xFF16265C),
-    heroB = Color(0xFF2F4BA8),
+    heroA = Color(0xFF2A2A2A),
+    heroB = Color(0xFF4A2A32),
     onHero = Color(0xFFFFFFFF),
+    surface = Color(0xFF232323),
 )
 
 private val Warni = CuciinPalette(
     dark = false,
     bg = Color(0xFFFFF5F9),
     card = Color(0xFFFFFFFF),
-    line = Color(0xFFB87A9B),
+    line = Color(0xFF9E6A86),
     lineSoft = Color(0xFFEFD3E2),
     ink = Color(0xFF241447),
-    muted = Color(0xFF6A5A80),
+    muted = Color(0xFF5D4F73),
     prim = Color(0xFFC2185B),
     primDeep = Color(0xFF3B1E6E),
     primSoft = Color(0xFFFCE4EE),
@@ -125,6 +137,7 @@ private val Warni = CuciinPalette(
     heroA = Color(0xFF3B1E6E),
     heroB = Color(0xFFC2185B),
     onHero = Color(0xFFFFFFFF),
+    surface = Color(0xFFFCE4EE),
 )
 
 internal val LightPalette = Terang
@@ -150,6 +163,7 @@ val Amber: Color @androidx.compose.runtime.Composable get() = LocalCuciinPalette
 val Gold: Color @androidx.compose.runtime.Composable get() = LocalCuciinPalette.current.gold
 val OnPrim: Color @androidx.compose.runtime.Composable get() = LocalCuciinPalette.current.onPrim
 val OnHero: Color @androidx.compose.runtime.Composable get() = LocalCuciinPalette.current.onHero
+val Surface2: Color @androidx.compose.runtime.Composable get() = LocalCuciinPalette.current.surface
 
 val LocalCuciinPalette = staticCompositionLocalOf { Terang }
 
@@ -211,40 +225,62 @@ internal fun materialScheme(p: CuciinPalette) = if (p.dark) darkColorScheme(
     error = p.coral,
 )
 
+/**
+ * Skala huruf mengikuti DESIGN.md Airbnb: judul memakai tracking negatif supaya
+ * terasa rapat dan ramah, bobot 600 sampai 800 pada judul, dan teks badan 14 sampai 16.
+ */
 internal val CuciinTypography = Typography(
     headlineLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Black,
-        fontSize = 34.sp,
-        lineHeight = 40.sp,
-        letterSpacing = (-0.6).sp,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 28.sp,
+        lineHeight = 34.sp,
+        letterSpacing = (-0.44).sp,
     ),
     headlineMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.ExtraBold,
-        fontSize = 26.sp,
-        letterSpacing = (-0.4).sp,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
+        letterSpacing = (-0.36).sp,
     ),
     titleLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
-        fontSize = 20.sp,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
+        letterSpacing = (-0.3).sp,
     ),
     titleMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
+        lineHeight = 22.sp,
+        letterSpacing = (-0.18).sp,
     ),
-    bodyLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 16.sp, lineHeight = 22.sp),
+    bodyLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 16.sp, lineHeight = 23.sp),
     bodyMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 14.sp, lineHeight = 20.sp),
-    labelLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 14.sp),
+    labelLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 15.sp),
     labelSmall = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
         fontSize = 11.sp,
-        letterSpacing = 0.8.sp,
+        letterSpacing = 0.5.sp,
     ),
 )
+
+/**
+ * Ukuran bentuk dan bayangan. Dipakai bersama oleh komponen supaya seluruh layar
+ * memakai bahasa bentuk yang sama: tombol 8, kartu 20, dan bayangan berlapis tiga.
+ */
+object CuciinShape {
+    val button = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+    val field = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+    val badge = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
+    val card = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+    val hero = androidx.compose.foundation.shape.RoundedCornerShape(32.dp)
+    val pill = androidx.compose.foundation.shape.RoundedCornerShape(9999.dp)
+}
 
 @Composable
 fun CuciinTheme(content: @Composable () -> Unit) {

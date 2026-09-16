@@ -9,7 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import java.util.UUID
 
 object CuciinStore {
-    val ownerName = "Cuciin"
+    val ownerName = "Tiftazani"
     val ownerEmail = "tiftazani.khara@gmail.com"
 
     val branches = mutableStateListOf<Branch>()

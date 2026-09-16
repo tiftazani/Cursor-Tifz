@@ -19,11 +19,16 @@ object VersionHistory {
         AppRelease(
             name = "1.10.0", code = 19, date = "16 Sep 2026",
             notes = listOf(
+                "Tampilan seluruh aplikasi memakai sistem desain baru: kanvas putih bersih, teks near-black, satu warna aksen, tombol utama gelap, dan sudut membulat 8 sampai 20 piksel.",
+                "Pemilih periode laporan menjadi satu bilah ringkas berisi periode aktif dan jumlah cabang, dengan lembar pilihan. Deretan kartu periode dihapus.",
+                "Header laporan menyebut data yang diambil: rentang tanggal, jumlah cabang, dan jumlah Service, jadi angka di bawahnya jelas asalnya.",
+                "Ringkasan per cabang dan per kasir menjadi daftar baris, bukan tumpukan kartu, sehingga puluhan cabang tetap terbaca.",
+                "Daftar cabang memakai baris ringkas dengan kolom pencarian nama, kode, atau alamat, plus keterangan jumlah kasir dan SPV tiap cabang.",
+                "Ikon aplikasi baru: mesin cuci dengan tumpukan lipatan laundry, tiga lapis yang mengecil ke atas.",
                 "Identitas aplikasi berpindah ke paket com.cuciin.laundryops. Aplikasi lama tetap ada di HP dan harus dicopot manual setelah versi ini dipasang, karena Android menganggap keduanya aplikasi berbeda.",
                 "Firebase Authentication berpindah ke project cuciin-ops. Seluruh akun operasional dibuat ulang di project itu dengan kata sandi awal yang sama seperti data awal aplikasi.",
                 "Server menerima token dari project lama dan project baru selama masa peralihan, jadi HP yang belum diperbarui tetap dapat bekerja seperti biasa.",
                 "Halaman reset kata sandi memakai domain cuciin-ops.web.app dan berbahasa Indonesia.",
-                "Nama Owner di aplikasi dan di data server menjadi Cuciin, bukan nama pribadi.",
             ),
         ),
         AppRelease(

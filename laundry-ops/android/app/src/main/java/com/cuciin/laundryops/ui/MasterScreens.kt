@@ -6,18 +6,28 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import com.cuciin.laundryops.ui.components.FeedbackBanner
 import com.cuciin.laundryops.ui.components.InfoRow
 import com.cuciin.laundryops.ui.components.rememberTapFeedback
+import com.cuciin.laundryops.ui.components.Eyebrow
+import com.cuciin.laundryops.ui.components.ListCard
+import com.cuciin.laundryops.ui.components.ListRow
+import com.cuciin.laundryops.ui.components.RowDivider
+import com.cuciin.laundryops.ui.components.SearchField
+import com.cuciin.laundryops.ui.theme.Ink
+import com.cuciin.laundryops.ui.theme.Surface2
 
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -170,6 +180,7 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
     var code by rememberSaveable { mutableStateOf("") }
     var location by rememberSaveable { mutableStateOf("") }
     var maps by rememberSaveable { mutableStateOf("") }
+    var branchQuery by rememberSaveable { mutableStateOf("") }
     val incomingMap = MapSelection.pendingLink.value
     LaunchedEffect(incomingMap) {
         if (incomingMap != null) {
@@ -192,8 +203,25 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
         maps = b?.mapsQuery.orEmpty()
     }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), state = listState, verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { ScreenHeader("Cabang", "Nama · lokasi · Maps", onBack = { nav.popBackStack() }) }
-        if (!creating && editing == null) item { PrimaryBtn("Cabang baru", icon = Icons.Outlined.Add) { creating = true; editingId = null; fill(null) } }
+        item {
+            ScreenHeader("Cabang", null, onBack = { nav.popBackStack() }) {
+                if (!creating && editing == null) {
+                    Surface(onClick = { creating = true; editingId = null; fill(null) }, modifier = Modifier.size(40.dp), shape = CircleShape, color = Surface2) {
+                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Add, "Cabang baru", tint = Ink, modifier = Modifier.size(20.dp)) }
+                    }
+                }
+            }
+        }
+        if (!creating && editing == null) item {
+            // Header menyebut jumlah cabang yang benar-benar ada, bukan angka tetap.
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Eyebrow("Master data")
+                Text("${store.branches.size} cabang terdaftar", fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.4).sp, color = Ink)
+            }
+        }
+        if (!creating && editing == null) item {
+            SearchField(branchQuery, { branchQuery = it }, "Cari nama, kode, atau alamat")
+        }
         if (creating || editing != null) {
             item {
                 CardBlock(accent = Teal) {
@@ -241,19 +269,45 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
         }
-        if (!creating && editing == null) items(store.branches, key = { it.id }) { b ->
-            val kasir = store.staff.filter { it.role == Role.Kasir && it.approved && b.id in it.branchIds }
-            val spv = store.staff.filter { it.role == Role.Supervisor && it.approved && b.id in it.branchIds }
-            CardBlock(Modifier.clickable { editingId = b.id; creating = false; fill(b) }) {
-                Text(b.name, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                Text(b.location, color = Muted, fontSize = 13.sp)
-                Text("Kasir: ${kasir.joinToString { it.name }.ifBlank { "—" }}", fontSize = 13.sp, color = Ink)
-                Text("SPV: ${spv.joinToString { it.name }.ifBlank { "—" }}", fontSize = 13.sp, color = Ink)
-                Chip("Kode ${b.code}", Teal)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GhostBtn("Buka peta", Modifier.weight(1f), icon = Icons.Outlined.Map) { MapSelection.open(ctx, b.mapsQuery.ifBlank { b.location }, toast) }
-                    GhostBtn("Ubah", Modifier.weight(1f), icon = Icons.Outlined.Edit) { editingId = b.id; creating = false; fill(b) }
+        if (!creating && editing == null) {
+            val shown = store.branches.filter { b ->
+                branchQuery.isBlank() ||
+                    b.name.contains(branchQuery, true) ||
+                    b.code.contains(branchQuery, true) ||
+                    b.location.contains(branchQuery, true)
+            }
+            if (shown.isEmpty()) item {
+                EmptyHint("Cabang tidak ditemukan", "Tidak ada cabang yang cocok dengan \"$branchQuery\". Ubah kata kunci atau kosongkan pencarian.")
+            } else item {
+                // Daftar baris, bukan tumpukan kartu: dengan puluhan cabang, satu baris
+                // per cabang jauh lebih mudah dipindai dan digulir.
+                ListCard {
+                    shown.forEachIndexed { index, b ->
+                        val kasir = store.staff.count { it.role == Role.Kasir && it.approved && b.id in it.branchIds }
+                        val spv = store.staff.count { it.role == Role.Supervisor && it.approved && b.id in it.branchIds }
+                        val kota = b.location.substringBefore(",").trim().ifBlank { "Alamat belum diisi" }
+                        val petugas = buildString {
+                            append("$kasir kasir")
+                            append(" · ")
+                            append(if (spv > 0) "$spv SPV" else "belum ada SPV")
+                        }
+                        ListRow(
+                            mark = b.code,
+                            title = b.name,
+                            detail = "$kota · $petugas",
+                            onClick = { editingId = b.id; creating = false; fill(b) },
+                        )
+                        if (index < shown.lastIndex) RowDivider()
+                    }
                 }
+            }
+            item {
+                Text(
+                    "${shown.size} dari ${store.branches.size} cabang ditampilkan",
+                    color = Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
             }
         }
         item { Spacer(Modifier.height(20.dp)) }

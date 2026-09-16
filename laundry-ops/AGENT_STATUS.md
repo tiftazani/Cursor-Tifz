@@ -1,9 +1,37 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 16 September 2026, 10:35 WIB (oleh Hermes).
+Terakhir diperbarui: 16 September 2026, 12:05 WIB (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
+
+## 0. Pekerjaan yang sedang berjalan (16 Sep, Hermes)
+
+**Tujuan:** menerapkan sistem desain bergaya Airbnb ke seluruh aplikasi, mengganti ikon, dan memperbaiki tiga layar yang dikeluhkan Owner.
+
+**Klaim file Hermes untuk pekerjaan ini:**
+
+```
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/theme/Theme.kt        (palet + CuciinShape)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/components/Widgets.kt (komponen bersama)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/UiMetrics.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MoreScreens.kt        (laporan + periode)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MasterScreens.kt      (daftar cabang)
+laundry-ops/android/app/src/main/res/drawable/ic_launcher_foreground.xml             (ikon baru)
+laundry-ops/android/app/src/main/res/drawable/cuciin_mark.xml
+laundry-ops/android/app/src/main/res/values/colors.xml
+laundry-ops/android/app/src/test/java/com/cuciin/laundryops/ui/theme/ThemePaletteTest.kt
+```
+
+**Codex: jangan menyunting file di atas sampai pekerjaan ini selesai dan dicatat di sini.** Area `ui/AuthScreens.kt`, `ui/OpsScreens.kt`, `ui/BusinessScreens.kt`, dan `ui/OwnerSettingsScreen.kt` **tidak** dipegang Hermes dan tetap milik Codex, tetapi tampilannya ikut berubah karena memakai komponen bersama.
+
+**Aturan yang berubah dan wajib dipatuhi siapa pun:**
+
+1. **Warna aksen bukan biru lagi.** Token `Teal` sekarang berisi merah aksen tema. Jangan menulis warna biru literal di layar baru; pakai token tema.
+2. **Tombol utama memakai near-black**, bukan warna aksen. Gunakan `PrimaryBtn` untuk pekerja utama dan `AccentBtn` hanya untuk satu aksi paling utama per layar.
+3. **Radius mengikuti `CuciinShape`**, bukan angka bebas: tombol 8, kartu 20, lencana 14, pil 9999.
+4. **Daftar panjang memakai `ListCard` + `ListRow` + `RowDivider`**, bukan tumpukan `CardBlock`. Tumpukan kartu hanya untuk beberapa item.
+5. **Semua pasangan warna wajib lolos WCAG.** Rausch Red asli (#ff385c) gagal 4.5:1, jadi jangan dipakai sebagai teks atau latar tombol. Jalankan `verifikasi-palet.py` di `~/Documents/ChatGPT/Laundry/cuciin-airbnb-mockup/` setelah mengubah palet.
 
 ## 1. Titik berangkat yang sudah diverifikasi
 
@@ -29,7 +57,7 @@ Ini perubahan besar yang mengubah banyak hal sekaligus. Ringkasannya:
 | Paket `com.tiftazani.laundryops` | Paket `com.cuciin.laundryops` |
 | Firebase project `cuciin-ops-tiftazani` | Firebase project `cuciin-ops` |
 | Domain reset `cuciin-ops-tiftazani.web.app` | Domain reset `cuciin-ops.web.app` |
-| Nama Owner `Tiftazani Khara` | Nama Owner `Cuciin` |
+| Nama Owner `Tiftazani Khara` | Nama Owner `Tiftazani` (Owner kedua memakai `Ustutifa`) |
 | Worker menerima 1 project | Worker menerima **2 project** selama peralihan |
 
 Yang **tidak** berubah: Worker URL, D1, skema database, signing key, dan seluruh data operasional.

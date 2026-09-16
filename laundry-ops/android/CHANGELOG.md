@@ -4,11 +4,42 @@ Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `ve
 
 ## 1.10.0 — 16 Sep 2026 (versionCode 19)
 
+### Tampilan
+
+- Seluruh aplikasi memakai sistem desain baru: kanvas putih bersih, teks near-black (#222222), satu warna aksen merah, tombol utama gelap, dan sudut membulat 8 sampai 20 piksel. Warna aksen tidak lagi dipakai untuk bidang luas.
+- Warna aksen disesuaikan agar lolos WCAG AA. Rausch Red (#ff385c) hanya 3.52:1 di atas putih, jadi tema Terang memakai #d92e4a (4.73:1), tema Gelap memakai #ff8098 (6.01:1 di kartu gelap), dan tema Warna-warni tetap memakai plum #c2185b. Seluruh 51 pasangan token diuji dengan rumus kontras, 0 gagal.
+- Tombol utama memakai near-black seperti pola Primary Dark, bukan warna merek. Warna aksen hanya untuk satu aksi paling utama per layar.
+- Radius mengikuti token bersama `CuciinShape`: tombol dan kolom isian 8, lencana 14, kartu 20, hero 32, pil penuh.
+- Tombol kembali menjadi bulat abu di semua layar, mengikuti pola Circular Navigation.
+- Tema tetap empat pilihan seperti sebelumnya: Ikut sistem, Terang, Gelap, dan Warna-warni. Semuanya memakai bahasa bentuk baru.
+
+### Laporan transaksi
+
+- Header menyebut data yang benar-benar diambil: rentang tanggal, jumlah cabang, dan jumlah Service. Sebelumnya hanya judul dan nama Owner.
+- Pemilih periode berubah dari deretan kartu chip menjadi satu bilah ringkas berisi periode aktif, rentang tanggal, dan jumlah cabang, dengan lembar pilihan. Pilihan cepat menampilkan rentang tanggalnya masing-masing.
+- Ringkasan per cabang dan per kasir menjadi daftar baris di dalam satu kartu, bukan tumpukan kartu terpisah.
+- Filter petugas tetap memakai chip karena jumlahnya sedikit.
+
+### Daftar cabang
+
+- Kartu per cabang diganti daftar baris: kode cabang, nama, kota, jumlah kasir, dan jumlah SPV. Puluhan cabang kini terbaca tanpa menggulir jauh.
+- Ditambahkan kolom pencarian nama, kode, atau alamat, dengan keadaan kosong yang menjelaskan kata kunci yang tidak cocok.
+- Cabang yang belum punya SPV ditandai teks, bukan warna atau titik dekoratif.
+- Tombol tambah pindah ke bilah atas sebagai ikon lingkaran.
+
+### Ikon
+
+- Ikon aplikasi baru: mesin cuci dengan tumpukan lipatan laundry, tiga lapis yang mengecil ke atas dan tepi atas bergelombang supaya terbaca sebagai kain, bukan alas.
+- Ikon digambar dengan garis di atas near-black, bukan bidang biru penuh, dan tetap benar saat Android memakai versi monokrom untuk ikon bertema.
+- Tanda di dalam aplikasi memakai bentuk yang sama agar identitasnya konsisten.
+
+### Identitas aplikasi
+
 - Identitas aplikasi berpindah ke paket `com.cuciin.laundryops`. Android menganggap paket ini aplikasi berbeda, jadi versi lama tetap terpasang dan harus dicopot manual setelah versi ini masuk. Data lokal lama (foto absensi, cache, outbox) tidak berpindah; data operasional di server tidak terpengaruh.
 - Firebase Authentication berpindah dari project `cuciin-ops-tiftazani` ke `cuciin-ops`. Kedua app Android (`com.cuciin.laundryops` dan `.debug`) terdaftar di project baru, sidik jari sertifikat rilis dan debug sudah ditambahkan.
 - Worker menerima ID token dari **kedua** project selama masa peralihan (`FIREBASE_PROJECT_IDS`). HP yang belum diperbarui tetap dapat bekerja seperti biasa, sehingga tidak ada pemutusan serentak di 20 cabang.
 - Halaman reset kata sandi memakai domain `cuciin-ops.web.app`, locale project `id`, dan `callbackUri` diarahkan ke domain itu.
-- Nama Owner di aplikasi dan di seluruh data server menjadi `Cuciin`; alamat email Owner tidak diubah.
+- Nama Owner di aplikasi dan di seluruh data server menjadi `Tiftazani`; alamat email Owner tidak diubah. Owner kedua `us.archuleta1207@gmail.com` memakai nama `Ustutifa`.
 
 ## 1.9.3 — 15 Sep 2026 (versionCode 18)
 

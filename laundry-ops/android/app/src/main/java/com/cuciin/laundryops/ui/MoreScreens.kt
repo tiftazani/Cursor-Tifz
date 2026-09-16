@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.cuciin.laundryops.ui.components.*
 import com.cuciin.laundryops.ui.theme.Card
+import com.cuciin.laundryops.ui.theme.CuciinShape
 import com.cuciin.laundryops.ui.theme.Line
 import com.cuciin.laundryops.ui.theme.Mist
 import com.cuciin.laundryops.data.FirebaseCloud
@@ -32,17 +33,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.cuciin.laundryops.BuildConfig
 import com.cuciin.laundryops.data.CloudSync
 import com.cuciin.laundryops.data.Clock
+import java.time.format.DateTimeFormatter
 import com.cuciin.laundryops.data.CuciinStore
 import com.cuciin.laundryops.data.PayMethod
 import com.cuciin.laundryops.data.Nota
@@ -168,6 +173,94 @@ internal fun MoreScreen(nav: NavHostController) {
     }
 }
 
+/**
+ * Rentang tanggal yang benar-benar diambil untuk tiap periode cepat. Dipakai header
+ * laporan supaya pembaca tahu angkanya berasal dari rentang mana, bukan hanya namanya.
+ */
+internal fun periodRangeLabel(period: String, now: LocalDateTime = LocalDateTime.now(Clock.ZONE)): String {
+    val end = now.toLocalDate()
+    val start = when (period) {
+        "hari" -> end
+        "minggu" -> end.minusDays(6)
+        "bulan" -> end.withDayOfMonth(1)
+        "tahun" -> end.withDayOfYear(1)
+        else -> end.minusDays(29)
+    }
+    val fmt = DateTimeFormatter.ofPattern("d MMM yyyy", DisplayDates.locale)
+    return if (start == end) start.format(fmt) else "${start.format(fmt)} sampai ${end.format(fmt)}"
+}
+
+/**
+ * Lembar pilihan periode: daftar pilihan cepat, rentang sendiri, lalu pilihan cabang.
+ * Menggantikan deretan chip yang memakan ruang dan sulit dibaca saat pilihannya banyak.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PeriodSheet(
+    currentPeriod: String,
+    customRange: Boolean,
+    branches: List<com.cuciin.laundryops.data.Branch>,
+    selectedBranches: Set<String>,
+    onDismiss: () -> Unit,
+    onPickPeriod: (String) -> Unit,
+    onPickCustom: () -> Unit,
+    onToggleBranch: (String) -> Unit,
+    onClearBranches: () -> Unit,
+) {
+    val quick = listOf("hari" to "Hari ini", "minggu" to "7 hari terakhir", "bulan" to "Bulan ini", "tahun" to "Tahun ini")
+    ModalBottomSheet(onDismissRequest = onDismiss, shape = CuciinShape.hero) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 28.dp)) {
+            Text("Pilih periode", modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp), fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.3).sp, color = Ink)
+            Eyebrow("Cepat").also { }
+            Column(Modifier.padding(horizontal = 8.dp)) {
+                quick.forEach { (id, label) ->
+                    val chosen = !customRange && currentPeriod == id
+                    Surface(onClick = { onPickPeriod(id) }, color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Column(Modifier.weight(1f)) {
+                                Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                                Text(periodRangeLabel(id), fontSize = 12.sp, color = Muted)
+                            }
+                            if (chosen) Icon(Icons.Outlined.Check, null, tint = Teal, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+                Surface(onClick = onPickCustom, color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Pilih tanggal dan jam", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                            Text("Tentukan mulai dan sampai", fontSize = 12.sp, color = Muted)
+                        }
+                        if (customRange) Icon(Icons.Outlined.Check, null, tint = Teal, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+            HorizontalDivider(color = LineSoft, modifier = Modifier.padding(vertical = 8.dp))
+            Text("Cabang", modifier = Modifier.padding(start = 20.dp, bottom = 6.dp), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, color = Muted)
+            Column(Modifier.padding(horizontal = 8.dp)) {
+                Surface(onClick = onClearBranches, color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Semua cabang", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink, modifier = Modifier.weight(1f))
+                        if (selectedBranches.isEmpty()) Icon(Icons.Outlined.Check, null, tint = Teal, modifier = Modifier.size(20.dp))
+                    }
+                }
+                branches.forEach { b ->
+                    val chosen = b.id in selectedBranches
+                    Surface(onClick = { onToggleBranch(b.id) }, color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Column(Modifier.weight(1f)) {
+                                Text(b.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                                Text(b.location, fontSize = 12.sp, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (chosen) Icon(Icons.Outlined.Check, null, tint = Teal, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 internal fun AnalyticsScreen(nav: NavHostController) {
     val ui = rememberUi()
@@ -177,6 +270,7 @@ internal fun AnalyticsScreen(nav: NavHostController) {
     var fromValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).withHour(0).withMinute(0))) }
     var untilValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59))) }
     var handlerFilter by rememberSaveable { mutableStateOf("all") }
+    var showPeriodSheet by rememberSaveable { mutableStateOf(false) }
     val from = DisplayDates.parse(fromValue) ?: LocalDateTime.now(Clock.ZONE).withHour(0).withMinute(0)
     val until = DisplayDates.parse(untilValue) ?: LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59)
     val selectedBranches = store.reportBranchIds.value
@@ -191,12 +285,57 @@ internal fun AnalyticsScreen(nav: NavHostController) {
     val points = AnalyticsSeries.build(rows, period)
     val operations = operationalCounts(rows)
     fun branchName(id: String): String = store.branches.firstOrNull { it.id == id }?.name ?: "Cabang $id"
+    // Label yang dipakai header dan bilah periode, supaya angkanya jelas asalnya.
+    val rangeLabel = if (customRange) "${DisplayDates.date(from)} sampai ${DisplayDates.date(until)}" else periodRangeLabel(period)
+    val periodLabel = if (customRange) "Rentang sendiri" else period.replaceFirstChar { it.uppercase() }
+    val summaryLine = buildString {
+        append("${rows.size} Service")
+        append(" · ")
+        append(if (selectedBranches.isEmpty()) "${store.branches.size} cabang" else "${selectedBranches.size} cabang dipilih")
+        if (handlerFilter != "all") {
+            val nama = handlers.firstOrNull { it.first == handlerFilter }?.second ?: handlerFilter
+            append(" · petugas $nama")
+        }
+    }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(ui.gap)) {
-        item { ScreenHeader("Laporan transaksi", "${rows.size} Service · ${store.ownerName}", onBack = { nav.popBackStack() }) }
         item {
-            SectionLabel("Periode laporan")
-            PeriodRow(if (customRange) "custom" else period) { customRange = false; store.reportPeriod.value = it; store.touchStatus() }
-            ChipRow { SelectChip(customRange, "Pilih tanggal") { customRange = true } }
+            ScreenHeader("Laporan transaksi", null, onBack = { nav.popBackStack() }) {
+                GhostBtn("PDF", Modifier.width(96.dp), enabled = !customRange || !until.isBefore(from), icon = Icons.Outlined.PictureAsPdf) { FileExports.shareFinancialPdf(ctx, rows, expenseRows, rangeLabel) }
+            }
+        }
+        item {
+            // Header menyebut data yang benar-benar diambil, bukan hanya judul.
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Eyebrow("Ringkasan keuangan")
+                Text(rangeLabel, fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.4).sp, color = Ink)
+                Text(summaryLine, color = Muted, fontSize = 13.sp, lineHeight = 18.sp)
+            }
+        }
+        item {
+            PeriodBar(
+                label = if (customRange) "Rentang sendiri" else periodLabel,
+                detail = rangeLabel,
+                trailingLabel = if (selectedBranches.isEmpty()) "Semua cabang" else "${selectedBranches.size} dipilih",
+                onPickPeriod = { showPeriodSheet = true },
+                onPickTrailing = { showPeriodSheet = true },
+            )
+        }
+        if (showPeriodSheet) item {
+            PeriodSheet(
+                currentPeriod = period,
+                customRange = customRange,
+                branches = store.branches,
+                selectedBranches = store.reportBranchIds.value,
+                onDismiss = { showPeriodSheet = false },
+                onPickPeriod = { id -> customRange = false; store.reportPeriod.value = id; store.touchStatus(); showPeriodSheet = false },
+                onPickCustom = { customRange = true; showPeriodSheet = false },
+                onToggleBranch = { id ->
+                    val current = store.reportBranchIds.value
+                    store.reportBranchIds.value = if (id in current) current - id else current + id
+                    store.touchStatus()
+                },
+                onClearBranches = { store.reportBranchIds.value = emptySet(); store.touchStatus() },
+            )
         }
         if (customRange) item {
             CardBlock {
@@ -206,23 +345,12 @@ internal fun AnalyticsScreen(nav: NavHostController) {
                 if (until.isBefore(from)) Text("Waktu akhir harus setelah waktu mulai.", color = com.cuciin.laundryops.ui.theme.Coral, fontSize = 12.sp)
             }
         }
-        item {
-            ChipRow {
-                SelectChip(store.reportBranchIds.value.isEmpty(), "Semua cabang") { store.reportBranchIds.value = emptySet(); store.touchStatus() }
-                store.branches.forEach { b ->
-                    SelectChip(b.id in store.reportBranchIds.value, b.name.removePrefix("Cuciin ")) {
-                        val current = store.reportBranchIds.value
-                        store.reportBranchIds.value = if (b.id in current) current - b.id else current + b.id
-                        store.touchStatus()
-                    }
-                }
-            }
-        }
         if (handlers.isNotEmpty()) item {
-            CardBlock {
-                SectionLabel("Filter petugas layanan")
+            // Petugas tetap memakai chip karena jumlahnya sedikit dan sering diganti.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionLabel("Petugas layanan")
                 ChipRow {
-                    SelectChip(handlerFilter == "all", "Semua petugas") { handlerFilter = "all" }
+                    SelectChip(handlerFilter == "all", "Semua") { handlerFilter = "all" }
                     handlers.forEach { (key, name) -> SelectChip(handlerFilter == key, name) { handlerFilter = key } }
                 }
             }
@@ -261,20 +389,43 @@ internal fun AnalyticsScreen(nav: NavHostController) {
             }
         }
         item { SectionLabel("Ringkasan per cabang") }
-        items(rows.groupBy { it.branchId }.toList(), key = { it.first }) { (branchId, branchRows) ->
-            CardBlock {
-                Text(branchName(branchId), fontWeight = FontWeight.Bold)
-                Text("${branchRows.size} transaksi · omzet ${rp(branchRows.sumOf { it.total })} · masuk ${rp(branchRows.sumOf { it.paid })}", color = Muted, fontSize = 13.sp)
-                val branchCost = expenseRows.filter { it.branchId == branchId }.sumOf { it.amount }
-                Text("Biaya ${rp(branchCost)} · hasil kas ${rp(branchRows.sumOf { it.paid } - branchCost)}", color = Ink, fontWeight = FontWeight.SemiBold)
+        item {
+            // Daftar baris, bukan tumpukan kartu, supaya puluhan cabang tetap terbaca.
+            ListCard {
+                val groups = rows.groupBy { it.branchId }.toList()
+                groups.forEachIndexed { index, (branchId, branchRows) ->
+                    val branchCost = expenseRows.filter { it.branchId == branchId }.sumOf { it.amount }
+                    val branchName = store.branches.firstOrNull { it.id == branchId }?.name ?: "Cabang $branchId"
+                    ListRow(
+                        mark = branchName.removePrefix("Cuciin ").take(3),
+                        title = branchName,
+                        detail = "${branchRows.size} Service · omzet ${rp(branchRows.sumOf { it.total })} · masuk ${rp(branchRows.sumOf { it.paid })}",
+                        trailing = {
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(rp(branchRows.sumOf { it.paid } - branchCost), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Ink)
+                                Text("hasil kas", color = Muted, fontSize = 11.sp)
+                            }
+                        },
+                        showChevron = false,
+                    )
+                    if (index < groups.lastIndex) RowDivider()
+                }
             }
         }
         item { SectionLabel("Ringkasan per kasir") }
-        items(rows.groupBy { it.kasir }.toList(), key = { it.first }) { (kasir, kasirRows) ->
-            CardBlock {
-                Text(kasir, fontWeight = FontWeight.Bold)
-                Text(kasirRows.map { branchName(it.branchId) }.distinct().joinToString(), color = Muted, fontSize = 12.sp)
-                Text("${rp(store.omzet(kasirRows))} · ${kasirRows.size} transaksi", fontWeight = FontWeight.Black, color = Ink)
+        item {
+            ListCard {
+                val kasirGroups = rows.groupBy { it.kasir }.toList()
+                kasirGroups.forEachIndexed { index, (kasir, kasirRows) ->
+                    ListRow(
+                        mark = kasir,
+                        title = kasir,
+                        detail = "${kasirRows.size} Service · ${kasirRows.map { branchName(it.branchId) }.distinct().joinToString()}",
+                        trailing = { Text(rp(store.omzet(kasirRows)), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Ink) },
+                        showChevron = false,
+                    )
+                    if (index < kasirGroups.lastIndex) RowDivider()
+                }
             }
         }
         item { SectionLabel("Komisi & layanan per petugas") }
