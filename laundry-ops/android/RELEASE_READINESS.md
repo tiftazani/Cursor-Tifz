@@ -20,7 +20,7 @@ Konsekuensi yang perlu diketahui sebelum distribusi:
 - APK rilis: non-debuggable, application ID `com.cuciin.laundryops`, versionCode `20`, versionName `1.10.1`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB.
 - SHA-256 sertifikat rilis cocok dengan fingerprint yang dicatat: `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`.
 - Firebase: 7 akun (2 Owner, 3 Kasir, 2 Supervisor) login berhasil di project `cuciin-ops`; kedua app Android terdaftar dengan sidik jari SHA-1 dan SHA-256.
-- Worker: 35 test lulus (29 lama + 6 baru untuk penerimaan dua project Firebase).
+- Worker: 39 test lulus, termasuk penjagaan revisi reproject dan penerimaan dua project Firebase.
 - Uji integrasi nyata: token project **baru** dan token project **lama** dua-duanya diterima `/v1/me` (HTTP 200); login penuh dari APK paket baru sampai masuk dashboard berhasil di emulator.
 - Data D1 produksi: seluruh nama pribadi diganti; yang tersisa hanya alamat email Owner yang memang dipertahankan.
 
@@ -59,7 +59,7 @@ Cloudflare Workers + D1 dapat dimulai dari paket gratis dan dinaikkan ke paket b
 
 Worker memverifikasi Firebase ID token menggunakan kunci publik Google, mendukung secret bootstrap melalui Cloudflare Secrets, memakai query terparameter, dan tidak menyimpan kata sandi. Command per entitas dicatat idempoten, delta dibatasi cabang, koreksi Service memakai optimistic concurrency, dan stok dijaga nonnegatif secara atomik. Foto bukti tetap disimpan di perangkat. QRIS tetap pencatatan metode pembayaran.
 
-Resource produksi aktif: Worker `cuciin-api` versi `5a2741cc-96b8-423a-8de1-8b2e1ea66f35`, D1 `cuciin-db` di APAC, dan proyek Firebase `cuciin-ops` (project lama `cuciin-ops-tiftazani` masih diterima selama masa peralihan). Health check produksi lulus pada 16 September 2026; endpoint snapshot tanpa autentikasi mengembalikan 401. Petunjuk migrasi, deploy, pemulihan, dan build ada di `laundry-ops/cloudflare/README.md`.
+Resource produksi aktif: Worker `cuciin-api` versi `a539b2e0-49e2-4d1f-a6cf-8d4912c1a7a7`, D1 `cuciin-db` di APAC, dan proyek Firebase `cuciin-ops` (project lama `cuciin-ops-tiftazani` masih diterima selama masa peralihan). Health check produksi lulus pada 16 September 2026; endpoint snapshot tanpa autentikasi mengembalikan 401. Petunjuk migrasi, deploy, pemulihan, dan build ada di `laundry-ops/cloudflare/README.md`.
 
 ## Build ulang
 

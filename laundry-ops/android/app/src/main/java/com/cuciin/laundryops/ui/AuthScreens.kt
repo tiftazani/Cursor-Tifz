@@ -140,11 +140,6 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
     fun goHome() {
         nav.navigate("home") { popUpTo("login") { inclusive = true } }
     }
-    fun localLogin() {
-        if (store.login(email, pass)) goHome()
-        else if (store.pendingName.value != null) nav.navigate("pending")
-        else toast("Email atau kata sandi salah, atau akun belum ada.")
-    }
     Box(Modifier.fillMaxSize()) {
         Image(
             painter = painterResource(R.drawable.login_laundry),
@@ -165,8 +160,6 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 BrandMark(size = 104.dp)
-                Text("Cuciin", fontSize = 32.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold, color = OnHero)
-                Text("Laundry dan perawatan", fontSize = 12.sp, color = OnHero.copy(alpha = .85f))
                 CardBlock {
                     Text("Masuk ke akun Anda", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold)
                     Text("Pakai email dan kata sandi akun Anda. Peran akun ditentukan dari akses yang diberikan Owner.", color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
@@ -179,8 +172,7 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
                             return@PrimaryBtn
                         }
                         if (!FirebaseCloud.enabled) {
-                            if (BuildConfig.DEBUG) localLogin()
-                            else toast("Konfigurasi identitas belum tersedia. Hubungi Owner sebelum memakai aplikasi.")
+                            toast("Konfigurasi identitas belum tersedia. Hubungi Owner sebelum memakai aplikasi.")
                             return@PrimaryBtn
                         }
                         busy = true
@@ -190,8 +182,7 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
                                 ok -> goHome()
                                 pending -> nav.navigate("pending")
                                 else -> {
-                                    if (BuildConfig.DEBUG && store.login(email, pass)) goHome()
-                                    else if (store.pendingName.value != null) nav.navigate("pending")
+                                    if (store.pendingName.value != null) nav.navigate("pending")
                                     else toast(msg)
                                 }
                             }
