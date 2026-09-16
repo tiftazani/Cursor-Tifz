@@ -26,6 +26,7 @@ object VersionHistory {
                 "Daftar cabang memakai baris ringkas dengan kolom pencarian nama, kode, atau alamat, plus keterangan jumlah kasir dan SPV tiap cabang.",
                 "Daftar User menampilkan Owner, Kasir, dan SPV sekaligus, dengan pencarian nama atau email dan penyaring peran.",
                 "Layar masuk memakai latar ilustrasi laundry dengan panel navy, dan ikon tiap jenis layanan kini mewakili pekerjaannya.",
+                "Logo Cuciin tampil tanpa plat latar, jadi terlihat menyatu dengan halaman di semua tema.",
                 "Data awal berisi empat cabang nyata (Bunayya, Laupay Kirab, Laupay Dayeuh, Shelly) beserta enam akun kasir dan dua Owner.",
                 "Ikon aplikasi baru: mesin cuci dengan tumpukan lipatan laundry, tiga lapis yang mengecil ke atas.",
                 "Identitas aplikasi berpindah ke paket com.cuciin.laundryops. Aplikasi lama tetap ada di HP dan harus dicopot manual setelah versi ini dipasang, karena Android menganggap keduanya aplikasi berbeda.",

@@ -2,6 +2,7 @@ package com.cuciin.laundryops.ui.components
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -31,6 +32,7 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cuciin.laundryops.R
@@ -398,10 +400,16 @@ fun DangerBtn(text: String, onClick: () -> Unit) {
     }
 }
 
-@Composable fun BrandMark(modifier: Modifier = Modifier) {
-    Surface(modifier.size(52.dp), shape = RoundedCornerShape(14.dp), color = Ink) {
-        Icon(painterResource(R.drawable.cuciin_logo), null, tint = Color.Unspecified, modifier = Modifier.padding(2.dp))
-    }
+/**
+ * Penanda merek: logo Cuciin tanpa plat latar supaya transparan di semua tema.
+ * Logo sudah punya garis luar navy sendiri, jadi tidak perlu kotak di belakangnya.
+ */
+@Composable fun BrandMark(modifier: Modifier = Modifier, size: Dp = 44.dp) {
+    Image(
+        painter = painterResource(R.drawable.cuciin_logo),
+        contentDescription = "Cuciin",
+        modifier = modifier.size(size),
+    )
 }
 
 @Composable
