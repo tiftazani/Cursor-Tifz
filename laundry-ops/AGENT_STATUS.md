@@ -147,11 +147,10 @@ File-file itu menyimpan aturan uang, stok, komisi, otorisasi, dan protokol sinkr
 5. **Isi template email reset** masih bawaan Firebase (`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`).
 6. **PR #18 dan #19** masih terbuka; `main` belum memuat 1.9.2 sampai 1.10.0.
 7. **Kata sandi awal `test1234`** wajib diubah semua akun sebelum data nyata dipakai.
-8. **State loading dan error di layar data belum lengkap.** Hanya layar masuk yang menampilkan indikator proses; sebagian besar layar belum membedakan "belum ada data" dari "sinkronisasi gagal".
-9. **Sebagian daftar panjang masih berupa tumpukan kartu**: pelanggan, layanan, produk, persediaan, riwayat stok, biaya, absensi, dan ringkasan petugas laporan. Pola `ListCard` + `ListRow` sudah dipakai di cabang, user, dan riwayat aktivitas.
-10. **Tabel laporan keuangan masih memaksa lebar 1470dp** dan digeser horizontal dengan teks 10sp; perlu reflow untuk layar sempit dan font besar.
-11. **Alamat lengkap Shelly belum ada**, jadi kolom alamat dan tautan peta cabang itu masih kosong.
-12. **Backup pascamigrasi sudah dibuat** di `firebase-migration/backup-d1/post-migration-rev286-20260916.sql` (revision 286, 4 cabang, 8 akun, integrity ok). Backup lama `pre-real-data-20260916.sql` adalah kondisi sebelum migrasi dan tidak bisa direstore sendirian.
+8. **State loading dan error di layar data belum lengkap.** Beranda dan riwayat aktivitas sudah menampilkan `SyncNotice` saat server belum terhubung, tetapi layar lain belum. Hanya layar masuk yang punya indikator proses panjang.
+9. **Sebagian daftar sudah jadi baris.** Pelanggan, layanan, produk, aset, biaya, persediaan, riwayat stok, riwayat WA, dan ringkasan petugas laporan sudah memakai `ListCard` + `ListRow`. Tabel laporan keuangan diganti kartu bertingkat per Service supaya terbaca di layar sempit.
+10. **Alamat lengkap Shelly belum ada**, jadi kolom alamat dan tautan peta cabang itu masih kosong.
+11. **Backup pascamigrasi sudah dibuat** di `firebase-migration/backup-d1/post-migration-rev286-20260916.sql` (revision 286, 4 cabang, 8 akun, integrity ok). Backup lama `pre-real-data-20260916.sql` adalah kondisi sebelum migrasi dan tidak bisa direstore sendirian.
 
 ## 5. Urutan kerja yang disarankan
 
