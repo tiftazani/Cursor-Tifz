@@ -30,3 +30,9 @@ laundry-ops/cloudflare/backups/
 laundry-ops/Image/
 laundry-ops/Design airbnb.md
 laundry-ops/LAUNDRY_APP_UI_UX_GUIDELINE.md
+
+# Artefak APK/AAB kandidat tidak ikut Git karena ukurannya besar (puluhan MB per kandidat).
+# Yang disimpan hanya README, SHA256SUMS, dan template Excel. Bila Owner minta satu kandidat
+# tertentu ikut Git, tambahkan dengan git add -f.
+laundry-ops/releases/*-candidate/*.apk
+laundry-ops/releases/*-candidate/*.aab
