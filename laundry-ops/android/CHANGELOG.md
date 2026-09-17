@@ -2,6 +2,20 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.19 — 18 Sep 2026 (versionCode 38)
+
+- Nama pemilik yang tampil di aplikasi tidak lagi memakai nama pribadi, tetapi nama usaha.
+  Aplikasi ini dijual ke banyak pemilik laundry, jadi nama di layar harus netral.
+- Nama pada data server diperbarui lewat migrasi `0008_owner_name_neutral.sql`. Perubahan
+  ditulis ke jurnal `sync_changes`, bukan hanya ke tabel, supaya perangkat yang sudah
+  memegang snapshot ikut menerima nama baru. Migrasi idempoten: dijalankan dua kali,
+  `rows_written` nol dan entri jurnal tetap satu.
+- Alamat email sengaja tidak diubah karena itu identitas akun Firebase; menggantinya akan
+  memutus login semua perangkat yang sudah terpasang.
+- Dua test Android baru menjaga nama pribadi tidak masuk kembali: satu mengunci nilai nama
+  bawaan, satu memindai seluruh berkas `src/main`, `src/main/res`, dan `src/debug`.
+- Dua test Worker baru mengunci isi migrasi dan cara jurnal staff mengganti baris lama.
+
 ## 1.10.18 — 18 Sep 2026 (versionCode 37)
 
 - Perbaikan: tombol kedua di halaman terakhir layar pembuka dihilangkan.

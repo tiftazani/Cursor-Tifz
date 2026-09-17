@@ -9,7 +9,14 @@ import androidx.compose.runtime.mutableStateOf
 import java.util.UUID
 
 object CuciinStore {
-    val ownerName = "Tiftazani"
+    /**
+     * Nama Owner bawaan untuk instalasi baru.
+     *
+     * Sengaja bukan nama pribadi: aplikasi ini dipakai banyak laundry, jadi nama yang tampil
+     * harus netral. Nama pemilik sebenarnya diambil dari data staff yang tersinkron.
+     * Alamat email tetap dipakai apa adanya karena itu identitas akun Firebase.
+     */
+    val ownerName = "Cuciin"
     val ownerEmail = "tiftazani.khara@gmail.com"
 
     val branches = mutableStateListOf<Branch>()

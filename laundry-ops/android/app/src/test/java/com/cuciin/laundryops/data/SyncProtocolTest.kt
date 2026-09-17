@@ -15,7 +15,7 @@ class SyncProtocolTest {
         SyncEntity(type, id, branch, buildJsonObject { put("id", id); put("value", value) })
 
     @Test fun debugBootstrapBranchUsesKotlinLocationField() {
-        val valid = """{"branches":[{"id":"debug-bunayya","code":"DEBUG","name":"Cabang Debug","location":"Data uji lokal","mapsQuery":""}],"staff":[{"name":"Tiftazani","email":"tiftazani.khara@gmail.com","role":"Owner","branchIds":["debug-bunayya"]}]}"""
+        val valid = """{"branches":[{"id":"debug-bunayya","code":"DEBUG","name":"Cabang Debug","location":"Data uji lokal","mapsQuery":""}],"staff":[{"name":"Cuciin","email":"tiftazani.khara@gmail.com","role":"Owner","branchIds":["debug-bunayya"]}]}"""
         val snapshot = LocalJson.json.decodeFromString(Snapshot.serializer(), valid)
         assertEquals("Data uji lokal", snapshot.branches.single().location)
 

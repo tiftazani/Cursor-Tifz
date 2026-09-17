@@ -80,7 +80,7 @@ const state = {
   payTarget: null,
   extraPay: 0,
   userFilter: "pengajuan",
-  ownerName: "Tiftazani Khara",
+  ownerName: "Cuciin",
   ownerEmail: "tiftazani.khara@gmail.com",
   reportPeriod: "minggu",
   viewBranch: "melati",
@@ -99,7 +99,7 @@ const state = {
     { name: "Operator Mesin", modules: ["dashboard"] },
   ],
   users: [
-    { name: "Tiftazani Khara", role: "Owner", status: "approved", branches: ["melati", "cibaduyut"] },
+    { name: "Cuciin", role: "Owner", status: "approved", branches: ["melati", "cibaduyut"] },
     { name: "Rina", role: "Kasir", status: "approved", branches: ["melati"] },
     { name: "Dedi", role: "Kasir", status: "approved", branches: ["melati"] },
     { name: "Andi", role: "Supervisor", status: "approved", branches: ["melati"] },

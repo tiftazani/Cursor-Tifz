@@ -263,6 +263,38 @@ test("snapshot PUT lama hanya tersedia untuk bootstrap privat", () => {
   assert.equal(legacySnapshotWriteAllowed({bootstrap:false},0),false);
 });
 
+test("migrasi nama Owner mengganti nama lewat jurnal, bukan hanya tabel", () => {
+  const sql = readFileSync(new URL("../migrations/0008_owner_name_neutral.sql", import.meta.url), "utf8");
+  // Nama netral harus diisi, dan perubahan wajib tercatat di jurnal supaya perangkat
+  // yang sudah memegang snapshot ikut menerima nama baru.
+  assert.match(sql, /UPDATE staff/);
+  assert.match(sql, /INSERT OR IGNORE INTO sync_changes/);
+  assert.match(sql, /'Cuciin'/);
+  assert.match(sql, /owner-name-neutral-v1/);
+  // Idempotensi: entri jurnal hanya ditulis bila command_id-nya belum ada.
+  assert.match(sql, /NOT EXISTS/);
+  // Jangan menyentuh alamat email: itu identitas akun Firebase.
+  assert.match(sql, /tiftazani\.khara@gmail\.com/);
+});
+
+test("entri jurnal staff mengganti baris lama berdasarkan email", () => {
+  const base={staff:[
+    {name:"Tiftazani",email:"tiftazani.khara@gmail.com",role:"Owner"},
+    {name:"Ustutifa",email:"us.archuleta1207@gmail.com",role:"Owner"},
+  ],updatedAt:1};
+  const materialized=applyJournalToSnapshot(base,[
+    {sequence:1,entity_type:"staff",entity_id:"tiftazani.khara@gmail.com",operation:"upsert",
+     payload_json:JSON.stringify({name:"Cuciin",email:"tiftazani.khara@gmail.com",role:"Owner"}),
+     updated_at:2},
+  ],1);
+  assert.equal(materialized.staff.length,2,"baris lama harus diganti, bukan ditambah");
+  const owner=materialized.staff.find(row=>row.email==="tiftazani.khara@gmail.com");
+  assert.equal(owner.name,"Cuciin");
+  // Owner kedua tidak boleh ikut berubah.
+  const kedua=materialized.staff.find(row=>row.email==="us.archuleta1207@gmail.com");
+  assert.equal(kedua.name,"Ustutifa");
+});
+
 test("entri jurnal bertipe order tetap masuk ke notas saat materialisasi", () => {
   const base={notas:[],deletedNotaIds:[],updatedAt:1};
   const materialized=applyJournalToSnapshot(base,[
