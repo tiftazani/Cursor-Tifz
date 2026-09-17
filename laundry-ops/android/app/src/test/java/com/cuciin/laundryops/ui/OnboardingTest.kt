@@ -58,4 +58,35 @@ class OnboardingTest {
             assertTrue("Baris '${page.body}' terlalu panjang (${page.body.length} huruf)", page.body.length <= 60)
         }
     }
+
+    @Test
+    fun tombolUtamaBerubahDiHalamanTerakhir() {
+        // Halaman 1 dan 2 masih punya lanjutan, halaman 3 adalah pintu masuk ke akun.
+        assertEquals("Lanjut", Onboarding.primaryLabel(0))
+        assertEquals("Lanjut", Onboarding.primaryLabel(1))
+        assertEquals("Masuk ke akun", Onboarding.primaryLabel(Onboarding.lastIndex))
+    }
+
+    @Test
+    fun tombolKeduaHanyaSaatMasihAdaYangBisaDilewati() {
+        // Di halaman terakhir tidak ada lagi halaman berikutnya, jadi "Lewati" dihilangkan.
+        // Kalau dibiarkan, layar punya dua tombol berbeda tulisan yang kerjanya sama.
+        assertEquals(true, Onboarding.hasSecondButton(0))
+        assertEquals(true, Onboarding.hasSecondButton(1))
+        assertEquals(false, Onboarding.hasSecondButton(Onboarding.lastIndex))
+        assertEquals(null, Onboarding.secondLabel(Onboarding.lastIndex))
+        assertEquals("Lewati", Onboarding.secondLabel(0))
+    }
+
+    @Test
+    fun tidakAdaTombolKeduaYangMenjanjikanHalLain() {
+        // Pernah ada tombol kedua bertulisan "Lihat panduan singkat" padahal tombolnya hanya
+        // menutup layar. Test ini menjaga supaya tulisan tombol kedua tetap "Lewati".
+        Onboarding.pages.indices.forEach { i ->
+            val label = Onboarding.secondLabel(i)
+            if (label != null) {
+                assertEquals("Tombol kedua halaman $i harus 'Lewati'", "Lewati", label)
+            }
+        }
+    }
 }

@@ -56,6 +56,22 @@ internal object Onboarding {
     )
 
     val lastIndex: Int get() = pages.lastIndex
+
+    /** Tulisan tombol utama di halaman ke-[index]. */
+    fun primaryLabel(index: Int): String = if (index == lastIndex) "Masuk ke akun" else "Lanjut"
+
+    /**
+     * Apakah halaman ke-[index] punya tombol kedua.
+     *
+     * Tombol kedua isinya "Lewati" dan hanya berguna selama masih ada halaman berikutnya. Di
+     * halaman terakhir tidak ada lagi yang bisa dilewati, dan tombol utamanya sudah "Masuk ke
+     * akun", jadi tombol kedua dihilangkan supaya tidak ada dua tombol berbeda tulisan yang
+     * melakukan hal yang sama.
+     */
+    fun hasSecondButton(index: Int): Boolean = index != lastIndex
+
+    /** Tulisan tombol kedua, atau null bila halaman itu tidak punya tombol kedua. */
+    fun secondLabel(index: Int): String? = if (hasSecondButton(index)) "Lewati" else null
 }
 
 /**
@@ -77,7 +93,6 @@ internal fun OnboardingScreen(nav: NavHostController, onDone: () -> Unit) {
     val pager = rememberPagerState(pageCount = { Onboarding.pages.size })
     val scope = rememberCoroutineScope()
     val tap = rememberTapFeedback()
-    val last = pager.currentPage == Onboarding.lastIndex
     val page = Onboarding.pages[pager.currentPage.coerceIn(0, Onboarding.lastIndex)]
 
     Box(Modifier.fillMaxSize().background(Color(0xFF0D164B))) {
@@ -113,7 +128,10 @@ internal fun OnboardingScreen(nav: NavHostController, onDone: () -> Unit) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 BrandMark(size = 58.dp)
                 Spacer(Modifier.weight(1f))
-                SkipPill { tap(); onDone() }
+                // "Lewati" hanya berguna selama masih ada halaman berikutnya. Di halaman
+                // terakhir tombol utamanya sudah "Masuk ke akun", jadi tombol ini dihilangkan
+                // supaya tidak ada dua tombol yang melakukan hal yang sama.
+                if (Onboarding.hasSecondButton(pager.currentPage)) SkipPill { tap(); onDone() }
             }
 
             // Satu-satunya pengisi fleksibel: mendorong judul dan tombol ke bawah bersama-sama.
@@ -155,18 +173,25 @@ internal fun OnboardingScreen(nav: NavHostController, onDone: () -> Unit) {
             Button(
                 onClick = {
                     tap()
-                    if (last) onDone() else scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
+                    val here = pager.currentPage
+                    if (here == Onboarding.lastIndex) {
+                        onDone()
+                    } else {
+                        scope.launch { pager.animateScrollToPage(here + 1) }
+                    }
                 },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp),
                 shape = CuciinShape.button,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF0D164B)),
             ) {
                 Text(
-                    if (last) "Masuk ke akun" else "Lanjut",
+                    Onboarding.primaryLabel(pager.currentPage),
                     fontSize = 14.5.sp,
                     fontWeight = FontWeight.Bold,
                 )
-                if (!last) {
+                // Panah hanya di tombol "Lanjut". Di halaman terakhir tombolnya "Masuk ke akun",
+                // dan panah di situ akan terbaca sebagai "pindah halaman" padahal bukan.
+                if (pager.currentPage != Onboarding.lastIndex) {
                     Spacer(Modifier.width(8.dp))
                     Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(17.dp))
                 }
@@ -174,18 +199,23 @@ internal fun OnboardingScreen(nav: NavHostController, onDone: () -> Unit) {
 
             Spacer(Modifier.height(9.dp))
 
-            OutlinedButton(
-                onClick = { tap(); if (last) onDone() else scope.launch { pager.animateScrollToPage(Onboarding.lastIndex) } },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp),
-                shape = CuciinShape.button,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = .45f)),
-            ) {
-                Text(
-                    if (last) "Lihat panduan singkat" else "Lewati",
-                    fontSize = 14.5.sp,
-                    fontWeight = FontWeight.Bold,
-                )
+            // Tombol kedua hanya ada selama masih ada halaman berikutnya, isinya "Lewati".
+            // Di halaman terakhir tombolnya dihilangkan supaya tidak ada dua tombol berbeda
+            // tulisan yang melakukan hal sama.
+            if (Onboarding.hasSecondButton(pager.currentPage)) {
+                OutlinedButton(
+                    onClick = { tap(); scope.launch { pager.animateScrollToPage(Onboarding.lastIndex) } },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp),
+                    shape = CuciinShape.button,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = .45f)),
+                ) {
+                    Text(
+                        Onboarding.secondLabel(pager.currentPage).orEmpty(),
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
         }
     }

@@ -67,8 +67,8 @@ android {
         applicationId = "com.cuciin.laundryops"
         minSdk = 26
         targetSdk = 36
-        versionCode = 36
-        versionName = "1.10.17"
+        versionCode = 37
+        versionName = "1.10.18"
         buildConfigField("String", "CUCIIN_CLOUD_URL", buildConfigString(releaseCloudUrl))
         buildConfigField("String", "CUCIIN_CLOUD_KEY", buildConfigString(cloudKey))
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

@@ -2,6 +2,12 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.18 — 18 Sep 2026 (versionCode 37)
+
+- Perbaikan: tombol kedua di halaman terakhir layar pembuka dihilangkan.
+- Sebelumnya tombol itu bertulisan "Lihat panduan singkat" padahal kerjanya hanya menutup layar, jadi tulisannya menjanjikan hal yang tidak dilakukan.
+- Sekarang tombol kedua hanya muncul selama masih ada halaman berikutnya, dan isinya selalu "Lewati". Aturannya hidup di `Onboarding.hasSecondButton` / `Onboarding.secondLabel` dan dikunci tiga test baru.
+
 ## 1.10.17 — 18 Sep 2026 (versionCode 36)
 
 - Perbaikan: judul halaman dan tombol di layar pembuka tidak lagi saling menimpa.

@@ -1,6 +1,6 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 18 September 2026, 01:38 WIB (oleh Hermes).
+Terakhir diperbarui: 18 September 2026, 01:52 WIB (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
@@ -51,6 +51,10 @@ Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **
 
 **1.10.17 (18 Sep, tumpang tindih judul pembuka):** diperbaiki judul halaman layar pembuka yang tertimpa tombol. Sebabnya tata letak dua wadah berisi penuh layar: judul terdorong ke dasar oleh pengisi fleksibel di dalam wadahnya, sementara tombol berada di wadah lain yang juga menempel di dasar. Perbaikan: seluruh isi (logo, judul, baris pendukung, titik halaman, tombol) disusun satu kolom yang mengalir dari atas ke bawah dengan satu pengisi fleksibel di antara logo dan judul. Diukur di emulator sebelum/sesudah: judul y 2187-2211 (tertimpa) menjadi y 1651-1825; jarak judul ke tombol 13 px menjadi 208 px. Gate lulus: 121 test debug + 121 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.17-candidate/`.
 
+**1.10.18 (18 Sep, tombol kedua layar pembuka):** di halaman terakhir layar pembuka, tombol kedua bertulisan "Lihat panduan singkat" padahal kerjanya hanya menutup layar. Sekarang tombol kedua hanya muncul selama masih ada halaman berikutnya dan isinya selalu "Lewati"; di halaman terakhir dihilangkan karena tombol utamanya sudah "Masuk ke akun". Aturannya hidup di `Onboarding.primaryLabel`, `Onboarding.hasSecondButton`, dan `Onboarding.secondLabel` supaya bisa diuji tanpa Android, dikunci tiga test baru. Gate lulus: 124 test debug + 124 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.18-candidate/`. Diuji di emulator: halaman 3 hanya memuat satu tombol.
+
+**Kebijakan artefak Git (18 Sep):** `.gitignore` kini menutup `laundry-ops/releases/*-candidate/*.apk` dan `*.aab`. Sebelumnya repo menyimpan 304 MB APK terlacak dan `.git` sudah 671 MB; kandidat 1.10.2 sampai 1.10.17 belum pernah masuk Git dan totalnya 826 MB, sehingga dimasukkan hanya catatannya (README, SHA256SUMS, PANDUAN-IMPOR-EXCEL.md, template Excel). Artefak kandidat yang sedang berlaku ditambahkan dengan `git add -f`. Kode 1.10.2 sampai 1.10.18 sudah di-commit (commit `3e8e631` dan `4e98767`), belum dipush.
+
 **Menunggu perintah Owner:**
 - Penghapusan data contoh (dummy) di produksi belum dijalankan. Jangan hapus tanpa backup dan perintah eksplisit.
 - Berkas Excel berisi data nyata belum diterima, jadi belum ada data yang ditembakkan ke D1 produksi.
@@ -73,6 +77,7 @@ laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/OnboardingPrefs.k
 laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/GlassCard.kt
 laundry-ops/android/app/src/main/res/values-v27/themes.xml
 laundry-ops/android/app/src/main/res/values-v29/themes.xml
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/OnboardingScreen.kt
 laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/LoginLayout.kt
 laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/AuthScreens.kt
 laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/Motion.kt
