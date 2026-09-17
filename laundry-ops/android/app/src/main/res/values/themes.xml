@@ -1,7 +1,25 @@
 <resources>
-    <style name="Theme.Cuciin" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:statusBarColor">@color/navy</item>
-        <item name="android:navigationBarColor">@color/navy</item>
-        <item name="android:windowBackground">@color/foam</item>
+    <!--
+      Tema dasar aplikasi.
+
+      Sebelumnya memakai parent Material.Light dengan windowBackground putih. Akibatnya muncul
+      pita terang di bawah layar login dan wallpaper terlihat terpotong.
+
+      Sekarang:
+      - windowBackground memakai navy gelap supaya tepi layar tidak pernah memunculkan pita
+        terang sebelum Compose menggambar isinya.
+      - status bar dan navigation bar dibuat tembus pandang.
+
+      Atribut yang lebih baru dipisah ke folder sesuai API-nya supaya perangkat lama
+      (minSdk 26) tetap bisa memasang aplikasi ini:
+      - res/values-v27/themes.xml  -> windowLightNavigationBar (API 27)
+      - res/values-v29/themes.xml  -> enforceStatusBarContrast, enforceNavigationBarContrast (API 29)
+    -->
+    <style name="Theme.Cuciin" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/navy</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

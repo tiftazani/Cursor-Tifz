@@ -14,6 +14,15 @@ class SyncProtocolTest {
     private fun entity(type: String, id: String, branch: String? = null, value: Int = 1) =
         SyncEntity(type, id, branch, buildJsonObject { put("id", id); put("value", value) })
 
+    @Test fun debugBootstrapBranchUsesKotlinLocationField() {
+        val valid = """{"branches":[{"id":"debug-bunayya","code":"DEBUG","name":"Cabang Debug","location":"Data uji lokal","mapsQuery":""}],"staff":[{"name":"Tiftazani","email":"tiftazani.khara@gmail.com","role":"Owner","branchIds":["debug-bunayya"]}]}"""
+        val snapshot = LocalJson.json.decodeFromString(Snapshot.serializer(), valid)
+        assertEquals("Data uji lokal", snapshot.branches.single().location)
+
+        val legacyAddress = valid.replace("\"location\":\"Data uji lokal\"", "\"address\":\"Data uji lokal\"")
+        assertTrue(runCatching { LocalJson.json.decodeFromString(Snapshot.serializer(), legacyAddress) }.isFailure)
+    }
+
     @Test fun repeatedSnapshotDoesNotCreateDuplicateCommands() {
         val initial = listOf(entity("nota", "MEL-1", "melati"))
         val outbox = SyncOutbox()
@@ -125,6 +134,32 @@ class SyncProtocolTest {
         assertEquals("409 · data berubah di perangkat lain", restored.rejected.single().reason)
         assertEquals(99, restored.rejected.single().rejectedAt)
         assertEquals(0, restored.revision)
+    }
+
+    @Test fun permanentRejectionReplacesDivergentShadowWithServerAndClearsResolvedEvidence() {
+        val local = listOf(entity("expense", "e-1", "melati", value = 2))
+        val remote = listOf(entity("expense", "e-1", "melati", value = 1))
+        val outbox = SyncOutbox().also { it.initialize(listOf(entity("expense", "e-1", "melati", value = 1))) }
+        val command = outbox.enqueue(local, 10, "melati", null) { "rejected-edit" }.single()
+        outbox.reject(mapOf(command.commandId to "Khusus Owner"), rejectedAt = 11)
+
+        assertTrue(outbox.reconcileRejectedRemote(remote, revision = 12, scopeKey = "owner:all"))
+        assertTrue(outbox.state.pending.isEmpty())
+        assertTrue(outbox.state.rejected.isEmpty())
+        assertEquals(remote, outbox.state.shadow)
+        assertEquals(12, outbox.state.revision)
+        assertEquals("owner:all", outbox.state.scopeKey)
+    }
+
+    @Test fun paymentJournalIsProjectedAsItsOwnBranchScopedEntity() {
+        val payment = PaymentRecord("pay-1", "BNY-1", "bunayya", 15_000, PayMethod.Qris, 100, "16 Sep 2026, 10.00", "Kasir")
+        val entity = SyncProjection.entities(Snapshot(payments = listOf(payment))).single()
+        assertEquals("payment", entity.entityType)
+        assertEquals("pay-1", entity.entityId)
+        assertEquals("bunayya", entity.branchId)
+
+        val restored = SyncProjection.apply(Snapshot(), listOf(SyncChange(1, "payment", "pay-1", "upsert", "bunayya", entity.payload)), 101)
+        assertEquals(listOf(payment), restored.payments)
     }
 
     @Test fun supervisorStatusMutationIsExplicitAndPhotoPathsNeverEnterProjection() {

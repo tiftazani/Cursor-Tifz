@@ -33,12 +33,12 @@ fun rememberUi(): UiMetrics {
             compact = w < 600,
             useRail = w >= 600,
             pad = when {
-                w < 340 -> 12.dp
-                w < 400 -> 16.dp
+                w < 600 -> 16.dp
+                w >= 1200 -> 32.dp
                 w >= 840 -> 28.dp
                 else -> 20.dp
             },
-            gap = 12.dp,
+            gap = 16.dp,
             radius = 20.dp,
             titleSp = when {
                 w < 340 -> 22.sp

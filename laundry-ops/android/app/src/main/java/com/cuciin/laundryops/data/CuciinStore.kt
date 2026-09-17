@@ -19,13 +19,18 @@ object CuciinStore {
     val products = mutableStateListOf<Product>()
     val branchStocks = mutableStateListOf<BranchStock>()
     val inventory = mutableStateListOf<InventoryItem>()
+    /** Katalog jenis aset, dipakai sebagai filter dan pembentuk kode aset. */
+    val assetTypes = mutableStateListOf<AssetType>()
     val expenses = mutableStateListOf<Expense>()
     val notas = mutableStateListOf<Nota>()
     val stockMoves = mutableStateListOf<StockMove>()
     val audit = mutableStateListOf<AuditRow>()
     val cashCloses = mutableStateListOf<CashClose>()
+    val payments = mutableStateListOf<PaymentRecord>()
     val attendance = mutableStateListOf<AttendanceRecord>()
     val accessPolicies = mutableStateListOf<UserAccessPolicy>()
+    /** Katalog role; pengguna melekat ke salah satunya. */
+    val accessRoles = mutableStateListOf<AccessRole>()
     val whatsappTemplates = mutableStateListOf<WhatsAppTemplate>()
     private val deletedNotaIds = mutableStateListOf<String>()
     val cart = mutableStateListOf<CartLine>()
@@ -142,6 +147,7 @@ object CuciinStore {
         stockMoves.clear()
         audit.clear()
         cashCloses.clear()
+        payments.clear()
         attendance.clear()
         accessPolicies.clear()
         whatsappTemplates.clear()
@@ -154,7 +160,7 @@ object CuciinStore {
     private fun isPristineSeed(snapshot: Snapshot): Boolean =
         snapshot.customers.isEmpty() && snapshot.notas.isEmpty() && snapshot.deletedNotaIds.isEmpty() &&
             snapshot.stockMoves.isEmpty() && snapshot.inventory.isEmpty() && snapshot.expenses.isEmpty() &&
-            snapshot.cashCloses.isEmpty() && snapshot.attendance.isEmpty() &&
+            snapshot.cashCloses.isEmpty() && snapshot.payments.isEmpty() && snapshot.attendance.isEmpty() &&
             snapshot.branchStocks.all { it.stock == 0 } &&
             snapshot.audit.all { it.action.startsWith("Data awal:") }
 
@@ -182,8 +188,10 @@ object CuciinStore {
         ensureBranchStocks()
         fill(audit, s.audit)
         fill(cashCloses, s.cashCloses)
+        fill(payments, s.payments)
         fill(attendance, s.attendance)
         fill(accessPolicies, s.accessPolicies)
+        fill(accessRoles, s.accessRoles.ifEmpty { AccessCatalog.builtInRoles() })
         fill(whatsappTemplates, s.whatsappTemplates.ifEmpty { listOf(WhatsAppTemplate()) })
         viewBranch.value = s.viewBranch
         viewKasir.value = s.viewKasir
@@ -205,7 +213,9 @@ object CuciinStore {
         fill(products, s.products)
         ensureServiceDefaults()
         fill(branchStocks, s.branchStocks)
-        fill(inventory, s.inventory)
+        val localAssetPhotos = inventory.associate { it.id to it.photoPath }
+        fill(inventory, s.inventory.map { remote -> remote.copy(photoPath = localAssetPhotos[remote.id].orEmpty()) })
+        fill(assetTypes, s.assetTypes.ifEmpty { defaultAssetTypes() })
         migrateLegacyInventoryProducts()
         fill(expenses, s.expenses)
         val localPhotos = notas.associate { it.id to it.photos.toMutableList() }
@@ -215,12 +225,14 @@ object CuciinStore {
         ensureBranchStocks()
         fill(audit, s.audit)
         fill(cashCloses, s.cashCloses)
+        fill(payments, s.payments)
         val localAttendancePhotos = attendance.associate { it.id to (it.checkInPhotoPath to it.checkOutPhotoPath) }
         fill(attendance, s.attendance.map { remote ->
             val local = localAttendancePhotos[remote.id]
             remote.copy(checkInPhotoPath = local?.first.orEmpty(), checkOutPhotoPath = local?.second.orEmpty())
         })
         fill(accessPolicies, s.accessPolicies)
+        fill(accessRoles, s.accessRoles.ifEmpty { AccessCatalog.builtInRoles() })
         fill(whatsappTemplates, s.whatsappTemplates.ifEmpty { listOf(WhatsAppTemplate()) })
     }
 
@@ -274,6 +286,8 @@ object CuciinStore {
         staff = staff.map { it.copy(passwordHash = "") },
         notas = notas.map { it.copy(photos = mutableListOf()) },
         attendance = attendance.map { it.copy(checkInPhotoPath = "", checkOutPhotoPath = "") },
+        // Foto aset hanya ada di perangkat ini; path-nya tidak ikut ke server.
+        inventory = inventory.map { it.copy(photoPath = "") },
         sessionEmail = null,
         updatedAt = localUpdatedAt,
     )
@@ -288,13 +302,16 @@ object CuciinStore {
         products = products.map { it.copy() },
         branchStocks = branchStocks.map { it.copy() },
         inventory = inventory.toList(),
+        assetTypes = assetTypes.toList(),
         expenses = expenses.toList(),
         notas = notas.map { it.copy(photos = it.photos.toMutableList()) },
         stockMoves = stockMoves.toList(),
         audit = audit.toList(),
         cashCloses = cashCloses.toList(),
+        payments = payments.toList(),
         attendance = attendance.toList(),
         accessPolicies = accessPolicies.toList(),
+        accessRoles = accessRoles.toList(),
         whatsappTemplates = whatsappTemplates.toList(),
         deletedNotaIds = deletedNotaIds.toList(),
         sessionEmail = session.value?.email,
@@ -391,28 +408,79 @@ object CuciinStore {
 
     fun canAccess(module: String, function: String? = null): Boolean {
         val s = session.value ?: return false
-        if (s.role == Role.Owner) return true
-        val policy = accessPolicies.firstOrNull { it.email.equals(s.email, true) } ?: return true
-        if (module !in policy.modules) return false
-        return function == null || function in policy.functions
+        val me = staff.firstOrNull { it.email.equals(s.email, true) }
+        val policy = accessPolicies.firstOrNull { it.email.equals(s.email, true) }
+        return AccessPolicy.can(me, accessRoles, policy, module, function)
+    }
+
+    /** Role yang melekat pada pengguna yang sedang masuk, dipakai untuk menampilkan hak aksesnya. */
+    fun currentAccessRole(): AccessRole? {
+        val s = session.value ?: return null
+        return AccessPolicy.effectiveRole(staff.firstOrNull { it.email.equals(s.email, true) }, accessRoles)
     }
 
     fun accessFor(email: String): UserAccessPolicy =
-        accessPolicies.firstOrNull { it.email.equals(email, true) } ?: defaultAccessFor(staff.firstOrNull { it.email.equals(email, true) }?.role)
+        accessPolicies.firstOrNull { it.email.equals(email, true) } ?: UserAccessPolicy(email = "")
 
-    private fun defaultAccessFor(role: Role?): UserAccessPolicy = UserAccessPolicy(
-        email = "",
-        modules = when (role) {
-            Role.Kasir -> setOf("queue", "service", "customer", "stock", "attendance", "whatsapp", "expense", "cash")
-            Role.Supervisor -> setOf("queue", "stock", "attendance", "inventory")
-            else -> emptySet()
-        },
-        functions = when (role) {
-            Role.Kasir -> setOf("service.create", "service.correct", "stock.write", "attendance.write", "whatsapp.send")
-            Role.Supervisor -> setOf("queue.status", "stock.write", "attendance.write")
-            else -> emptySet()
-        },
-    )
+    fun roles(): List<AccessRole> = AccessPolicy.rolesFor(accessRoles)
+
+    fun roleById(id: String): AccessRole? = AccessPolicy.roleById(accessRoles, id)
+
+    /** Role bawaan dibuat otomatis saat pertama dibuka supaya instalasi lama tetap punya katalog. */
+    fun ensureAccessRoles() {
+        if (accessRoles.isNotEmpty()) return
+        accessRoles.addAll(AccessCatalog.builtInRoles())
+    }
+
+    fun saveAccessRole(role: AccessRole): String? {
+        if (session.value?.role != Role.Owner) return "Hanya Owner yang dapat mengatur role"
+        val name = role.name.trim()
+        if (name.isBlank()) return "Nama role wajib diisi"
+        if (accessRoles.any { it.id != role.id && it.name.equals(name, true) }) return "Nama role $name sudah dipakai"
+        val (modules, functions) = AccessCatalog.sanitize(role.modules, role.functions)
+        if (modules.isEmpty()) return "Pilih minimal satu modul"
+        val cleaned = role.copy(name = name, modules = modules, functions = functions)
+        val index = accessRoles.indexOfFirst { it.id == role.id }
+        if (index >= 0) accessRoles[index] = cleaned else accessRoles.add(cleaned)
+        log("Role ${cleaned.name} disimpan · ${cleaned.modules.size} modul · ${cleaned.functions.size} fungsi", branches.firstOrNull()?.id.orEmpty())
+        bump()
+        return null
+    }
+
+    fun createAccessRole(name: String): AccessRole? {
+        if (session.value?.role != Role.Owner) return null
+        val role = AccessRole(id = "role-${newId()}", name = name.trim(), builtIn = false)
+        accessRoles.add(role)
+        return role
+    }
+
+    /** Role yang masih dipakai pengguna tidak dihapus supaya tidak ada pengguna tanpa akses. */
+    fun deleteAccessRole(id: String): String? {
+        if (session.value?.role != Role.Owner) return "Hanya Owner yang dapat menghapus role"
+        val role = accessRoles.firstOrNull { it.id == id } ?: return "Role tidak ditemukan"
+        if (role.builtIn) return "Role bawaan ${role.name} tidak dapat dihapus"
+        val members = AccessPolicy.memberCount(staff, id)
+        if (members > 0) return "$members pengguna masih memakai role ${role.name}"
+        accessRoles.removeAll { it.id == id }
+        log("Role ${role.name} dihapus", branches.firstOrNull()?.id.orEmpty())
+        bump()
+        return null
+    }
+
+    /** Memindahkan pengguna ke role lain; aksesnya langsung mengikuti role tersebut. */
+    fun assignAccessRole(email: String, roleId: String): String? {
+        if (session.value?.role != Role.Owner) return "Hanya Owner yang dapat mengubah role pengguna"
+        val index = staff.indexOfFirst { it.email.equals(email, true) }
+        if (index < 0) return "Pengguna tidak ditemukan"
+        if (roleId.isNotBlank() && accessRoles.none { it.id == roleId }) return "Role tidak ditemukan"
+        staff[index] = staff[index].copy(accessRoleId = roleId)
+        // Kebijakan per pengguna dibuang supaya hasilnya murni mengikuti role.
+        accessPolicies.removeAll { it.email.equals(email, true) }
+        val role = accessRoles.firstOrNull { it.id == roleId }
+        log("${staff[index].name} memakai role ${role?.name ?: "bawaan"}", staff[index].branchIds.firstOrNull() ?: branches.firstOrNull()?.id.orEmpty())
+        bump()
+        return null
+    }
 
     fun saveAccessPolicy(email: String, modules: Set<String>, functions: Set<String>): String? {
         if (session.value?.role != Role.Owner) return "Hanya Owner yang dapat mengatur akses"
@@ -420,7 +488,7 @@ object CuciinStore {
         if (user.role == Role.Owner) return "Owner selalu memiliki semua akses"
         accessPolicies.removeAll { it.email.equals(email, true) }
         accessPolicies.add(UserAccessPolicy(user.email, modules, functions))
-        log("Akses ${user.name} diperbarui", user.branchIds.firstOrNull() ?: branches.first().id)
+        log("Akses ${user.name} diperbarui", user.branchIds.firstOrNull() ?: branches.firstOrNull()?.id.orEmpty())
         bump()
         return null
     }
@@ -429,7 +497,7 @@ object CuciinStore {
         if (session.value?.role != Role.Owner) return "Hanya Owner yang dapat mengatur akses"
         accessPolicies.removeAll { it.email.equals(email, true) }
         val user = staff.firstOrNull { it.email.equals(email, true) }
-        log("Akses ${user?.name ?: email} dipulihkan ke role dasar", user?.branchIds?.firstOrNull() ?: branches.first().id)
+        log("Akses ${user?.name ?: email} dipulihkan ke role dasar", user?.branchIds?.firstOrNull() ?: branches.firstOrNull()?.id.orEmpty())
         bump()
         return null
     }
@@ -441,17 +509,17 @@ object CuciinStore {
         if (opening.isBlank() || content.isBlank() || closing.isBlank()) return "Pesan pembuka, isi, dan penutup wajib diisi"
         whatsappTemplates.clear()
         whatsappTemplates.add(WhatsAppTemplate(opening = opening.trim(), content = content.trim(), closing = closing.trim()))
-        log("Template WhatsApp diperbarui", branches.first().id)
+        log("Template WhatsApp diperbarui", branches.firstOrNull()?.id.orEmpty())
         bump()
         return null
     }
 
     fun selectedStockBranch(): String {
-        val s = session.value ?: return branches.first().id
+        val s = session.value ?: return branches.firstOrNull()?.id.orEmpty()
         if (s.role != Role.Owner) return s.branchId
         return stockBranchId.value
             ?.takeIf { id -> branches.any { it.id == id } }
-            ?: branches.first().id.also { stockBranchId.value = it }
+            ?: branches.firstOrNull()?.id.orEmpty().also { stockBranchId.value = it }
     }
 
     fun visibleNotas(): List<Nota> {
@@ -507,25 +575,30 @@ object CuciinStore {
 
     fun omzet(rows: List<Nota> = periodNotas()): Int = rows.sumOf { it.total }
 
+    /** Pembayaran lama tanpa jurnal diperlakukan sebagai penerimaan pada waktu nota dibuat. */
+    fun paymentRecords(rows: List<Nota> = visibleNotas()): List<PaymentRecord> {
+        val byNota = rows.associateBy { it.id }
+        val recorded = payments.filter { it.notaId in byNota }
+        val recordedNotaIds = recorded.mapTo(hashSetOf()) { it.notaId }
+        val legacy = rows.filter { it.id !in recordedNotaIds && it.paid > 0 }.map { nota ->
+            PaymentRecord("legacy-${nota.id}", nota.id, nota.branchId, nota.paid, nota.payMethod, nota.createdAtMs, nota.createdAt, nota.kasir)
+        }
+        return (recorded + legacy).filter { it.amount > 0 }
+    }
+
     fun collected(rows: List<Nota> = periodNotas()): Int = rows.sumOf { it.paid }
 
     fun piutang(rows: List<Nota> = visibleNotas()): Int =
-        rows.filter { it.pay == PayStatus.Belum }.sumOf { (it.total - it.paid).coerceAtLeast(0) }
+        rows.sumOf { (it.total - it.paid).coerceAtLeast(0) }
 
     fun todayCollected(branchId: String? = null): Int {
         val start = Clock.todayStartMs()
-        return notas.filter {
-            it.createdAtMs >= start && (branchId == null || branchId == "all" || it.branchId == branchId)
-        }.sumOf { it.paid }
+        return paymentRecords(notas).filter { it.atMs >= start && (branchId == null || branchId == "all" || it.branchId == branchId) }.sumOf { it.amount }
     }
 
     fun todayByMethod(method: PayMethod, branchId: String): Int {
         val start = Clock.todayStartMs()
-        return notas.filter {
-            it.createdAtMs >= start &&
-                (branchId == "all" || it.branchId == branchId) &&
-                it.payMethod == method
-        }.sumOf { it.paid }
+        return paymentRecords(notas).filter { it.atMs >= start && (branchId == "all" || it.branchId == branchId) && it.method == method }.sumOf { it.amount }
     }
 
     fun login(email: String, password: String = "", skipPassword: Boolean = false): Boolean {
@@ -570,6 +643,11 @@ object CuciinStore {
         }
         session.value = null
         persist()
+        revision.intValue++
+    }
+
+    fun markRegistrationPending(name: String) {
+        pendingName.value = name.trim()
         revision.intValue++
     }
 
@@ -624,27 +702,27 @@ object CuciinStore {
         if (notas.any { it.branchId == id }) return "Cabang memiliki riwayat Service dan tidak dapat dihapus"
         if (inventory.any { it.branchId == id } || expenses.any { it.branchId == id } ||
             stockMoves.any { it.branchId == id } || cashCloses.any { it.branchId == id } ||
-            attendance.any { it.branchId == id }
+            payments.any { it.branchId == id } || attendance.any { it.branchId == id }
         ) return "Cabang memiliki riwayat operasional dan tidak dapat dihapus"
         val gone = branches.find { it.id == id } ?: return "Cabang tidak ketemu"
         branches.removeAll { it.id == id }
         branchStocks.removeAll { it.branchId == id }
         val relocated = staff.map { u ->
-            u.copy(branchIds = u.branchIds.filter { it != id }.ifEmpty { listOf(branches.first().id) })
+            u.copy(branchIds = u.branchIds.filter { it != id }.ifEmpty { listOfNotNull(branches.firstOrNull()?.id) })
         }
         staff.clear()
         staff.addAll(relocated)
         if (viewBranch.value == id) viewBranch.value = "all"
-        log("Cabang ${gone.name} dihapus", branches.first().id)
+        log("Cabang ${gone.name} dihapus", branches.firstOrNull()?.id.orEmpty())
         bump()
         return null
     }
 
     fun addCustomer(name: String, phone: String, address: String): Customer {
-        val c = Customer("c-${Clock.nowMs()}", name.trim(), address.trim(), phone.trim())
+        val c = Customer("c-${newId()}", name.trim(), address.trim(), phone.trim())
         customers.add(0, c)
         selectedCustomer.value = c
-        log("Pelanggan ${c.name} ditambah", session.value?.branchId ?: branches.first().id)
+        log("Pelanggan ${c.name} ditambah", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
         return c
     }
@@ -654,7 +732,7 @@ object CuciinStore {
         if (i < 0) return
         customers[i] = customers[i].copy(name = name.trim(), phone = phone.trim(), address = address.trim())
         if (selectedCustomer.value?.id == id) selectedCustomer.value = customers[i]
-        log("Pelanggan ${name.trim()} diubah", session.value?.branchId ?: branches.first().id)
+        log("Pelanggan ${name.trim()} diubah", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
     }
 
@@ -663,7 +741,7 @@ object CuciinStore {
         val c = customers.find { it.id == id } ?: return "Pelanggan tidak ketemu"
         customers.removeAll { it.id == id }
         if (selectedCustomer.value?.id == id) selectedCustomer.value = null
-        log("Pelanggan ${c.name} dihapus", session.value?.branchId ?: branches.first().id)
+        log("Pelanggan ${c.name} dihapus", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
         return null
     }
@@ -672,7 +750,7 @@ object CuciinStore {
         val em = email.trim()
         if (name.isBlank() || em.isBlank()) return "Nama dan email wajib"
         if (staff.any { it.email.equals(em, ignoreCase = true) }) return "Email sudah dipakai"
-        val bids = branchIds.ifEmpty { listOf(branches.first().id) }
+        val bids = branchIds.ifEmpty { listOfNotNull(branches.firstOrNull()?.id) }
         val hash = if (password.isBlank()) "" else Passwords.hash(password)
         staff.add(Staff(name.trim(), em, role, bids, approved = approved, passwordHash = hash))
         log("User ${name.trim()} (${role.name}) ditambah", bids.first())
@@ -713,19 +791,19 @@ object CuciinStore {
         if (u.role == Role.Owner && staff.count { it.role == Role.Owner } <= 1) return "Owner terakhir tidak bisa dihapus"
         if (session.value?.email.equals(email, ignoreCase = true) == true) return "Tidak bisa hapus akun yang sedang login. Pakai Hapus akun saya."
         staff.removeAll { it.email.equals(email, ignoreCase = true) }
-        log("User ${u.name} dihapus", u.branchIds.firstOrNull() ?: branches.first().id)
+        log("User ${u.name} dihapus", u.branchIds.firstOrNull() ?: branches.firstOrNull()?.id.orEmpty())
         bump()
         return null
     }
 
     fun addService(name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean, selfService: Boolean = false, commissionPerUnit: Int = 0, productKey: String = ""): ServiceItem {
-        val id = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "svc-${Clock.nowMs()}" }
-        val unique = if (services.any { it.id == id }) "$id-${Clock.nowMs()}" else id
+        val id = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "svc-${newId()}" }
+        val unique = if (services.any { it.id == id }) "$id-${newId()}" else id
         val finalUnit = if (selfService) "Load" else unit.trim().ifBlank { "pcs" }
         val linkedProduct = productForKey(productKey)?.key ?: if (retail) productForName(name)?.key.orEmpty() else ""
         val s = ServiceItem(unique, name.trim(), finalUnit, price.coerceAtLeast(0), retail && !selfService, dropOut && !selfService, selfService, commissionPerUnit.coerceAtLeast(0), linkedProduct)
         services.add(s)
-        log("Layanan ${s.name} ditambah", session.value?.branchId ?: branches.first().id)
+        log("Layanan ${s.name} ditambah", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
         return s
     }
@@ -743,7 +821,7 @@ object CuciinStore {
             commissionPerUnit = commissionPerUnit.coerceAtLeast(0),
             productKey = productForKey(productKey)?.key ?: if (retail) productForName(name)?.key.orEmpty() else "",
         )
-        log("Layanan ${name.trim()} diubah", session.value?.branchId ?: branches.first().id)
+        log("Layanan ${name.trim()} diubah", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
     }
 
@@ -751,18 +829,18 @@ object CuciinStore {
         val s = services.find { it.id == id } ?: return "Layanan tidak ketemu"
         services.removeAll { it.id == id }
         cart.removeAll { it.service.id == id }
-        log("Layanan ${s.name} dihapus", session.value?.branchId ?: branches.first().id)
+        log("Layanan ${s.name} dihapus", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
         return null
     }
 
     fun addProduct(name: String, stock: Int, min: Int, initialBranchIds: Set<String>, kind: ProductKind = ProductKind.BahanHabisPakai, unit: String = "pcs"): Product {
-        val p = Product(name.trim(), 0, min.coerceAtLeast(0), "p-${Clock.nowMs()}", kind, unit.trim().ifBlank { "pcs" })
+        val p = Product(name.trim(), 0, min.coerceAtLeast(0), "p-${newId()}", kind, unit.trim().ifBlank { "pcs" })
         products.add(p)
         branches.forEach { branch ->
             branchStocks.add(BranchStock(branch.id, p.key, if (branch.id in initialBranchIds) stock.coerceAtLeast(0) else 0))
         }
-        log("Produk ${p.name} ditambah", session.value?.branchId ?: branches.first().id)
+        log("Produk ${p.name} ditambah", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
         return p
     }
@@ -771,12 +849,12 @@ object CuciinStore {
         val i = products.indexOfFirst { it.key == key || it.name == key }
         if (i < 0) return
         val old = products[i]
-        val updated = old.copy(name = name.trim(), min = min.coerceAtLeast(0), id = old.id.ifBlank { "p-${Clock.nowMs()}" }, kind = kind, unit = unit.trim().ifBlank { old.unit })
+        val updated = old.copy(name = name.trim(), min = min.coerceAtLeast(0), id = old.id.ifBlank { "p-${newId()}" }, kind = kind, unit = unit.trim().ifBlank { old.unit })
         products[i] = updated
         branchStocks.indices.filter { branchStocks[it].productKey == old.key }.forEach { index ->
             branchStocks[index] = branchStocks[index].copy(productKey = updated.key)
         }
-        log("Produk ${name.trim()} diubah", session.value?.branchId ?: branches.first().id)
+        log("Produk ${name.trim()} diubah", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
     }
 
@@ -784,7 +862,7 @@ object CuciinStore {
         val p = products.find { it.key == key || it.name == key } ?: return "Produk tidak ketemu"
         products.removeAll { it.key == key || it.name == key }
         branchStocks.removeAll { it.productKey == p.key }
-        log("Produk ${p.name} dihapus", session.value?.branchId ?: branches.first().id)
+        log("Produk ${p.name} dihapus", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
         return null
     }
@@ -801,31 +879,93 @@ object CuciinStore {
         purchaseAt: String,
         notes: String,
         sellable: Boolean,
+        assetTypeId: String = "",
+        photoPath: String = "",
     ): InventoryItem {
         val row = InventoryItem(
-            id = "inv-${Clock.nowMs()}", branchId = branchId, name = name.trim(), category = category,
+            id = "inv-${newId()}", branchId = branchId, name = name.trim(), category = category,
             brand = brand.trim(), serialNumber = serialNumber.trim(), quantity = quantity.coerceAtLeast(0),
             unit = unit.trim().ifBlank { "unit" }, status = status, purchaseAt = purchaseAt,
             notes = notes.trim(), sellable = sellable,
+            assetTypeId = assetTypeId,
+            assetCode = nextAssetCode(branchId, assetTypeId),
+            photoPath = photoPath,
         )
         inventory.add(0, row)
-        log("Inventory ${row.name} ditambah · ${row.quantity} ${row.unit} · ${row.status.label}", branchId)
+        log("Aset ${row.assetCode} ${row.name} ditambah · ${row.quantity} ${row.unit} · ${row.status.label}", branchId)
         bump()
         return row
     }
+
+    /**
+     * Aset ID dibuat sistem dari kode cabang, kode jenis aset, lalu nomor urut pada cabang itu.
+     * Nomor urut diambil dari kode tertinggi yang sudah ada, bukan jumlah baris, supaya kode
+     * tidak terpakai ulang setelah sebuah aset dihapus.
+     */
+    fun nextAssetCode(branchId: String, assetTypeId: String): String {
+        val branchCode = branches.firstOrNull { it.id == branchId }?.code.orEmpty()
+        val type = assetTypes.firstOrNull { it.id == assetTypeId }
+        val typeCode = type?.code.orEmpty()
+            .ifBlank { defaultAssetTypes().firstOrNull { it.id == assetTypeId }?.code.orEmpty() }
+        val head = AssetCodes.prefix(branchCode, typeCode)
+        val codes = inventory.filter { it.branchId == branchId && it.assetCode.startsWith(head) }.map { it.assetCode }
+        return AssetCodes.next(branchCode, typeCode, codes)
+    }
+
+    /** Jenis bawaan dipakai saat server belum punya katalog jenis aset. */
+    fun defaultAssetTypes(): List<AssetType> = listOf(
+        AssetType("at-mesin-cuci", "MC", "Mesin cuci"),
+        AssetType("at-mesin-pengering", "MP", "Mesin pengering"),
+        AssetType("at-setrika", "ST", "Setrika / steamer"),
+        AssetType("at-timbangan", "TB", "Timbangan"),
+        AssetType("at-peralatan", "PR", "Peralatan operasional"),
+        AssetType("at-lainnya", "LN", "Lainnya"),
+    )
+
+    fun addAssetType(code: String, name: String): String? {
+        val cleanCode = code.trim().uppercase().filter { it.isLetterOrDigit() }.take(4)
+        val cleanName = name.trim()
+        if (cleanName.isBlank()) return "Nama jenis aset wajib diisi"
+        if (cleanCode.isBlank()) return "Kode jenis aset wajib diisi"
+        if (assetTypes.any { it.code.equals(cleanCode, true) }) return "Kode $cleanCode sudah dipakai"
+        if (assetTypes.any { it.name.equals(cleanName, true) }) return "Jenis $cleanName sudah ada"
+        assetTypes.add(AssetType("at-${newId()}", cleanCode, cleanName))
+        log("Jenis aset $cleanName ($cleanCode) ditambah", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
+        bump()
+        return null
+    }
+
+    fun updateAssetType(row: AssetType) {
+        val index = assetTypes.indexOfFirst { it.id == row.id }
+        if (index < 0) return
+        assetTypes[index] = row.copy(code = row.code.trim().uppercase().take(4), name = row.name.trim())
+        bump()
+    }
+
+    /** Jenis yang sudah dipakai aset tidak dihapus supaya kode aset lama tetap terbaca. */
+    fun deleteAssetType(id: String): String? {
+        if (inventory.any { it.assetTypeId == id }) return "Jenis ini masih dipakai aset. Nonaktifkan saja."
+        assetTypes.removeAll { it.id == id }
+        bump()
+        return null
+    }
+
+    fun assetTypeName(id: String): String =
+        (assetTypes + defaultAssetTypes()).firstOrNull { it.id == id }?.name.orEmpty()
 
     fun updateInventory(row: InventoryItem) {
         val index = inventory.indexOfFirst { it.id == row.id }
         if (index < 0) return
         inventory[index] = row.copy(name = row.name.trim(), quantity = row.quantity.coerceAtLeast(0), unit = row.unit.trim().ifBlank { "unit" })
-        log("Inventory ${row.name.trim()} diubah · ${row.status.label}", row.branchId)
+        log("Aset ${row.assetCode.ifBlank { row.name }} diubah · ${row.status.label}", row.branchId)
         bump()
     }
 
     fun deleteInventory(id: String): String? {
-        val row = inventory.firstOrNull { it.id == id } ?: return "Inventory tidak ditemukan"
+        val row = inventory.firstOrNull { it.id == id } ?: return "Aset tidak ditemukan"
         inventory.removeAll { it.id == id }
-        log("Inventory ${row.name} dihapus", row.branchId)
+        AssetPhotos.delete(row.photoPath)
+        log("Aset ${row.assetCode.ifBlank { row.name }} dihapus", row.branchId)
         bump()
         return null
     }
@@ -833,7 +973,7 @@ object CuciinStore {
     fun addExpense(branchId: String, category: ExpenseCategory, amount: Int, occurredAtMs: Long, note: String): Expense {
         val s = session.value!!
         val row = Expense(
-            id = "cost-${Clock.nowMs()}", branchId = branchId, category = category,
+            id = "cost-${newId()}", branchId = branchId, category = category,
             amount = amount.coerceAtLeast(0), occurredAtMs = occurredAtMs,
             occurredAt = Clock.nowLabel(occurredAtMs), note = note.trim(), by = s.name,
         )
@@ -912,7 +1052,7 @@ object CuciinStore {
     private fun uniqueBranchId(name: String): String {
         val base = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "cabang" }
         if (branches.none { it.id == base }) return base
-        return "$base-${Clock.nowMs()}"
+        return "$base-${newId()}"
     }
 
     private fun grantOwnerBranch(id: String) {
@@ -988,8 +1128,11 @@ object CuciinStore {
             else -> branchId == s.branchId
         }
         require(permittedBranch) { "Cabang transaksi tidak tersedia untuk akun ini" }
+        require(cartLines.isNotEmpty()) { "Service harus memiliki minimal satu layanan" }
+        require(cartLines.all { it.qty.isFinite() && it.qty > 0.0 && it.qty <= 9999.0 && (it.service.unit == "kg" || it.qty % 1.0 == 0.0) }) { "Jumlah layanan belum valid" }
         require(retailStockShortages(cartLines, branchId).isEmpty()) { "Stok retail cabang tidak mencukupi" }
-        val total = cartLines.sumOf { (it.qty * it.unitPrice).toInt() }
+        val total = cartLines.sumOf { (it.qty * it.unitPrice.coerceAtLeast(0)).toInt() }
+        require(paid in 0..total) { "Pembayaran harus berada antara Rp 0 dan total Service" }
         val t = Clock.nowMs()
         val nota = Nota(
             id = nextNotaId(branchId),
@@ -1026,6 +1169,9 @@ object CuciinStore {
             },
         )
         notas.add(0, nota)
+        if (paid > 0) {
+            payments.add(0, PaymentRecord("pay-${syncEventId()}", nota.id, branchId, paid, method, t, Clock.nowLabel(t), s.name))
+        }
         cartLines.filter { it.service.retail }.forEach { line ->
             val qty = line.qty.toInt()
             var balanceAfter: Int? = null
@@ -1074,6 +1220,9 @@ object CuciinStore {
             return "Jumlah layanan belum valid"
         }
 
+        val total = clean.sumOf { (it.qty * it.unitPrice).toInt() }
+        if (total < old.paid) return "Total koreksi tidak boleh lebih kecil dari pembayaran yang sudah diterima. Catat pengembalian dana terlebih dahulu."
+
         val oldQty = old.lines.groupBy { it.serviceId }.mapValues { (_, rows) -> rows.sumOf { it.qty }.toInt() }
         val newQty = clean.groupBy { it.serviceId }.mapValues { (_, rows) -> rows.sumOf { it.qty }.toInt() }
         val retailProducts = (old.lines + clean).mapNotNull { line ->
@@ -1106,7 +1255,6 @@ object CuciinStore {
             }
         }
 
-        val total = clean.sumOf { (it.qty * it.unitPrice).toInt() }
         old.lines.forEach { before ->
             val after = clean.firstOrNull { it.serviceId == before.serviceId }
             if (after == null) log("${before.name} dihapus dari Service $id", old.branchId, id)
@@ -1144,6 +1292,7 @@ object CuciinStore {
             return "Akun ini tidak dapat menghapus Service tersebut"
         }
         if (old.waSent && s.role != Role.Owner) return "Service sudah dikirim ke pelanggan; hanya Owner yang dapat menghapus"
+        if (old.paid > 0) return "Service yang sudah menerima pembayaran tidak dapat dihapus. Catat pengembalian dana terlebih dahulu."
         val now = Clock.nowMs()
         old.lines.forEach { line ->
             val product = productForKey(line.productKey).takeIf { line.productKey.isNotBlank() }
@@ -1173,23 +1322,32 @@ object CuciinStore {
         bump()
     }
 
-    fun advanceLaundry(id: String) {
-        val n = notas.find { it.id == id } ?: return
-        n.laundry.next?.let {
-            n.laundry = it
-            if (it == LaundryStatus.Selesai && n.completedAt == null) n.completedAt = Clock.nowLabel()
-        }
+    fun advanceLaundry(id: String): String? {
+        val s = session.value ?: return "Silakan masuk kembali"
+        val n = notas.find { it.id == id } ?: return "Service tidak ditemukan"
+        if (s.role != Role.Owner && s.branchId != n.branchId) return "Cabang Service tidak sesuai akun"
+        val next = n.laundry.next ?: return "Service sudah selesai"
+        n.laundry = next
+        if (next == LaundryStatus.Selesai && n.completedAt == null) n.completedAt = Clock.nowLabel()
         log("${n.id} → ${n.laundry.label}", n.branchId, n.id)
         bump()
+        return null
     }
 
-    fun markLunas(id: String, method: PayMethod = PayMethod.Tunai) {
-        val n = notas.find { it.id == id } ?: return
+    fun markLunas(id: String, method: PayMethod = PayMethod.Tunai): String? {
+        val s = session.value ?: return "Silakan masuk kembali"
+        val n = notas.find { it.id == id } ?: return "Service tidak ditemukan"
+        if (s.role == Role.Supervisor || (s.role != Role.Owner && s.branchId != n.branchId)) return "Akun ini tidak dapat mencatat pembayaran Service tersebut"
+        val remaining = (n.total - n.paid).coerceAtLeast(0)
+        if (remaining == 0 || n.pay == PayStatus.Lunas) return "Pembayaran Service sudah lunas"
+        val now = Clock.nowMs()
+        n.paid += remaining
         n.pay = PayStatus.Lunas
-        n.paid = n.total
         n.payMethod = method
-        log("${n.id} ditandai Lunas · ${method.label}", n.branchId, n.id)
+        payments.add(0, PaymentRecord("pay-${syncEventId()}", n.id, n.branchId, remaining, method, now, Clock.nowLabel(now), s.name))
+        log("${n.id} menerima ${rp(remaining)} · ${method.label}", n.branchId, n.id)
         bump()
+        return null
     }
 
     fun markPickedUp(id: String): String? {
@@ -1251,20 +1409,31 @@ object CuciinStore {
 
     private fun syncEventId(): String = UUID.randomUUID().toString()
 
-    fun closeCash(): CashClose {
-        val s = session.value!!
+    /**
+     * ID unik untuk baris baru.
+     *
+     * Sebelumnya ID memakai milidetik saja. Impor template bisa membuat puluhan baris dalam
+     * satu milidetik, sehingga ID-nya bertabrakan dan baris saling menimpa saat disimpan.
+     */
+    internal fun newId(): String = UUID.randomUUID().toString().take(13)
+
+    fun closeCash(): CashClose? {
+        val s = session.value ?: return null
         val bid = if (s.role == Role.Owner) viewBranch.value else s.branchId
+        if (bid == "all") return null
         val t = Clock.nowMs()
+        if (cashCloses.any { it.branchId == bid && Clock.dateKey(it.atMs) == Clock.dateKey(t) }) return null
+        val received = paymentRecords(notas.filter { it.branchId == bid }).filter { it.atMs >= Clock.todayStartMs() }
         val row = CashClose(
             id = "kas-$bid-$t-${syncEventId().take(8)}",
             at = Clock.nowLabel(t),
             atMs = t,
             by = s.name,
             branchId = bid,
-            tunai = todayByMethod(PayMethod.Tunai, bid),
-            qris = todayByMethod(PayMethod.Qris, bid),
-            transfer = todayByMethod(PayMethod.Transfer, bid),
-            piutang = piutang(notas.filter { bid == "all" || it.branchId == bid }),
+            tunai = received.filter { it.method == PayMethod.Tunai }.sumOf { it.amount },
+            qris = received.filter { it.method == PayMethod.Qris }.sumOf { it.amount },
+            transfer = received.filter { it.method == PayMethod.Transfer }.sumOf { it.amount },
+            piutang = piutang(notas.filter { it.branchId == bid }),
         )
         cashCloses.add(0, row)
         log(

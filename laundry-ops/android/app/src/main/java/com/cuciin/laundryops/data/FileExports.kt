@@ -15,6 +15,12 @@ import com.cuciin.laundryops.R
 import java.io.File
 
 object FileExports {
+    // Semua PDF memakai kepala tabel, garis, dan zebra row yang sama.
+    private val reportNavy = Color.rgb(8, 58, 114)
+    private val reportBlue = Color.rgb(7, 91, 175)
+    private val reportSky = Color.rgb(232, 247, 253)
+    private val reportGrid = Color.rgb(202, 221, 233)
+
     private fun csv(value: Any?): String = "\"${value?.toString().orEmpty().replace("\"", "\"\"")}\""
 
     private fun wrapped(text: String, paint: Paint, width: Float, maxLines: Int = Int.MAX_VALUE): List<String> =
@@ -75,8 +81,74 @@ object FileExports {
         shareGenerated(ctx, "cuciin-semua-data-${Clock.nowMs()}.json", "application/json", LocalJson.json.encodeToString(Snapshot.serializer(), safe))
     }
 
-    fun shareFinancial(ctx: Context, notas: List<Nota>, expenses: List<Expense>) {
+    fun shareFinancial(ctx: Context, notas: List<Nota>, expenses: List<Expense>, sections: Set<String> = emptySet()) {
+        fun kasirName(n: Nota): String = staffDisplayName(CuciinStore.staff, n.kasirEmail.ifBlank { n.kasir }, n.kasir)
         val body = buildString {
+            appendLine("LAPORAN TRANSAKSI CUCIIN")
+            appendLine(listOf("Dibuat", Clock.nowLabel() + " WIB").joinToString(",", transform = ::csv))
+            appendLine(listOf("Bagian", if (sections.isEmpty()) "Rincian" else sections.sorted().joinToString(", ")).joinToString(",", transform = ::csv))
+            appendLine()
+            // Bagian yang dipilih di filter Tampilan laporan ikut diekspor, bukan hanya rincian.
+            if ("ringkasan" in sections) {
+                val omzet = notas.sumOf { it.total }
+                val masuk = notas.sumOf { it.paid }
+                val biaya = expenses.sumOf { it.amount }
+                appendLine("RINGKASAN")
+                appendLine(listOf("Ukuran", "Nilai").joinToString(",", transform = ::csv))
+                listOf(
+                    "Omzet Service" to rp(omzet),
+                    "Kas diterima" to rp(masuk),
+                    "Piutang berjalan" to rp(notas.sumOf { maxOf(0, it.total - it.paid) }),
+                    "Biaya tercatat" to rp(biaya),
+                    "Hasil kas" to rp(masuk - biaya),
+                    "Jumlah Service" to notas.size.toString(),
+                    "Service belum lunas" to notas.count { it.pay != PayStatus.Lunas }.toString(),
+                ).forEach { (label, value) -> appendLine(listOf(label, value).joinToString(",", transform = ::csv)) }
+                appendLine()
+            }
+            if ("cabang" in sections) {
+                appendLine("PER CABANG")
+                appendLine(listOf("Cabang", "Service", "Omzet", "Masuk", "Biaya", "Hasil kas").joinToString(",", transform = ::csv))
+                notas.groupBy { it.branchId }.forEach { (branchId, group) ->
+                    val cost = expenses.filter { it.branchId == branchId }.sumOf { it.amount }
+                    appendLine(listOf(
+                        CuciinStore.branches.firstOrNull { it.id == branchId }?.name ?: branchId,
+                        group.size, group.sumOf { it.total }, group.sumOf { it.paid }, cost, group.sumOf { it.paid } - cost,
+                    ).joinToString(",", transform = ::csv))
+                }
+                appendLine()
+            }
+            if ("kasir" in sections) {
+                appendLine("PER KASIR")
+                appendLine(listOf("Kasir", "Email", "Service", "Omzet", "Masuk", "Cabang").joinToString(",", transform = ::csv))
+                notas.groupBy { it.kasirEmail.ifBlank { it.kasir } }.forEach { (email, group) ->
+                    appendLine(listOf(
+                        staffDisplayName(CuciinStore.staff, email, group.first().kasir), email, group.size,
+                        group.sumOf { it.total }, group.sumOf { it.paid },
+                        group.map { CuciinStore.branches.firstOrNull { b -> b.id == it.branchId }?.name ?: it.branchId }.distinct().joinToString(" | "),
+                    ).joinToString(",", transform = ::csv))
+                }
+                appendLine()
+            }
+            if ("petugas" in sections) {
+                appendLine("KOMISI PETUGAS")
+                appendLine(listOf("Petugas", "Email", "Cabang", "Service", "Komisi").joinToString(",", transform = ::csv))
+                notas.flatMap { nota -> nota.lines.map { line -> Triple(nota, line, (line.qty * line.commissionPerUnit).toInt()) } }
+                    .groupBy { (nota, line, _) -> "${nota.branchId}|${line.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir }}" }
+                    .forEach { (_, group) ->
+                        val first = group.first()
+                        val email = first.second.handledByEmail.ifBlank { first.first.kasirEmail }.ifBlank { first.first.kasir }
+                        appendLine(listOf(
+                            staffDisplayName(CuciinStore.staff, email, first.second.handledByName.ifBlank { first.first.kasir }),
+                            email,
+                            CuciinStore.branches.firstOrNull { it.id == first.first.branchId }?.name ?: first.first.branchId,
+                            group.map { it.first.id }.distinct().size,
+                            group.sumOf { it.third },
+                        ).joinToString(",", transform = ::csv))
+                    }
+                appendLine()
+            }
+            appendLine("RINCIAN TRANSAKSI")
             appendLine("No,Jenis,ID Service,Waktu,Cabang,Kasir,Pelanggan,Layanan,Jumlah,Satuan,Harga Satuan,Omzet Baris,Diterima Service,Petugas Layanan,Email Petugas,Komisi,Biaya,Metode,Status Pembayaran,Status Pengerjaan")
             var number = 1
             notas.sortedByDescending { it.createdAtMs }.forEach { n ->
@@ -84,10 +156,11 @@ object FileExports {
                 val lines = n.lines.ifEmpty { listOf(NotaLine("", n.items, 1.0, "Service", n.total, n.kasirEmail, n.kasir, 0)) }
                 lines.forEachIndexed { lineIndex, line ->
                     appendLine(listOf(
-                        number++, "Transaksi", n.id, n.createdAt, branch, n.kasir, n.customer,
+                        number++, "Transaksi", n.id, n.createdAt, branch, kasirName(n), n.customer,
                         line.name, line.qty, line.unit, line.unitPrice, (line.qty * line.unitPrice).toInt(),
                         if (lineIndex == 0) n.paid else 0,
-                        line.handledByName.ifBlank { n.kasir }, line.handledByEmail.ifBlank { n.kasirEmail },
+                        staffDisplayName(CuciinStore.staff, line.handledByEmail.ifBlank { n.kasirEmail }, line.handledByName.ifBlank { n.kasir }),
+                        line.handledByEmail.ifBlank { n.kasirEmail },
                         (line.qty * line.commissionPerUnit).toInt(), 0, n.payMethod.label, n.pay.label, n.laundry.label,
                     ).joinToString(",", transform = ::csv))
                 }
@@ -100,113 +173,121 @@ object FileExports {
         shareGenerated(ctx, "laporan-keuangan-${Clock.nowMs()}.csv", "text/csv", body)
     }
 
-    fun shareFinancialPdf(ctx: Context, notas: List<Nota>, expenses: List<Expense>, periodLabel: String) {
-        val dir = File(ctx.cacheDir, "share").apply { mkdirs() }
-        val file = File(dir, "laporan-transaksi-${Clock.nowMs()}.pdf")
-        val pdf = PdfDocument()
-        val navy = Color.rgb(8, 58, 114)
-        val blue = Color.rgb(7, 91, 175)
-        val sky = Color.rgb(232, 247, 253)
-        val ink = Color.rgb(18, 43, 72)
-        val muted = Color.rgb(80, 102, 122)
-        val grid = Paint().apply { color = Color.rgb(202, 221, 233); style = Paint.Style.STROKE; strokeWidth = .8f }
-        val body = Paint().apply { color = ink; textSize = 8.1f; isAntiAlias = true }
-        val small = Paint(body).apply { color = muted; textSize = 8.3f }
-        val tableHead = Paint(body).apply { color = Color.WHITE; isFakeBoldText = true }
-        val title = Paint().apply { color = Color.WHITE; textSize = 18f; isFakeBoldText = true; isAntiAlias = true }
-        data class ReportRow(val no: Int, val id: String, val time: String, val branch: String, val cashier: String, val detail: String, val omzet: Int, val received: Int, val commission: Int, val status: String)
-        fun quantity(value: Double): String = if (value % 1.0 == 0.0) value.toInt().toString() else value.toString().replace('.', ',')
-        fun detail(n: Nota): String = n.lines.takeIf { it.isNotEmpty() }?.joinToString("; ") { "${it.name} ${quantity(it.qty)} ${it.unit}" }
-            ?: Regex("(\\d+)\\.0\\s*([A-Za-z]+)").replace(n.items) { "${it.groupValues[1]} ${it.groupValues[2]}" }
-        val rows = notas.sortedByDescending { it.createdAtMs }.mapIndexed { index, n ->
-            ReportRow(
-                no = index + 1,
-                id = n.id,
-                time = n.createdAt,
-                branch = CuciinStore.branches.firstOrNull { it.id == n.branchId }?.name?.removePrefix("Cuciin ") ?: n.branchId,
-                cashier = n.kasir,
-                detail = "${n.customer} · ${detail(n)}",
-                omzet = n.total,
-                received = n.paid,
-                commission = n.lines.sumOf { (it.qty * it.commissionPerUnit).toInt() },
-                status = "${n.pay.label} · ${n.laundry.label}",
+    fun shareFinancialPdf(ctx: Context, notas: List<Nota>, expenses: List<Expense>, periodLabel: String, sections: Set<String> = emptySet()) {
+        shareFile(ctx, ReportPdf.transaksi(ctx, notas, expenses, periodLabel, sections), "application/pdf")
+    }
+
+    /**
+     * CSV laporan analitik: memuat seluruh baris yang tampil di layar, termasuk ringkasan,
+     * tren bulanan, omzet per cabang, penerimaan per metode, peringkat kasir, dan rincian
+     * tiap Service pada filter yang sedang aktif.
+     */
+    fun shareAnalyticsCsv(
+        ctx: Context,
+        notas: List<Nota>,
+        expenses: List<Expense>,
+        periodLabel: String,
+        trend: List<Triple<String, Int, Int>>,
+        filterSummary: String,
+    ) {
+        fun kasirName(n: Nota): String = staffDisplayName(CuciinStore.staff, n.kasirEmail.ifBlank { n.kasir }, n.kasir)
+        val body = buildString {
+            appendLine("LAPORAN ANALITIK CUCIIN")
+            appendLine(listOf("Periode", periodLabel).joinToString(",", transform = ::csv))
+            appendLine(listOf("Filter", filterSummary).joinToString(",", transform = ::csv))
+            appendLine(listOf("Dibuat", Clock.nowLabel() + " WIB").joinToString(",", transform = ::csv))
+            appendLine()
+            val omzet = notas.sumOf { it.total }
+            val masuk = notas.sumOf { it.paid }
+            val biaya = expenses.sumOf { it.amount }
+            val piutang = notas.sumOf { maxOf(0, it.total - it.paid) }
+            appendLine("RINGKASAN")
+            appendLine(listOf("Ukuran", "Nilai").joinToString(",", transform = ::csv))
+            listOf(
+                "Omzet Service" to rp(omzet),
+                "Kas diterima" to rp(masuk),
+                "Piutang berjalan" to rp(piutang),
+                "Biaya tercatat" to rp(biaya),
+                "Hasil kas" to rp(masuk - biaya),
+                "Jumlah Service" to notas.size.toString(),
+                "Rata-rata per Service" to rp(if (notas.isEmpty()) 0 else omzet / notas.size),
+                "Service selesai" to notas.count { it.pickedUpAt != null }.toString(),
+                "Service belum lunas" to notas.count { it.pay != PayStatus.Lunas }.toString(),
+            ).forEach { (label, value) -> appendLine(listOf(label, value).joinToString(",", transform = ::csv)) }
+            appendLine()
+            appendLine("TREN BULANAN")
+            appendLine(listOf("Bulan", "Omzet", "Service").joinToString(",", transform = ::csv))
+            trend.forEach { (label, omzetBulan, count) -> appendLine(listOf(label, omzetBulan, count).joinToString(",", transform = ::csv)) }
+            appendLine()
+            appendLine("OMZET PER CABANG")
+            appendLine(listOf("Cabang", "Service", "Omzet", "Masuk", "Biaya", "Hasil kas").joinToString(",", transform = ::csv))
+            notas.groupBy { it.branchId }.map { (branchId, group) ->
+                val cost = expenses.filter { it.branchId == branchId }.sumOf { it.amount }
+                listOf(
+                    CuciinStore.branches.firstOrNull { it.id == branchId }?.name ?: branchId,
+                    group.size, group.sumOf { it.total }, group.sumOf { it.paid }, cost, group.sumOf { it.paid } - cost,
+                )
+            }.sortedByDescending { (it[2] as Int) }.forEach { row -> appendLine(row.joinToString(",", transform = ::csv)) }
+            appendLine()
+            appendLine("PENERIMAAN PER METODE")
+            appendLine(listOf("Metode", "Diterima", "Service").joinToString(",", transform = ::csv))
+            PayMethod.entries.forEach { method ->
+                val group = notas.filter { it.payMethod == method }
+                if (group.isNotEmpty()) appendLine(listOf(method.label, group.sumOf { it.paid }, group.size).joinToString(",", transform = ::csv))
+            }
+            appendLine()
+            appendLine("PERINGKAT KASIR")
+            appendLine(listOf("Kasir", "Email", "Service", "Omzet", "Masuk", "Cabang").joinToString(",", transform = ::csv))
+            notas.groupBy { it.kasirEmail.ifBlank { it.kasir } }.map { (email, group) ->
+                listOf(
+                    staffDisplayName(CuciinStore.staff, email, group.first().kasir), email, group.size,
+                    group.sumOf { it.total }, group.sumOf { it.paid },
+                    group.map { CuciinStore.branches.firstOrNull { b -> b.id == it.branchId }?.name ?: it.branchId }.distinct().joinToString(" | "),
+                )
+            }.sortedByDescending { (it[3] as Int) }.forEach { row -> appendLine(row.joinToString(",", transform = ::csv)) }
+            appendLine()
+            appendLine("RINCIAN SERVICE")
+            appendLine(
+                listOf(
+                    "No", "ID Service", "Waktu", "Cabang", "Kasir", "Email Kasir", "Pelanggan", "Layanan", "Jumlah", "Satuan",
+                    "Harga Satuan", "Omzet Baris", "Petugas Layanan", "Email Petugas", "Komisi", "Metode", "Status Pembayaran", "Status Pengerjaan",
+                ).joinToString(",", transform = ::csv),
             )
-        }
-        val columns = listOf("No" to 24f, "Nota" to 68f, "Waktu" to 68f, "Cabang" to 74f, "Kasir" to 75f, "Rincian layanan" to 176f, "Omzet" to 67f, "Diterima" to 67f, "Komisi" to 62f, "Status" to 91f)
-        fun cells(row: ReportRow) = listOf(row.no.toString(), row.id, row.time, row.branch, row.cashier, row.detail, rp(row.omzet), rp(row.received), rp(row.commission), row.status)
-        fun rowHeight(row: ReportRow): Float {
-            val lines = columns.mapIndexed { index, (_, width) -> wrapped(cells(row)[index], body, width - 8f, 5).size }
-            return maxOf(34f, lines.maxOrNull()!!.toFloat() * 11f + 12f)
-        }
-        val firstCapacity = 544f - 190f - 32f
-        val nextCapacity = 544f - 132f - 32f
-        val pages = mutableListOf<MutableList<ReportRow>>()
-        var current = mutableListOf<ReportRow>()
-        var used = 0f
-        rows.forEach { row ->
-            val capacity = if (pages.isEmpty()) firstCapacity else nextCapacity
-            val height = rowHeight(row)
-            if (current.isNotEmpty() && used + height > capacity) {
-                pages += current
-                current = mutableListOf()
-                used = 0f
-            }
-            current += row
-            used += height
-        }
-        if (current.isNotEmpty() || pages.isEmpty()) pages += current
-        val omzet = notas.sumOf { it.total }
-        val received = notas.sumOf { it.paid }
-        val cost = expenses.sumOf { it.amount }
-        pages.forEachIndexed { pageIndex, pageRows ->
-            val page = pdf.startPage(PdfDocument.PageInfo.Builder(842, 595, pageIndex + 1).create())
-            val canvas = page.canvas
-            canvas.drawColor(Color.WHITE)
-            canvas.drawRect(24f, 20f, 818f, 102f, Paint().apply { color = navy })
-            BitmapFactory.decodeResource(ctx.resources, R.drawable.cuciin_logo)?.let { logo -> canvas.drawBitmap(logo, null, Rect(38, 34, 95, 88), null) }
-            canvas.drawText("LAPORAN TRANSAKSI", 112f, 54f, title)
-            canvas.drawText("Periode: $periodLabel", 112f, 78f, Paint(tableHead).apply { textSize = 10.3f })
-            canvas.drawText("Halaman ${pageIndex + 1} / ${pages.size}", 718f, 78f, Paint(tableHead).apply { textSize = 9.5f })
-            var y = if (pageIndex == 0) {
-                val metric = Paint(body).apply { textSize = 9.3f; isFakeBoldText = true }
-                val values = listOf("Omzet\n${rp(omzet)}", "Kas masuk\n${rp(received)}", "Biaya\n${rp(cost)}", "Hasil kas\n${rp(received - cost)}")
-                values.forEachIndexed { index, value ->
-                    val left = 24f + index * 198.5f
-                    canvas.drawRect(left, 116f, left + 190f, 168f, Paint().apply { color = if (index == 3) navy else sky })
-                    val paint = Paint(metric).apply { color = if (index == 3) Color.WHITE else ink }
-                    value.split('\n').forEachIndexed { lineIndex, lineText -> canvas.drawText(lineText, left + 12f, 136f + lineIndex * 16f, paint) }
+            var number = 1
+            notas.sortedByDescending { it.createdAtMs }.forEach { n ->
+                val branch = CuciinStore.branches.firstOrNull { it.id == n.branchId }?.name ?: n.branchId
+                val lines = n.lines.ifEmpty { listOf(NotaLine("", n.items, 1.0, "Service", n.total, n.kasirEmail, n.kasir, 0)) }
+                lines.forEachIndexed { lineIndex, line ->
+                    appendLine(
+                        listOf(
+                            number++, n.id, n.createdAt, branch, kasirName(n), n.kasirEmail, n.customer,
+                            line.name, line.qty, line.unit, line.unitPrice, (line.qty * line.unitPrice).toInt(),
+                            if (lineIndex == 0) n.paid else 0,
+                            staffDisplayName(CuciinStore.staff, line.handledByEmail.ifBlank { n.kasirEmail }, line.handledByName.ifBlank { n.kasir }),
+                            line.handledByEmail.ifBlank { n.kasirEmail },
+                            (line.qty * line.commissionPerUnit).toInt(), n.payMethod.label, n.pay.label, n.laundry.label,
+                        ).joinToString(",", transform = ::csv),
+                    )
                 }
-                canvas.drawText("${rows.size} transaksi · ${notas.map { it.branchId }.distinct().size} cabang · ${notas.map { it.kasir }.distinct().size} kasir", 28f, 184f, small)
-                190f
-            } else 132f
-            var x = 24f
-            columns.forEach { (label, width) ->
-                canvas.drawRect(x, y, x + width, y + 32f, Paint().apply { color = blue })
-                canvas.drawRect(x, y, x + width, y + 32f, grid)
-                drawWrapped(canvas, label, x + 4f, y + 13f, width - 8f, tableHead, 10f, 2)
-                x += width
             }
-            y += 32f
-            pageRows.forEachIndexed { rowIndex, row ->
-                val height = rowHeight(row)
-                x = 24f
-                cells(row).forEachIndexed { cellIndex, cell ->
-                    val width = columns[cellIndex].second
-                    if (rowIndex % 2 == 0) canvas.drawRect(x, y, x + width, y + height, Paint().apply { color = sky })
-                    canvas.drawRect(x, y, x + width, y + height, grid)
-                    drawWrapped(canvas, cell, x + 4f, y + 13f, width - 8f, body, 11f, 5)
-                    x += width
-                }
-                y += height
-            }
-            if (rows.isEmpty()) canvas.drawText("Tidak ada transaksi pada periode ini.", 32f, y + 26f, small)
-            canvas.drawLine(24f, 564f, 818f, 564f, Paint().apply { color = Color.rgb(202, 221, 233) })
-            canvas.drawText("Dibuat oleh Cuciin · ${Clock.nowLabel()} · nominal dalam rupiah", 24f, 580f, small)
-            pdf.finishPage(page)
         }
-        file.outputStream().use { pdf.writeTo(it) }
-        pdf.close()
-        shareFile(ctx, file, "application/pdf")
+        shareGenerated(ctx, "laporan-analitik-${Clock.nowMs()}.csv", "text/csv", body)
+    }
+
+    /**
+     * PDF laporan analitik: ringkasan, diagram batang tren bulanan, diagram donat komposisi,
+     * tabel peringkat kasir, dan rincian Service. Diagram digambar langsung di kanvas PDF
+     * supaya angka yang tampil di aplikasi juga terlihat di berkas.
+     */
+    fun shareAnalyticsPdf(
+        ctx: Context,
+        notas: List<Nota>,
+        expenses: List<Expense>,
+        periodLabel: String,
+        trend: List<Triple<String, Int, Int>> = emptyList(),
+        filterSummary: String = "",
+    ) {
+        shareFile(ctx, ReportPdf.analytics(ctx, notas, expenses, periodLabel, trend, filterSummary), "application/pdf")
     }
 
     fun shareAudit(ctx: Context, rows: List<AuditRow>) {
@@ -261,14 +342,14 @@ object FileExports {
         val dir = File(ctx.cacheDir, "share").apply { mkdirs() }
         val file = File(dir, "laporan-stok-${Clock.nowMs()}.pdf")
         val pdf = PdfDocument()
-        val navy = Color.rgb(8, 58, 114)
-        val blue = Color.rgb(7, 91, 175)
-        val sky = Color.rgb(232, 247, 253)
+        val navy = reportNavy
+        val blue = reportBlue
+        val sky = reportSky
         val ink = Color.rgb(18, 43, 72)
         val muted = Color.rgb(80, 102, 122)
         val body = Paint().apply { color = ink; textSize = 8.4f; isAntiAlias = true }
         val head = Paint(body).apply { color = Color.WHITE; isFakeBoldText = true }
-        val grid = Paint().apply { color = Color.rgb(202, 221, 233); style = Paint.Style.STROKE; strokeWidth = .8f }
+        val grid = Paint().apply { color = reportGrid; style = Paint.Style.STROKE; strokeWidth = .8f }
         val columns = listOf("No" to 28f, "Waktu" to 94f, "Cabang" to 84f, "Produk" to 112f, "Perubahan" to 74f, "Jumlah" to 54f, "Saldo" to 52f, "Akun" to 102f, "Catatan" to 160f)
         data class StockRow(val no: Int, val move: StockMove, val branch: String, val product: String)
         val reportRows = rows.mapIndexed { index, move ->
@@ -332,7 +413,7 @@ object FileExports {
                 y += height
             }
             if (reportRows.isEmpty()) canvas.drawText("Tidak ada perubahan stok pada periode ini.", 32f, y + 26f, label)
-            canvas.drawLine(24f, 564f, 818f, 564f, Paint().apply { color = Color.rgb(202, 221, 233) })
+            canvas.drawLine(24f, 564f, 818f, 564f, Paint().apply { color = reportGrid })
             canvas.drawText("Dibuat oleh Cuciin · ${Clock.nowLabel()} · nominal dan saldo mengikuti data pada saat ekspor", 24f, 580f, label)
             pdf.finishPage(page)
         }
@@ -348,141 +429,7 @@ object FileExports {
     }
 
     fun sharePdf(ctx: Context, n: Nota) {
-        val dir = File(ctx.cacheDir, "share").apply { mkdirs() }
-        val file = File(dir, "${n.id}.pdf")
-        val pdf = PdfDocument()
-        val page = pdf.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
-        val canvas = page.canvas
-        val branch = CuciinStore.branch(n.branchId)
-        val navy = Color.rgb(8, 58, 114)
-        val blue = Color.rgb(7, 91, 175)
-        val sky = Color.rgb(232, 247, 253)
-        val ink = Color.rgb(18, 43, 72)
-        val muted = Color.rgb(80, 102, 122)
-        val body = Paint().apply { color = ink; textSize = 10.5f; isAntiAlias = true }
-        val small = Paint(body).apply { color = muted; textSize = 9f }
-        val bold = Paint(body).apply { isFakeBoldText = true }
-        val white = Paint(bold).apply { color = Color.WHITE }
-        val grid = Paint().apply { color = Color.rgb(211, 224, 228); style = Paint.Style.STROKE; strokeWidth = 1f }
-        fun drawGrandTotal(target: Canvas, top: Float): Float {
-            target.drawRect(40f, top, 427f, top + 44f, Paint().apply { color = sky })
-            target.drawRect(427f, top, 555f, top + 44f, Paint().apply { color = navy })
-            target.drawText("TOTAL", 328f, top + 27f, bold)
-            target.drawText(rp(n.total), 437f, top + 27f, white)
-            return top + 66f
-        }
-        fun drawPaymentAndStatus(target: Canvas, top: Float) {
-            target.drawText("Pembayaran", 40f, top, small)
-            target.drawText("${n.payMethod.label} · ${n.pay.label} · Dibayar ${rp(n.paid)}", 40f, top + 18f, bold)
-            target.drawText("Status Pengerjaan", 330f, top, small)
-            target.drawText(n.laundry.label, 330f, top + 18f, bold)
-        }
-        canvas.drawColor(Color.WHITE)
-        canvas.drawRect(32f, 28f, 563f, 132f, Paint().apply { color = navy })
-        canvas.drawRoundRect(42f, 40f, 87f, 85f, 8f, 8f, Paint().apply { color = Color.WHITE })
-        BitmapFactory.decodeResource(ctx.resources, R.drawable.cuciin_logo)?.let { logo -> canvas.drawBitmap(logo, null, Rect(46, 44, 83, 81), null) }
-        canvas.drawText(branch.name.uppercase(), 101f, 61f, Paint(white).apply { textSize = 21f })
-        canvas.drawText("NOTA LAUNDRY · ${n.id}", 101f, 86f, Paint(white).apply { textSize = 11f })
-        if (branch.location.isNotBlank()) drawWrapped(canvas, branch.location, 101f, 108f, 430f, Paint(white).apply { textSize = 9f }, 11f, 2)
-
-        canvas.drawText("INFORMASI PESANAN", 40f, 164f, Paint(bold).apply { color = blue; textSize = 10f })
-        val info = listOf(
-            "Kasir" to n.kasir,
-            "Pelanggan" to n.customer,
-            "Waktu Masuk" to n.createdAt,
-            "Estimasi selesai" to n.pickupAt,
-        )
-        var infoY = 186f
-        info.chunked(2).forEach { pair ->
-            pair.forEachIndexed { index, (label, value) ->
-                val x = 40f + index * 260f
-                canvas.drawText(label, x, infoY, small)
-                drawWrapped(canvas, value, x, infoY + 16f, 230f, bold, 13f, 2)
-            }
-            infoY += 45f
-        }
-
-        var y = 286f
-        val columns = listOf("No." to 42f, "Layanan" to 345f, "Subtotal" to 128f)
-        var x = 40f
-        columns.forEach { (label, width) ->
-            canvas.drawRect(x, y, x + width, y + 32f, Paint().apply { color = Color.rgb(31, 91, 110) })
-            canvas.drawRect(x, y, x + width, y + 32f, grid)
-            canvas.drawText(label, x + 8f, y + 20f, white)
-            x += width
-        }
-        y += 32f
-        val legacyItems = Regex("(\\d+)\\.0\\s*([A-Za-z]+)").replace(n.items) { match -> "${match.groupValues[1]} ${match.groupValues[2]}" }
-        val lines = n.lines.ifEmpty { listOf(NotaLine("", legacyItems, 1.0, "nota", n.total, n.kasirEmail, n.kasir, 0)) }
-        val pageLineCounts = receiptPageLineCounts(lines.size)
-        lines.take(pageLineCounts.first()).forEachIndexed { index, line ->
-            val rowHeight = 52f
-            x = 40f
-            val qty = if (line.qty % 1.0 == 0.0) line.qty.toInt().toString() else line.qty.toString().replace('.', ',')
-            val serviceText = if (line.serviceId.isBlank()) line.name else "${line.name}\n$qty ${line.unit} × ${rp(line.unitPrice)}"
-            val values = listOf((index + 1).toString(), serviceText, rp((line.qty * line.unitPrice).toInt()))
-            columns.forEachIndexed { cellIndex, (_, width) ->
-                if (index % 2 == 0) canvas.drawRect(x, y, x + width, y + rowHeight, Paint().apply { color = Color.rgb(244, 249, 250) })
-                canvas.drawRect(x, y, x + width, y + rowHeight, grid)
-                drawWrapped(canvas, values[cellIndex], x + 8f, y + 18f, width - 16f, if (cellIndex == 2) bold else body, 15f, 2)
-                x += width
-            }
-            y += rowHeight
-        }
-        if (lines.size > 7) {
-            canvas.drawText("+ ${lines.size - 7} layanan dilanjutkan pada halaman berikutnya.", 48f, y + 18f, small)
-        } else {
-            y = drawGrandTotal(canvas, y)
-            drawPaymentAndStatus(canvas, y)
-        }
-        canvas.drawLine(40f, 790f, 555f, 790f, Paint().apply { color = Color.rgb(211, 224, 228) })
-        canvas.drawText("Terima kasih telah mempercayakan laundry Anda kepada ${branch.name}.", 40f, 812f, small)
-        pdf.finishPage(page)
-        val continuationPages = lines.drop(pageLineCounts.first()).chunked(10)
-        continuationPages.forEachIndexed { extraPageIndex, pageLines ->
-            val extra = pdf.startPage(PdfDocument.PageInfo.Builder(595, 842, extraPageIndex + 2).create())
-            val extraCanvas = extra.canvas
-            extraCanvas.drawColor(Color.WHITE)
-            extraCanvas.drawRect(32f, 28f, 563f, 104f, Paint().apply { color = navy })
-            extraCanvas.drawRoundRect(42f, 40f, 79f, 77f, 7f, 7f, Paint().apply { color = Color.WHITE })
-            BitmapFactory.decodeResource(ctx.resources, R.drawable.cuciin_logo)?.let { logo -> extraCanvas.drawBitmap(logo, null, Rect(45, 43, 76, 74), null) }
-            extraCanvas.drawText(branch.name.uppercase(), 91f, 60f, Paint(white).apply { textSize = 18f })
-            extraCanvas.drawText("NOTA LAUNDRY ${n.id} · RINCIAN LANJUTAN", 91f, 84f, Paint(white).apply { textSize = 10f })
-            var extraY = 132f
-            var extraX = 40f
-            columns.forEach { (label, width) ->
-                extraCanvas.drawRect(extraX, extraY, extraX + width, extraY + 32f, Paint().apply { color = Color.rgb(31, 91, 110) })
-                extraCanvas.drawRect(extraX, extraY, extraX + width, extraY + 32f, grid)
-                extraCanvas.drawText(label, extraX + 8f, extraY + 20f, white)
-                extraX += width
-            }
-            extraY += 32f
-            pageLines.forEachIndexed { pageLineIndex, line ->
-                val absoluteIndex = 7 + extraPageIndex * 10 + pageLineIndex
-                val qty = if (line.qty % 1.0 == 0.0) line.qty.toInt().toString() else line.qty.toString().replace('.', ',')
-                val serviceText = if (line.serviceId.isBlank()) line.name else "${line.name}\n$qty ${line.unit} × ${rp(line.unitPrice)}"
-                val values = listOf((absoluteIndex + 1).toString(), serviceText, rp((line.qty * line.unitPrice).toInt()))
-                extraX = 40f
-                columns.forEachIndexed { cellIndex, (_, width) ->
-                    if (pageLineIndex % 2 == 0) extraCanvas.drawRect(extraX, extraY, extraX + width, extraY + 52f, Paint().apply { color = Color.rgb(244, 249, 250) })
-                    extraCanvas.drawRect(extraX, extraY, extraX + width, extraY + 52f, grid)
-                    drawWrapped(extraCanvas, values[cellIndex], extraX + 8f, extraY + 18f, width - 16f, if (cellIndex == 2) bold else body, 15f, 2)
-                    extraX += width
-                }
-                extraY += 52f
-            }
-            if (extraPageIndex == continuationPages.lastIndex) {
-                extraY = drawGrandTotal(extraCanvas, extraY)
-                drawPaymentAndStatus(extraCanvas, extraY)
-            } else {
-                extraCanvas.drawText("Rincian berlanjut ke halaman berikutnya.", 48f, extraY + 18f, small)
-            }
-            extraCanvas.drawText("Halaman ${extraPageIndex + 2}", 40f, 812f, small)
-            pdf.finishPage(extra)
-        }
-        file.outputStream().use { pdf.writeTo(it) }
-        pdf.close()
-        shareFile(ctx, file, "application/pdf")
+        shareFile(ctx, ReportPdf.nota(ctx, n), "application/pdf")
     }
 
     private fun shareFile(ctx: Context, file: File, type: String) {

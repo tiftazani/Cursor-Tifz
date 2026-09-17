@@ -27,18 +27,23 @@ val cloudProperties = Properties().apply {
         ).firstOrNull { it.isFile }?.absolutePath
     path?.let { candidate -> file(candidate).takeIf { it.isFile }?.inputStream()?.use { load(it) } }
 }
-val cloudUrl = providers.environmentVariable("CUCIIN_CLOUD_URL").orNull
+// Konfigurasi release memakai Worker produksi. Debug selalu memakai Worker dan D1 test
+// agar data uji tidak dapat masuk ke database operasional.
+val releaseCloudUrl = providers.environmentVariable("CUCIIN_CLOUD_URL").orNull
     ?: cloudProperties.getProperty("cloudUrl").orEmpty()
+val debugCloudUrl = providers.environmentVariable("CUCIIN_DEBUG_CLOUD_URL").orNull
+    ?: cloudProperties.getProperty("debugCloudUrl")
+    ?: "https://cuciin-api-debug.tiftazani-cuciin.workers.dev/api/cuciin"
 val cloudKey = providers.environmentVariable("CUCIIN_CLOUD_KEY").orNull
     ?: cloudProperties.getProperty("cloudKey").orEmpty()
 
-// Build debug wajib punya alamat cloud; kalau tidak, aplikasi diam-diam jalan mode lokal
-// dan data tidak pernah naik ke server. Lebih baik gagal saat build daripada diam-diam salah.
+// Kedua varian wajib memiliki endpoint sendiri. Debug tidak pernah fallback ke produksi.
 tasks.configureEach {
     if (name == "preDebugBuild" || name == "preReleaseBuild") {
         doFirst {
-            check(cloudUrl.isNotBlank()) {
-                "CUCIIN_CLOUD_URL kosong. Isi environment variable CUCIIN_CLOUD_URL atau taruh cloudUrl di signing-private/cuciin-cloud.properties."
+            val endpoint = if (name == "preDebugBuild") debugCloudUrl else releaseCloudUrl
+            check(endpoint.isNotBlank()) {
+                "Endpoint cloud untuk varian $name kosong."
             }
         }
     }
@@ -62,9 +67,9 @@ android {
         applicationId = "com.cuciin.laundryops"
         minSdk = 26
         targetSdk = 36
-        versionCode = 20
-        versionName = "1.10.1"
-        buildConfigField("String", "CUCIIN_CLOUD_URL", buildConfigString(cloudUrl))
+        versionCode = 36
+        versionName = "1.10.17"
+        buildConfigField("String", "CUCIIN_CLOUD_URL", buildConfigString(releaseCloudUrl))
         buildConfigField("String", "CUCIIN_CLOUD_KEY", buildConfigString(cloudKey))
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -98,6 +103,7 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            buildConfigField("String", "CUCIIN_CLOUD_URL", buildConfigString(debugCloudUrl))
         }
     }
     compileOptions {

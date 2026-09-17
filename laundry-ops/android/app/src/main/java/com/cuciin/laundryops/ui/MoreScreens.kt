@@ -52,6 +52,7 @@ import com.cuciin.laundryops.data.CuciinStore
 import com.cuciin.laundryops.data.PayMethod
 import com.cuciin.laundryops.data.PayStatus
 import com.cuciin.laundryops.data.Nota
+import com.cuciin.laundryops.data.Staff
 import com.cuciin.laundryops.data.Role
 import com.cuciin.laundryops.data.VersionHistory
 import com.cuciin.laundryops.data.rp
@@ -69,9 +70,8 @@ import com.cuciin.laundryops.ui.theme.Muted
 import com.cuciin.laundryops.ui.theme.Teal
 import com.cuciin.laundryops.ui.theme.Green
 import com.cuciin.laundryops.ui.theme.Amber
-import com.cuciin.laundryops.ui.theme.CuciinThemeMode
 import com.cuciin.laundryops.ui.theme.OnPrim
-import com.cuciin.laundryops.ui.theme.ThemePrefs
+import com.cuciin.laundryops.ui.theme.Mist
 import com.cuciin.laundryops.ui.theme.LineSoft
 import java.time.LocalDateTime
 
@@ -82,96 +82,110 @@ internal fun MoreScreen(nav: NavHostController) {
     val ui = rememberUi()
     val ctx = LocalContext.current
     val role = store.session.value?.role ?: Role.Kasir
-    val items = buildList {
-        add("Absensi karyawan" to "attendance")
-        if (role == Role.Owner) {
-            add("Laporan transaksi" to "analytics")
-            add("Cabang" to "branches")
-            add("Daftar User" to "users")
-            add("Layanan & harga" to "services")
-            add("Produk stok" to "products")
-            add("Pengaturan Owner" to "ownerSettings")
-            add("Riwayat aktivitas" to "audit")
-        }
-        if (role == Role.Owner) add("Aset & mesin cabang" to "inventory")
-        add("Biaya operasional" to "expenses")
-        if (role != Role.Supervisor) add("Pelanggan" to "customers")
-        if (role != Role.Supervisor) {
-            add("WA menunggu" to "wa")
-            add("Arsip WA" to "waArchive")
-            add("Tutup kas" to "cash")
-        }
-        add("Riwayat versi" to "versions")
-        add("Profil" to "profil")
-    }.filter { (_, route) ->
-        when (route) {
-            "attendance" -> store.canAccess("attendance")
-            "analytics", "branches", "users", "services", "products", "audit", "ownerSettings" -> store.canAccess("owner")
-            "inventory" -> store.canAccess("inventory")
-            "expenses" -> store.canAccess("expense")
-            "customers" -> store.canAccess("customer")
-            "wa", "waArchive" -> store.canAccess("whatsapp")
-            "cash" -> store.canAccess("cash")
-            else -> true
-        }
-    }
     val tap = rememberTapFeedback()
-    val columns = if (ui.widthDp < 360 || LocalDensity.current.fontScale > 1.3f) 1 else if (ui.twoPane) 3 else 2
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
+    // Susunan diambil dari preferensi supaya urutan yang diubah pengguna ikut terpakai.
+    val sections = MenuPrefs.layout.render { route -> routeAllowed(route) }
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Kelola laundry", "${store.session.value?.name} · ${if (role == Role.Supervisor) "SPV" else role.name}") }
         item {
-            Surface(onClick = { nav.navigate("profil") }, color = Teal, shape = RoundedCornerShape(20.dp)) {
-                Row(Modifier.fillMaxWidth().padding(18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.AccountCircle, null, tint = OnPrim, modifier = Modifier.size(32.dp))
-                    Column(Modifier.weight(1f)) { Text("Akun & profil", color = OnPrim, fontWeight = FontWeight.Bold); Text("Informasi akun dan kata sandi", color = OnPrim.copy(alpha = .85f), fontSize = 12.sp) }
-                    Icon(Icons.Outlined.ChevronRight, null, tint = OnPrim)
+            Surface(
+                onClick = { tap(); nav.navigate("menuOrder") },
+                shape = CuciinShape.card,
+                color = Card,
+                border = BorderStroke(1.dp, LineSoft),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Surface(shape = CuciinShape.badge, color = Mist) {
+                        Icon(Icons.Outlined.SwapVert, null, tint = Teal, modifier = Modifier.padding(10.dp).size(20.dp))
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("Atur urutan menu", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Text("Geser menu dan pindahkan ke bagian lain", color = Muted, fontSize = 12.sp, lineHeight = 16.sp)
+                    }
+                    Icon(Icons.Outlined.ChevronRight, null, tint = Line, modifier = Modifier.size(20.dp))
                 }
             }
         }
-        items(items.filter { it.second != "profil" }.chunked(columns)) { group ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
-                group.forEach { (label, route) ->
-                    Surface(onClick = { tap(); nav.navigate(route) }, modifier = Modifier.weight(1f).fillMaxHeight(), color = Card, shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, LineSoft)) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Icon(when (route) {
-                                "analytics" -> Icons.Outlined.BarChart
-                                "branches" -> Icons.Outlined.Storefront
-                                "users" -> Icons.Outlined.Badge
-                                "services" -> Icons.Outlined.LocalLaundryService
-                                "products" -> Icons.Outlined.Inventory2
-                                "inventory" -> Icons.Outlined.PrecisionManufacturing
-                                "expenses" -> Icons.Outlined.ReceiptLong
-                                "attendance" -> Icons.Outlined.Fingerprint
-                                "customers" -> Icons.Outlined.PeopleOutline
-                                "cash" -> Icons.Outlined.AccountBalanceWallet
-                                "audit" -> Icons.Outlined.History
-                                "versions" -> Icons.Outlined.Info
-                                else -> Icons.Outlined.Forum
-                            }, null, tint = Teal, modifier = Modifier.size(28.dp))
-                            Text(label, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                            Text(when (route) {
-                                "analytics" -> "Periode, rincian, dan keuangan"
-                                "branches" -> "Lokasi dan tim cabang"
-                                "users" -> "Peran dan persetujuan"
-                                "services" -> "Layanan dan tarif"
-                                "products" -> "Katalog persediaan"
-                                "inventory" -> "Mesin, alat, dan barang"
-                                "expenses" -> "Pengeluaran per cabang"
-                                "attendance" -> "Jam masuk dan pulang per cabang"
-                                "customers" -> "Kontak pelanggan"
-                                "cash" -> "Rekap akhir giliran"
-                                "audit" -> "Aktivitas operasional"
-                                "versions" -> "Pembaruan Cuciin"
-                                else -> "Pengiriman nota"
-                            }, fontSize = 12.sp, color = Muted, lineHeight = 17.sp)
+        sections.forEach { (title, entries) ->
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SectionLabel(title)
+                    ListCard {
+                        entries.forEachIndexed { index, entry ->
+                            ModuleRow(entry.label, entry.summary, menuIcon(entry.icon)) { tap(); nav.navigate(entry.route) }
+                            if (index < entries.lastIndex) RowDivider()
                         }
                     }
                 }
-                repeat(columns - group.size) { Spacer(Modifier.weight(1f)) }
             }
         }
         if (role == Role.Owner) item { GhostBtn("Ekspor semua data (JSON)", icon = Icons.Outlined.FileDownload) { FileExports.shareAllData(ctx, store.exportSnapshot()) } }
         item { GhostBtn("Keluar dari akun", icon = Icons.Outlined.Logout) { store.logout(); nav.navigate("login") { popUpTo(0) } } }
+    }
+}
+
+/**
+ * Izin satu rute. Menu yang butuh izin Owner diperiksa lewat modul owner, sisanya lewat
+ * modulnya sendiri. Rute yang tidak punya modul (akun, tema, versi) selalu boleh.
+ */
+internal fun routeAllowed(route: String): Boolean = when (route) {
+    "attendance" -> store.canAccess("attendance")
+    "analytics", "analyticsReport", "branches", "users", "services", "products", "audit", "ownerSettings", "accessRoles" -> store.canAccess("owner")
+    "inventory" -> store.canAccess("inventory")
+    "expenses" -> store.canAccess("expense")
+    "customers" -> store.canAccess("customer")
+    "wa", "waArchive" -> store.canAccess("whatsapp")
+    "cash" -> store.canAccess("cash")
+    "queue" -> store.canAccess("queue")
+    "service" -> store.canAccess("service")
+    else -> true
+}
+
+/** Nama ikon di katalog dipetakan ke ikon sungguhan di sini supaya katalognya tetap murni. */
+internal fun menuIcon(name: String): ImageVector = when (name) {
+    "ListAlt" -> Icons.Outlined.ListAlt
+    "AddCircleOutline" -> Icons.Outlined.AddCircleOutline
+    "Fingerprint" -> Icons.Outlined.Fingerprint
+    "PrecisionManufacturing" -> Icons.Outlined.PrecisionManufacturing
+    "ReceiptLong" -> Icons.Outlined.ReceiptLong
+    "AccountBalanceWallet" -> Icons.Outlined.AccountBalanceWallet
+    "PeopleOutline" -> Icons.Outlined.PeopleOutline
+    "ScheduleSend" -> Icons.Outlined.ScheduleSend
+    "Forum" -> Icons.Outlined.Forum
+    "BarChart" -> Icons.Outlined.BarChart
+    "Insights" -> Icons.Outlined.Insights
+    "History" -> Icons.Outlined.History
+    "Storefront" -> Icons.Outlined.Storefront
+    "Badge" -> Icons.Outlined.Badge
+    "LocalLaundryService" -> Icons.Outlined.LocalLaundryService
+    "Inventory2" -> Icons.Outlined.Inventory2
+    "AdminPanelSettings" -> Icons.Outlined.AdminPanelSettings
+    "Settings" -> Icons.Outlined.Settings
+    else -> Icons.Outlined.ChevronRight
+}
+
+@Composable
+private fun ModuleRow(title: String, detail: String, icon: ImageVector, onClick: () -> Unit) {
+    Surface(onClick = onClick, color = Card, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(shape = CuciinShape.badge, color = Mist) {
+                Icon(icon, null, tint = Teal, modifier = Modifier.padding(10.dp).size(20.dp))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(detail, color = Muted, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            Icon(Icons.Outlined.ChevronRight, null, tint = Line, modifier = Modifier.size(20.dp))
+        }
     }
 }
 
@@ -213,7 +227,7 @@ private fun PeriodSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, shape = CuciinShape.hero) {
         Column(Modifier.fillMaxWidth().padding(bottom = 28.dp)) {
             Text("Pilih periode", modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp), fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.3).sp, color = Ink)
-            Eyebrow("Cepat").also { }
+            Eyebrow("Cepat", Modifier.padding(start = 20.dp, end = 20.dp))
             Column(Modifier.padding(horizontal = 8.dp)) {
                 quick.forEach { (id, label) ->
                     val chosen = !customRange && currentPeriod == id
@@ -272,16 +286,24 @@ internal fun AnalyticsScreen(nav: NavHostController) {
     var customRange by rememberSaveable { mutableStateOf(false) }
     var fromValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).withHour(0).withMinute(0))) }
     var untilValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59))) }
-    var handlerFilter by rememberSaveable { mutableStateOf("all") }
+    var selectedHandlerIds by rememberSaveable { mutableStateOf(emptySet<String>()) }
+    var selectedSections by rememberSaveable { mutableStateOf(setOf("ringkasan")) }
     var showPeriodSheet by rememberSaveable { mutableStateOf(false) }
     var showBranchSheet by rememberSaveable { mutableStateOf(false) }
     var showHandlerSheet by rememberSaveable { mutableStateOf(false) }
+    var showReportSheet by rememberSaveable { mutableStateOf(false) }
     val from = DisplayDates.parse(fromValue) ?: LocalDateTime.now(Clock.ZONE).withHour(0).withMinute(0)
     val until = DisplayDates.parse(untilValue) ?: LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59)
     val selectedBranches = store.reportBranchIds.value
+    fun reportName(email: String, snapshotName: String): String = reportStaffDisplayName(store.staff, email, snapshotName)
     val baseRows = if (customRange) store.notas.filter { DisplayDates.isInSelectedMinute(it.createdAtMs, from, until) && (selectedBranches.isEmpty() || it.branchId in selectedBranches) } else store.periodNotas()
-    val handlers = baseRows.flatMap { nota -> nota.lines.map { it.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir } to it.handledByName.ifBlank { nota.kasir } } }.distinctBy { it.first }
-    val rows = baseRows.filter { nota -> handlerFilter == "all" || nota.lines.any { it.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir } == handlerFilter } }
+    val handlers = baseRows.flatMap { nota -> nota.lines.map { line ->
+        val email = line.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir }
+        email to reportName(email, line.handledByName.ifBlank { nota.kasir })
+    } }.distinctBy { it.first }
+    val rows = baseRows.filter { nota ->
+        selectedHandlerIds.isEmpty() || nota.lines.any { it.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir } in selectedHandlerIds }
+    }
     val expenseRows = if (customRange) store.expenses.filter { DisplayDates.isInSelectedMinute(it.occurredAtMs, from, until) && (selectedBranches.isEmpty() || it.branchId in selectedBranches) } else store.periodExpenses()
     val omzet = store.omzet(rows)
     val masuk = store.collected(rows)
@@ -297,9 +319,9 @@ internal fun AnalyticsScreen(nav: NavHostController) {
         append("${rows.size} Service")
         append(" · ")
         append(if (selectedBranches.isEmpty()) "${store.branches.size} cabang" else "${selectedBranches.size} cabang dipilih")
-        if (handlerFilter != "all") {
-            val nama = handlers.firstOrNull { it.first == handlerFilter }?.second ?: handlerFilter
-            append(" · petugas $nama")
+        if (selectedHandlerIds.isNotEmpty()) {
+            append(" · ")
+            append("${selectedHandlerIds.size} petugas dipilih")
         }
     }
     // Laporan dipecah per bagian supaya pengguna tidak menggulir seluruh isi
@@ -311,211 +333,102 @@ internal fun AnalyticsScreen(nav: NavHostController) {
         "petugas" to "Komisi petugas",
         "rincian" to "Rincian",
     )
-    var section by rememberSaveable { mutableStateOf("ringkasan") }
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(ui.gap)) {
-        item {
-            ScreenHeader("Laporan transaksi", null, onBack = { nav.popBackStack() }) {
-                GhostBtn("PDF", Modifier.width(96.dp), enabled = !customRange || !until.isBefore(from), icon = Icons.Outlined.PictureAsPdf) { FileExports.shareFinancialPdf(ctx, rows, expenseRows, rangeLabel) }
-            }
+    val selectedSectionLabels = sections.filter { it.first in selectedSections }.map { it.second }
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = ui.pad),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ScreenHeader("Laporan transaksi", null, onBack = { nav.popBackStack() }) {
+            GhostBtn("PDF", Modifier.width(96.dp), enabled = !customRange || !until.isBefore(from), icon = Icons.Outlined.PictureAsPdf) { FileExports.shareFinancialPdf(ctx, rows, expenseRows, rangeLabel, selectedSections) }
         }
-        item {
-            // Header menyebut data yang benar-benar diambil, bukan hanya judul.
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(rangeLabel, fontSize = 19.sp, lineHeight = 25.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.4).sp, color = Ink)
-                Text(summaryLine, color = Muted, fontSize = 13.sp, lineHeight = 18.sp)
-            }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(rangeLabel, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.ExtraBold, color = Ink)
+            Text(summaryLine, color = Muted, fontSize = 12.sp, lineHeight = 16.sp)
         }
-        item {
-            // Filter periode, cabang, dan petugas dalam satu bilah, bukan deretan kartu.
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterBar(
-                    label = "Periode",
-                    value = if (customRange) "Rentang sendiri" else periodLabel,
-                    detail = rangeLabel,
-                    icon = Icons.Outlined.CalendarMonth,
-                    onClick = { showPeriodSheet = true },
-                )
+        FilterBarRow(
+            left = {
+                FilterBar(label = "Periode", value = if (customRange) "Rentang sendiri" else periodLabel, detail = rangeLabel, icon = Icons.Outlined.CalendarMonth, onClick = { showPeriodSheet = true }, modifier = Modifier.fillMaxWidth())
+            },
+            right = {
                 FilterBar(
                     label = "Cabang",
-                    value = if (selectedBranches.isEmpty()) "Semua cabang" else "${selectedBranches.size} cabang dipilih",
-                    detail = if (selectedBranches.isEmpty()) "${store.branches.size} cabang tersedia" else selectedBranches.joinToString { branchName(it) },
+                    value = if (selectedBranches.isEmpty()) "Semua cabang" else "${selectedBranches.size} dipilih",
+                    detail = if (selectedBranches.isEmpty()) "${store.branches.size} cabang" else selectedBranches.joinToString { branchName(it) },
                     icon = Icons.Outlined.Storefront,
                     onClick = { showBranchSheet = true },
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                if (handlers.size > 1) {
-                    FilterBar(
-                        label = "Petugas layanan",
-                        value = if (handlerFilter == "all") "Semua petugas" else (handlers.firstOrNull { it.first == handlerFilter }?.second ?: handlerFilter),
-                        detail = "${handlers.size} petugas menangani periode ini",
-                        icon = Icons.Outlined.Badge,
-                        onClick = { showHandlerSheet = true },
-                    )
+            },
+        )
+        FilterBarRow(
+            left = {
+                if (handlers.size > 1) FilterBar(
+                    label = "Petugas",
+                    value = if (selectedHandlerIds.isEmpty()) "Semua petugas" else "${selectedHandlerIds.size} dipilih",
+                    detail = "${handlers.size} petugas menangani periode ini",
+                    icon = Icons.Outlined.Badge,
+                    onClick = { showHandlerSheet = true },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            right = {
+                FilterBar(
+                    label = "Tampilan",
+                    value = selectedSectionLabels.joinToString().ifBlank { "Pilih tampilan" },
+                    detail = "Bisa pilih lebih dari satu",
+                    icon = Icons.Outlined.ViewList,
+                    onClick = { showReportSheet = true },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+        )
+        if (customRange) {
+            Surface(color = Card, shape = CuciinShape.card, border = BorderStroke(1.dp, Line)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    DateTimeFields(from, { fromValue = DisplayDates.encode(it) }, "Mulai")
+                    DateTimeFields(until, { untilValue = DisplayDates.encode(it) }, "Sampai")
+                    if (until.isBefore(from)) Text("Waktu akhir harus setelah waktu mulai.", color = com.cuciin.laundryops.ui.theme.Coral, fontSize = 12.sp)
                 }
             }
         }
-        if (showPeriodSheet) item {
-            PeriodSheet(
-                currentPeriod = period,
-                customRange = customRange,
-                branches = store.branches,
-                selectedBranches = store.reportBranchIds.value,
-                onDismiss = { showPeriodSheet = false },
-                onPickPeriod = { id -> customRange = false; store.reportPeriod.value = id; store.touchStatus(); showPeriodSheet = false },
-                onPickCustom = { customRange = true; showPeriodSheet = false },
-                onToggleBranch = { id ->
-                    val current = store.reportBranchIds.value
-                    store.reportBranchIds.value = if (id in current) current - id else current + id
-                    store.touchStatus()
-                },
-                onClearBranches = { store.reportBranchIds.value = emptySet(); store.touchStatus() },
-            )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(selectedSectionLabels.joinToString().ifBlank { "Hasil laporan" }, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text("${rows.size} Service", color = Muted, fontSize = 12.sp)
         }
-        if (customRange) item {
-            CardBlock {
-                SectionLabel("Interval transaksi")
-                DateTimeFields(from, { fromValue = DisplayDates.encode(it) }, "Mulai")
-                DateTimeFields(until, { untilValue = DisplayDates.encode(it) }, "Sampai")
-                if (until.isBefore(from)) Text("Waktu akhir harus setelah waktu mulai.", color = com.cuciin.laundryops.ui.theme.Coral, fontSize = 12.sp)
-            }
+        ReportListBox(
+            modifier = Modifier.weight(1f),
+            sections = selectedSections,
+            rows = rows,
+            expenseRows = expenseRows,
+            staff = store.staff,
+            branchName = ::branchName,
+            omzet = omzet,
+            masuk = masuk,
+            biaya = biaya,
+            operations = operations,
+            onOpen = { nav.navigate("queue/$it") },
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PrimaryBtn("Ekspor PDF", Modifier.weight(1f), enabled = !customRange || !until.isBefore(from), icon = Icons.Outlined.PictureAsPdf) { FileExports.shareFinancialPdf(ctx, rows, expenseRows, rangeLabel, selectedSections) }
+            GhostBtn("CSV", Modifier.weight(1f), enabled = !customRange || !until.isBefore(from), icon = Icons.Outlined.TableView) { FileExports.shareFinancial(ctx, rows, expenseRows, selectedSections) }
         }
-        item {
-            // Pemilih bagian laporan: satu bagian tampil, sisanya tidak menumpuk di bawah.
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                sections.forEach { (id, label) ->
-                    SelectChip(section == id, label) { section = id }
-                }
-            }
-        }
-
-        when (section) {
-            "cabang" -> {
-                if (rows.isEmpty()) item { EmptyHint("Belum ada transaksi", "Tidak ada Service pada cabang dan periode yang dipilih.") }
-                else item {
-                    // Daftar baris, bukan tumpukan kartu, supaya puluhan cabang tetap terbaca.
-                    val groups = rows.groupBy { it.branchId }.toList()
-                    ListCard {
-                        groups.forEachIndexed { index, (branchId, branchRows) ->
-                            val branchCost = expenseRows.filter { it.branchId == branchId }.sumOf { it.amount }
-                            val namaCabang = store.branches.firstOrNull { it.id == branchId }?.name ?: "Cabang $branchId"
-                            ListRow(
-                                mark = namaCabang.removePrefix("Cuciin ").take(3),
-                                title = namaCabang,
-                                detail = "${branchRows.size} Service · omzet ${rp(branchRows.sumOf { it.total })} · masuk ${rp(branchRows.sumOf { it.paid })} · biaya ${rp(branchCost)}",
-                                trailing = {
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        Text(rp(branchRows.sumOf { it.paid } - branchCost), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Ink)
-                                        Text("hasil kas", color = Muted, fontSize = 11.sp)
-                                    }
-                                },
-                                showChevron = false,
-                            )
-                            if (index < groups.lastIndex) RowDivider()
-                        }
-                    }
-                }
-            }
-            "kasir" -> {
-                if (rows.isEmpty()) item { EmptyHint("Belum ada transaksi", "Tidak ada Service pada cabang dan periode yang dipilih.") }
-                else item {
-                    // Dikelompokkan per email kasir: nama bisa berubah, email tidak.
-                    val kasirGroups = rows.groupBy { it.kasirEmail.ifBlank { it.kasir } }.toList()
-                    ListCard {
-                        kasirGroups.forEachIndexed { index, (key, kasirRows) ->
-                            val namaKasir = kasirRows.first().kasir
-                            val cabangKasir = kasirRows.map { branchName(it.branchId) }.distinct()
-                            ListRow(
-                                mark = namaKasir,
-                                title = namaKasir,
-                                detail = "${kasirRows.size} Service · ${cabangKasir.joinToString()} · masuk ${rp(kasirRows.sumOf { it.paid })}",
-                                trailing = { Text(rp(store.omzet(kasirRows)), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Ink) },
-                                showChevron = false,
-                            )
-                            if (index < kasirGroups.lastIndex) RowDivider()
-                        }
-                    }
-                }
-            }
-            "petugas" -> {
-                val handledRows = rows.flatMap { nota -> nota.lines.map { line -> Triple(nota, line, (line.qty * line.commissionPerUnit).toInt()) } }
-                if (handledRows.isEmpty()) item { EmptyHint("Rincian petugas belum tersedia", "Service lama tetap masuk laporan transaksi, tetapi belum memiliki petugas per layanan.") }
-                else item {
-                    val handlerGroups = handledRows.groupBy { (nota, line, _) -> "${nota.branchId}|${line.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir }}" }.toList()
-                    ListCard {
-                        handlerGroups.forEachIndexed { index, (_, group) ->
-                            val first = group.first()
-                            val nota = first.first
-                            val petugas = first.second.handledByName.ifBlank { nota.kasir }
-                            val services = group.groupBy { it.second.name }.map { (service, serviceRows) ->
-                                val qty = serviceRows.sumOf { it.second.qty }
-                                val unit = serviceRows.first().second.unit
-                                val omzetLayanan = serviceRows.sumOf { (it.second.qty * it.second.unitPrice).toInt() }
-                                "$service ${if (qty % 1.0 == 0.0) qty.toInt() else qty} $unit (${rp(omzetLayanan)})"
-                            }.joinToString(", ")
-                            ListRow(
-                                mark = petugas,
-                                title = petugas,
-                                detail = listOf(
-                                    branchName(nota.branchId),
-                                    services,
-                                    "${group.map { it.first.id }.distinct().size} Service ditangani",
-                                ).filter { it.isNotBlank() }.joinToString(" · "),
-                                showChevron = false,
-                                trailing = { Chip("Komisi ${rp(group.sumOf { it.third })}", Green) },
-                            )
-                            if (index < handlerGroups.lastIndex) RowDivider()
-                        }
-                    }
-                }
-            }
-            "rincian" -> {
-                if (rows.isEmpty()) item { EmptyHint("Belum ada transaksi", "Tidak ada Service pada cabang dan periode yang dipilih.") }
-                else items(rows.sortedByDescending { it.createdAtMs }, key = { it.id }) { nota ->
-                    TransactionReportRow(nota, ::branchName) { nav.navigate("queue/$it") }
-                }
-            }
-            else -> {
-                item { Hero("Omzet Service", rp(omzet), listOf("masuk kas ${rp(masuk)}", "biaya ${rp(biaya)}", "hasil kas ${rp(labaKas)}")) }
-                item { RevenueChart(points) }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        AnalyticsKpi("Transaksi", rows.size.toString(), Modifier.weight(1f))
-                        AnalyticsKpi("Rata-rata", if (rows.isEmpty()) "Rp 0" else rp(omzet / rows.size), Modifier.weight(1f))
-                    }
-                }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        AnalyticsKpi("Kas tertagih", if (omzet == 0) "0%" else "${(masuk.toLong() * 100 / omzet).coerceIn(0, 100)}%", Modifier.weight(1f))
-                        AnalyticsKpi("Biaya operasional", rp(biaya), Modifier.weight(1f))
-                    }
-                }
-                item {
-                    CardBlock {
-                        SectionLabel("Kondisi operasional")
-                        Text("${operations.overdue} terlambat · ${operations.dueToday} jatuh tempo hari ini", color = if (operations.overdue > 0) com.cuciin.laundryops.ui.theme.Coral else Muted)
-                        Text("${operations.readyForPickup} siap diambil · ${operations.unpaid} belum lunas", color = Muted)
-                    }
-                }
-                item {
-                    CardBlock {
-                        SectionLabel("Penerimaan per metode")
-                        PayMethod.entries.forEach { method ->
-                            val amount = rows.filter { it.payMethod == method }.sumOf { it.paid }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(method.label, color = Muted)
-                                Text(rp(amount), fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PrimaryBtn("Ekspor PDF", Modifier.weight(1f), enabled = !customRange || !until.isBefore(from), icon = Icons.Outlined.PictureAsPdf) { FileExports.shareFinancialPdf(ctx, rows, expenseRows, rangeLabel) }
-                GhostBtn("Ekspor CSV", Modifier.weight(1f), enabled = !customRange || !until.isBefore(from), icon = Icons.Outlined.TableView) { FileExports.shareFinancial(ctx, rows, expenseRows) }
-            }
-        }
-        item { Spacer(Modifier.height(16.dp)) }
+    }
+    if (showPeriodSheet) {
+        PeriodSheet(
+            currentPeriod = period,
+            customRange = customRange,
+            branches = store.branches,
+            selectedBranches = store.reportBranchIds.value,
+            onDismiss = { showPeriodSheet = false },
+            onPickPeriod = { id -> customRange = false; store.reportPeriod.value = id; store.touchStatus(); showPeriodSheet = false },
+            onPickCustom = { customRange = true; showPeriodSheet = false },
+            onToggleBranch = { id ->
+                val current = store.reportBranchIds.value
+                store.reportBranchIds.value = if (id in current) current - id else current + id
+                store.touchStatus()
+            },
+            onClearBranches = { store.reportBranchIds.value = emptySet(); store.touchStatus() },
+        )
     }
     if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -537,13 +450,114 @@ internal fun AnalyticsScreen(nav: NavHostController) {
     if (showHandlerSheet) ModalBottomSheet(onDismissRequest = { showHandlerSheet = false }) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Pilih petugas", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
-            FilterSheetRow(handlerFilter == "all", "Semua petugas", "${handlers.size} petugas") { handlerFilter = "all"; showHandlerSheet = false }
+            Text("Bisa pilih lebih dari satu. Kosong berarti semua petugas.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp))
+            FilterSheetRow(selectedHandlerIds.isEmpty(), "Semua petugas", "${handlers.size} petugas") { selectedHandlerIds = emptySet(); store.touchStatus() }
             ListDivider()
             handlers.forEach { (key, name) ->
-                FilterSheetRow(handlerFilter == key, name, null) { handlerFilter = key; showHandlerSheet = false }
+                FilterSheetRow(key in selectedHandlerIds, name, null) {
+                    selectedHandlerIds = if (key in selectedHandlerIds) selectedHandlerIds - key else selectedHandlerIds + key
+                    store.touchStatus()
+                }
+            }
+            PrimaryBtn("Selesai", Modifier.padding(horizontal = 18.dp, vertical = 8.dp)) { showHandlerSheet = false }
+        }
+    }
+    if (showReportSheet) ModalBottomSheet(onDismissRequest = { showReportSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Tampilan laporan", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            Text("Pilih satu atau lebih bagian yang ingin dibaca dalam box laporan.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp))
+            sections.forEach { (id, label) ->
+                FilterSheetRow(id in selectedSections, label, null) {
+                    selectedSections = if (id in selectedSections) selectedSections - id else selectedSections + id
+                }
+            }
+            PrimaryBtn("Terapkan", Modifier.padding(horizontal = 18.dp, vertical = 8.dp), enabled = selectedSections.isNotEmpty()) { showReportSheet = false }
+        }
+    }
+}
+
+@Composable
+private fun ReportListBox(
+    modifier: Modifier,
+    sections: Set<String>,
+    rows: List<Nota>,
+    expenseRows: List<com.cuciin.laundryops.data.Expense>,
+    staff: List<Staff>,
+    branchName: (String) -> String,
+    omzet: Int,
+    masuk: Int,
+    biaya: Int,
+    operations: OperationalCounts,
+    onOpen: (String) -> Unit,
+) {
+    Surface(modifier = modifier.fillMaxWidth(), color = Card, shape = CuciinShape.card, border = BorderStroke(1.dp, Line)) {
+        if (sections.isEmpty()) {
+            EmptyHint("Pilih tampilan laporan", "Pilih minimal satu bagian melalui filter Tampilan laporan.")
+        } else LazyColumn(contentPadding = PaddingValues(vertical = 4.dp)) {
+            fun heading(text: String) = item { Text(text, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Ink, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) }
+            if ("ringkasan" in sections) {
+                heading("Ringkasan")
+                item { ListRow("OMZ", "Omzet Service", "${rows.size} Service", trailing = { Text(rp(omzet), fontWeight = FontWeight.Bold, color = Ink) }, showChevron = false) }
+                item { ListRow("KAS", "Kas diterima", "Biaya ${rp(biaya)} · hasil kas ${rp(masuk - biaya)}", trailing = { Text(rp(masuk), fontWeight = FontWeight.Bold, color = Ink) }, showChevron = false) }
+                item { ListRow("OPS", "Kondisi operasional", "${operations.overdue} terlambat · ${operations.readyForPickup} siap diambil · ${operations.unpaid} belum lunas", showChevron = false) }
+                item { ListDivider() }
+            }
+            if ("cabang" in sections) {
+                heading("Per cabang")
+                val groups = rows.groupBy { it.branchId }.toList()
+                if (groups.isEmpty()) item { EmptyHint("Belum ada transaksi", "Tidak ada Service pada cabang dan periode yang dipilih.") }
+                else items(groups, key = { it.first }) { (branchId, branchRows) ->
+                    val branchCost = expenseRows.filter { it.branchId == branchId }.sumOf { it.amount }
+                    val name = branchName(branchId)
+                    ListRow(name.take(3), name, "${branchRows.size} Service · masuk ${rp(branchRows.sumOf { it.paid })} · biaya ${rp(branchCost)}", trailing = { Text(rp(branchRows.sumOf { it.paid } - branchCost), fontWeight = FontWeight.Bold, color = Ink) }, showChevron = false)
+                    ListDivider()
+                }
+            }
+            if ("kasir" in sections) {
+                heading("Per kasir")
+                val groups = rows.groupBy { it.kasirEmail.ifBlank { it.kasir } }.toList()
+                if (groups.isEmpty()) item { EmptyHint("Belum ada transaksi", "Tidak ada Service pada kasir dan periode yang dipilih.") }
+                else items(groups, key = { it.first }) { (email, kasirRows) ->
+                    val name = reportStaffDisplayName(staff, email, kasirRows.first().kasir)
+                    ListRow(name, name, "${kasirRows.size} Service · ${kasirRows.map { branchName(it.branchId) }.distinct().joinToString()} · masuk ${rp(kasirRows.sumOf { it.paid })}", trailing = { Text(rp(kasirRows.sumOf { it.total }), fontWeight = FontWeight.Bold, color = Ink) }, showChevron = false)
+                    ListDivider()
+                }
+            }
+            if ("petugas" in sections) {
+                heading("Komisi petugas")
+                val groups = rows.flatMap { nota -> nota.lines.map { line -> Triple(nota, line, (line.qty * line.commissionPerUnit).toInt()) } }
+                    .groupBy { (nota, line, _) -> "${nota.branchId}|${line.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir }}" }.toList()
+                if (groups.isEmpty()) item { EmptyHint("Rincian petugas belum tersedia", "Service lama belum memiliki petugas per layanan.") }
+                else items(groups, key = { it.first }) { (_, group) ->
+                    val first = group.first()
+                    val email = first.second.handledByEmail.ifBlank { first.first.kasirEmail }.ifBlank { first.first.kasir }
+                    val name = reportStaffDisplayName(staff, email, first.second.handledByName.ifBlank { first.first.kasir })
+                    ListRow(name, name, "${branchName(first.first.branchId)} · ${group.map { it.first.id }.distinct().size} Service ditangani", trailing = { Text(rp(group.sumOf { it.third }), fontWeight = FontWeight.Bold, color = Ink) }, showChevron = false)
+                    ListDivider()
+                }
+            }
+            if ("rincian" in sections) {
+                heading("Rincian transaksi")
+                if (rows.isEmpty()) item { EmptyHint("Belum ada transaksi", "Tidak ada Service pada filter yang dipilih.") }
+                else items(rows.sortedByDescending { it.createdAtMs }, key = { it.id }) { nota ->
+                    ReportTransactionListRow(nota, branchName, staff) { onOpen(nota.id) }
+                    ListDivider()
+                }
             }
         }
     }
+}
+
+@Composable
+private fun ReportTransactionListRow(nota: Nota, branchName: (String) -> String, staff: List<Staff>, onOpen: () -> Unit) {
+    val kasir = reportStaffDisplayName(staff, nota.kasirEmail.ifBlank { nota.kasir }, nota.kasir)
+    ListRow(
+        mark = nota.id.takeLast(4),
+        title = nota.customer,
+        detail = "${nota.id} · ${branchName(nota.branchId)} · $kasir · ${nota.pay.label}",
+        trailing = { Text(rp(nota.total), fontWeight = FontWeight.Bold, color = Ink, fontSize = 13.sp) },
+        onClick = onOpen,
+    )
 }
 
 @Composable
@@ -556,8 +570,12 @@ private fun AnalyticsKpi(label: String, value: String, modifier: Modifier = Modi
     }
 }
 
+internal fun reportStaffDisplayName(staff: List<Staff>, email: String, snapshotName: String): String =
+    com.cuciin.laundryops.data.staffDisplayName(staff, email, snapshotName)
+
 @Composable
-private fun TransactionReportRow(nota: Nota, branchName: (String) -> String, onOpen: (String) -> Unit) {
+private fun TransactionReportRow(nota: Nota, branchName: (String) -> String, staff: List<Staff>, onOpen: (String) -> Unit) {
+    val kasir = reportStaffDisplayName(staff, nota.kasirEmail.ifBlank { nota.kasir }, nota.kasir)
     CardBlock(Modifier.clickable { onOpen(nota.id) }) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(nota.id, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink, modifier = Modifier.weight(1f))
@@ -565,14 +583,16 @@ private fun TransactionReportRow(nota: Nota, branchName: (String) -> String, onO
         }
         Text(nota.customer, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Ink)
         Text(
-            listOf(nota.createdAt, branchName(nota.branchId), nota.kasir).filter { it.isNotBlank() }.joinToString(" · "),
+            listOf(nota.createdAt, branchName(nota.branchId), kasir).filter { it.isNotBlank() }.joinToString(" · "),
             color = Muted,
             fontSize = 12.sp,
             lineHeight = 17.sp,
         )
         if (nota.lines.isNotEmpty()) {
             Text(nota.lines.joinToString { "${it.name} ${if (it.qty % 1.0 == 0.0) it.qty.toInt() else it.qty} ${it.unit}" }, color = Ink, fontSize = 13.sp, lineHeight = 18.sp)
-            val handlers = nota.lines.map { it.handledByName.ifBlank { nota.kasir } }.distinct().joinToString()
+            val handlers = nota.lines.map { line ->
+                reportStaffDisplayName(staff, line.handledByEmail.ifBlank { nota.kasirEmail }.ifBlank { nota.kasir }, line.handledByName.ifBlank { kasir })
+            }.distinct().joinToString()
             val commission = nota.lines.sumOf { (it.qty * it.commissionPerUnit).toInt() }
             Text("Petugas $handlers · komisi ${rp(commission)}", color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
         }
@@ -623,11 +643,18 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
                 Text("Piutang  ${rp(store.piutang(store.notas.filter { bid == "all" || it.branchId == bid }))}")
             }
         }
-        item {
-            PrimaryBtn("Tutup shift") {
-                val row = store.closeCash()
-                toast("Kas ditutup ${row.at}")
-                nav.popBackStack()
+        if (bid == "all") {
+            item { EmptyHint("Pilih satu cabang", "Tutup kas dibuat per cabang agar penerimaan dan piutang tidak tercampur.") }
+        } else {
+            item {
+                PrimaryBtn("Tutup kas hari ini") {
+                    val row = store.closeCash()
+                    if (row == null) toast("Kas cabang ini sudah ditutup hari ini")
+                    else {
+                        toast("Kas ditutup ${row.at}")
+                        nav.popBackStack()
+                    }
+                }
             }
         }
         if (store.cashCloses.isNotEmpty()) {
@@ -647,7 +674,6 @@ internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
     val s = store.session.value ?: return
     val account = store.staff.firstOrNull { it.email.equals(s.email, true) }
     val assignedBranches = account?.branchIds.orEmpty().mapNotNull { id -> store.branches.firstOrNull { it.id == id }?.name }
-    var themeMode by remember { mutableStateOf(ThemePrefs.mode) }
     var changePassword by remember { mutableStateOf(false) }
     var changeEmail by remember { mutableStateOf(false) }
     var newEmail by remember { mutableStateOf(s.email) }
@@ -708,18 +734,7 @@ internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
         }
-        item {
-            CardBlock {
-                SectionLabel("Tema tampilan")
-                Text("Berlaku untuk akun ini di HP ini saja, tidak ikut tersinkron ke perangkat lain.", color = Muted, fontSize = 12.sp)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CuciinThemeMode.entries.forEach { option ->
-                        SelectChip(themeMode == option, option.label) { ThemePrefs.set(option); themeMode = ThemePrefs.mode }
-                    }
-                }
-                Text("Contoh teks dan kartu memakai warna tema ini: ${paletteSampleLabel(themeMode)}.", color = Muted, fontSize = 12.sp)
-            }
-        }
+        item { GhostBtn("Theme Aplikasi", icon = Icons.Outlined.Colorize) { nav.navigate("theme") } }
         item { CardBlock { InfoRow(Icons.Outlined.CloudSync, "Sinkronisasi", CloudSync.lastStatus); InfoRow(Icons.Outlined.Info, "Versi aplikasi", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") } }
         item { GhostBtn("Riwayat versi", icon = Icons.Outlined.History) { nav.navigate("versions") } }
         if (s.role != Role.Owner) item { DangerBtn("Hapus akun saya") { if (store.deleteMyAccount()) { toast("Akun dihapus"); nav.navigate("login") { popUpTo(0) } } } }
@@ -749,12 +764,4 @@ internal fun VersionScreen(nav: NavHostController) {
         }
         item { Spacer(Modifier.height(20.dp)) }
     }
-}
-
-/** Kalimat contoh supaya pengguna melihat tema mana yang sedang aktif tanpa menebak. */
-private fun paletteSampleLabel(mode: CuciinThemeMode): String = when (mode) {
-    CuciinThemeMode.Sistem -> "mengikuti pengaturan gelap/terang HP"
-    CuciinThemeMode.Terang -> "latar terang dengan aksen pink dan navy"
-    CuciinThemeMode.Gelap -> "latar gelap dengan aksen pink muda"
-    CuciinThemeMode.Warni -> "latar merah muda dengan aksen ungu"
 }

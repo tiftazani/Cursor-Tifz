@@ -53,13 +53,13 @@ enum class Role { Owner, Kasir, Supervisor }
 
 @Serializable
 enum class LaundryStatus(val label: String) {
-    Masuk("Masuk Antrian, dan akan dikerjakan"),
-    Progress("Masuk Antrian, dan akan dikerjakan"),
+    Masuk("Menunggu dikerjakan"),
+    Progress("Sedang dikerjakan"),
     Selesai("Selesai");
 
     val next: LaundryStatus?
         get() = when (this) {
-            Masuk -> Selesai
+            Masuk -> Progress
             Progress -> Selesai
             Selesai -> null
         }
@@ -98,6 +98,13 @@ data class Staff(
     val branchIds: List<String>,
     val approved: Boolean = true,
     val passwordHash: String = "",
+    /**
+     * Role akses yang melekat pada pengguna ini.
+     *
+     * Kosong berarti memakai role bawaan sesuai [role] lama, sehingga data sebelum fitur
+     * Kontrol Akses Role tetap bekerja tanpa migrasi khusus.
+     */
+    val accessRoleId: String = "",
 )
 
 @Serializable
@@ -241,6 +248,16 @@ enum class InventoryStatus(val label: String) {
 }
 
 @Serializable
+data class AssetType(
+    val id: String,
+    /** Kode pendek yang membentuk Aset ID, misalnya MC untuk mesin cuci. */
+    val code: String,
+    val name: String,
+    /** Jenis yang sudah dipakai aset tidak dihapus, hanya dinonaktifkan. */
+    val active: Boolean = true,
+)
+
+@Serializable
 data class InventoryItem(
     val id: String,
     val branchId: String,
@@ -254,6 +271,12 @@ data class InventoryItem(
     val purchaseAt: String = "",
     val notes: String = "",
     val sellable: Boolean = false,
+    /** ID jenis aset dari katalog. Kosong untuk data lama yang masih memakai kategori bawaan. */
+    val assetTypeId: String = "",
+    /** Aset ID yang dibuat sistem: kode cabang, kode jenis, lalu nomor urut pada cabang itu. */
+    val assetCode: String = "",
+    /** Path foto di perangkat ini saja. Tidak ikut dikirim ke server. */
+    val photoPath: String = "",
 )
 
 @Serializable
@@ -322,12 +345,41 @@ data class CashClose(
     val piutang: Int,
 )
 
+/** Pembayaran append-only agar kas dihitung dari waktu uang diterima, bukan waktu nota dibuat. */
+@Serializable
+data class PaymentRecord(
+    val id: String,
+    val notaId: String,
+    val branchId: String,
+    val amount: Int,
+    val method: PayMethod,
+    val atMs: Long,
+    val at: String,
+    val by: String,
+)
+
 /** Batas modul dan fungsi tambahan milik seorang pengguna. Owner selalu memiliki akses penuh. */
 @Serializable
 data class UserAccessPolicy(
     val email: String,
     val modules: Set<String> = emptySet(),
     val functions: Set<String> = emptySet(),
+)
+
+/**
+ * Role adalah kumpulan hak akses yang dapat dipakai ulang.
+ *
+ * Setiap pengguna melekat pada satu role, dan role itulah yang menentukan modul serta fungsi
+ * yang dapat diakses. Role bawaan tidak dapat dihapus supaya peran lama tetap bekerja.
+ */
+@Serializable
+data class AccessRole(
+    val id: String,
+    val name: String,
+    val modules: Set<String> = emptySet(),
+    val functions: Set<String> = emptySet(),
+    /** Role bawaan dibuat sistem; hanya hak aksesnya yang boleh diubah. */
+    val builtIn: Boolean = false,
 )
 
 /** Pesan dapat disusun oleh Owner tanpa mengubah template nota di kode aplikasi. */
@@ -363,13 +415,18 @@ data class Snapshot(
     val products: List<Product> = emptyList(),
     val branchStocks: List<BranchStock> = emptyList(),
     val inventory: List<InventoryItem> = emptyList(),
+    /** Katalog jenis aset; dipakai sebagai filter dan pembentuk Aset ID. */
+    val assetTypes: List<AssetType> = emptyList(),
     val expenses: List<Expense> = emptyList(),
     val notas: List<Nota> = emptyList(),
     val stockMoves: List<StockMove> = emptyList(),
     val audit: List<AuditRow> = emptyList(),
     val cashCloses: List<CashClose> = emptyList(),
+    val payments: List<PaymentRecord> = emptyList(),
     val attendance: List<AttendanceRecord> = emptyList(),
     val accessPolicies: List<UserAccessPolicy> = emptyList(),
+    /** Katalog role; setiap pengguna melekat pada salah satunya. */
+    val accessRoles: List<AccessRole> = emptyList(),
     val whatsappTemplates: List<WhatsAppTemplate> = emptyList(),
     val deletedNotaIds: List<String> = emptyList(),
     val sessionEmail: String? = null,

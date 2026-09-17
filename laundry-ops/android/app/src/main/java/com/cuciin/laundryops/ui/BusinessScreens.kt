@@ -36,135 +36,6 @@ private val businessStore get() = CuciinStore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun InventoryScreen(nav: NavHostController, toast: (String) -> Unit) {
-    val ui = rememberUi()
-    val ctx = LocalContext.current
-    val session = businessStore.session.value ?: return
-    var showBranchSheet by rememberSaveable { mutableStateOf(false) }
-    businessStore.revision.intValue
-    val allowedBranches = if (session.role == Role.Owner) businessStore.branches.toList() else businessStore.branches.filter { it.id == session.branchId }
-    var branchId by rememberSaveable { mutableStateOf(session.branchId) }
-    var editing by remember { mutableStateOf<InventoryItem?>(null) }
-    var creating by rememberSaveable { mutableStateOf(false) }
-    var name by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf(InventoryCategory.MesinCuci) }
-    var brand by remember { mutableStateOf("") }
-    var serial by remember { mutableStateOf("") }
-    var quantity by remember { mutableStateOf("1") }
-    var unit by remember { mutableStateOf("unit") }
-    var status by remember { mutableStateOf(InventoryStatus.Normal) }
-    var purchaseAt by remember { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE))) }
-    var notes by remember { mutableStateOf("") }
-    var filter by remember { mutableStateOf<InventoryCategory?>(null) }
-
-    fun fill(row: InventoryItem?) {
-        editing = row
-        name = row?.name.orEmpty(); category = row?.category ?: InventoryCategory.MesinCuci
-        brand = row?.brand.orEmpty(); serial = row?.serialNumber.orEmpty(); quantity = row?.quantity?.toString() ?: "1"
-        unit = row?.unit ?: "unit"; status = row?.status ?: InventoryStatus.Normal
-        purchaseAt = row?.purchaseAt?.takeIf { DisplayDates.parse(it) != null } ?: DisplayDates.encode(LocalDateTime.now(Clock.ZONE)); notes = row?.notes.orEmpty()
-        if (row != null) branchId = row.branchId
-    }
-
-    val assetCategories = InventoryCategory.entries.filter { it !in setOf(InventoryCategory.BarangJual, InventoryCategory.BahanHabisPakai) }
-    val rows = businessStore.inventory.filter { it.branchId == branchId && it.category in assetCategories && (filter == null || it.category == filter) }
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 28.dp)) {
-        item { ScreenHeader("Aset & mesin cabang", "Mesin dan peralatan operasional; produk dan bahan ada di Produk stok", onBack = { nav.popBackStack() }) }
-        if (allowedBranches.size > 1) item {
-            FilterBar(
-                label = "Cabang",
-                value = businessStore.branch(branchId).name.removePrefix("Cuciin "),
-                detail = "Saring aset dan mesin berdasarkan satu cabang",
-                icon = Icons.Outlined.Storefront,
-                onClick = { showBranchSheet = true },
-            )
-        }
-        item {
-            CardBlock {
-                SectionLabel("Filter kategori")
-                ChipRow {
-                    SelectChip(filter == null, "Semua") { filter = null }
-                    assetCategories.forEach { value -> SelectChip(filter == value, value.label) { filter = value } }
-                }
-            }
-        }
-        if (!creating && editing == null) item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PrimaryBtn("Tambah aset", Modifier.weight(1f), icon = Icons.Outlined.Add) { creating = true; fill(null) }
-                GhostBtn("Ekspor", Modifier.weight(.65f), icon = Icons.Outlined.FileDownload) { FileExports.shareInventory(ctx, rows) }
-            }
-        }
-        if (creating || editing != null) item {
-            CardBlock(accent = Teal) {
-                SectionLabel(if (editing == null) "Aset baru" else "Ubah aset")
-                Field(name, { name = it }, "Nama aset")
-                SectionLabel("Kategori")
-                ChipRow { assetCategories.forEach { value -> SelectChip(category == value, value.label) { category = value } } }
-                Field(brand, { brand = it }, "Merek / pembuat")
-                Field(serial, { serial = it }, "Nomor seri / kode aset")
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.weight(1f)) { Field(quantity, { quantity = it.filter(Char::isDigit).take(7) }, "Jumlah", number = true) }
-                    Box(Modifier.weight(1f)) { Field(unit, { unit = it }, "Satuan") }
-                }
-                SectionLabel("Kondisi")
-                ChipRow { InventoryStatus.entries.forEach { value -> SelectChip(status == value, value.label) { status = value } } }
-                DateTimeFields(DisplayDates.parse(purchaseAt) ?: LocalDateTime.now(Clock.ZONE), { purchaseAt = DisplayDates.encode(it) }, "Tanggal beli / mulai dipakai")
-                Field(notes, { notes = it }, "Catatan lokasi, kapasitas, atau perawatan")
-                PrimaryBtn("Simpan inventory", enabled = name.isNotBlank() && (quantity.toIntOrNull() ?: -1) >= 0, icon = Icons.Outlined.Check) {
-                    val old = editing
-                    if (old == null) businessStore.addInventory(branchId, name, category, brand, serial, quantity.toIntOrNull() ?: 0, unit, status, purchaseAt, notes, sellable = false)
-                    else businessStore.updateInventory(old.copy(branchId = branchId, name = name, category = category, brand = brand, serialNumber = serial, quantity = quantity.toIntOrNull() ?: 0, unit = unit, status = status, purchaseAt = purchaseAt, notes = notes, sellable = false))
-                    toast("Aset tersimpan untuk ${businessStore.branch(branchId).name}"); creating = false; editing = null
-                }
-                if (editing != null) DangerBtn("Hapus aset") { businessStore.deleteInventory(editing!!.id)?.let(toast) ?: run { editing = null; toast("Aset dihapus") } }
-                GhostBtn("Batal") { creating = false; editing = null }
-            }
-        }
-        if (!creating && editing == null && rows.isEmpty()) item { EmptyHint("Aset belum dicatat", "Tambahkan mesin cuci, mesin pengering, peralatan, bahan, atau barang jual untuk cabang ini.") }
-        if (!creating && editing == null && rows.isNotEmpty()) item {
-            ListCard {
-                rows.forEachIndexed { index, row ->
-                    ListRow(
-                        mark = row.name,
-                        title = row.name,
-                        detail = listOf(
-                            row.category.label,
-                            row.brand.ifBlank { "tanpa merek" },
-                            "${row.quantity} ${row.unit}",
-                            row.serialNumber.takeIf(String::isNotBlank).orEmpty(),
-                            row.notes,
-                        ).filter { it.isNotBlank() }.joinToString(" · "),
-                        trailing = {
-                            Chip(
-                                row.status.label,
-                                when (row.status) {
-                                    InventoryStatus.Normal -> Green
-                                    InventoryStatus.PerluPerbaikan -> Amber
-                                    InventoryStatus.Rusak -> Coral
-                                },
-                            )
-                        },
-                        onClick = { fill(row) },
-                    )
-                    if (index < rows.lastIndex) RowDivider()
-                }
-            }
-        }
-    }
-    if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
-            allowedBranches.forEach { branch ->
-                FilterSheetRow(branch.id == branchId, branch.name, "${businessStore.inventory.count { it.branchId == branch.id }} aset tercatat") {
-                    branchId = branch.id; editing = null; creating = false; showBranchSheet = false
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
 internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val ctx = LocalContext.current
@@ -180,7 +51,7 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
     var time by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE))) }
     val parsedTime = DisplayDates.parse(time) ?: LocalDateTime.now(Clock.ZONE)
     val rows = businessStore.expenses.filter { it.branchId == branchId }.sortedByDescending { it.occurredAtMs }
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 28.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 28.dp)) {
         item { ScreenHeader("Biaya operasional", "Semua pengeluaran tercatat per cabang", onBack = { nav.popBackStack() }) }
         if (allowedBranches.size > 1) item {
             FilterBar(
@@ -299,7 +170,7 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
 
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = ui.pad),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(ui.gap),
         contentPadding = PaddingValues(bottom = 28.dp),
     ) {
         item { ScreenHeader("Absensi karyawan", "Jam masuk dan pulang tercatat per cabang", onBack = { nav.popBackStack() }) }

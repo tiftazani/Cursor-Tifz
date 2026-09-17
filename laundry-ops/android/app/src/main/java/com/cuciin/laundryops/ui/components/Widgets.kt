@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -113,6 +114,9 @@ fun Chip(text: String, color: Color) {
  * Pemilih satu nilai berbentuk bilah: label kecil, nilai aktif, dan pintasan
  * membuka lembar pilihan. Dipakai untuk cabang, kasir, periode, atau kategori
  * supaya tidak ada deretan kartu yang memakan ruang saat pilihannya banyak.
+ *
+ * Dua bilah berdampingan muat dalam satu baris di layar ponsel; nilai panjang
+ * dipotong dengan elipsis supaya tinggi bilah tidak ikut membengkak.
  */
 @Composable
 fun FilterBar(
@@ -125,47 +129,107 @@ fun FilterBar(
 ) {
     val tap = rememberTapFeedback()
     Surface(
-        modifier = modifier,
+        modifier = modifier.heightIn(min = 48.dp),
         shape = CuciinShape.field,
         color = Card,
         border = BorderStroke(1.dp, Line),
     ) {
         Row(
-            Modifier.fillMaxWidth().clickable { tap(); onClick() }.padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+            Modifier
+                .fillMaxWidth()
+                .clickable { tap(); onClick() }
+                .semantics { if (detail != null) stateDescription = detail }
+                .padding(horizontal = 12.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Muted)
-                Text(value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (detail != null) Text(detail, fontSize = 11.sp, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(label, fontSize = 11.sp, lineHeight = 13.sp, fontWeight = FontWeight.Bold, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(value, fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Surface(onClick = { tap(); onClick() }, shape = CircleShape, color = Surface2, modifier = Modifier.size(36.dp)) {
-                Box(contentAlignment = Alignment.Center) { Icon(icon, null, tint = Ink, modifier = Modifier.size(18.dp)) }
-            }
+            Icon(icon, null, tint = TealDeep, modifier = Modifier.size(18.dp))
         }
     }
 }
 
-/** Isi lembar pilihan untuk [FilterBar]: satu pilihan atau banyak pilihan. */
+/**
+ * Baris berisi beberapa [FilterBar] sejajar supaya beberapa penyaring muat dalam satu baris layar.
+ * Jumlah kolom mengikuti lebar layar: dua di ponsel sempit, tiga bila ruangnya cukup.
+ * Bila hanya ada satu bilah, bilah itu memakai lebar penuh agar tidak ada ruang kosong menganggur.
+ */
 @Composable
-fun FilterSheetRow(selected: Boolean, label: String, detail: String? = null, onClick: () -> Unit) {
+fun FilterBarRow(
+    left: @Composable RowScope.() -> Unit,
+    right: (@Composable RowScope.() -> Unit)? = null,
+    third: (@Composable RowScope.() -> Unit)? = null,
+) {
+    val ui = rememberUi()
+    if (third != null && ui.widthDp < 600) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { Row(content = left) }
+                if (right != null) Box(Modifier.weight(1f)) { Row(content = right) }
+            }
+            Row(Modifier.fillMaxWidth()) { Box(Modifier.weight(1f)) { Row(content = third) } }
+        }
+    } else {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.weight(1f)) { Row(content = left) }
+            if (right != null) Box(Modifier.weight(1f)) { Row(content = right) }
+            if (third != null) Box(Modifier.weight(1f)) { Row(content = third) }
+        }
+    }
+}
+
+/**
+ * Isi lembar pilihan untuk [FilterBar]: satu pilihan atau banyak pilihan.
+ *
+ * Bentuk penanda dibedakan menurut jenis pilihannya, bukan hanya warnanya: pilihan tunggal
+ * memakai radio, pilihan banyak memakai kotak centang. Baris yang terpilih juga diberi latar
+ * dan label "Dipilih", sehingga status pilihan tetap terbaca tanpa mengandalkan warna.
+ */
+@Composable
+fun FilterSheetRow(selected: Boolean, label: String, detail: String? = null, multiSelect: Boolean = false, onClick: () -> Unit) {
     val tap = rememberTapFeedback()
     Row(
-        Modifier.fillMaxWidth().clickable { tap(); onClick() }.padding(horizontal = 18.dp, vertical = 14.dp),
+        Modifier
+            .fillMaxWidth()
+            .background(if (selected) TealDeep.copy(alpha = .10f) else Color.Transparent)
+            .clickable { tap(); onClick() }
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .semantics { this.selected = selected },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Icon(
-            if (selected) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
-            null,
-            tint = if (selected) TealDeep else Line,
-            modifier = Modifier.size(20.dp),
-        )
+        if (multiSelect) {
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = if (selected) TealDeep else Color.Transparent,
+                border = if (selected) null else BorderStroke(1.5.dp, Line),
+                modifier = Modifier.size(22.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    if (selected) Icon(Icons.Outlined.Check, "Dipilih", tint = OnPrim, modifier = Modifier.size(16.dp))
+                }
+            }
+        } else {
+            Icon(
+                if (selected) Icons.Outlined.RadioButtonChecked else Icons.Outlined.RadioButtonUnchecked,
+                null,
+                tint = if (selected) TealDeep else Line,
+                modifier = Modifier.size(22.dp),
+            )
+        }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(label, fontSize = 15.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, color = Ink)
             if (detail != null) Text(detail, fontSize = 12.sp, color = Muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
+        if (multiSelect) Text(
+            if (selected) "Dipilih" else "Tidak dipilih",
+            color = if (selected) TealDeep else Muted,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 
@@ -294,12 +358,11 @@ fun Hero(title: String, value: String, pills: List<String>) {
  */
 @Composable
 fun CardBlock(modifier: Modifier = Modifier, accent: Color? = null, content: @Composable ColumnScope.() -> Unit) {
-    val dark = LocalCuciinPalette.current.dark
     Surface(
-        modifier.fillMaxWidth().shadow(if (dark) 0.dp else 2.dp, CuciinShape.card),
+        modifier.fillMaxWidth(),
         shape = CuciinShape.card,
         color = Card,
-        border = BorderStroke(1.dp, if (dark) LineSoft else LineSoft),
+        border = BorderStroke(1.dp, LineSoft),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (accent != null) Box(Modifier.width(28.dp).height(3.dp).clip(CircleShape).background(accent))
@@ -361,13 +424,15 @@ fun SyncNotice(modifier: Modifier = Modifier) {
 @Composable
 fun PrimaryBtn(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, icon: ImageVector? = null, onClick: () -> Unit) {
     val tap = rememberTapFeedback()
+    val source = remember { MutableInteractionSource() }
     Button(
         onClick = { tap(); onClick() },
         enabled = enabled,
-        modifier = modifier.fillMaxWidth().heightIn(min = 52.dp),
+        interactionSource = source,
+        modifier = modifier.fillMaxWidth().heightIn(min = 52.dp).pressScale(source),
         shape = CuciinShape.button,
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Teal, contentColor = OnPrim, disabledContainerColor = LineSoft, disabledContentColor = Muted),
+        colors = ButtonDefaults.buttonColors(containerColor = ButtonFill, contentColor = OnButtonFill, disabledContainerColor = LineSoft, disabledContentColor = Muted),
         contentPadding = PaddingValues(16.dp, 12.dp),
     ) {
         if (icon != null) { Icon(icon, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(9.dp)) }
@@ -379,13 +444,15 @@ fun PrimaryBtn(text: String, modifier: Modifier = Modifier, enabled: Boolean = t
 @Composable
 fun AccentBtn(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, icon: ImageVector? = null, onClick: () -> Unit) {
     val tap = rememberTapFeedback()
+    val source = remember { MutableInteractionSource() }
     Button(
         onClick = { tap(); onClick() },
         enabled = enabled,
-        modifier = modifier.fillMaxWidth().heightIn(min = 52.dp),
+        interactionSource = source,
+        modifier = modifier.fillMaxWidth().heightIn(min = 52.dp).pressScale(source),
         shape = CuciinShape.button,
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = TealDeep, contentColor = OnPrim, disabledContainerColor = LineSoft, disabledContentColor = Muted),
+        colors = ButtonDefaults.buttonColors(containerColor = TealDeep, contentColor = OnButtonFill, disabledContainerColor = LineSoft, disabledContentColor = Muted),
         contentPadding = PaddingValues(16.dp, 12.dp),
     ) {
         if (icon != null) { Icon(icon, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(9.dp)) }
@@ -397,10 +464,12 @@ fun AccentBtn(text: String, modifier: Modifier = Modifier, enabled: Boolean = tr
 @Composable
 fun GhostBtn(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, icon: ImageVector? = null, onClick: () -> Unit) {
     val tap = rememberTapFeedback()
+    val source = remember { MutableInteractionSource() }
     OutlinedButton(
         onClick = { tap(); onClick() },
         enabled = enabled,
-        modifier = modifier.fillMaxWidth().heightIn(min = 50.dp),
+        interactionSource = source,
+        modifier = modifier.fillMaxWidth().heightIn(min = 50.dp).pressScale(source),
         shape = CuciinShape.button,
         colors = ButtonDefaults.outlinedButtonColors(containerColor = Card, contentColor = Ink),
         border = BorderStroke(1.dp, if (enabled) Ink else LineSoft),
@@ -441,12 +510,13 @@ fun DangerBtn(text: String, onClick: () -> Unit) {
 }
 
 /** Label konteks singkat di atas judul utama. */
-@Composable fun Eyebrow(text: String) {
+@Composable fun Eyebrow(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
         color = TealDeep,
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
+        modifier = modifier,
     )
 }
 

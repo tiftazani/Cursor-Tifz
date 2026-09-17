@@ -12,10 +12,181 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.1"
-    val currentCode: Int = 20
+    val currentName: String = "1.10.17"
+    val currentCode: Int = 36
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.17", code = 36, date = "18 Sep 2026",
+            notes = listOf(
+                "Perbaikan: judul dan tombol di layar pembuka tidak lagi saling menimpa.",
+                "Tata letak layar pembuka disusun satu kolom supaya judul selalu duduk di atas tombol berapa pun tinggi layar.",
+                "Judul panjang kini terbungkus dua baris dengan jarak yang cukup, bukan terpotong.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.16", code = 35, date = "18 Sep 2026",
+            notes = listOf(
+                "Layar pembuka baru berisi tiga halaman: semua cabang dalam satu aplikasi, tetap jalan tanpa internet, dan akses sesuai peran.",
+                "Layar pembuka muncul sekali setelah aplikasi dipasang, dan bisa dibuka lagi lewat tautan Tentang aplikasi di halaman masuk.",
+                "Halaman login memakai kartu kaca tembus pandang, jadi wallpaper terlihat di belakangnya.",
+                "Perbaikan: bar putih di bawah halaman login hilang; wallpaper kini mencapai tepi paling bawah layar.",
+                "Tombol Daftar akun baru, Lupa kata sandi, dan Tentang aplikasi ditata ulang di halaman masuk.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.15", code = 34, date = "17 Sep 2026",
+            notes = listOf(
+                "Aplikasi versi debug kini bernama Cuciin Debug di layar HP, jadi tidak tertukar dengan versi asli.",
+                "Nama aplikasi versi rilis tetap Cuciin.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.14", code = 33, date = "17 Sep 2026",
+            notes = listOf(
+                "Perbaikan: setelah membuka Service baru dari layar Antrian, tab Antrian dan tab lain tidak lagi macet.",
+                "Perpindahan tab kini memakai satu cara yang seragam untuk semua tab, jadi tidak ada lagi tab yang diam sendiri.",
+                "Menekan tab yang sedang aktif tidak lagi menambah tumpukan layar.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.13", code = 32, date = "17 Sep 2026",
+            notes = listOf(
+                "Perbaikan: layar login tidak lagi terpotong saat keyboard terbuka; tulisan Lupa kata sandi dan tombol Daftar akun kini selalu terjangkau.",
+                "Saat keyboard muncul, isi login dipadatkan dan layar otomatis menggulir secukupnya ke kartu isian.",
+                "Saat keyboard tertutup, layar login tetap satu layar penuh tanpa gulir seperti sebelumnya.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.12", code = 31, date = "17 Sep 2026",
+            notes = listOf(
+                "Perbaikan: bar navigasi bawah kini tampil di layar Service seperti di tab lain; sebelumnya hilang hanya di sana.",
+                "Perpindahan antar layar memakai animasi geser dan pudar yang halus, bukan muncul seketika.",
+                "Tombol dan kartu mengecil sedikit saat ditekan sebagai balasan sentuhan.",
+                "Baris daftar muncul mengalir satu per satu, dibatasi beberapa baris pertama saja.",
+                "Angka pada kartu status menghitung naik saat berubah, jadi perubahan jumlah terlihat.",
+                "Semua animasi mengikuti pengaturan animasi Android: bila pengguna mematikannya, gerak ikut mati.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.11", code = 30, date = "17 Sep 2026",
+            notes = listOf(
+                "Menu Modul disusun ulang: Pekerjaan harian, Keuangan, Pelanggan, Laporan, Master data, lalu Aplikasi paling bawah.",
+                "Theme Aplikasi dan Riwayat versi pindah ke bagian Aplikasi; Riwayat versi kini di urutan paling bawah.",
+                "Menu baru Atur urutan menu untuk memindahkan urutan menu sendiri, baik dalam satu bagian maupun antar bagian.",
+                "Tiap menu punya panah naik, panah turun, dan tombol pindah bagian; tiap judul bagian punya panah untuk memindahkan seluruh bagian.",
+                "Tersedia tombol Kembalikan urutan awal untuk kembali ke susunan bawaan.",
+                "Susunan menu disimpan di HP ini saja, tidak ikut tersinkron dan tidak mengubah pengaturan HP lain.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.10", code = 29, date = "17 Sep 2026",
+            notes = listOf(
+                "Menu baru Theme Aplikasi berisi tiga pilihan: Light, Dark, dan Custom.",
+                "Light memakai latar terang dengan aksen pink, Dark memakai latar hitam dengan tulisan terang.",
+                "Custom membebaskan enam warna: warna utama, warna tombol, warna latar, warna kartu, warna teks, dan warna header.",
+                "Setiap warna diatur lewat slider R, G, B dengan nilai 0 sampai 255, kode hex, dan pratinjau yang berubah langsung.",
+                "Warna teks di atas tombol dan header dihitung otomatis dari terang gelapnya warna pilihan, jadi tulisan tetap terbaca.",
+                "Pengaturan tema pindah dari Akun & Profil ke menu Theme Aplikasi; Akun & Profil hanya menyediakan pintasan ke sana.",
+                "Pengaturan tema tidak ikut tersinkron; setiap HP menyimpan pilihannya sendiri.",
+                "Perbaikan server: entityType assetType kini dikenali saat parsing command, sehingga perintah aset tidak lagi ditolak 422 dan tertahan di perangkat.",
+                "Perbaikan: ID baris baru selalu unik, sehingga penambahan banyak data sekaligus tidak saling menimpa.",
+                "Perbaikan: catatan aktivitas tetap aman meski daftar cabang belum terisi.",
+                "Urutan menu Modul disusun ulang: Pekerjaan harian, Keuangan, Pelanggan, Laporan, Master data, lalu Aplikasi paling bawah.",
+                "Theme Aplikasi dan Riwayat versi pindah ke bagian Aplikasi; Riwayat versi kini di urutan paling bawah.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.9", code = 28, date = "17 Sep 2026",
+            notes = listOf(
+                "Filter periode di layar utama kini menyediakan pilihan dua tanggal tertentu, bukan hanya periode cepat.",
+                "Laporan transaksi, laporan analitik, dan nota pelanggan dicetak ulang mengikuti desain terbaru.",
+                "Laporan transaksi: header periode dan nomor halaman, filter aktif dalam bahasa pengguna, empat kartu metrik, rekonsiliasi berdampingan dengan tabel per cabang, lalu tabel rincian dengan sepuluh kolom.",
+                "Laporan transaksi hanya mencetak bagian yang dipilih; tabel kosong tidak lagi dipertahankan demi tata letak.",
+                "Laporan analitik: kartu metrik, tren bulanan, donut omzet per cabang dan penerimaan per metode dengan total di tengah, lalu tabel pendukung.",
+                "Persentase donut memakai satu angka desimal dan legendanya memuat swatch, nama, nominal, dan persen.",
+                "Nota pelanggan: header cabang, kapsul status terpisah, tabel layanan, ringkasan pembayaran dengan total menonjol, dan status pengerjaan.",
+                "Seluruh tabel memakai baris yang membungkus dan tinggi menyesuaikan, jadi tidak ada teks yang dipotong dengan elipsis.",
+                "Kepala tabel diulang pada halaman baru dan satu transaksi tidak pernah terpotong antarhalaman.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.8", code = 27, date = "17 Sep 2026",
+            notes = listOf(
+                "Lembar pilihan modul kini memakai kotak centang yang jelas: terisi penuh saat dipilih, kosong bergaris saat tidak.",
+                "Setiap baris menampilkan label Dipilih atau Tidak dipilih di sisi kanan, jadi status pilihan tidak lagi bergantung pada warna saja.",
+                "Baris terpilih diberi latar berbeda supaya mudah dikenali sekilas.",
+                "Lembar pilihan modul menampilkan hitungan seperti 1 dari 12 modul dipilih, plus tombol Pilih semua dan Kosongkan.",
+                "Tombol Selesai pada lembar pilihan selalu terlihat penuh; daftar yang panjang dapat digulir tanpa menutupi tombol.",
+                "Lembar pilihan tunggal memakai radio, sedangkan pilihan banyak memakai kotak centang, sehingga jenis pilihan langsung terbaca.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.7", code = 26, date = "17 Sep 2026",
+            notes = listOf(
+                "Tampilan utama memakai dua filter sebaris: periode (bawaan hari ini) dan cabang.",
+                "Di bawah filter ada tiga kartu status yang dapat diketuk: Sedang dikerjakan, Cucian telat, dan Selesai.",
+                "Cucian telat adalah pesanan yang estimasi selesainya sudah lewat tetapi pengerjaannya belum selesai.",
+                "Menu baru Kontrol Akses Role: satu pengguna melekat ke satu role, dan role menentukan modul serta fungsi yang dapat diakses.",
+                "Setiap modul menampilkan daftar fungsi dengan kotak centang yang jelas, plus hitungan seperti 2/2 dan 0/1 serta ringkasan pilihan.",
+                "Role baru dapat dibuat dari aplikasi; role bawaan hanya dapat diubah hak aksesnya, tidak dapat dihapus.",
+                "Kontrol akses pengguna dipindahkan dari Pengaturan Owner ke menu Kontrol Akses Role supaya hak akses diatur sekali per role.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.6", code = 25, date = "17 Sep 2026",
+            notes = listOf(
+                "Menu Aset & mesin cabang berganti nama menjadi Daftar Aset Cabang dan memakai filter cabang serta jenis aset dalam bentuk dropdown, bukan kartu.",
+                "Registrasi aset berpindah ke layar terpisah dengan tombol kembali, bukan formulir yang menempel di bawah daftar.",
+                "Aset ID dibuat otomatis dari kode cabang, kode jenis aset, lalu nomor urut tiga digit pada cabang itu. Contoh BNY-MC-001.",
+                "Registrasi aset memuat merek, nomor seri, jumlah, satuan, kondisi, tanggal beli, catatan, dan foto aset.",
+                "Kondisi aset dipilih lewat tiga kartu Normal, Perlu perbaikan, dan Rusak.",
+                "Katalog jenis aset dapat ditambah dari aplikasi; jenis yang sudah dipakai aset tidak dapat dihapus supaya kode aset lama tetap terbaca.",
+                "Foto aset disimpan privat di perangkat masing-masing dan tidak dikirim ke server, jadi metadata aset tetap ringan saat disinkronkan.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.5", code = 24, date = "17 Sep 2026",
+            notes = listOf(
+                "Sistem layout Android diseragamkan: margin layar compact 16dp, jarak dalam kelompok 8dp, dan jarak antarbagian 16dp.",
+                "Menu Modul kini berupa daftar berkelompok dengan baris yang ringkas, bukan grid kartu besar.",
+                "Antrian memakai dua filter per baris untuk Owner dan daftar Service berbentuk baris lazy agar tetap cepat dipindai saat data bertambah.",
+                "Pengaturan Owner memakai bottom sheet multi-select untuk modul dan fungsi, dengan tombol Selesai yang selalu terlihat.",
+                "Diagram donat aplikasi dan PDF memakai warna kategorikal yang berbeda, legenda konsisten, serta label persen pada bagian yang cukup besar.",
+                "Grafik tren dengan hanya satu periode ditampilkan sebagai batang horizontal berlabel, tanpa bidang kosong besar.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.4", code = 23, date = "17 Sep 2026",
+            notes = listOf(
+                "PDF dan CSV laporan transaksi kini benar-benar memuat seluruh bagian yang dipilih di filter Tampilan laporan, bukan hanya rincian.",
+                "Bagian yang panjang pindah ke halaman berikutnya dengan kepala tabel yang diulang, jadi tidak ada baris yang terpotong.",
+                "PDF laporan analitik memuat diagram batang tren bulanan dan diagram donat omzet per cabang serta penerimaan per metode.",
+                "PDF laporan analitik mencetak seluruh Service pada filter, dengan halaman lanjutan bila lebih dari satu halaman.",
+                "Tombol Excel di laporan analitik mengekspor semua tabel yang tampil di layar: ringkasan, tren, per cabang, per metode, peringkat kasir, dan rincian Service.",
+                "Bilah filter dibuat lebih ringkas sehingga dua filter muat dalam satu baris layar.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.3", code = 22, date = "17 Sep 2026",
+            notes = listOf(
+                "Laporan transaksi dan laporan analitik dipisah menjadi dua menu. Laporan transaksi memuat rincian dan rekap; laporan analitik memuat tren, komposisi, dan peringkat.",
+                "Laporan analitik menangkap seluruh data yang terlihat akun, dengan filter periode, cabang, kasir, dan jenis data yang semuanya bisa dipilih lebih dari satu.",
+                "Laporan analitik menyediakan diagram batang tren omzet bulanan dan diagram donat untuk komposisi omzet per cabang serta penerimaan per metode.",
+                "Nama kasir dan petugas pada seluruh laporan, PDF, dan CSV kini mengikuti nama terkini di Daftar User, bukan nama saat transaksi dibuat.",
+                "Laporan transaksi memakai box daftar yang bisa digulir sendiri, jadi ribuan transaksi tidak memanjangkan layar.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.2", code = 21, date = "17 Sep 2026",
+            notes = listOf(
+                "Penerimaan pembayaran kini dicatat sebagai jurnal terpisah per waktu dan metode, sehingga pembayaran bertahap tidak dipindahkan ke tanggal Service dibuat.",
+                "Kas harian memakai jurnal pembayaran, tutup kas hanya dapat dibuat sekali per cabang per hari, dan koreksi maupun hapus Service tidak dapat mengurangi uang yang sudah diterima tanpa proses pengembalian dana.",
+                "Urutan kerja Service jelas: Menunggu dikerjakan, Sedang dikerjakan, lalu Selesai.",
+                "Pendaftaran Owner, Kasir, dan SPV dikirim ke server sebagai permohonan yang tetap harus disetujui Owner aktif.",
+                "Beranda memakai filter ringkas untuk status antrean dan pembayaran; daftar role, cabang, dan user tetap dipilih lewat daftar filter, bukan kartu.",
+            ),
+        ),
         AppRelease(
             name = "1.10.1", code = 20, date = "16 Sep 2026",
             notes = listOf(

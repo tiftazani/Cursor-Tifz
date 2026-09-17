@@ -94,6 +94,12 @@ test("komisi transaksi selalu berasal dari katalog server", () => {
   assert.match(commandSyncSource,/FROM services WHERE organization_id=\? AND active=1 AND id IN/);
 });
 
+test("jurnal pembayaran bersifat append-only dan tidak boleh melebihi penerimaan Service", () => {
+  assert.match(commandSyncSource,/INSERT INTO payments/);
+  assert.match(commandSyncSource,/Pembayaran melebihi penerimaan Service/);
+  assert.match(commandSyncSource,/Pembayaran tercatat tidak dapat dikurangi tanpa pengembalian dana/);
+});
+
 test("tutup kas bersifat append-only dan menolak ID yang sudah ada", () => {
   assert.equal(cashCloseCreateAllowed(null),true);
   assert.equal(cashCloseCreateAllowed("melati"),false);
@@ -136,6 +142,29 @@ test("envelope Android dipetakan tanpa mengganti nama entity Kotlin", () => {
   const deletion=parseCommand({commandId:"device-command-002",entityType:"attendance",entityId:"abs-1",operation:"delete",branchId:"melati",payload:null});
   assert.equal(deletion.type,"attendance.delete");
   assert.deepEqual(deletion.payload,{});
+});
+
+test("setiap entityType yang dikirim Android punya alias command", () => {
+  // Tanpa alias, command ditolak 422 dan perangkat mengulanginya tanpa henti.
+  const cases={
+    assetType:"assetType.upsert",
+    accessRole:"accessRole.upsert",
+    accessPolicy:"accessPolicy.upsert",
+    inventory:"inventory.upsert",
+    expense:"expense.upsert",
+    payment:"payment.upsert",
+    cashClose:"cashClose.upsert",
+    stockMove:"stockMove.upsert",
+    audit:"audit.upsert",
+    branchStock:"branchStock.put",
+    whatsappTemplate:"whatsappTemplate.upsert",
+  };
+  for (const [entityType, expected] of Object.entries(cases)) {
+    const command=parseCommand({commandId:`device-command-${entityType}`,entityType,entityId:"x-1",operation:"upsert",branchId:"melati",payload:{id:"x-1"}});
+    assert.equal(command.type,expected,`entityType ${entityType} harus dipetakan ke ${expected}`);
+  }
+  const removal=parseCommand({commandId:"device-command-remove",entityType:"assetType",entityId:"at-1",operation:"delete",branchId:"melati",payload:null});
+  assert.equal(removal.type,"assetType.delete");
 });
 
 test("kegagalan D1 sementara tidak ditandai sebagai penolakan permanen", () => {

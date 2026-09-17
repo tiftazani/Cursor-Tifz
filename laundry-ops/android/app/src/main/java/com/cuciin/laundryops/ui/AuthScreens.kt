@@ -3,12 +3,16 @@ package com.cuciin.laundryops.ui
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material.icons.outlined.Login
+import androidx.compose.material.icons.outlined.AdminPanelSettings
+import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.LocalLaundryService
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,17 +29,29 @@ import com.cuciin.laundryops.ui.components.FeedbackBanner
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,6 +82,8 @@ import com.cuciin.laundryops.data.CuciinStore
 import com.cuciin.laundryops.data.FirebaseCloud
 import com.cuciin.laundryops.data.Role
 import com.cuciin.laundryops.ui.components.ChipRow
+import com.cuciin.laundryops.ui.components.FilterBar
+import com.cuciin.laundryops.ui.components.FilterSheetRow
 import com.cuciin.laundryops.ui.components.GhostBtn
 import com.cuciin.laundryops.ui.components.PrimaryBtn
 import com.cuciin.laundryops.ui.components.ScreenHeader
@@ -125,6 +143,7 @@ internal fun Field(
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
@@ -148,23 +167,81 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
             modifier = Modifier.fillMaxSize(),
         )
         Box(Modifier.fillMaxSize().background(Color(0xA80D164B)))
-        // Satu layar penuh tanpa gulir: seluruh isi dibagi ruang, bukan ditumpuk.
+        // Layar login mengikuti ruang yang benar-benar tersisa. Saat keyboard terbuka ruang
+        // menyusut tajam, jadi isi dipadatkan dan boleh digulir supaya tidak ada bagian yang
+        // terpotong. Saat ruang lega, layar tetap satu layar penuh tanpa gulir seperti semula.
+        val scroll = rememberScrollState()
+        // Tinggi jendela saja tidak cukup: pada Android modern jendela bisa tidak menyusut saat
+        // keyboard muncul. Inset keyboard dan tinggi jendela diperiksa dua-duanya supaya
+        // keadaan sempit tetap terdeteksi pada kedua perilaku sistem itu.
+        val ime = WindowInsets.ime.getBottom(LocalDensity.current)
+        val spec = LoginLayout.forRoom(ui.heightDp, ime > 0)
+        // Saat keyboard terbuka, gulirkan seperlunya supaya kartu login (kolom isian, tombol
+        // Masuk, dan Lupa kata sandi) terlihat penuh. Bukan digulir ke dasar layar, karena
+        // yang sedang diisi justru ada di kartu itu.
+        val cardIntoView = remember { BringIntoViewRequester() }
+        LaunchedEffect(ime) {
+            if (ime > 0) {
+                // Dua kali: sekali setelah keyboard selesai muncul, sekali lagi setelah
+                // tata letak menyesuaikan tinggi barunya.
+                cardIntoView.bringIntoView()
+                kotlinx.coroutines.delay(120)
+                cardIntoView.bringIntoView()
+            }
+        }
         Column(
-            Modifier.fillMaxSize().padding(horizontal = ui.pad, vertical = 12.dp),
+            Modifier
+                .fillMaxSize()
+                // Layar ini mengatur insetnya sendiri karena wallpaper harus mencapai tepi
+                // layar. union mengambil nilai terbesar, jadi inset bar sistem dan keyboard
+                // tidak dihitung dua kali saat keyboard terbuka.
+                .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime))
+                .padding(horizontal = ui.pad, vertical = spec.verticalPad.dp)
+                .then(if (spec.scrollable) Modifier.verticalScroll(scroll) else Modifier),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(spec.gap.dp),
         ) {
             Column(
-                Modifier.widthIn(max = 460.dp).fillMaxWidth().weight(1f),
+                Modifier.widthIn(max = 460.dp).fillMaxWidth().then(if (spec.roomy) Modifier.weight(1f) else Modifier),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(spec.gap.dp),
             ) {
-                BrandMark(size = 104.dp)
-                CardBlock {
-                    Text("Masuk ke akun Anda", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                    Text("Pakai email dan kata sandi akun Anda. Peran akun ditentukan dari akses yang diberikan Owner.", color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
-                    Field(email, { email = it }, "Email")
-                    Field(pass, { pass = it }, "Kata sandi", password = true)
+                BrandMark(size = spec.brandSize.dp)
+                Text(
+                    "Dicuci bersih, dicatat rapi.",
+                    color = OnHero.copy(alpha = .82f),
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.2.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                GlassSurface(Modifier.bringIntoViewRequester(cardIntoView)) {
+                    Text("Masuk ke akun Anda", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Pakai email dan kata sandi akun Anda.",
+                        color = Color.White.copy(alpha = .86f),
+                        fontSize = 12.5.sp,
+                        lineHeight = 17.sp,
+                        modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
+                    )
+                    GlassField(email, { email = it }, "Email", modifier = Modifier.padding(bottom = 13.dp))
+                    GlassField(pass, { pass = it }, "Kata sandi", password = true)
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Lupa kata sandi?",
+                            color = Color.White,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable {
+                                resetEmail = email; resetMessage = ""; resetFailed = false; loginHelp = true
+                            },
+                        )
+                    }
                     PrimaryBtn(if (busy) "Memeriksa akun…" else "Masuk", enabled = !busy, icon = Icons.Outlined.Login) {
                         if (busy) return@PrimaryBtn
                         if (email.isBlank() || pass.isBlank()) {
@@ -193,12 +270,22 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
                             CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Teal)
                         }
                     }
-                    TextButton(onClick = { resetEmail = email; resetMessage = ""; resetFailed = false; loginHelp = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Lupa kata sandi?", color = Teal) }
                 }
-                GhostBtn("Daftar sebagai Kasir / SPV", icon = Icons.Outlined.PersonAdd) { nav.navigate("register") }
+                GhostBtn("Daftar akun baru", icon = Icons.Outlined.PersonAdd) { nav.navigate("register") }
             }
-            TextButton(onClick = { nav.navigate("versions") }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text("Versi ${BuildConfig.VERSION_NAME}", color = OnHero)
+            Row(
+                Modifier.align(Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { nav.navigate("versions") }) {
+                    Text("Versi ${BuildConfig.VERSION_NAME}", color = Color.White.copy(alpha = .70f))
+                }
+                Text("·", color = Color.White.copy(alpha = .45f), fontSize = 13.sp)
+                // Membuka layar pembuka lagi, karena setelah aplikasi dipasang layar itu
+                // tidak muncul sendiri lagi.
+                TextButton(onClick = { nav.navigate("onboarding") }) {
+                    Text("Tentang aplikasi", color = Color.White.copy(alpha = .82f), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     }
@@ -225,6 +312,7 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
     }, dismissButton = { TextButton(enabled = !resetBusy, onClick = { loginHelp = false }) { Text("Batal") } })
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RegisterScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
@@ -234,24 +322,41 @@ internal fun RegisterScreen(nav: NavHostController, toast: (String) -> Unit) {
     var role by remember { mutableStateOf(Role.Kasir) }
     var branch by remember { mutableStateOf(store.branches.firstOrNull()?.id.orEmpty()) }
     var busy by remember { mutableStateOf(false) }
+    var showRoleSheet by rememberSaveable { mutableStateOf(false) }
+    var showBranchSheet by rememberSaveable { mutableStateOf(false) }
+    fun roleLabel(value: Role) = when (value) {
+        Role.Owner -> "Owner"
+        Role.Supervisor -> "SPV"
+        Role.Kasir -> "Kasir"
+    }
+    val branchName = store.branches.firstOrNull { it.id == branch }?.name?.removePrefix("Cuciin ")?.ifBlank { null } ?: "Pilih cabang"
     Column(Modifier.fillMaxSize().padding(horizontal = ui.pad)) {
         ScreenHeader("Daftar", "Akun akan ditinjau Owner", onBack = { nav.popBackStack() })
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(ui.gap)) {
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Field(name, { name = it }, "Nama")
             Field(email, { email = it }, "Email")
             Field(pass, { pass = it }, "Kata sandi", password = true)
-            ChipRow {
-                SelectChip(role == Role.Kasir, "Kasir") { role = Role.Kasir }
-                SelectChip(role == Role.Supervisor, "SPV") { role = Role.Supervisor }
-            }
-            ChipRow {
-                store.branches.forEach { b ->
-                    SelectChip(branch == b.id, b.name.removePrefix("Cuciin ")) { branch = b.id }
-                }
-            }
+            FilterBar(
+                label = "Peran akses",
+                value = roleLabel(role),
+                detail = "Kasir, SPV, atau Owner. Owner baru tetap ditinjau Owner aktif.",
+                icon = Icons.Outlined.AdminPanelSettings,
+                onClick = { showRoleSheet = true },
+            )
+            FilterBar(
+                label = "Cabang penugasan",
+                value = branchName,
+                detail = "Satu cabang awal. Owner dapat menambah cabang setelah persetujuan.",
+                icon = Icons.Outlined.Storefront,
+                onClick = { showBranchSheet = true },
+            )
             PrimaryBtn(if (busy) "Mengirim…" else "Kirim pendaftaran", enabled = !busy) {
                 if (name.isBlank() || email.isBlank()) {
                     toast("Nama dan email wajib")
+                    return@PrimaryBtn
+                }
+                if (branch.isBlank()) {
+                    toast("Pilih cabang penugasan")
                     return@PrimaryBtn
                 }
                 if (!BuildConfig.DEBUG && pass.length < 12) {
@@ -266,6 +371,24 @@ internal fun RegisterScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+    if (showRoleSheet) ModalBottomSheet(onDismissRequest = { showRoleSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih peran akses", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            Text("Satu peran per pendaftaran. Owner dapat lebih dari dua selama disetujui Owner aktif.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp))
+            Role.entries.forEach { option ->
+                FilterSheetRow(role == option, roleLabel(option), null) { role = option; showRoleSheet = false }
+            }
+        }
+    }
+    if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih cabang penugasan", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            Text("Daftar tumbuh mengikuti master cabang, bukan chip yang terpotong.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp))
+            store.branches.forEach { b ->
+                FilterSheetRow(branch == b.id, b.name.removePrefix("Cuciin "), b.code) { branch = b.id; showBranchSheet = false }
+            }
         }
     }
 }

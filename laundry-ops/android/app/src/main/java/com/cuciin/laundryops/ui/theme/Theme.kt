@@ -10,6 +10,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
@@ -20,7 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 
 /**
- * Tema pilihan pengguna: Terang, Gelap, Warna-warni, atau ikut sistem.
+ * Tema tampilan aplikasi: Light, Dark, atau Custom.
  *
  * Setiap tema memakai nama token yang sama supaya seluruh layar tidak perlu diubah.
  * Nilainya dijaga agar teks lolos WCAG AA 4.5:1 dan batas kontrol lolos 3:1.
@@ -28,12 +29,37 @@ import androidx.core.view.WindowCompat
  * Bentuk visual mengikuti guideline Jemur: struktur navy, aksi utama pink,
  * aksen kuning untuk navigasi aktif, surface putih, serta sudut membulat terukur.
  * Pink terang tidak dipakai untuk teks kecil bila kontrasnya tidak memenuhi WCAG AA.
+ *
+ * Tema Custom dibentuk dari enam warna pilihan pengguna. Warna teks di atas tombol dan
+ * header tidak ikut dipilih manual: nilainya dihitung dari terang gelapnya warna tersebut
+ * supaya tulisan tetap terbaca berapa pun warna yang dipilih.
  */
 enum class CuciinThemeMode(val label: String) {
-    Sistem("Ikut sistem"),
-    Terang("Terang"),
-    Gelap("Gelap"),
-    Warni("Warna-warni"),
+    Terang("Light"),
+    Gelap("Dark"),
+    Custom("Custom"),
+}
+
+/** Enam warna yang boleh diubah pengguna pada tema Custom. Disimpan sebagai ARGB. */
+data class CuciinCustomTheme(
+    val primary: Int,
+    val button: Int,
+    val background: Int,
+    val card: Int,
+    val ink: Int,
+    val hero: Int,
+) {
+    companion object {
+        /** Titik awal tema Custom: sama dengan tema Light supaya langsung terpakai. */
+        val Default = CuciinCustomTheme(
+            primary = 0xFFC1358F.toInt(),
+            button = 0xFFC1358F.toInt(),
+            background = 0xFFF7F7F9.toInt(),
+            card = 0xFFFFFFFF.toInt(),
+            ink = 0xFF15151F.toInt(),
+            hero = 0xFF0D164B.toInt(),
+        )
+    }
 }
 
 /**
@@ -64,6 +90,10 @@ data class CuciinPalette(
     val surface: Color = card,
     /** Latar halaman utama. */
     val canvas: Color = bg,
+    /** Warna tombol aksi utama; pada Light dan Dark sama dengan aksen. */
+    val button: Color = prim,
+    /** Warna teks di atas tombol; dihitung, bukan dipilih manual. */
+    val onButton: Color = onPrim,
 ) {
     val foam: Color get() = bg
     val mist: Color get() = primSoft
@@ -94,55 +124,89 @@ private val Terang = CuciinPalette(
     surface = Color(0xFFFBEAF5),
 )
 
+/**
+ * Tema gelap berlatar hitam. Header sedikit lebih terang dari latar supaya panel judul
+ * tetap terbaca, tetapi keseluruhan tampilan tetap hitam.
+ */
 private val Gelap = CuciinPalette(
     dark = true,
-    bg = Color(0xFF10132A),
-    card = Color(0xFF171B38),
-    line = Color(0xFF8A8D9B),
-    lineSoft = Color(0xFF303653),
-    ink = Color(0xFFF4F3FA),
-    muted = Color(0xFFC4C5CE),
+    bg = Color(0xFF000000),
+    card = Color(0xFF121212),
+    line = Color(0xFF6E6E6E),
+    lineSoft = Color(0xFF2A2A2A),
+    ink = Color(0xFFF2F2F2),
+    muted = Color(0xFFB8B8B8),
     prim = Color(0xFFF08AC8),
     primDeep = Color(0xFFFFB1DD),
-    primSoft = Color(0xFF3D2340),
-    onPrim = Color(0xFF0D164B),
+    primSoft = Color(0xFF2A1A26),
+    onPrim = Color(0xFF000000),
     coral = Color(0xFFFFB4AB),
     green = Color(0xFF70D6A0),
     amber = Color(0xFFFFD180),
     gold = Color(0xFFF7CA3A),
-    heroA = Color(0xFF0D164B),
-    heroB = Color(0xFF232F70),
+    heroA = Color(0xFF16181D),
+    heroB = Color(0xFF23262E),
     onHero = Color(0xFFFFFFFF),
     navSelected = Color(0xFFF7CA3A),
-    surface = Color(0xFF242947),
-)
-
-private val Warni = CuciinPalette(
-    dark = false,
-    bg = Color(0xFFFFF5F9),
-    card = Color(0xFFFFFFFF),
-    line = Color(0xFF9E6A86),
-    lineSoft = Color(0xFFEFD3E2),
-    ink = Color(0xFF241447),
-    muted = Color(0xFF5D4F73),
-    prim = Color(0xFFC2185B),
-    primDeep = Color(0xFF3B1E6E),
-    primSoft = Color(0xFFFCE4EE),
-    onPrim = Color(0xFFFFFFFF),
-    coral = Color(0xFFB3261E),
-    green = Color(0xFF0E7350),
-    amber = Color(0xFF9A5B00),
-    gold = Color(0xFF7A4A00),
-    heroA = Color(0xFF3B1E6E),
-    heroB = Color(0xFFC2185B),
-    onHero = Color(0xFFFFFFFF),
-    navSelected = Color(0xFFF7CA3A),
-    surface = Color(0xFFFCE4EE),
+    surface = Color(0xFF1E1E1E),
 )
 
 internal val LightPalette = Terang
 internal val DarkPalette = Gelap
-internal val WarniPalette = Warni
+
+// ------------------------------------------------------------------ warna kustom
+
+internal fun Color.luminance(): Float = 0.2126f * red + 0.7152f * green + 0.0722f * blue
+
+/** Warna teks yang terbaca di atas [background], dihitung dari terang gelapnya. */
+internal fun readableOn(background: Color): Color =
+    if (background.luminance() > 0.55f) Color(0xFF11131A) else Color(0xFFFFFFFF)
+
+internal fun blend(from: Color, to: Color, amount: Float): Color = Color(
+    red = from.red + (to.red - from.red) * amount,
+    green = from.green + (to.green - from.green) * amount,
+    blue = from.blue + (to.blue - from.blue) * amount,
+)
+
+/**
+ * Membentuk palet lengkap dari enam warna pilihan pengguna. Token turunan dihitung,
+ * bukan disimpan, supaya tema tetap koheren walau warnanya digeser bebas.
+ */
+fun CuciinCustomTheme.toPalette(): CuciinPalette {
+    val bgColor = Color(background)
+    val cardColor = Color(card)
+    val inkColor = Color(ink)
+    val primColor = Color(primary)
+    val buttonColor = Color(button)
+    val heroColor = Color(hero)
+    val dark = bgColor.luminance() < 0.5f
+
+    return CuciinPalette(
+        dark = dark,
+        bg = bgColor,
+        card = cardColor,
+        // Batas kontrol harus lebih tegas daripada garis dekoratif.
+        line = blend(inkColor, bgColor, if (dark) 0.55f else 0.45f),
+        lineSoft = blend(inkColor, bgColor, 0.86f),
+        ink = inkColor,
+        muted = blend(inkColor, bgColor, 0.35f),
+        prim = primColor,
+        primDeep = if (dark) blend(primColor, Color.White, 0.35f) else blend(primColor, Color.Black, 0.35f),
+        primSoft = blend(primColor, bgColor, if (dark) 0.72f else 0.88f),
+        onPrim = readableOn(primColor),
+        coral = if (dark) Color(0xFFFFB4AB) else Color(0xFFB3261E),
+        green = if (dark) Color(0xFF70D6A0) else Color(0xFF1F7A4D),
+        amber = if (dark) Color(0xFFFFD180) else Color(0xFF8A5A00),
+        gold = Color(0xFFF7CA3A),
+        heroA = heroColor,
+        heroB = blend(heroColor, primColor, 0.18f),
+        onHero = readableOn(heroColor),
+        navSelected = Color(0xFFF7CA3A),
+        surface = blend(cardColor, bgColor, 0.35f),
+        button = buttonColor,
+        onButton = readableOn(buttonColor),
+    )
+}
 
 /**
  * Token warna untuk composable. Setiap nilai membaca palet tema yang sedang aktif,
@@ -164,6 +228,8 @@ val Gold: Color @androidx.compose.runtime.Composable get() = LocalCuciinPalette.
 val OnPrim: Color @androidx.compose.runtime.Composable get() = LocalCuciinPalette.current.onPrim
 val OnHero: Color @androidx.compose.runtime.Composable get() = LocalCuciinPalette.current.onHero
 val Surface2: Color @androidx.compose.runtime.Composable get() = LocalCuciinPalette.current.surface
+val ButtonFill: Color @androidx.compose.runtime.Composable get() = LocalCuciinPalette.current.button
+val OnButtonFill: Color @androidx.compose.runtime.Composable get() = LocalCuciinPalette.current.onButton
 
 val LocalCuciinPalette = staticCompositionLocalOf { Terang }
 
@@ -172,12 +238,12 @@ val Navy: Color @androidx.compose.runtime.Composable get() = Ink
 val Pink: Color @androidx.compose.runtime.Composable get() = Coral
 val MintSoft: Color @androidx.compose.runtime.Composable get() = Mist
 
-fun paletteFor(mode: CuciinThemeMode, systemDark: Boolean): CuciinPalette = when (mode) {
-    CuciinThemeMode.Sistem -> if (systemDark) DarkPalette else LightPalette
-    CuciinThemeMode.Terang -> LightPalette
-    CuciinThemeMode.Gelap -> DarkPalette
-    CuciinThemeMode.Warni -> WarniPalette
-}
+fun paletteFor(mode: CuciinThemeMode, systemDark: Boolean, custom: CuciinCustomTheme = CuciinCustomTheme.Default): CuciinPalette =
+    when (mode) {
+        CuciinThemeMode.Terang -> LightPalette
+        CuciinThemeMode.Gelap -> DarkPalette
+        CuciinThemeMode.Custom -> custom.toPalette()
+    }
 
 internal fun materialScheme(p: CuciinPalette) = if (p.dark) darkColorScheme(
     primary = p.prim,
@@ -286,17 +352,21 @@ object CuciinShape {
 fun CuciinTheme(content: @Composable () -> Unit) {
     val systemDark = isSystemInDarkTheme()
     val mode = ThemePrefs.mode
-    val palette = paletteFor(mode, systemDark)
+    val custom = ThemePrefs.custom
+    val palette = paletteFor(mode, systemDark, custom)
     val view = LocalView.current
     val context = LocalContext.current
 
     if (!view.isInEditMode) {
         SideEffect {
             val window = (context as? android.app.Activity)?.window ?: return@SideEffect
-            val (status, navigation) = ThemePrefs.systemBarColors(mode, systemDark)
-            window.statusBarColor = status
-            window.navigationBarColor = navigation
-            // Ikon status bar harus kontras dengan latar yang baru dipasang.
+            // Bar sistem dibiarkan TEMBUS PANDANG, bukan diwarnai. Halaman login memakai
+            // wallpaper penuh layar; mewarnai bar dengan warna palet membuat pita terang di
+            // bawah dan wallpaper terlihat terpotong. Layar biasa sudah punya latar sendiri
+            // di belakang bar, jadi transparan tetap aman di sana.
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
+            // Ikon bar harus kontras dengan isi di belakangnya.
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars = !palette.dark
                 isAppearanceLightNavigationBars = !palette.dark
@@ -308,3 +378,7 @@ fun CuciinTheme(content: @Composable () -> Unit) {
         MaterialTheme(colorScheme = materialScheme(palette), typography = CuciinTypography, content = content)
     }
 }
+
+/** Warna sistem bar untuk pratinjau tema di layar pengaturan. */
+internal fun previewArgb(mode: CuciinThemeMode, custom: CuciinCustomTheme): Int =
+    paletteFor(mode, systemDark = false, custom = custom).bg.toArgb()

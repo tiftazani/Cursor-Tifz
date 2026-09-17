@@ -10,6 +10,9 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import com.cuciin.laundryops.ui.CuciinRoot
 import com.cuciin.laundryops.ui.theme.CuciinTheme
+import com.cuciin.laundryops.ui.MenuPrefs
+import com.cuciin.laundryops.ui.OnboardingPrefs
+import com.cuciin.laundryops.ui.Motion
 import com.cuciin.laundryops.ui.theme.ThemePrefs
 
 class MainActivity : ComponentActivity() {
@@ -23,6 +26,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ThemePrefs.attach(this)
+        MenuPrefs.attach(this)
+        OnboardingPrefs.attach(this)
+        Motion.attach(this)
         captureSharedMap(intent)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),

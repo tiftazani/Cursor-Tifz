@@ -5,6 +5,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.cuciin.laundryops.BuildConfig
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
@@ -43,6 +45,7 @@ object CloudSync {
     private var hadPersistedLocalData = false
     private var persistence: SyncPersistence? = null
     private var outbox = SyncOutbox()
+    @Volatile private var rejectedNeedsRecovery = false
     private val endpointConfigured: Boolean get() = BuildConfig.CUCIIN_CLOUD_URL.isNotBlank()
 
     @Synchronized fun init(application: Application) {
@@ -50,6 +53,7 @@ object CloudSync {
         persistence = SyncPersistence(application)
         outbox = SyncOutbox(persistence!!.load())
         pendingCount = outbox.state.pending.size
+        rejectedNeedsRecovery = outbox.state.rejected.isNotEmpty()
         updateRejectedStatus()
     }
 
@@ -85,6 +89,31 @@ object CloudSync {
     }
 
     fun onAuthenticated() { if (endpointConfigured) synchronize() }
+
+    fun submitRegistration(name: String, email: String, role: Role, branchId: String, onDone: (String?) -> Unit) {
+        if (!endpointConfigured) {
+            main.post { onDone("Server pendaftaran belum dikonfigurasi") }
+            return
+        }
+        io.execute {
+            try {
+                val conn = open("POST", apiUrl("/v1/registration"))
+                conn.doOutput = true
+                val payload = LocalJson.json.encodeToString(RegistrationRequest.serializer(), RegistrationRequest(name.trim(), email.trim(), role, branchId))
+                OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(payload) }
+                val code = conn.responseCode
+                val body = readBody(conn, code)
+                conn.disconnect()
+                val error = if (code in 200..299) null else runCatching {
+                    LocalJson.json.parseToJsonElement(body).jsonObject["error"]?.jsonPrimitive?.content
+                }.getOrNull().orEmpty().ifBlank { "Pendaftaran ditolak server ($code)" }
+                main.post { onDone(error) }
+            } catch (error: Exception) {
+                Log.w(TAG, "pendaftaran server gagal", error)
+                main.post { onDone("Pendaftaran belum terkirim ke server") }
+            }
+        }
+    }
 
     fun verifyIdentity(onDone: (CloudIdentity?, String?) -> Unit) {
         if (!endpointConfigured) {
@@ -200,7 +229,9 @@ object CloudSync {
                     EndpointResult.UNSUPPORTED -> legacyPushThenPull()
                     EndpointResult.FAILED -> Unit
                     EndpointResult.OK -> if (pendingCommands().isEmpty()) {
-                        if (needsBootstrap() && bootstrapSnapshot() == EndpointResult.FAILED) return@execute
+                        if (rejectedNeedsRecovery) {
+                            if (recoverRejectedSnapshot() == EndpointResult.FAILED) return@execute
+                        } else if (needsBootstrap() && bootstrapSnapshot() == EndpointResult.FAILED) return@execute
                         pullChanges()
                     }
                 }
@@ -251,6 +282,7 @@ object CloudSync {
             val moved = synchronized(this) {
                 val acked = outbox.acknowledge(acknowledged, response.revision, updatedAtByCommand)
                 val dead = outbox.reject(rejected, Clock.nowMs())
+                if (dead > 0) rejectedNeedsRecovery = true
                 if (acked > 0 || dead > 0) saveState()
                 acked + dead
             }
@@ -386,6 +418,51 @@ object CloudSync {
         return result
     }
 
+    /** Rejection permanen harus kembali ke snapshot server, bukan tinggal sebagai data lokal berbeda. */
+    private fun recoverRejectedSnapshot(): EndpointResult {
+        val conn = open("GET")
+        val code = conn.responseCode
+        val body = readBody(conn, code)
+        val remoteRevision = conn.getHeaderField("X-Cuciin-Revision")?.toLongOrNull()?.coerceAtLeast(0) ?: 0
+        val remoteScope = conn.getHeaderField("X-Cuciin-Scope").orEmpty()
+        conn.disconnect()
+        if (code !in 200..299 || body.isBlank()) {
+            markOffline("Pemulihan perubahan yang ditolak gagal ($code)")
+            return EndpointResult.FAILED
+        }
+        val remote = runCatching { LocalJson.json.decodeFromString(Snapshot.serializer(), body) }.getOrElse {
+            markOffline("Snapshot pemulihan tidak valid", it)
+            return EndpointResult.FAILED
+        }
+        val completed = CountDownLatch(1)
+        var result = EndpointResult.FAILED
+        main.post {
+            val reconciled = synchronized(this) {
+                outbox.reconcileRejectedRemote(SyncProjection.entities(remote), remoteRevision, remoteScope).also { accepted ->
+                    if (accepted) {
+                        latestSnapshot = remote
+                        rejectedNeedsRecovery = false
+                        saveState()
+                    }
+                }
+            }
+            if (!reconciled) {
+                completed.countDown()
+                return@post
+            }
+            CuciinStore.applyCloud(remote) {
+                result = EndpointResult.OK
+                completed.countDown()
+            }
+        }
+        if (!completed.await(30, TimeUnit.SECONDS)) {
+            markOffline("Pemulihan perubahan yang ditolak melewati batas waktu")
+            return EndpointResult.FAILED
+        }
+        if (result == EndpointResult.OK) markOnline()
+        return result
+    }
+
     private fun legacyPushThenPull(): EndpointResult {
         val snapshot = synchronized(this) { latestSnapshot } ?: return legacyPull()
         if (pendingCommands().isNotEmpty()) {
@@ -428,7 +505,10 @@ object CloudSync {
 
     @Synchronized private fun moveToRejected(reasons: Map<String, String>): Int {
         val moved = outbox.reject(reasons, Clock.nowMs())
-        if (moved > 0) saveState()
+        if (moved > 0) {
+            rejectedNeedsRecovery = true
+            saveState()
+        }
         return moved
     }
 
@@ -440,8 +520,7 @@ object CloudSync {
     private fun markOnline(status: String = "Database server nyambung") {
         online = true
         lastOkAt = Clock.nowMs()
-        val base = if (pendingCount == 0) status else "$pendingCount perubahan menunggu sinkronisasi"
-        lastStatus = rejectionSuffix(base)
+        lastStatus = if (pendingCount == 0) status else "$pendingCount perubahan menunggu sinkronisasi"
         main.post { CuciinStore.touchStatus() }
     }
 

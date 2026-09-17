@@ -30,6 +30,14 @@ data class SyncCommand(
 data class SyncCommandBatch(val commands: List<SyncCommand>)
 
 @Serializable
+data class RegistrationRequest(
+    val name: String,
+    val email: String,
+    val role: Role,
+    val branchId: String,
+)
+
+@Serializable
 data class SyncCommandResult(
     val commandId: String,
     val status: String = "",
@@ -72,14 +80,18 @@ data class SyncCommandResponse(
         .filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "Command ditolak server" }.take(500)
 }
 
-private fun SyncCommandResult.reason(): String =
-    listOfNotNull(
+private fun SyncCommandResult.reason(): String {
+    val human = listOfNotNull(
         error,
         message,
+        detail.takeUnless { it is JsonNull }?.toString(),
+    ).filter { it.isNotBlank() }
+    if (human.isNotEmpty()) return human.joinToString(" · ").ifBlank { "Command ditolak server" }.take(500)
+    return listOfNotNull(
         status.takeIf { it.isNotBlank() },
         code.takeUnless { it is JsonNull }?.toString(),
-        detail.takeUnless { it is JsonNull }?.toString(),
     ).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "Command ditolak server" }.take(500)
+}
 
 @Serializable
 data class SyncChange(
@@ -354,6 +366,23 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
         return enqueue(desired, occurredAt, defaultBranchId, allowedBranchIds, actorRole, commandId)
     }
 
+    /**
+     * A permanen server rejection means the corresponding local mutation must not
+     * remain in the shadow. Once all pending commands are settled, replace the
+     * shadow with the server snapshot and clear the resolved rejection evidence.
+     */
+    fun reconcileRejectedRemote(remote: List<SyncEntity>, revision: Long, scopeKey: String = ""): Boolean {
+        if (state.pending.isNotEmpty() || state.pendingRemote != null) return false
+        state = state.copy(
+            revision = maxOf(state.revision, revision),
+            shadow = remote,
+            rejected = emptyList(),
+            bootstrapped = true,
+            scopeKey = scopeKey.ifBlank { state.scopeKey },
+        )
+        return true
+    }
+
     fun resetForScope(scopeKey: String): Boolean {
         if (state.pending.isNotEmpty() || state.pendingRemote != null) return false
         state = state.copy(revision = 0, shadow = emptyList(), bootstrapped = false, scopeKey = scopeKey)
@@ -384,13 +413,16 @@ object SyncProjection {
         "product" to Spec("products", { text("id")(it).ifBlank { text("name")(it) } }, { null }),
         "branchStock" to Spec("branchStocks", { "${text("branchId")(it)}:${text("productKey")(it)}" }, text("branchId")),
         "inventory" to Spec("inventory", text("id"), text("branchId")),
+        "assetType" to Spec("assetTypes", text("id"), { null }),
         "expense" to Spec("expenses", text("id"), text("branchId")),
         "nota" to Spec("notas", text("id"), text("branchId")),
         "stockMove" to Spec("stockMoves", { syncIdOrLegacyHash(it) }, text("branchId")),
         "audit" to Spec("audit", { syncIdOrLegacyHash(it) }, text("branchId")),
         "cashClose" to Spec("cashCloses", text("id"), text("branchId")),
+        "payment" to Spec("payments", text("id"), text("branchId")),
         "attendance" to Spec("attendance", text("id"), text("branchId")),
         "accessPolicy" to Spec("accessPolicies", { text("email")(it).lowercase() }, { null }),
+        "accessRole" to Spec("accessRoles", text("id"), { null }),
         "whatsappTemplate" to Spec("whatsappTemplates", text("id"), { null }),
     )
 
@@ -404,6 +436,8 @@ object SyncProjection {
                     "nota" -> JsonObject(obj + ("photos" to JsonArray(emptyList())))
                     "stockMove", "audit" -> JsonObject(obj + ("syncId" to JsonPrimitive(id)))
                     "attendance" -> JsonObject(obj + ("checkInPhotoPath" to JsonPrimitive("")) + ("checkOutPhotoPath" to JsonPrimitive("")))
+                    // Foto aset hanya ada di perangkat pencatat; metadata aset tetap dibagikan.
+                    "inventory" -> JsonObject(obj + ("photoPath" to JsonPrimitive("")))
                     else -> obj
                 }
                 if (id.isBlank()) null else SyncEntity(type, id, spec.branch(obj)?.ifBlank { null }, cloudPayload)

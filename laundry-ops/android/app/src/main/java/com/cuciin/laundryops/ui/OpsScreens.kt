@@ -3,9 +3,13 @@ package com.cuciin.laundryops.ui
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -45,6 +49,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -103,116 +108,189 @@ private val store get() = CuciinStore
 internal fun HomeScreen(nav: NavHostController) {
     val ui = rememberUi()
     val s = store.session.value ?: return
-    var completed by rememberSaveable { mutableStateOf(false) }
-    var unpaid by rememberSaveable { mutableStateOf(false) }
+    var period by rememberSaveable { mutableStateOf("hari") }
+    var customRange by rememberSaveable { mutableStateOf(false) }
+    var fromValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).withHour(0).withMinute(0))) }
+    var untilValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59))) }
+    var statusFilter by rememberSaveable { mutableStateOf("kerja") }
+    var showPeriodSheet by rememberSaveable { mutableStateOf(false) }
     var showBranchSheet by rememberSaveable { mutableStateOf(false) }
-    var showCashierSheet by rememberSaveable { mutableStateOf(false) }
     store.revision.intValue
     val all = store.visibleNotas().map { it.copy() }
-    val working = all.count { it.laundry != LaundryStatus.Selesai }
-    val ready = all.count { it.laundry == LaundryStatus.Selesai }
-    val operations = operationalCounts(all)
     val now = LocalDateTime.now(Clock.ZONE)
-    val rows = all.filter { (it.laundry == LaundryStatus.Selesai) == completed && (!unpaid || it.pay != PayStatus.Lunas) }
-        .sortedWith(compareBy<Nota> {
-            when {
-                it.pickedUpAt != null -> 3
-                it.laundry == LaundryStatus.Selesai -> 1
-                DisplayDates.parse(it.pickupAt)?.isBefore(now) == true -> 0
-                else -> 2
-            }
-        }.thenBy { DisplayDates.parse(it.pickupAt) })
+    val todayLabel = DisplayDates.date(now)
+    val from = DisplayDates.parse(fromValue) ?: now.withHour(0).withMinute(0)
+    val until = DisplayDates.parse(untilValue) ?: now.withHour(23).withMinute(59)
+    val rangeValid = !until.isBefore(from)
+
+    // Periode menyaring berdasarkan tanggal masuk Service. Rentang sendiri memakai tanggal
+    // yang dipilih pengguna, jadi tanggal mana pun bisa dibandingkan tanpa mengubah nota.
+    val periodStart = Clock.periodStartMs(period)
     val bid = if (s.role == Role.Owner) store.viewBranch.value else s.branchId
+    val scoped = all.filter { nota ->
+        val inRange = if (customRange) {
+            rangeValid && DisplayDates.isInSelectedMinute(nota.createdAtMs, from, until)
+        } else {
+            nota.createdAtMs == 0L || nota.createdAtMs >= periodStart
+        }
+        (bid == "all" || nota.branchId == bid) && inRange
+    }
+    val working = scoped.filter { it.laundry != LaundryStatus.Selesai }
+    // Telat: estimasi selesai sudah lewat, tetapi pengerjaan belum selesai.
+    val late = working.filter { DisplayDates.parse(it.pickupAt)?.isBefore(now) == true }
+    val done = scoped.filter { it.laundry == LaundryStatus.Selesai }
+    val periodLabel = if (customRange) "Rentang sendiri" else when (period) {
+        "hari" -> "Hari ini"
+        "minggu" -> "7 hari terakhir"
+        "bulan" -> "Bulan ini"
+        "tahun" -> "Tahun ini"
+        else -> "30 hari terakhir"
+    }
+    val periodDetail = when {
+        customRange && rangeValid -> "${DisplayDates.date(from)} sampai ${DisplayDates.date(until)}"
+        customRange -> "Waktu akhir harus setelah waktu mulai"
+        period == "hari" -> todayLabel
+        else -> periodRangeLabel(period, now)
+    }
+
+    // Daftar yang tampil mengikuti kartu status yang dipilih.
+    val rows = when (statusFilter) {
+        "telat" -> late.sortedBy { DisplayDates.parse(it.pickupAt) }
+        "selesai" -> done.sortedByDescending { it.createdAtMs }
+        else -> working.sortedBy { DisplayDates.parse(it.pickupAt) }
+    }
+
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
-            ScreenHeader("Antrian laundry", DisplayDates.date(LocalDateTime.now(Clock.ZONE))) {
-                BrandMark()
-            }
+            ScreenHeader("Antrian laundry", todayLabel) { BrandMark() }
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SummaryTile("Masuk antrian", working.toString(), Icons.Outlined.LocalLaundryService, !completed, Modifier.weight(1f)) { completed = false }
-                SummaryTile("Selesai", ready.toString(), Icons.Outlined.CheckCircle, completed, Modifier.weight(1f)) { completed = true }
-            }
+            FilterBarRow(
+                left = {
+                    FilterBar(label = "Periode", value = periodLabel, detail = periodDetail, icon = Icons.Outlined.CalendarMonth, onClick = { showPeriodSheet = true }, modifier = Modifier.fillMaxWidth())
+                },
+                right = {
+                    FilterBar(label = "Cabang", value = if (bid == "all") "Semua cabang" else store.branch(bid).name.removePrefix("Cuciin "), detail = "${scoped.size} pesanan", icon = Icons.Outlined.Storefront, onClick = { showBranchSheet = true }, modifier = Modifier.fillMaxWidth())
+                },
+            )
         }
         item {
-            CardBlock {
-                SectionLabel("Operasional hari ini")
-                ChipRow {
-                    if (operations.overdue > 0) Chip("${operations.overdue} terlambat", Coral)
-                    Chip("${operations.dueToday} jatuh tempo", Amber)
-                    Chip("${operations.readyForPickup} siap diambil", Green)
-                    Chip("${operations.unpaid} belum lunas", Gold)
-                }
-                Text("Antrian diurutkan dari yang terlambat dan siap diserahkan.", color = Muted, fontSize = 12.sp)
-            }
-        }
-        if (s.role != Role.Supervisor) {
-            item {
-                CardBlock {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(Icons.Outlined.AccountBalanceWallet, null, tint = Teal, modifier = Modifier.size(24.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Kas masuk hari ini", color = Muted, fontSize = 12.sp)
-                            Text(rp(store.todayCollected(bid)), color = Ink, fontWeight = FontWeight.Bold, fontSize = 24.sp)
-                        }
-                    }
-                    PrimaryBtn("Buat Service baru", icon = Icons.Outlined.Add) { nav.navigate("nota") }
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatusCard("Sedang dikerjakan", working.size, Teal, Icons.Outlined.PendingActions, statusFilter == "kerja", Modifier.weight(1f)) { statusFilter = "kerja" }
+                StatusCard("Cucian telat", late.size, Coral, Icons.Outlined.Schedule, statusFilter == "telat", Modifier.weight(1f)) { statusFilter = "telat" }
+                StatusCard("Selesai", done.size, Green, Icons.Outlined.CheckCircle, statusFilter == "selesai", Modifier.weight(1f)) { statusFilter = "selesai" }
             }
         }
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(if (bid == "all") "Semua cabang" else store.branch(bid).name, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    Text("${rows.size} pesanan${if (store.viewKasir.value != "all" && s.role == Role.Owner) " · ${store.viewKasir.value}" else ""}", color = Muted, fontSize = 12.sp)
+                    Text(
+                        when (statusFilter) {
+                            "telat" -> "Cucian telat"
+                            "selesai" -> "Cucian selesai"
+                            else -> "Sedang dikerjakan"
+                        },
+                        fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink,
+                    )
+                    Text("${rows.size} pesanan · $periodLabel", color = Muted, fontSize = 12.sp)
+                }
+                if (s.role != Role.Supervisor) {
+                    PrimaryBtn("Service baru", Modifier.width(150.dp), icon = Icons.Outlined.Add) { nav.navigate("nota") }
                 }
             }
         }
-        if (s.role == Role.Owner) item {
-            FilterBar(
-                label = "Cabang",
-                value = if (bid == "all") "Semua cabang" else store.branch(bid).name.removePrefix("Cuciin "),
-                detail = "Saring antrean berdasarkan satu cabang",
-                icon = Icons.Outlined.Storefront,
-                onClick = { showBranchSheet = true },
-            )
-        }
-        if (s.role == Role.Owner) item {
-            FilterBar(
-                label = "Kasir",
-                value = store.viewKasir.value.ifBlank { "Semua kasir" }.let { if (it == "all") "Semua kasir" else it },
-                detail = "Saring antrean berdasarkan kasir pencatat",
-                icon = Icons.Outlined.Person,
-                onClick = { showCashierSheet = true },
-            )
-        }
         item { SyncNotice() }
-        item { ChipRow { SelectChip(!unpaid, "Semua pembayaran") { unpaid = false }; SelectChip(unpaid, "Belum lunas") { unpaid = true } } }
-        if (rows.isEmpty()) item { EmptyHint(if (completed) "Belum ada pesanan selesai" else "Antrian sudah tertangani", if (unpaid) "Tidak ada pesanan belum lunas pada pilihan ini." else if (s.role == Role.Supervisor) "Pesanan dari kasir akan muncul di sini." else "Pesanan baru akan muncul setelah Anda membuat nota.") }
-        items(rows.chunked(if (ui.twoPane) 2 else 1), key = { chunk -> chunk.joinToString { it.id } }) { chunk ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                chunk.forEach { n -> Box(Modifier.weight(1f)) { NotaCard(n) { nav.navigate("queue/${n.id}") } } }
-                if (ui.twoPane && chunk.size == 1) Spacer(Modifier.weight(1f))
+        if (rows.isEmpty()) item {
+            EmptyHint(
+                when (statusFilter) {
+                    "telat" -> "Tidak ada cucian telat"
+                    "selesai" -> "Belum ada cucian selesai"
+                    else -> "Tidak ada cucian dikerjakan"
+                },
+                when (statusFilter) {
+                    "telat" -> "Semua pesanan pada periode ini masih dalam estimasi."
+                    "selesai" -> "Pesanan yang selesai akan tampil di sini."
+                    else -> "Pesanan baru akan muncul setelah Anda membuat nota."
+                },
+            )
+        }
+        itemsIndexed(rows, key = { _, nota -> nota.id }) { index, nota ->
+            // Baris menyusul masuk satu per satu dengan geser halus, dibatasi sampai 6 baris
+            // pertama supaya daftar panjang tidak membuat semua baris beranimasi sekaligus.
+            EnterOnce(index = index) {
+                QueueRow(nota) { nav.navigate("queue/${nota.id}") }
+            }
+            RowDivider()
+        }
+    }
+    if (showPeriodSheet) ModalBottomSheet(onDismissRequest = { showPeriodSheet = false }) {
+        // Tinggi dibatasi dan isi digulir, jadi tombol Terapkan rentang tetap terjangkau
+        // ketika panel tanggal ikut terbuka.
+        Column(
+            Modifier.fillMaxWidth().heightIn(max = 560.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text("Pilih periode", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            Text("Tanggal masuk Service dipakai sebagai patokan periode.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp))
+            listOf("hari" to "Hari ini", "minggu" to "7 hari terakhir", "bulan" to "Bulan ini", "tahun" to "Tahun ini").forEach { (id, label) ->
+                FilterSheetRow(!customRange && period == id, label, if (id == "hari") todayLabel else periodRangeLabel(id, now)) {
+                    period = id
+                    customRange = false
+                    showPeriodSheet = false
+                }
+            }
+            // Rentang tanggal tertentu: dua tanggal dipilih langsung, bukan sekadar periode cepat.
+            FilterSheetRow(customRange, "Pilih dua tanggal", if (customRange) periodDetail else "Tentukan tanggal mulai dan sampai") {
+                customRange = true
+            }
+            if (customRange) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DateTimeFields(from, { fromValue = DisplayDates.encode(it) }, "Mulai")
+                    DateTimeFields(until, { untilValue = DisplayDates.encode(it) }, "Sampai")
+                    if (!rangeValid) Text("Waktu akhir harus setelah waktu mulai.", color = Coral, fontSize = 12.sp)
+                    PrimaryBtn("Terapkan rentang", enabled = rangeValid, icon = Icons.Outlined.Check) { showPeriodSheet = false }
+                }
             }
         }
     }
     if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
-            FilterSheetRow(bid == "all", "Semua cabang", "${store.branches.size} cabang") { store.viewBranch.value = "all"; store.touchStatus(); showBranchSheet = false }
-            store.branches.forEach { branch ->
-                FilterSheetRow(bid == branch.id, branch.name, null) { store.viewBranch.value = branch.id; store.touchStatus(); showBranchSheet = false }
+            Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            if (s.role == Role.Owner) {
+                FilterSheetRow(bid == "all", "Semua cabang", "${store.branches.size} cabang") { store.viewBranch.value = "all"; store.touchStatus(); showBranchSheet = false }
+                store.branches.forEach { branch ->
+                    FilterSheetRow(bid == branch.id, branch.name, "${all.count { it.branchId == branch.id }} pesanan") { store.viewBranch.value = branch.id; store.touchStatus(); showBranchSheet = false }
+                }
+            } else {
+                FilterSheetRow(true, store.branch(bid).name, "Cabang tugas Anda") { showBranchSheet = false }
             }
         }
     }
-    if (showCashierSheet) ModalBottomSheet(onDismissRequest = { showCashierSheet = false }) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Pilih kasir", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
-            FilterSheetRow(store.viewKasir.value == "all", "Semua kasir", null) { store.viewKasir.value = "all"; store.touchStatus(); showCashierSheet = false }
-            store.staff.filter { it.role == Role.Kasir && it.approved }.forEach { cashier ->
-                FilterSheetRow(store.viewKasir.value == cashier.name, cashier.name, cashier.email) { store.viewKasir.value = cashier.name; store.touchStatus(); showCashierSheet = false }
-            }
+}
+
+/** Kartu status di bawah filter: satu ketukan menyaring daftar di bawahnya. */
+@Composable
+private fun StatusCard(label: String, count: Int, tint: Color, icon: ImageVector, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val tap = rememberTapFeedback()
+    val source = remember { MutableInteractionSource() }
+    // Angka menghitung naik saat berubah, jadi perubahan jumlah terlihat, bukan melompat.
+    val shown by animateIntAsState(count, tween(Motion.ms(420), easing = Motion.easing), label = "jumlah kartu")
+    // Warna latar dan garis ikut berubah lembut saat kartu dipilih.
+    val bg by animateColorAsState(if (selected) tint.copy(alpha = .12f) else Card, tween(Motion.ms(180)), label = "latar kartu")
+    val stroke by animateColorAsState(if (selected) tint else Line, tween(Motion.ms(180)), label = "garis kartu")
+    val strokeWidth by animateFloatAsState(if (selected) 2f else 1f, tween(Motion.ms(180)), label = "tebal garis")
+    Surface(
+        onClick = { tap(); onClick() },
+        interactionSource = source,
+        modifier = modifier.heightIn(min = 84.dp).pressScale(source, 0.97f).semantics { this.selected = selected },
+        shape = RoundedCornerShape(20.dp),
+        color = bg,
+        border = BorderStroke(strokeWidth.dp, stroke),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
+            Text(shown.toString(), color = Ink, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+            Text(label, color = Muted, fontSize = 11.sp, lineHeight = 14.sp, maxLines = 2)
         }
     }
 }
@@ -232,28 +310,24 @@ private fun SummaryTile(label: String, value: String, icon: androidx.compose.ui.
 }
 
 @Composable
-private fun NotaCard(n: Nota, onClick: () -> Unit) {
+private fun QueueRow(nota: Nota, onClick: () -> Unit) {
     val tap = rememberTapFeedback()
-    Surface(onClick = { tap(); onClick() }, shape = RoundedCornerShape(20.dp), color = Card, border = BorderStroke(1.dp, Line), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                AvatarMark(n.customer)
-                Column(Modifier.weight(1f)) {
-                    Text(n.customer, color = Ink, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                    Text(n.id, color = Muted, fontSize = 11.sp)
-                }
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = Teal, modifier = Modifier.size(18.dp))
+    Surface(onClick = { tap(); onClick() }, color = Card, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AvatarMark(nota.customer)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(nota.customer, color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(nota.items, color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${nota.id} · ${nota.pickupAt}", color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Text(n.items, color = Muted, fontSize = 13.sp)
-            InfoRow(Icons.Outlined.Schedule, "Estimasi Waktu Keluar", n.pickupAt)
-            ListDivider()
-            LaundryChip(n.laundry)
-            if (n.laundry == LaundryStatus.Selesai) {
-                Chip(if (n.pickedUpAt == null) "Siap diambil" else "Sudah diserahkan", if (n.pickedUpAt == null) Amber else Green)
-            }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(rp(n.total), color = Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                PayChip(n.pay)
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(rp(nota.total), color = Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                PayChip(nota.pay)
+                Text(nota.laundry.label, color = if (nota.laundry == LaundryStatus.Selesai) Green else Teal, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             }
         }
     }
@@ -261,6 +335,7 @@ private fun NotaCard(n: Nota, onClick: () -> Unit) {
 
 private fun quantity(qty: Double): String = if (qty % 1.0 == 0.0) qty.toInt().toString() else qty.toString().replace('.', ',')
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun NotaScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
@@ -275,6 +350,7 @@ internal fun NotaScreen(nav: NavHostController, toast: (String) -> Unit) {
     val cust = store.selectedCustomer.value
     var feedback by rememberSaveable { mutableStateOf("") }
     var selectedCategory by rememberSaveable { mutableStateOf("laundry") }
+    var showBranchSheet by rememberSaveable { mutableStateOf(false) }
     var serviceMenuOpen by remember { mutableStateOf(false) }
     var selectedServiceId by rememberSaveable { mutableStateOf("") }
     val total = cart.sumOf { (it.qty * it.unitPrice).toInt() }
@@ -283,17 +359,13 @@ internal fun NotaScreen(nav: NavHostController, toast: (String) -> Unit) {
             item { ScreenHeader("Service baru", store.branch(selectedBranchId).name, onBack = { nav.popBackStack() }) }
             item { StepProgress(if (cust == null) 0 else 1) }
             if (s.role == Role.Owner) item {
-                CardBlock {
-                    SectionLabel("Cabang transaksi")
-                    Text("Service, stok retail, dan pesan WhatsApp akan mengikuti cabang ini.", color = Muted, fontSize = 12.sp)
-                    ChipRow {
-                        allowedBranches.forEach { branch ->
-                            SelectChip(selectedBranchId == branch.id, branch.name.removePrefix("Cuciin ")) {
-                                store.notaBranchId.value = branch.id
-                            }
-                        }
-                    }
-                }
+                FilterBar(
+                    label = "Cabang transaksi",
+                    value = store.branch(selectedBranchId).name,
+                    detail = "Service, stok retail, dan pesan WhatsApp mengikuti cabang ini.",
+                    icon = Icons.Outlined.Storefront,
+                    onClick = { showBranchSheet = true },
+                )
             }
             item {
                 Surface(onClick = { tap(); nav.navigate("customers") }, shape = RoundedCornerShape(18.dp), color = Card, border = BorderStroke(1.dp, if (cust == null) Line else Teal.copy(alpha = .3f))) {
@@ -382,6 +454,18 @@ internal fun NotaScreen(nav: NavHostController, toast: (String) -> Unit) {
                     else Icon(Icons.AutoMirrored.Outlined.ReceiptLong, null, tint = Teal, modifier = Modifier.size(28.dp))
                 }
                 if (!shortScreen) PrimaryBtn("Periksa Service", enabled = cart.isNotEmpty(), icon = Icons.AutoMirrored.Filled.ArrowForward, onClick = next)
+            }
+        }
+    }
+    if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih cabang transaksi", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            Text("Pilih satu cabang. Layanan, stok retail, dan pesan WhatsApp mengikuti cabang ini.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp))
+            allowedBranches.forEach { branch ->
+                FilterSheetRow(selectedBranchId == branch.id, branch.name.removePrefix("Cuciin "), branch.code) {
+                    store.notaBranchId.value = branch.id
+                    showBranchSheet = false
+                }
             }
         }
     }
@@ -821,8 +905,8 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
             }
         }
     }
-    if (finishConfirm) AlertDialog(onDismissRequest = { finishConfirm = false }, icon = { Icon(Icons.Outlined.CheckCircle, null, tint = Teal) }, title = { Text("Selesaikan pesanan?") }, text = { Text("Pastikan cucian ${n.customer} sudah selesai ditangani. Status pembayaran tetap dicatat terpisah.") }, confirmButton = { TextButton(onClick = { finishConfirm = false; store.advanceLaundry(id); toast("Pesanan ditandai selesai") }) { Text("Ya, selesai") } }, dismissButton = { TextButton(onClick = { finishConfirm = false }) { Text("Kembali") } })
-    if (paidConfirm) AlertDialog(onDismissRequest = { paidConfirm = false }, title = { Text("Catat pelunasan?") }, text = { Text("Pastikan sisa ${rp((n.total - n.paid).coerceAtLeast(0))} telah diterima melalui ${n.payMethod.label}.") }, confirmButton = { TextButton(onClick = { paidConfirm = false; store.markLunas(id, n.payMethod); toast("Pembayaran tercatat lunas") }) { Text("Sudah diterima") } }, dismissButton = { TextButton(onClick = { paidConfirm = false }) { Text("Kembali") } })
+    if (finishConfirm) AlertDialog(onDismissRequest = { finishConfirm = false }, icon = { Icon(Icons.Outlined.CheckCircle, null, tint = Teal) }, title = { Text(if (n.laundry == LaundryStatus.Masuk) "Mulai pengerjaan?" else "Selesaikan pesanan?") }, text = { Text(if (n.laundry == LaundryStatus.Masuk) "Status akan berubah menjadi sedang dikerjakan." else "Pastikan cucian ${n.customer} sudah selesai ditangani. Status pembayaran tetap dicatat terpisah.") }, confirmButton = { TextButton(onClick = { finishConfirm = false; store.advanceLaundry(id)?.let(toast) ?: toast(if (n.laundry == LaundryStatus.Masuk) "Pengerjaan dimulai" else "Pesanan ditandai selesai") }) { Text(if (n.laundry == LaundryStatus.Masuk) "Mulai" else "Ya, selesai") } }, dismissButton = { TextButton(onClick = { finishConfirm = false }) { Text("Kembali") } })
+    if (paidConfirm) AlertDialog(onDismissRequest = { paidConfirm = false }, title = { Text("Catat pelunasan?") }, text = { Text("Pastikan sisa ${rp((n.total - n.paid).coerceAtLeast(0))} telah diterima melalui ${n.payMethod.label}.") }, confirmButton = { TextButton(onClick = { paidConfirm = false; store.markLunas(id, n.payMethod)?.let(toast) ?: toast("Pembayaran tercatat lunas") }) { Text("Sudah diterima") } }, dismissButton = { TextButton(onClick = { paidConfirm = false }) { Text("Kembali") } })
     if (handoverConfirm) AlertDialog(onDismissRequest = { handoverConfirm = false }, title = { Text("Tutup Service ini?") }, text = { Text("Tutup Service hanya setelah cucian diterima pelanggan. Waktu penutupan disimpan di sistem dan tidak dicetak pada nota.") }, confirmButton = { TextButton(onClick = { handoverConfirm = false; store.markPickedUp(id)?.let(toast) ?: toast("Service berhasil ditutup") }) { Text("Ya, tutup Service") } }, dismissButton = { TextButton(onClick = { handoverConfirm = false }) { Text("Kembali") } })
 }
 

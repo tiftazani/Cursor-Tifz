@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
@@ -65,6 +67,8 @@ import com.cuciin.laundryops.ui.components.Chip
 import com.cuciin.laundryops.ui.components.ChipRow
 import com.cuciin.laundryops.ui.components.DangerBtn
 import com.cuciin.laundryops.ui.components.EmptyHint
+import com.cuciin.laundryops.ui.components.FilterBar
+import com.cuciin.laundryops.ui.components.FilterSheetRow
 import com.cuciin.laundryops.ui.components.GhostBtn
 import com.cuciin.laundryops.ui.components.PrimaryBtn
 import com.cuciin.laundryops.ui.components.ScreenHeader
@@ -317,6 +321,7 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
@@ -334,6 +339,15 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
     var branches by remember { mutableStateOf(setOf<String>()) }
     var userQuery by rememberSaveable { mutableStateOf("") }
     var roleFilter by rememberSaveable { mutableStateOf<Role?>(null) }
+    var showRoleFilterSheet by rememberSaveable { mutableStateOf(false) }
+    var showRoleSheet by rememberSaveable { mutableStateOf(false) }
+    var showBranchSheet by rememberSaveable { mutableStateOf(false) }
+    fun roleLabel(value: Role?) = when (value) {
+        null -> "Semua peran"
+        Role.Owner -> "Owner"
+        Role.Supervisor -> "SPV"
+        Role.Kasir -> "Kasir"
+    }
     fun fill(u: Staff?) {
         name = u?.name.orEmpty()
         email = u?.email.orEmpty()
@@ -341,18 +355,25 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
         role = u?.role ?: Role.Kasir
         branches = u?.branchIds?.toSet() ?: setOf(store.branches.first().id)
     }
+    val selectedBranchNames = store.branches.filter { it.id in branches }.map { it.name.removePrefix("Cuciin ") }
+    val selectedBranchValue = when (selectedBranchNames.size) {
+        0 -> "Pilih cabang"
+        1 -> selectedBranchNames.single()
+        else -> "${selectedBranchNames.size} cabang dipilih"
+    }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), state = listState, verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Daftar User", "Owner, kasir, SPV, dan akses cabang", onBack = { nav.popBackStack() }) }
         if (!creating && editing == null) {
             item { PrimaryBtn("Tambah user", icon = Icons.Outlined.Add) { creating = true; editing = null; fill(null) } }
             item { SearchField(userQuery, { userQuery = it }, "Cari nama atau email") }
             item {
-                ChipRow {
-                    SelectChip(roleFilter == null, "Semua") { roleFilter = null }
-                    SelectChip(roleFilter == Role.Owner, "Owner") { roleFilter = Role.Owner }
-                    SelectChip(roleFilter == Role.Kasir, "Kasir") { roleFilter = Role.Kasir }
-                    SelectChip(roleFilter == Role.Supervisor, "SPV") { roleFilter = Role.Supervisor }
-                }
+                FilterBar(
+                    label = "Filter peran",
+                    value = roleLabel(roleFilter),
+                    detail = "Pilih satu peran atau tampilkan semua user",
+                    icon = Icons.Outlined.Tune,
+                    onClick = { showRoleFilterSheet = true },
+                )
             }
         }
         if (creating || editing != null) {
@@ -362,20 +383,20 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
                     Field(name, { name = it }, "Nama")
                     Field(email, { email = it }, "Email")
                     Field(pass, { pass = it }, if (editing != null) "Kata sandi baru (boleh kosong)" else "Kata sandi awal (kosong = test1234)", password = true)
-                    SectionLabel("Peran")
-                    ChipRow {
-                        SelectChip(role == Role.Kasir, "Kasir") { role = Role.Kasir }
-                        SelectChip(role == Role.Supervisor, "SPV") { role = Role.Supervisor }
-                        SelectChip(role == Role.Owner, "Owner") { role = Role.Owner }
-                    }
-                    SectionLabel("Cabang")
-                    ChipRow {
-                        store.branches.forEach { b ->
-                            SelectChip(b.id in branches, b.name.removePrefix("Cuciin ")) {
-                                branches = if (b.id in branches) branches - b.id else branches + b.id
-                            }
-                        }
-                    }
+                    FilterBar(
+                        label = "Peran akses",
+                        value = roleLabel(role),
+                        detail = "Satu peran per user. Owner dapat ditambahkan tanpa batas jumlah.",
+                        icon = Icons.Outlined.AdminPanelSettings,
+                        onClick = { showRoleSheet = true },
+                    )
+                    FilterBar(
+                        label = "Cabang penugasan",
+                        value = selectedBranchValue,
+                        detail = if (selectedBranchNames.isEmpty()) "Pilih minimal satu cabang" else selectedBranchNames.joinToString(),
+                        icon = Icons.Outlined.Storefront,
+                        onClick = { showBranchSheet = true },
+                    )
                     Spacer(Modifier.height(8.dp))
                     PrimaryBtn("Simpan") {
                         val bids = branches.toList().ifEmpty { listOf(store.branches.first().id) }
@@ -429,12 +450,12 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
                 item {
                     ListCard {
                         shown.forEachIndexed { index, user ->
-                            val roleLabel = if (user.role == Role.Supervisor) "SPV" else user.role.name
+                            val roleText = roleLabel(user.role)
                             val branchLabel = user.branchIds.joinToString { id -> store.branches.find { it.id == id }?.name ?: id }
                             ListRow(
                                 mark = user.name,
                                 title = user.name,
-                                detail = "$roleLabel · ${user.email}\n${branchLabel.ifBlank { "Belum ada cabang" }}",
+                                detail = "$roleText · ${user.email}\n${branchLabel.ifBlank { "Belum ada cabang" }}",
                                 trailing = { Chip(if (user.approved) "Aktif" else "Menunggu", if (user.approved) Green else Amber) },
                                 onClick = { editing = user; creating = false; fill(user) },
                             )
@@ -446,6 +467,37 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
             }
         }
         item { Spacer(Modifier.height(20.dp)) }
+    }
+    if (showRoleFilterSheet) ModalBottomSheet(onDismissRequest = { showRoleFilterSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Filter peran", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            Text("Daftar user dapat dibatasi ke satu peran.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp))
+            FilterSheetRow(roleFilter == null, "Semua peran", "Tampilkan seluruh user") { roleFilter = null; showRoleFilterSheet = false }
+            Role.entries.forEach { option ->
+                FilterSheetRow(roleFilter == option, roleLabel(option), null) { roleFilter = option; showRoleFilterSheet = false }
+            }
+        }
+    }
+    if (showRoleSheet) ModalBottomSheet(onDismissRequest = { showRoleSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih peran akses", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            Text("Owner baru harus dibuat oleh Owner yang sudah aktif.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp))
+            Role.entries.forEach { option ->
+                FilterSheetRow(role == option, roleLabel(option), null) { role = option; showRoleSheet = false }
+            }
+        }
+    }
+    if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih cabang penugasan", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+            Text("Bisa pilih satu atau lebih sesuai area kerja user.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp))
+            store.branches.forEach { branch ->
+                FilterSheetRow(branch.id in branches, branch.name.removePrefix("Cuciin "), branch.code) {
+                    branches = if (branch.id in branches) branches - branch.id else branches + branch.id
+                }
+            }
+            PrimaryBtn("Selesai", Modifier.padding(horizontal = 18.dp, vertical = 8.dp)) { showBranchSheet = false }
+        }
     }
 }
 

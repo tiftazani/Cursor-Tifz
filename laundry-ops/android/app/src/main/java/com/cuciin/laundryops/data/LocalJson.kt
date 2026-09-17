@@ -2,6 +2,7 @@ package com.cuciin.laundryops.data
 
 import android.app.Application
 import android.util.Log
+import com.cuciin.laundryops.BuildConfig
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.nio.file.AtomicMoveNotSupportedException
@@ -22,6 +23,25 @@ object LocalJson {
     fun init(app: Application) {
         file = File(app.filesDir, "cuciin-data.json")
         backup = File(app.filesDir, "cuciin-data.backup.json")
+        val environment = File(app.filesDir, "cuciin-cloud-environment.txt")
+        val priorEndpoint = environment.takeIf { it.isFile }?.readText()?.trim()
+        val currentEndpoint = BuildConfig.CUCIIN_CLOUD_URL.trim()
+        val needsIsolationReset = (priorEndpoint?.isNotBlank() == true && priorEndpoint != currentEndpoint) ||
+            (BuildConfig.DEBUG && priorEndpoint.isNullOrBlank())
+        if (needsIsolationReset) {
+            listOf(
+                file,
+                backup,
+                File(app.filesDir, "cuciin-data.json.tmp"),
+                File(app.filesDir, "cuciin-sync-state.json"),
+                File(app.filesDir, "cuciin-sync-state.backup.json"),
+                File(app.filesDir, "cuciin-sync-state.json.tmp"),
+            ).forEach { it.delete() }
+            File(app.filesDir, "attendance").deleteRecursively()
+            File(app.filesDir, "proofs").deleteRecursively()
+            Log.i(TAG, "Data lokal dihapus karena endpoint cloud berubah")
+        }
+        environment.writeText(currentEndpoint)
         latestSavedAt = Long.MIN_VALUE
     }
 

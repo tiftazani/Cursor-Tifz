@@ -7,6 +7,8 @@ import com.cuciin.laundryops.data.Nota
 import com.cuciin.laundryops.data.PayStatus
 import com.cuciin.laundryops.data.ReceiptText
 import com.cuciin.laundryops.data.NotaLine
+import com.cuciin.laundryops.data.Staff
+import com.cuciin.laundryops.data.Role
 import org.junit.Assert.*
 import org.junit.Test
 import java.time.LocalDateTime
@@ -15,6 +17,12 @@ import com.cuciin.laundryops.data.wrapMeasuredText
 import com.cuciin.laundryops.data.receiptPageLineCounts
 
 class InteractionContractsTest {
+    @Test fun reportUsesCurrentStaffNameForStableEmail() {
+        val staff = listOf(Staff("Aida", "aidanurita25@gmail.com", Role.Kasir, listOf("laupay-kirab")))
+        assertEquals("Aida", reportStaffDisplayName(staff, "aidanurita25@gmail.com", "aidanurita25"))
+        assertEquals("nama lama", reportStaffDisplayName(emptyList(), "unknown@example.com", "nama lama"))
+    }
+
     @Test fun dateAndTimeRoundTripPreservesUserSelection() {
         val leapDay = LocalDateTime.of(2028, 2, 29, 23, 45)
         assertEquals(leapDay, DisplayDates.parse(DisplayDates.encode(leapDay)))
@@ -51,10 +59,10 @@ class InteractionContractsTest {
         assertEquals(listOf(7, 1), receiptPageLineCounts(8))
         assertEquals(listOf(7, 10, 10), receiptPageLineCounts(27))
     }
-    @Test fun existingWorkingStatesBothCompleteInOneStep() {
-        assertEquals("Masuk Antrian, dan akan dikerjakan", LaundryStatus.Masuk.label)
-        assertEquals("Masuk Antrian, dan akan dikerjakan", LaundryStatus.Progress.label)
-        assertEquals(LaundryStatus.Selesai, LaundryStatus.Masuk.next)
+    @Test fun workStatusMovesFromQueueToProgressBeforeCompletion() {
+        assertEquals("Menunggu dikerjakan", LaundryStatus.Masuk.label)
+        assertEquals("Sedang dikerjakan", LaundryStatus.Progress.label)
+        assertEquals(LaundryStatus.Progress, LaundryStatus.Masuk.next)
         assertEquals(LaundryStatus.Selesai, LaundryStatus.Progress.next)
         assertNull(LaundryStatus.Selesai.next)
         val n = Nota("n", "b", "k", "c", "p", "i", 1000, 0, PayStatus.Belum, LaundryStatus.Selesai, "", pickupAt = "", waSent = false)
@@ -78,7 +86,7 @@ class InteractionContractsTest {
         assertTrue(text.contains("Cuciin Cibaduyut"))
         assertTrue(text.contains("Waktu Masuk: 11 Sep 2026, 08.00"))
         assertTrue(text.contains("Estimasi Waktu Keluar: 12 Sep 2026, 17.00"))
-        assertTrue(text.contains("Status Pengerjaan: Masuk Antrian, dan akan dikerjakan"))
+        assertTrue(text.contains("Status Pengerjaan: Menunggu dikerjakan"))
         assertFalse(text.contains("Waktu Pengambilan"))
         assertFalse(text.contains("\nPengerjaan:"))
         assertFalse(text.contains("Selesai dikerjakan"))

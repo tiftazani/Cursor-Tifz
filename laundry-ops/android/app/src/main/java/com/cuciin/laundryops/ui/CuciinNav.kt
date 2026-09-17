@@ -2,6 +2,11 @@ package com.cuciin.laundryops.ui
 
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.imePadding
@@ -57,15 +62,14 @@ import kotlinx.coroutines.launch
 
 private val store get() = CuciinStore
 
-private data class Tab(val route: String, val label: String, val icon: ImageVector, val show: (Role) -> Boolean)
-
-private val tabs = listOf(
-    Tab("home", "Antrian", Icons.Outlined.Home) { true },
-    Tab("nota", "Service", Icons.Outlined.PointOfSale) { it != Role.Supervisor },
-    Tab("wa", "WA", Icons.AutoMirrored.Outlined.Chat) { it != Role.Supervisor },
-    Tab("stok", "Stok", Icons.Outlined.Inventory2) { true },
-    Tab("more", "Modul", Icons.Outlined.GridView) { true },
-)
+/** Ikon tab: dipetakan dari katalog [NavTabs] karena ikon butuh Compose. */
+private fun tabIcon(route: String): ImageVector = when (route) {
+    "home" -> Icons.Outlined.Home
+    "nota" -> Icons.Outlined.PointOfSale
+    "wa" -> Icons.AutoMirrored.Outlined.Chat
+    "stok" -> Icons.Outlined.Inventory2
+    else -> Icons.Outlined.GridView
+}
 
 @Composable
 fun CuciinRoot() {
@@ -77,20 +81,13 @@ fun CuciinRoot() {
     store.revision.intValue
     val ui = rememberUi()
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
-    val showBar = session != null && route in setOf("home", "wa", "stok", "more")
+    val showBar = session != null && route in NavTabs.routes
     val mapLink = MapSelection.pendingLink.value
     LaunchedEffect(mapLink, session?.role) {
         if (mapLink != null && session?.role == Role.Owner && route != "branches") nav.navigate("branches") { launchSingleTop = true }
     }
-    val visibleTabs = tabs.filter { tab ->
-        session != null && tab.show(session.role) && when (tab.route) {
-            "home" -> store.canAccess("queue")
-            "nota" -> store.canAccess("service")
-            "wa" -> store.canAccess("whatsapp")
-            "stok" -> store.canAccess("stock")
-            else -> true
-        }
-    }
+    val visibleTabs = if (session == null) emptyList()
+    else NavTabs.visibleFor(session.role.name) { module -> store.canAccess(module) }
     fun toast(msg: String) { scope.launch { snack.showSnackbar(msg) } }
 
     val palette = LocalCuciinPalette.current
@@ -111,9 +108,25 @@ fun CuciinRoot() {
         unselectedTextColor = OnHero.copy(alpha = 0.76f),
     )
 
+    /**
+     * Berpindah tab.
+     *
+     * Semua tab berada di satu graf datar dan "home" selalu ada di dasar stack selama pengguna
+     * sudah masuk. Karena itu tab tujuan dicapai dengan membersihkan dulu sampai home lalu
+     * mendorongnya, semuanya dalam satu panggilan navigate.
+     *
+     * Sebelumnya di sini dipakai popUpTo(saveState) berpasangan dengan restoreState. Kombinasi
+     * itu hanya benar untuk graf bertingkat; pada graf datar ia membuat tab macet: setelah
+     * layar Service dibuka dari tombol "Service baru", menekan tab Antrian tidak berpindah
+     * sama sekali, sementara tab lain tetap jalan.
+     */
     fun go(r: String) {
         tap()
-        nav.navigate(r) { launchSingleTop = true; popUpTo("home") { saveState = true }; restoreState = true }
+        if (!NavTransition.needsNavigation(route, r)) return
+        nav.navigate(r) {
+            launchSingleTop = true
+            popUpTo(NavTransition.HOME_ROUTE) { inclusive = NavTransition.POP_INCLUSIVE }
+        }
     }
 
     Row(Modifier.fillMaxSize()) {
@@ -123,7 +136,7 @@ fun CuciinRoot() {
                     NavigationRailItem(
                         selected = route == t.route,
                         onClick = { go(t.route) },
-                        icon = { Icon(t.icon, t.label) },
+                        icon = { Icon(tabIcon(t.route), t.label) },
                         label = { Text(t.label, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.sp) },
                         colors = railColors,
                     )
@@ -134,13 +147,21 @@ fun CuciinRoot() {
             containerColor = Foam,
             snackbarHost = { SnackbarHost(snack) },
             bottomBar = {
-                if (showBar && ui.compact) {
+                // Bar muncul dan hilang dengan lembut supaya perpindahan ke layar tanpa bar
+                // tidak terasa melompat. Hanya alpha dan geser sedikit, ringan untuk GPU.
+                AnimatedVisibility(
+                    visible = showBar && ui.compact,
+                    enter = slideInVertically(animationSpec = tween(Motion.ms(200), easing = Motion.easing)) { it } +
+                        fadeIn(tween(Motion.ms(160))),
+                    exit = slideOutVertically(animationSpec = tween(Motion.ms(180), easing = Motion.easing)) { it } +
+                        fadeOut(tween(Motion.ms(120))),
+                ) {
                     NavigationBar(containerColor = navSurface, contentColor = OnHero) {
                         visibleTabs.forEach { t ->
                             NavigationBarItem(
                                 selected = route == t.route,
                                 onClick = { go(t.route) },
-                                icon = { Icon(t.icon, t.label) },
+                                icon = { Icon(tabIcon(t.route), t.label) },
                                 label = { Text(t.label, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.sp) },
                                 colors = navColors,
                             )
@@ -149,16 +170,54 @@ fun CuciinRoot() {
                 }
             },
         ) { pad ->
-            Box(Modifier.padding(pad).fillMaxSize().imePadding(), contentAlignment = Alignment.TopCenter) {
+            // Layar penuh (login dan pembuka) memakai wallpaper sampai tepi layar. Bila
+            // padding Scaffold ikut dipasang, area bar sistem tidak tertutup gambar dan latar
+            // Scaffold yang terang terlihat sebagai pita di bawah. Layar penuh karena itu
+            // melewatkan padding itu dan mengatur insetnya sendiri.
+            val fullBleed = route == "login" || route == "onboarding" || route == "register" || route == "pending"
+            Box(
+                Modifier
+                    .then(if (fullBleed) Modifier else Modifier.padding(pad))
+                    .fillMaxSize()
+                    .imePadding(),
+                contentAlignment = Alignment.TopCenter,
+            ) {
                 NavHost(
                     nav,
-                    startDestination = if (session == null) "login" else "home",
+                    // Layar pembuka muncul sekali setelah aplikasi dipasang. Setelah itu
+                    // langsung ke masuk atau beranda sesuai keadaan sesi.
+                    startDestination = when {
+                        session != null -> "home"
+                        !OnboardingPrefs.alreadySeen -> "onboarding"
+                        else -> "login"
+                    },
                     modifier = Modifier.widthIn(max = 960.dp).fillMaxSize(),
-                    enterTransition = { fadeIn(tween(180)) },
-                    exitTransition = { fadeOut(tween(120)) },
-                    popEnterTransition = { fadeIn(tween(180)) },
-                    popExitTransition = { fadeOut(tween(120)) },
+                    // Perpindahan layar: layar baru menyusul dari kanan sambil memudar, layar lama
+                    // mundur sedikit. Hanya alpha dan geser, jadi dikerjakan GPU dan ringan di HP
+                    // kelas bawah. Durasi mengikuti pengaturan animasi sistem lewat Motion.
+                    enterTransition = {
+                        slideInHorizontally(animationSpec = tween(Motion.ms(220), easing = Motion.easing)) { it / 12 } +
+                            fadeIn(tween(Motion.ms(180)))
+                    },
+                    exitTransition = {
+                        slideOutHorizontally(animationSpec = tween(Motion.ms(200), easing = Motion.easing)) { -it / 16 } +
+                            fadeOut(tween(Motion.ms(140)))
+                    },
+                    popEnterTransition = {
+                        slideInHorizontally(animationSpec = tween(Motion.ms(220), easing = Motion.easing)) { -it / 12 } +
+                            fadeIn(tween(Motion.ms(180)))
+                    },
+                    popExitTransition = {
+                        slideOutHorizontally(animationSpec = tween(Motion.ms(200), easing = Motion.easing)) { it / 16 } +
+                            fadeOut(tween(Motion.ms(140)))
+                    },
                 ) {
+                    composable("onboarding") {
+                        OnboardingScreen(nav) {
+                            OnboardingPrefs.markSeen()
+                            nav.navigate("login") { popUpTo("onboarding") { inclusive = true } }
+                        }
+                    }
                     composable("login") { LoginScreen(nav, ::toast) }
                     composable("register") { RegisterScreen(nav, ::toast) }
                     composable("pending") { PendingScreen(nav) }
@@ -175,16 +234,25 @@ fun CuciinRoot() {
                     composable("stokHistory") { StockHistoryScreen(nav) }
                     composable("more") { MoreScreen(nav) }
                     composable("analytics") { AnalyticsScreen(nav) }
+                    composable("analyticsReport") { AnalyticsReportScreen(nav) }
                     composable("branches") { BranchesScreen(nav, ::toast) }
                     composable("audit") { AuditScreen(nav) }
                     composable("users") { UsersScreen(nav, ::toast) }
                     composable("services") { ServicesScreen(nav, ::toast) }
                     composable("products") { ProductsScreen(nav, ::toast) }
-                    composable("inventory") { InventoryScreen(nav, ::toast) }
+                    composable("inventory") { AssetListScreen(nav, ::toast) }
+                    composable("assetNew") { AssetFormScreen(nav, null, ::toast) }
+                    composable("assetEdit/{id}") { e -> AssetFormScreen(nav, e.arguments?.getString("id"), ::toast) }
+                    composable("assetTypes") { AssetTypesScreen(nav, ::toast) }
+                    composable("accessRoles") { AccessRolesScreen(nav, ::toast) }
+                    composable("accessRole/{id}") { e -> AccessRoleEditScreen(nav, e.arguments?.getString("id") ?: "", ::toast) }
+                    composable("accessRoleUser/{email}") { e -> AccessRoleUserScreen(nav, e.arguments?.getString("email") ?: "", ::toast) }
                     composable("ownerSettings") { OwnerSettingsScreen(nav, ::toast) }
                     composable("expenses") { ExpensesScreen(nav, ::toast) }
                     composable("attendance") { AttendanceScreen(nav, ::toast) }
                     composable("versions") { VersionScreen(nav) }
+                    composable("theme") { ThemeScreen(nav) }
+                    composable("menuOrder") { MenuOrderScreen(nav) }
                     composable("cash") { CashScreen(nav, ::toast) }
                     composable("customers") { CustomersScreen(nav, ::toast) }
                     composable("profil") { ProfilScreen(nav, ::toast) }

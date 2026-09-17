@@ -80,9 +80,22 @@ object FirebaseCloud {
         }
         FirebaseAuth.getInstance().createUserWithEmailAndPassword(email.trim(), password)
             .addOnSuccessListener {
-                CuciinStore.register(name, email, role, branchId, password)
-                FirebaseAuth.getInstance().signOut()
-                ui { onDone("pending") }
+                CloudSync.submitRegistration(name, email, role, branchId) { error ->
+                    val auth = FirebaseAuth.getInstance()
+                    if (error == null) {
+                        CuciinStore.markRegistrationPending(name)
+                        auth.signOut()
+                        onDone("pending")
+                    } else {
+                        auth.currentUser?.delete()?.addOnCompleteListener {
+                            auth.signOut()
+                            onDone(error)
+                        } ?: run {
+                            auth.signOut()
+                            onDone(error)
+                        }
+                    }
+                }
             }
             .addOnFailureListener { e -> ui { onDone(e.message ?: "gagal daftar") } }
     }

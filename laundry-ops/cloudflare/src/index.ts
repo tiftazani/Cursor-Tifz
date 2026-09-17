@@ -75,30 +75,62 @@ async function sameSecret(given: string, expected: string): Promise<boolean> {
 
 type Identity = { uid?: string; email: string; name: string; role: "Owner" | "Kasir" | "Supervisor"; branchIds: string[]; bootstrap: boolean };
 
-async function authorize(request: Request, env: Env): Promise<Identity | null> {
+async function authenticatedFirebaseUser(request: Request, env: Env): Promise<{ sub: string; email: string } | null> {
   const bearer = request.headers.get("authorization")?.match(/^Bearer (.+)$/i)?.[1];
-  const projectIds = firebaseProjectIds(env);
-  if (bearer && projectIds.length > 0) {
-    let firebaseUser: { sub: string; email: string } | null = null;
-    for (const projectId of projectIds) {
-      firebaseUser = await firebaseIdentity(bearer, projectId);
-      if (firebaseUser) break;
+  if (!bearer) return null;
+  for (const projectId of firebaseProjectIds(env)) {
+    const user = await firebaseIdentity(bearer, projectId);
+    if (user?.email) return user;
+  }
+  return null;
+}
+
+async function authorize(request: Request, env: Env): Promise<Identity | null> {
+  const firebaseUser = await authenticatedFirebaseUser(request, env);
+  if (firebaseUser) {
+    let staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE firebase_uid=? AND approved=1 AND active=1").bind(firebaseUser.sub).first<{email:string;name:string;role:string}>();
+    if (!staff) {
+      staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE lower(email)=lower(?) AND approved=1 AND active=1").bind(firebaseUser.email).first<{email:string;name:string;role:string}>();
+      if (staff) await env.DB.prepare("UPDATE staff SET firebase_uid=? WHERE email=? AND firebase_uid IS NULL").bind(firebaseUser.sub, staff.email).run();
     }
-    if (firebaseUser?.email) {
-      let staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE firebase_uid=? AND approved=1 AND active=1").bind(firebaseUser.sub).first<{email:string;name:string;role:string}>();
-      if (!staff) {
-        staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE lower(email)=lower(?) AND approved=1 AND active=1").bind(firebaseUser.email).first<{email:string;name:string;role:string}>();
-        if (staff) await env.DB.prepare("UPDATE staff SET firebase_uid=? WHERE email=? AND firebase_uid IS NULL").bind(firebaseUser.sub, staff.email).run();
-      }
-      if (staff && ["Owner","Kasir","Supervisor"].includes(staff.role)) {
-        const branches = await env.DB.prepare("SELECT branch_id FROM staff_branches WHERE staff_email=? ORDER BY branch_id").bind(staff.email).all<{branch_id:string}>();
-        return { uid: firebaseUser.sub, email: firebaseUser.email, name: staff.name, role: staff.role as Identity["role"], branchIds: branches.results.map((row) => row.branch_id), bootstrap: false };
-      }
+    if (staff && ["Owner","Kasir","Supervisor"].includes(staff.role)) {
+      const branches = await env.DB.prepare("SELECT branch_id FROM staff_branches WHERE staff_email=? ORDER BY branch_id").bind(staff.email).all<{branch_id:string}>();
+      return { uid: firebaseUser.sub, email: firebaseUser.email, name: staff.name, role: staff.role as Identity["role"], branchIds: branches.results.map((row) => row.branch_id), bootstrap: false };
     }
   }
   const key = request.headers.get("x-cuciin-key") ?? "";
   if (env.SYNC_SECRET && key && await sameSecret(key, env.SYNC_SECRET)) return { email: "bootstrap", name: "Bootstrap", role: "Owner", branchIds: [], bootstrap: true };
   return null;
+}
+
+async function registerAccount(request: Request, env: Env): Promise<Response> {
+  const firebaseUser = await authenticatedFirebaseUser(request, env);
+  if (!firebaseUser?.email) return json({ error: "Identitas Firebase tidak valid" }, 401);
+  const text = await request.text();
+  let body: JsonRecord;
+  try { body = JSON.parse(text) as JsonRecord; } catch { return json({ error: "Data pendaftaran tidak valid" }, 422); }
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const branchId = typeof body.branchId === "string" ? body.branchId.trim() : "";
+  const role = typeof body.role === "string" ? body.role : "";
+  if (!name || name.length > 160 || !email || email !== firebaseUser.email.toLowerCase() || !branchId || !["Owner", "Kasir", "Supervisor"].includes(role)) {
+    return json({ error: "Data pendaftaran tidak valid" }, 422);
+  }
+  const [existing, branch] = await Promise.all([
+    env.DB.prepare("SELECT email FROM staff WHERE lower(email)=lower(?)").bind(email).first<{email:string}>(),
+    env.DB.prepare("SELECT id FROM branches WHERE id=? AND organization_id=?").bind(branchId, ORG_ID).first<{id:string}>(),
+  ]);
+  if (existing) return json({ error: "Email sudah terdaftar atau masih menunggu persetujuan" }, 409);
+  if (!branch) return json({ error: "Cabang tidak ditemukan" }, 422);
+  const now = Date.now();
+  const payload = { name, email, role, branchIds: [branchId], approved: false };
+  await env.DB.batch([
+    env.DB.prepare("INSERT OR IGNORE INTO organizations(id,name,owner_email,created_at,updated_at) VALUES(?,?,?,?,?)").bind(ORG_ID, "Cuciin", "tiftazani.khara@gmail.com", now, now),
+    env.DB.prepare("INSERT INTO staff(email,organization_id,name,role,approved,active,firebase_uid,updated_at) VALUES(?,?,?,?,?,?,?,?)").bind(email, ORG_ID, name, role, 0, 1, firebaseUser.sub, now),
+    env.DB.prepare("INSERT INTO staff_branches(staff_email,branch_id) VALUES(?,?)").bind(email, branchId),
+    env.DB.prepare("INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id) VALUES(?,?,?,?,?,?,?,?,?)").bind(ORG_ID, "staff", email, "upsert", JSON.stringify(payload), now, branchId, email, `registration:${firebaseUser.sub}`),
+  ]);
+  return json({ status: "pending" }, 201);
 }
 
 function list(snapshot: JsonRecord, key: string): JsonRecord[] {
@@ -109,7 +141,7 @@ function str(row: JsonRecord, key: string, fallback = ""): string { return typeo
 function num(row: JsonRecord, key: string, fallback = 0): number { return typeof row[key] === "number" && Number.isFinite(row[key]) ? row[key] as number : fallback; }
 function bool(row: JsonRecord, key: string): number { return row[key] === true ? 1 : 0; }
 
-const BRANCH_DATASETS = ["branchStocks", "inventory", "expenses", "notas", "stockMoves", "audit", "cashCloses", "attendance"] as const;
+const BRANCH_DATASETS = ["branchStocks", "inventory", "expenses", "notas", "stockMoves", "audit", "cashCloses", "payments", "attendance"] as const;
 
 function rowKey(dataset: string, row: JsonRecord): string {
   if (dataset === "branchStocks") return `${str(row,"branchId")}|${str(row,"productKey")}`;
@@ -171,7 +203,7 @@ export type SnapshotJournalChange = {
 
 const CHANGE_DATASETS:Record<string,string>={
   branch:"branches",staff:"staff",customer:"customers",service:"services",product:"products",branchStock:"branchStocks",
-  inventory:"inventory",expense:"expenses",nota:"notas",order:"notas",stockMove:"stockMoves",audit:"audit",cashClose:"cashCloses",attendance:"attendance",accessPolicy:"accessPolicies",whatsappTemplate:"whatsappTemplates",
+  inventory:"inventory",assetType:"assetTypes",expense:"expenses",nota:"notas",order:"notas",stockMove:"stockMoves",audit:"audit",cashClose:"cashCloses",payment:"payments",attendance:"attendance",accessRole:"accessRoles",accessPolicy:"accessPolicies",whatsappTemplate:"whatsappTemplates",
 };
 
 function journalEntityId(dataset:string,row:JsonRecord):string {
@@ -242,8 +274,8 @@ async function projectSnapshot(env: Env, snapshot: JsonRecord, updatedAt: number
   const ceilingSources: Array<[string, boolean]> = [
     ["orders", true], ["branches", true], ["staff", true], ["services", true], ["products", true],
     ["customers", true], ["branch_stocks", false], ["expenses", true], ["attendance", true],
-    ["inventory_items", true], ["stock_moves", true], ["cash_closes", true],
-    ["access_policies", true], ["whatsapp_templates", true],
+    ["inventory_items", true], ["stock_moves", true], ["cash_closes", true], ["payments", true],
+    ["access_policies", true], ["whatsapp_templates", true], ["asset_types", true], ["access_roles", true],
   ];
   const ceilings = await env.DB.batch<{highest: number | null}>(
     ceilingSources.map(([table, scoped]) =>
@@ -284,9 +316,12 @@ async function projectSnapshot(env: Env, snapshot: JsonRecord, updatedAt: number
   for (const row of list(snapshot, "attendance")) statements.push(env.DB.prepare("INSERT INTO attendance(id,organization_id,branch_id,staff_email,staff_name,work_date,check_in_at,check_out_at,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET check_out_at=excluded.check_out_at,note=excluded.note,updated_at=excluded.updated_at").bind(str(row,"id"),ORG_ID,str(row,"branchId"),str(row,"staffEmail").toLowerCase(),str(row,"staffName"),str(row,"workDate"),num(row,"checkInAtMs"),typeof row.checkOutAtMs === "number" ? row.checkOutAtMs : null,str(row,"note"),version));
   for (const policy of list(snapshot, "accessPolicies")) statements.push(env.DB.prepare("INSERT INTO access_policies(email,organization_id,payload_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(email,organization_id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(policy,"email").toLowerCase(),ORG_ID,JSON.stringify(policy),version));
   for (const template of list(snapshot, "whatsappTemplates")) statements.push(env.DB.prepare("INSERT INTO whatsapp_templates(id,organization_id,payload_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(id,organization_id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(template,"id","business"),ORG_ID,JSON.stringify(template),version));
+  for (const assetType of list(snapshot, "assetTypes")) statements.push(env.DB.prepare("INSERT INTO asset_types(id,organization_id,code,name,active,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET code=excluded.code,name=excluded.name,active=excluded.active,updated_at=excluded.updated_at").bind(str(assetType,"id"),ORG_ID,str(assetType,"code").toUpperCase(),str(assetType,"name"),assetType.active===false?0:1,version));
+  for (const accessRole of list(snapshot, "accessRoles")) statements.push(env.DB.prepare("INSERT INTO access_roles(id,organization_id,name,built_in,payload_json,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(accessRole,"id"),ORG_ID,str(accessRole,"name"),accessRole.builtIn===true?1:0,JSON.stringify(accessRole),version));
   list(snapshot, "stockMoves").forEach((row, index) => statements.push(env.DB.prepare("INSERT INTO stock_moves(id,organization_id,branch_id,payload_json,occurred_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(row,"syncId") || `${str(row,"branchId")}:${num(row,"atMs")}:${str(row,"product")}:${index}`,ORG_ID,str(row,"branchId"),JSON.stringify(row),num(row,"atMs"),version)));
   list(snapshot, "audit").forEach((row, index) => statements.push(env.DB.prepare("INSERT INTO audit_logs(id,organization_id,branch_id,actor,action,order_id,occurred_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING").bind(str(row,"syncId") || `${str(row,"branchId")}:${num(row,"atMs")}:${index}`,ORG_ID,str(row,"branchId"),str(row,"user"),str(row,"action"),row.notaId ?? null,num(row,"atMs"))));
   for (const row of list(snapshot, "cashCloses")) statements.push(env.DB.prepare("INSERT INTO cash_closes(id,organization_id,branch_id,payload_json,occurred_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(row,"id"),ORG_ID,str(row,"branchId"),JSON.stringify(row),num(row,"atMs"),version));
+  for (const payment of list(snapshot, "payments")) statements.push(env.DB.prepare("INSERT OR IGNORE INTO payments(id,organization_id,order_id,branch_id,amount,method,received_at,received_by,payload_json,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(str(payment,"id"),ORG_ID,str(payment,"notaId"),str(payment,"branchId"),num(payment,"amount"),str(payment,"method"),num(payment,"atMs"),str(payment,"by"),JSON.stringify(payment),version));
   for (let i = 0; i < statements.length; i += 80) await env.DB.batch(statements.slice(i, i + 80));
 }
 
@@ -338,6 +373,7 @@ export default {
         return json({ok:false,service:"cuciin-api",environment:env.ENVIRONMENT,database:"unavailable"},503);
       }
     }
+    if (url.pathname === "/v1/registration" && request.method === "POST") return registerAccount(request, env);
     const identity = await authorize(request, env);
     if (!identity) return json({ error: "Tidak terautentikasi" }, 401);
     if (url.pathname === "/v1/me" && request.method === "GET") {

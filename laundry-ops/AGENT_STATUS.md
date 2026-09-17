@@ -1,11 +1,101 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 16 September 2026, 17:05 WIB (oleh Hermes).
+Terakhir diperbarui: 18 September 2026, 01:38 WIB (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
-## 0. Pekerjaan yang sedang berjalan (16 Sep, Hermes)
+## 0. Pekerjaan yang sedang berjalan (17 Sep, Hermes)
+
+**Tujuan:** sistem layout konsisten, menu aset cabang, Kontrol Akses Role, dan tampilan utama baru.
+
+**Sudah diterapkan ke produksi dan diverifikasi:**
+
+- Migrasi `0006_asset_types.sql` (tabel `asset_types`, 6 jenis bawaan) dan `0007_access_roles.sql` (tabel `access_roles`, 3 role bawaan) sudah diterapkan ke D1 produksi.
+- Worker produksi dideploy ulang (version `445117ac-cd1b-4a84-a10a-b5fb2d001560`) dan mengenal command `assetType.*` serta `accessRole.*`.
+- Dibaca balik: `migrations list` memuat 0001 sampai 0007, `PRAGMA table_info(access_roles)` sesuai, 3 baris role bawaan, `/health` ok revision 356, dan data produksi tidak berubah (5 orders, 4 branches, 8 staff).
+
+**Perubahan aplikasi yang sudah diverifikasi di emulator:**
+
+- `OpsScreens.kt`: tampilan utama memakai dua filter sebaris (periode bawaan hari ini dan cabang) serta tiga kartu status yang dapat diketuk: Sedang dikerjakan, Cucian telat, Selesai. Cucian telat = estimasi selesai lewat tetapi pengerjaan belum selesai.
+- `AccessScreens.kt` (baru): daftar role, editor role dengan checklist modul dan fungsi, serta pemilih role per pengguna.
+- `AccessCatalog.kt` (baru): katalog modul dan fungsi, satu sumber untuk layar dan pemeriksaan izin.
+- `AccessPolicy.kt` (baru): penentu izin yang dapat diuji tanpa Android; Owner selalu penuh, role menentukan modul dan fungsi, kebijakan per pengguna hanya mempersempit.
+- `AccessPolicyTest.kt` (baru): 11 test lulus.
+- `OwnerSettingsScreen.kt`: kontrol akses pengguna dipindahkan ke menu Kontrol Akses Role; layar ini hanya memuat template WhatsApp.
+- `MoreScreens.kt`: menu baru "Kontrol Akses Role" di grup Master data.
+
+**Gate yang lulus:** 68 unit test debug dan 68 unit test release (0 gagal), lint debug dan release, APK debug dan release, AAB, `verify_release.py`, dan `npm run check` Worker (40 test). Kandidat `releases/1.10.8-candidate/` sudah dibuat dan checksum-nya diverifikasi.
+
+**Perbaikan 1.10.8:** lembar pilihan sekarang membedakan jenis pilihan secara bentuk, bukan hanya warna. Pilihan banyak memakai kotak centang (terisi penuh saat dipilih, kosong bergaris saat tidak), tiap baris menampilkan label "Dipilih" atau "Tidak dipilih", baris terpilih berlatar berbeda, dan tersedia hitungan "1 dari 12 modul dipilih" plus tombol Pilih semua dan Kosongkan. Tombol Selesai dibatasi `heightIn(max = 560.dp)` dengan daftar `weight(1f)` sehingga selalu terlihat penuh (terukur 46px di emulator). Pilihan tunggal tetap memakai radio tanpa label tambahan.
+
+**1.10.9 (17 Sep):** filter periode di layar utama menambah pilihan "Pilih dua tanggal" (`customRange` + `DateTimeFields` di dalam sheet periode yang kini dapat digulir). Ketiga PDF dicetak ulang mengikuti desain terlampir melalui modul baru `data/ReportPdf.kt`: laporan transaksi (kartu metrik, rekonsiliasi berdampingan dengan per cabang, tabel rincian 10 kolom, hanya bagian yang dipilih yang dicetak), laporan analitik (donut dengan total di tengah dan legenda lengkap), dan nota pelanggan (kapsul status terpisah, ringkasan pembayaran dengan total navy). Baris tabel PDF membungkus dengan tinggi adaptif sehingga tidak ada elipsis. Gate lulus: 68 test debug + 68 test release, lint, APK/AAB, `verify_release.py`, checksum `releases/1.10.9-candidate/`.
+
+**1.10.10 (17 Sep):** menu baru **Theme Aplikasi** (`ui/ThemeScreen.kt`) berisi Light, Dark, dan Custom. `CuciinThemeMode` kini tiga nilai; `CuciinCustomTheme` menyimpan enam warna ARGB yang diatur lewat slider R/G/B, kode hex, dan pratinjau langsung; `toPalette()` menurunkan seluruh token sisanya dan `readableOn()` menghitung warna teks di atas tombol/header agar selalu kontras. Pengaturan tema dihapus dari `ProfilScreen` dan diganti pintasan. Ditemukan dan diperbaiki bug server: alias `assetType` hilang di `parseCommand` sehingga 23 perintah aset tertahan 422; ditambah test yang mengiterasi seluruh entityType. Worker debug dan produksi sudah dideploy ulang (produksi version `a8f7f1f2-89ec-4266-b00e-f8653da9fc6f`); antrean perangkat kembali 0. Gate lulus: 72 test debug + 72 release, lint, APK/AAB, `verify_release.py`, `npm run check` (41 test), checksum `releases/1.10.10-candidate/`.
+
+**1.10.10 (17 Sep, lanjutan):** pengisian data awal dipindah ke jalur Excel, bukan dari dalam aplikasi. Alat baru di `laundry-ops/scripts/`: `fetch_d1_reference.py` (membaca acuan entitas dari D1) dan `import_template_to_d1.py` (Excel -> SQL + jurnal `sync_changes`). Template `releases/1.10.10-candidate/template-data-cuciin.xlsx` berisi sembilan sheet, dan panduannya di `PANDUAN-IMPOR-EXCEL.md`. Alur diuji di D1 uji: 8 baris masuk, 8 entri jurnal, dan idempoten saat dijalankan dua kali. Perbaikan menyertai yang tetap dipakai: `CuciinStore.newId()` (UUID) dan `branches.firstOrNull()?.id.orEmpty()` pada catatan audit.
+
+**1.10.10 (17 Sep, urutan menu):** susunan menu layar Modul dirapikan dan dipindah ke `ui/MenuOrder.kt` supaya dapat diuji tanpa Android. Bagian yang tampil berurutan: Pekerjaan harian, Keuangan, Pelanggan, Laporan, Master data, lalu Aplikasi paling bawah. "Theme Aplikasi" keluar dari bagian laporan dan "Riwayat versi" kini di urutan paling bawah. Layar `MoreScreens.kt` hanya merender katalog; ikon dan ringkasan disimpan sebagai nama di katalog lalu dipetakan di layar. Test baru `MenuOrderTest.kt` (13 test) mengunci urutan bagian, urutan isi tiap bagian, dan penyaringan izin tanpa mengubah urutan. Gate lulus: 85 test debug + 85 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.10-candidate/` diperbarui. Pengaturan urutan menu oleh pengguna (naik/turun) belum dibuat, menunggu keputusan Owner.
+
+**1.10.11 (17 Sep, pengaturan urutan menu):** menu Modul kini dapat disusun pengguna. Susunan hidup di `ui/MenuOrder.kt` (`MenuOrder` katalog murni + `MenuLayout` susunan yang berlaku) dan disimpan per HP lewat `ui/MenuPrefs.kt`; tidak ikut tersinkron, sama seperti tema. Layar baru `ui/MenuOrderScreen.kt` dengan pintasan di paling atas layar Modul: panah naik dan turun per menu, tombol pindah bagian, panah per judul bagian, serta tombol Kembalikan urutan awal. Susunan tersimpan dirapikan terhadap katalog sehingga menu baru dari pembaruan tetap muncul di bagian bawaannya. Bagian bawaan berurutan: Pekerjaan harian, Keuangan, Pelanggan, Laporan, Master data, Aplikasi. Gate lulus: 98 test debug + 98 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.11-candidate/`. Diuji di emulator: geser menu, pindah bagian (Theme Aplikasi ke Keuangan), dan susunan bertahan setelah aplikasi dibuka ulang.
+
+**1.10.12 (17 Sep, bar navigasi + animasi):** diperbaiki bug bar navigasi bawah yang hilang hanya di layar Service: daftar rute berbar ditulis ulang terpisah di `CuciinNav.kt` dan rute `nota` tertinggal. Sekarang rute berbar selalu diturunkan dari katalog tab baru `ui/NavTabs.kt` (tab, label, izin) dan dikunci `NavBarContractTest.kt`. Animasi ditambahkan lewat `ui/Motion.kt` (durasi mengikuti skala animasi sistem; bila animasi dimatikan, gerak mati): geser dan pudar saat pindah layar dengan arah maju/mundur, efek tekan pada tombol dan kartu status, angka kartu status menghitung naik, baris antrian muncul mengalir (`ui/components/EnterOnce.kt`, dibatasi 6 baris), bar bawah muncul dan hilang lembut. Semua hanya alpha, geser, dan skala lewat graphicsLayer supaya ringan di HP kelas bawah. Gate lulus: 104 test debug + 104 test release, lint, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.12-candidate/`. Uji emulator: bar terbaca di kelima tab; animasi terbukti dengan rekaman layar pada skala animasi 8x; waktu render 50th 16ms dan 99th 18ms.
+
+**1.10.13 (17 Sep, login + keyboard):** diperbaiki layar login yang terpotong saat keyboard Android muncul. Penyebabnya layar login dirancang satu layar penuh tanpa gulir, sehingga saat ruang menyusut 300-400dp bagian bawah (tulisan "Lupa kata sandi?" dan tombol "Daftar akun") terpotong tanpa cara menjangkaunya. Aturan tata letak baru hidup di `ui/LoginLayout.kt` dan dikunci `LoginLayoutTest.kt`: ruang lega tetap satu layar penuh tanpa gulir, ruang sempit dipadatkan dan boleh digulir, dan saat keyboard terbuka layar menggulir otomatis ke kartu isian lewat `BringIntoViewRequester`. Gate lulus: 109 test debug + 109 test release, lint, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.13-candidate/`. Diuji di emulator pada lima tinggi ruang (2400 sampai 1100 piksel).
+
+**1.10.14 (17 Sep, tab macet):** diperbaiki tab Antrian yang tidak bisa diklik setelah layar Service dibuka lewat tombol "Service baru". Penyebab: perpindahan tab memakai `popUpTo("home") { saveState = true }` berpasangan `restoreState = true`, pola untuk graf navigasi bertingkat, sedangkan graf Cuciin datar; pada keadaan setelah `nota` dibuka lewat tombol, `navigate` tidak menghasilkan perpindahan apa pun. Perbaikan: satu panggilan `navigate` dengan `launchSingleTop` + `popUpTo("home")` tanpa saveState/restoreState, dan tab aktif tidak dinavigasi ulang. Aturan hidup di `ui/NavTransition.kt`, dikunci `NavTransitionContractTest.kt`. Gate lulus: 115 test debug + 115 test release, lint, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.14-candidate/`. Diuji di emulator: kelima tab dari layar Service, bolak-balik lima putaran, lewat tab maupun tombol, dan setelah tombol kembali.
+
+**1.10.15 (17 Sep, nama debug):** aplikasi varian debug kini bernama **Cuciin Debug** di layar HP, sedangkan versi rilis tetap **Cuciin**. Namanya diambil dari `app/src/debug/res/values/strings.xml` (hanya berlaku untuk varian debug), bukan dari `res/values/strings.xml` bersama. Dibaca balik dari APK: debug `application-label:'Cuciin Debug'`, rilis `application-label:'Cuciin'`. Sekaligus ditegaskan: bug tab macet hanya ada di rilis 1.10.13 ke bawah; perbaikannya dibuktikan ada di dalam APK rilis 1.10.14 dan 1.10.15 (kelas `NavTransition` ditemukan di `classes.dex`, tidak ada di 1.10.13). Gate lulus: 115 test debug + 115 test release, lint, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.15-candidate/`.
+
+**1.10.16 (18 Sep, layar pembuka + login kaca):** tiga hal dikerjakan sekaligus. (1) Layar pembuka baru `ui/OnboardingScreen.kt` + `ui/OnboardingPrefs.kt`: tiga halaman geser, muncul sekali setelah pemasangan, bisa dibuka lagi lewat tautan "Tentang aplikasi" di halaman masuk. Gambar rasio 9:20 (841x1870) dari Owner, dikompres ke webp ~200 KB per gambar. (2) Halaman login memakai kartu kaca gelap (`ui/GlassCard.kt`): latar navy 42%, isian bening dengan garis putih tipis. Kaca gelap dipilih karena wallpaper login ramai dan kaca terang membuat tulisan putih kehilangan kontras. (3) Bar putih 60px di bawah halaman login diperbaiki: sebabnya `Scaffold` memotong area bar sistem dari konten, sehingga latar Scaffold terang terlihat di bagian yang tidak tertutup wallpaper. Layar penuh kini melewatkan padding Scaffold dan mengatur insetnya sendiri; bar sistem dibuat tembus pandang dari tema. Atribut tema yang butuh API lebih baru dipisah ke `values-v27` dan `values-v29` karena minSdk 26 (lint menangkap ini). Gate lulus: 121 test debug + 121 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.16-candidate/`.
+
+**1.10.17 (18 Sep, tumpang tindih judul pembuka):** diperbaiki judul halaman layar pembuka yang tertimpa tombol. Sebabnya tata letak dua wadah berisi penuh layar: judul terdorong ke dasar oleh pengisi fleksibel di dalam wadahnya, sementara tombol berada di wadah lain yang juga menempel di dasar. Perbaikan: seluruh isi (logo, judul, baris pendukung, titik halaman, tombol) disusun satu kolom yang mengalir dari atas ke bawah dengan satu pengisi fleksibel di antara logo dan judul. Diukur di emulator sebelum/sesudah: judul y 2187-2211 (tertimpa) menjadi y 1651-1825; jarak judul ke tombol 13 px menjadi 208 px. Gate lulus: 121 test debug + 121 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.17-candidate/`.
+
+**Menunggu perintah Owner:**
+- Penghapusan data contoh (dummy) di produksi belum dijalankan. Jangan hapus tanpa backup dan perintah eksplisit.
+- Berkas Excel berisi data nyata belum diterima, jadi belum ada data yang ditembakkan ke D1 produksi.
+
+**Catatan penting:** role dan pengguna sekarang tersimpan sebagai `accessRoles` pada snapshot dan `staff.accessRoleId`. Pengguna tanpa `accessRoleId` otomatis memakai role bawaan sesuai peran lamanya, jadi data lama tetap berjalan tanpa migrasi khusus.
+
+## 0a. Klaim file Hermes saat ini
+
+```
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/components/Widgets.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/UiMetrics.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MoreScreens.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MenuOrder.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MenuOrderScreen.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MenuPrefs.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/NavTabs.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/NavTransition.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/OnboardingScreen.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/OnboardingPrefs.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/GlassCard.kt
+laundry-ops/android/app/src/main/res/values-v27/themes.xml
+laundry-ops/android/app/src/main/res/values-v29/themes.xml
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/LoginLayout.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/AuthScreens.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/Motion.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/components/Motion.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/components/EnterOnce.kt
+laundry-ops/android/app/src/test/java/com/cuciin/laundryops/ui/MenuOrderTest.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/OpsScreens.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/OwnerSettingsScreen.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/BusinessScreens.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/AssetScreens.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/AccessScreens.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/AnalyticsReportScreen.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/FileExports.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/ChartPalette.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/AssetCodes.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/AssetPhotos.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/AccessCatalog.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/AccessPolicy.kt
+laundry-ops/cloudflare/migrations/0006_asset_types.sql
+laundry-ops/cloudflare/migrations/0007_access_roles.sql
+```
+
+## 0b. Riwayat klaim sebelumnya (16 Sep, Hermes)
 
 **Tujuan:** menerapkan sistem desain Jemur ke seluruh aplikasi, mengganti ikon, memigrasikan data cabang dan akun operasional, serta memperbaiki tiga layar yang dikeluhkan Owner.
 
