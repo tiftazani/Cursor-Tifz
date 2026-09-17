@@ -4,6 +4,21 @@ Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `ve
 
 ## 1.10.19 — 18 Sep 2026 (versionCode 38)
 
+### Perbaikan sebelum naik ke produksi: jurnal ditulis per cabang
+
+- Entri jurnal `staff` ditulis SATU PER CABANG, bukan satu saja.
+- Penyebab: `pullChanges` di `command-sync.ts` menyaring jurnal untuk pengguna non-Owner dengan
+  `branch_id IN (cabang pengguna)`, dan entri `staff` hanya lolos bila cabangnya cocok. Versi
+  pertama migrasi menulis satu entri untuk satu cabang saja, sehingga kasir dan SPV di cabang
+  lain tidak akan pernah menerima nama baru walaupun Owner melihatnya.
+- Ditemukan SEBELUM migrasi dijalankan ke produksi, lewat simulasi filter `pullChanges` untuk
+  tiap cabang. Setelah diperbaiki, kelima cabang menerima entri.
+- Idempotensi juga diperbaiki: `sync_changes` tidak punya indeks unik pada `command_id`, jadi
+  `INSERT OR IGNORE` tidak menjamin apa pun. Penjagaan sekarang memakai `NOT EXISTS` yang
+  membandingkan `command_id` DAN `branch_id`.
+- Perbaikan ini sisi server. APK tidak berubah, jadi versi tetap 1.10.19 dan perangkat yang
+  sudah terpasang tidak perlu memasang ulang.
+
 - Nama pemilik yang tampil di aplikasi tidak lagi memakai nama pribadi, tetapi nama usaha.
   Aplikasi ini dijual ke banyak pemilik laundry, jadi nama di layar harus netral.
 - Nama pada data server diperbarui lewat migrasi `0008_owner_name_neutral.sql`. Perubahan

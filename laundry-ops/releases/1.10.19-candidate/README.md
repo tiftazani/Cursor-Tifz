@@ -55,17 +55,47 @@ Tidak ada lagi nama tampilan di layar mana pun.
 ## Verifikasi
 
 - VersionName `1.10.19`, versionCode `38`.
-- Unit test debug dan release lulus: 130 test per varian, 0 gagal.
-- Test Worker lulus: 43 test, 0 gagal.
+- Unit test debug dan release lulus: 131 test per varian, 0 gagal.
+- Test Worker lulus: 44 test, 0 gagal.
 - Lint debug dan release lulus.
 - APK release bertanda tangan dan lolos `verify_release.py`.
-- Migrasi `0008` diuji di D1 uji: idempoten, jurnal tetap satu entri.
+- Migrasi `0008` diuji di D1 uji: idempoten, dan kelima cabang menerima entri jurnal.
 - Uji emulator: layar pembuka, halaman masuk, dan layar pendaftaran diperiksa dengan
   `uiautomator`; tidak ada nama pribadi yang tampil.
 
+## Perbaikan sebelum naik ke produksi: jurnal ditulis per cabang
+
+Versi pertama migrasi ini menulis SATU entri jurnal saja. Itu salah.
+
+`pullChanges` di `command-sync.ts` menyaring jurnal untuk pengguna non-Owner dengan
+`branch_id IN (cabang pengguna)`, dan entri `staff` hanya lolos bila cabangnya cocok. Dengan satu
+entri saja, kasir dan SPV di cabang lain tidak akan pernah menerima nama baru, walaupun Owner
+melihatnya. Aturan yang dipakai kode Worker ada di `staffJournalScopes`: satu entri untuk tiap
+cabang tugas.
+
+Bug ini ditemukan SEBELUM migrasi dijalankan ke produksi, dengan menyimulasikan filter
+`pullChanges` untuk tiap cabang di D1 uji. Setelah diperbaiki:
+
+| Cabang | Entri diterima |
+|---|---|
+| bunayya | 1 |
+| laupay-kirab | 1 |
+| laupay-dayeuh | 1 |
+| shelly | 1 |
+| cuciin-test-impor (hanya di uji) | 1 |
+
+Idempotensi juga diperbaiki. `sync_changes` tidak punya indeks unik pada `command_id`, jadi
+`INSERT OR IGNORE` tidak menjamin apa pun di tabel itu. Penjagaan sekarang memakai `NOT EXISTS`
+yang membandingkan `command_id` DAN `branch_id` sekaligus.
+
+Perbaikan ini sisi server. APK tidak berubah, jadi versi tetap `1.10.19` dan perangkat yang
+sudah terpasang tidak perlu memasang ulang.
+
 ## Catatan
 
-- Migrasi `0008` **belum** diterapkan ke produksi. Menunggu perintah Owner.
+- Migrasi `0008` sudah diterapkan ke produksi dan diverifikasi: nama Owner di tabel `staff`
+  menjadi "Cuciin", 4 entri jurnal (satu per cabang), dijalankan ulang menghasilkan
+  `rows_written` nol. Backup sebelum migrasi disimpan di luar repo.
 - Pengaturan urutan menu belum bisa menyembunyikan menu, hanya mengurutkan dan memindahkannya.
 
 Tidak ada kredensial, token, atau material signing di folder ini.

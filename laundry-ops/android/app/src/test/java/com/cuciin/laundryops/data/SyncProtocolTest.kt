@@ -79,6 +79,38 @@ class SyncProtocolTest {
         assertEquals(1, outbox.state.pending.size)
     }
 
+    @Test fun entriJurnalStaffMenggantiNamaOwnerTanpaMenambahBaris() {
+        // Perangkat menerima perubahan nama Owner lewat jurnal, bukan lewat snapshot penuh.
+        // Dua hal yang harus benar: baris lama diganti (bukan ditambah), dan Owner kedua
+        // tidak ikut berubah.
+        val awal = Snapshot(
+            staff = listOf(
+                Staff("Tiftazani", "tiftazani.khara@gmail.com", Role.Owner, listOf("melati")),
+                Staff("Ustutifa", "us.archuleta1207@gmail.com", Role.Owner, listOf("melati")),
+            ),
+            updatedAt = 1,
+        )
+        val payload = LocalJson.json.encodeToJsonElement(
+            Staff.serializer(),
+            Staff("Cuciin", "tiftazani.khara@gmail.com", Role.Owner, listOf("melati")),
+        )
+        val sesudah = SyncProjection.apply(
+            awal,
+            listOf(SyncChange(9, "staff", "tiftazani.khara@gmail.com", "upsert", "melati", payload)),
+            updatedAt = 20,
+        )
+        assertEquals("jumlah staff tidak boleh bertambah", 2, sesudah.staff.size)
+        assertEquals(
+            "Cuciin",
+            sesudah.staff.single { it.email == "tiftazani.khara@gmail.com" }.name,
+        )
+        assertEquals(
+            "Owner kedua tidak boleh ikut berubah",
+            "Ustutifa",
+            sesudah.staff.single { it.email == "us.archuleta1207@gmail.com" }.name,
+        )
+    }
+
     @Test fun deltaProjectionUpsertsAndDeletesByStableEntityId() {
         val original = Snapshot(
             branches = listOf(Branch("melati", "MEL", "Lama", "", "")),

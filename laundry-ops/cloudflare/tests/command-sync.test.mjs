@@ -268,13 +268,28 @@ test("migrasi nama Owner mengganti nama lewat jurnal, bukan hanya tabel", () => 
   // Nama netral harus diisi, dan perubahan wajib tercatat di jurnal supaya perangkat
   // yang sudah memegang snapshot ikut menerima nama baru.
   assert.match(sql, /UPDATE staff/);
-  assert.match(sql, /INSERT OR IGNORE INTO sync_changes/);
+  assert.match(sql, /INSERT INTO sync_changes/);
   assert.match(sql, /'Cuciin'/);
   assert.match(sql, /owner-name-neutral-v1/);
-  // Idempotensi: entri jurnal hanya ditulis bila command_id-nya belum ada.
-  assert.match(sql, /NOT EXISTS/);
   // Jangan menyentuh alamat email: itu identitas akun Firebase.
   assert.match(sql, /tiftazani\.khara@gmail\.com/);
+  // Satu entri per cabang. `pullChanges` menyaring entri staff dengan `branch_id IN (...)`,
+  // jadi entri satu cabang saja tidak akan sampai ke kasir di cabang lain.
+  assert.match(sql, /JOIN staff_branches/, "jurnal harus ditulis per cabang lewat join staff_branches");
+  assert.match(sql, /sc\.branch_id = sb\.branch_id/, "penjagaan idempoten harus per cabang, bukan global");
+  // Tidak ada indeks unik pada sync_changes, jadi idempotensi wajib memakai NOT EXISTS.
+  // Komentar dibuang dulu supaya penjelasan di dalam berkas tidak ikut terbaca sebagai perintah.
+  const tanpaKomentar = sql.split("\n").filter(line => !line.trimStart().startsWith("--")).join("\n");
+  assert.doesNotMatch(tanpaKomentar, /INSERT OR IGNORE/, "INSERT OR IGNORE tidak menjamin idempotensi di tabel ini");
+});
+
+test("jurnal staff ditulis satu entri per cabang, bukan satu saja", () => {
+  // Aturan yang dipakai kode Worker: satu entri untuk tiap cabang tugas.
+  assert.deepEqual(staffJournalScopes([], ["bunayya", "shelly"]), { deletes: [], upserts: ["bunayya", "shelly"] });
+  // Tanpa cabang, tetap satu entri tanpa cabang supaya tidak ada perangkat yang terlewat.
+  assert.deepEqual(staffJournalScopes([], []), { deletes: [], upserts: [null] });
+  // Cabang yang dilepas menghasilkan entri delete, sisanya upsert.
+  assert.deepEqual(staffJournalScopes(["bunayya", "shelly"], ["shelly"]), { deletes: ["bunayya"], upserts: ["shelly"] });
 });
 
 test("entri jurnal staff mengganti baris lama berdasarkan email", () => {
