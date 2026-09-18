@@ -31,6 +31,11 @@ Perbaikan:
 - `payment.delete` ditambahkan ke `KNOWN_COMMANDS` beserta `planPayment` untuk operasi
   hapus. Pembayaran yang sudah tidak ada dianggap selesai (idempoten), bukan ditolak,
   karena command bisa terkirim ulang setelah barisnya hilang.
+- `order.delete` juga dibuat idempoten: menghapus Service yang belum pernah sampai ke
+  server (dibuat lalu dihapus saat offline) sekarang dianggap selesai, bukan dijawab
+  `404 Service tidak ditemukan`. Command yang ditolak 404 akan disimpan perangkat dan
+  tidak pernah berhasil. Aturan "Service yang sudah menerima pembayaran tidak dapat
+  dihapus" **tetap** berlaku dan dikunci test.
 - `pushCommands` mem-parse command satu per satu. Command yang sah tetap dijalankan;
   yang rusak dilaporkan `rejected` dengan `commandId`-nya supaya perangkat bisa
   membuangnya dari antrean.
@@ -41,9 +46,13 @@ Bukti di emulator: antrean 11 perintah yang macet menjadi `pending 0, rejected 0
 revisi perangkat naik 670 ke 674; biaya `cost-5caba443-d84f` (Rp 15.000) muncul di D1
 debug; audit `Menghapus pembayaran` tercatat di server.
 
-Dikunci oleh `cloudflare/tests/queue-stall.test.mjs` (4 test) dan
-`cloudflare/tests/wire-contract.test.mjs` (3 test). Ketujuhnya **terbukti gagal** saat
-perilaku lama dikembalikan satu per satu. Gate Worker naik 44 menjadi 51 test.
+Bukti alur uang: nota `SHL-2609-0001-A34F8` dilunasi lewat UI (sisa Rp 45.000, Tunai).
+Perangkat `paid` 30.000 ke 75.000; D1 `payments` menerima `pay-fa4ead29` Rp 45.000,
+`orders.paid` 75.000, dan audit `SHL-2609-0001-A34F8 menerima Rp 45.000 · Tunai`.
+
+Dikunci oleh `cloudflare/tests/queue-stall.test.mjs` (6 test) dan
+`cloudflare/tests/wire-contract.test.mjs` (3 test). Kesembilannya **terbukti gagal** saat
+perilaku lama dikembalikan satu per satu. Gate Worker naik 44 menjadi 53 test.
 
 ## 1.10.23 — 18 Sep 2026 (versionCode 42)
 

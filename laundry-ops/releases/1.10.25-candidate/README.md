@@ -30,10 +30,10 @@ menjalankan `parseCommand` Worker terhadap 11 perintah nyata dari perangkat.
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| Gate Worker | 51 test lulus (naik dari 44) |
+| Gate Worker | 53 test lulus (naik dari 44) |
 | Gate Android | 191 test debug + 191 test release, 0 gagal |
 | Lint | debug + release lulus |
-| Test pengunci | 7 test, **terbukti gagal** saat perilaku lama dikembalikan satu per satu |
+| Test pengunci | 9 test, **terbukti gagal** saat perilaku lama dikembalikan satu per satu |
 | Antrean perangkat | pending 11 ke 0, rejected 0, revision 670 ke 674 |
 | Data sampai server | biaya `cost-5caba443-d84f` (Rp 15.000) muncul di D1 debug |
 | Audit server | `Menghapus pembayaran` tercatat di D1 debug |
@@ -51,6 +51,9 @@ menjalankan `parseCommand` Worker terhadap 11 perintah nyata dari perangkat.
   diambil (perilaku benar, bukan bug).
 - **Ekspor laporan**: CSV 1.738 byte 22 baris, PDF 1,1 MB, keduanya valid.
 - **Sapu 22 menu**: 0 crash.
+- **Pelunasan lewat UI**: nota `SHL-2609-0001-A34F8` sisa Rp 45.000 dilunasi (Tunai);
+  perangkat `paid` 30.000 ke 75.000; D1 menerima `pay-fa4ead29` Rp 45.000, `orders.paid`
+  75.000, dan audit `menerima Rp 45.000 · Tunai`.
 
 ## Berkas
 
@@ -64,6 +67,8 @@ Sertifikat rilis: SHA-256 `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d
 ## Yang belum diuji
 
 - Alur absensi sampai foto tersimpan (butuh kamera emulator).
-- Alur pembayaran bertahap lewat UI (hanya diuji lewat injeksi data).
+- Pembayaran sebagian lewat UI (yang diuji hanya pelunasan penuh; aplikasi hanya
+  menyediakan tombol "Catat pelunasan").
 - Nol instrumented test (`androidTest`); verifikasi UI bersifat titik-sampel.
-- Peran Supervisor hanya diuji pada 1.10.23, belum diulang di 1.10.25.
+- Peran Supervisor sudah diuji di 1.10.25: header `Aida · SPV`, Laporan transaksi &
+  analitik TERBUKA, Riwayat aktivitas TIDAK TAMPIL, crash 0.

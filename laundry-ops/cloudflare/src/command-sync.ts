@@ -300,7 +300,10 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
   }
 
   if (command.type === "order.delete") {
-    if (!existing) throw new CommandError(404, "Service tidak ditemukan");
+    // Nota yang belum pernah sampai ke server (dibuat lalu dihapus saat offline, atau
+    // sudah hilang di sisi server) sudah sesuai maksud command. Menolaknya 404 membuat
+    // perangkat menyimpan command yang tidak akan pernah berhasil dan menahan antreannya.
+    if (!existing) return { statements: [], entityType: command.wireEntityType ?? "order", entityId: id, branchId, operation: "delete", changePayload: null, updatedAt: now };
     if (existing.paid > 0) throw new CommandError(422, "Service yang sudah menerima pembayaran tidak dapat dihapus. Catat pengembalian dana terlebih dahulu.");
     const adjustments=await retailAdjustments(db,id,[]);
     statements.push(db.prepare(`DELETE FROM orders WHERE id=? AND organization_id=? AND updated_at=? AND ${gate}`).bind(id, ORG_ID, existing.updated_at, command.commandId, ORG_ID, token));

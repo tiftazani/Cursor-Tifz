@@ -160,3 +160,53 @@ test("payment.delete untuk baris yang sudah hilang dianggap selesai, bukan menah
   assert.equal(result.status, 200);
   assert.equal(body.results[0].accepted, true);
 });
+
+test("order.delete untuk Service yang belum pernah sampai server dianggap selesai", async () => {
+  const env = fakeD1();
+  seedBaseline(env);
+  const result = await pushCommands(
+    commandRequest([
+      {
+        commandId: "device-uji-orderdelete-0001",
+        entityType: "nota",
+        entityId: "SLP-2609-9999-BELUMADA",
+        operation: "delete",
+        branchId: "melati",
+        occurredAt: 5,
+        payload: null,
+      },
+    ]),
+    env,
+    identities.owner,
+  );
+  const body = await result.json();
+  assert.equal(result.status, 200);
+  assert.equal(body.results[0].accepted, true);
+  assert.equal(body.results[0].status, "applied");
+});
+
+test("order.delete tetap ditolak bila Service sudah menerima pembayaran", async () => {
+  const env = fakeD1();
+  seedOrder(env);
+  const result = await pushCommands(
+    commandRequest([
+      {
+        commandId: "device-uji-orderdelete-0002",
+        entityType: "nota",
+        entityId: orderId,
+        operation: "delete",
+        branchId: "melati",
+        occurredAt: 6,
+        payload: null,
+      },
+    ]),
+    env,
+    identities.owner,
+  );
+  const body = await result.json();
+  assert.equal(body.results[0].accepted, false);
+  assert.equal(body.results[0].status, "rejected");
+  assert.equal(body.results[0].code, 422);
+  assert.match(body.results[0].error, /menerima pembayaran/);
+  assert.equal(rows(env, `SELECT COUNT(*) AS n FROM orders WHERE id='${orderId}'`)[0].n, 1);
+});
