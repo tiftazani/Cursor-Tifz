@@ -31,12 +31,18 @@ Aturannya dipindah ke `data/PaymentTally.kt` supaya dapat diuji tanpa Android.
 ### Test
 
 ```text
-testDebugUnitTest   : 184 test, 0 gagal, 0 error
-testReleaseUnitTest : 184 test, 0 gagal, 0 error
+testDebugUnitTest   : 191 test, 0 gagal, 0 error
+testReleaseUnitTest : 191 test, 0 gagal, 0 error
 ```
 
-Naik dari 178. `PaymentLedgerTallyTest` mengunci aturan perhitungannya, dan sudah dibuktikan
-**GAGAL** saat aturan lama dikembalikan (2 test), lalu lulus setelah diperbaiki.
+Catatan: saat APK ini dibangun, jumlahnya 184. `MoneyInvariantTest` (7 test) ditambahkan setelahnya
+dan **tidak mengubah kode produksi**, jadi APK dalam folder ini tetap mewakili kode saat ini.
+Checksum di bawah sudah diverifikasi ulang terhadap berkas yang ada di folder ini.
+
+Naik dari 178. `PaymentLedgerTallyTest` dan `MoneyInvariantTest` mengunci aturan perhitungan uang.
+`PaymentLedgerTallyTest` sudah dibuktikan **GAGAL** saat aturan lama dikembalikan (2 test), dan
+`MoneyInvariantTest` juga GAGAL pada keadaan yang sama (2 test), lalu keduanya lulus setelah
+diperbaiki.
 
 Catatan cara uji yang perlu dibaca siapa pun yang menyentuh berkas ini: versi pertama test itu
 menyalin ulang logikanya di dalam test, sehingga tetap LULUS walaupun bug-nya dikembalikan. Test
