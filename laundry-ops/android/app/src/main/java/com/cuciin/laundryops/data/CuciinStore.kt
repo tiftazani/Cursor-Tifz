@@ -357,8 +357,8 @@ object CuciinStore {
      *
      * Selalu mengembalikan nilai, tidak pernah melempar. Katalog cabang bisa kosong sesaat
      * (basis data baru, impor belum jalan) atau memuat id yang belum tersinkron, dan versi
-     * sebelumnya memakai `first()` sehingga aplikasi berhenti pada dua keadaan itu. Ada 21
-     * pemanggil di layar, jadi satu id asing cukup untuk menutup aplikasi.
+     * sebelumnya memakai `first()` sehingga aplikasi berhenti pada dua keadaan itu. Ada 29
+     * pemanggil di seluruh kode utama, jadi satu id asing cukup untuk menutup aplikasi.
      */
     fun branch(id: String = session.value?.branchId ?: viewBranch.value): Branch {
         if (id == "all") return branches.firstOrNull() ?: missingBranch

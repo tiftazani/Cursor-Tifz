@@ -38,7 +38,7 @@ kosong untuk kejadian itu (persetujuan user, tutup kas tanpa cabang).
 
 `CuciinStore.branch()` memakai `first()` dan `first { }` yang melempar `NoSuchElementException`.
 Katalog cabang bisa kosong sesaat (basis data baru, impor belum jalan) atau memuat id yang belum
-tersinkron. Ada 21 pemanggil di layar, jadi satu keadaan itu cukup untuk menutup aplikasi.
+tersinkron. Ada 29 pemanggil di seluruh kode utama, jadi satu keadaan itu cukup untuk menutup aplikasi.
 Sekarang selalu mengembalikan nilai, dengan cabang pengganti bernama "Cabang belum tersedia".
 
 Tiga tempat lain dengan pola sama ikut diperbaiki: dua di formulir user (`MasterScreens`) dan

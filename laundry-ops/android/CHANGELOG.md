@@ -33,8 +33,9 @@ nyata.
 
 `CuciinStore.branch()` memakai `first()` dan `first { }` yang melempar `NoSuchElementException`.
 Katalog cabang bisa kosong sesaat (basis data baru, impor belum jalan) atau memuat id yang belum
-tersinkron. Ada 21 pemanggil di layar, jadi satu keadaan itu cukup untuk menutup aplikasi.
-Sekarang selalu mengembalikan nilai dengan cabang pengganti "Cabang belum tersedia".
+tersinkron. Ada 29 pemanggil di seluruh kode utama, jadi satu keadaan itu cukup untuk menutup
+aplikasi. Sekarang selalu mengembalikan nilai, dengan cabang pengganti bernama "Cabang belum
+tersedia".
 
 Tiga tempat lain dengan pola sama ikut diperbaiki: `MasterScreens` (dua tempat, formulir user)
 dan `nextNotaId` (pembuatan nota baru).
