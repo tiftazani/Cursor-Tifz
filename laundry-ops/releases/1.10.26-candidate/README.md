@@ -27,6 +27,10 @@ Dari 17 fungsi di `AccessCatalog`, **8 yang benar-benar diperiksa** kode dan **9
 Catatan koreksi: catatan ini sempat menulis "hanya 2 dari 17 diperiksa". Angka itu salah.
 Angka di atas hasil pengukuran ulang langsung ke kode sumber.
 
+**Sembilan sisanya sudah ditutup di 1.10.27 (versionCode 46).** Seluruh 17 fungsi kini diperiksa:
+15 lewat titik jaga di `CuciinStore.kt`, 2 lewat gerbang rute di `RouteAccess.kt`. Lihat
+`releases/1.10.27-candidate/README.md`.
+
 Modul lebih baik daripada fungsi: 11 dari 12 modul diperiksa lewat `RouteAccess`, sisanya
 (`stock`) lewat katalog tab di `NavTabs`.
 
@@ -148,7 +152,10 @@ Test ini terbukti gagal ketika tiga penjagaan berbeda dikembalikan ke bug-nya, s
 ## Yang belum dikerjakan
 
 - Worker **produksi** belum di-deploy dengan perbaikan antrean sinkronisasi (bug A/B/C/D dari
-  1.10.25). Worker debug sudah.
+  1.10.25) **pada saat kandidat ini dikemas**. Sudah di-deploy setelahnya: versi
+  `0a3735c3-ef1b-4549-a437-dfe4b458177c`, 18 Sep 2026 14:10 UTC. Perilaku A/B/C/D di produksi
+  belum pernah dijalankan dengan token Firebase sungguhan; yang terbukti hanya bundle-nya
+  identik dengan commit (build deterministik).
 - Perbaikan 1.10.26 hanya di Android; tidak ada perubahan Worker.
 - Belum ada instrumented test (`androidTest`); verifikasi UI masih titik-sampel lewat adb.
 - CRUD user dan registrasi dari UI belum diuji.

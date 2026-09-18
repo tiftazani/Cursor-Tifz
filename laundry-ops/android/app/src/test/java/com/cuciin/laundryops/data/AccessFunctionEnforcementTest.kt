@@ -12,14 +12,15 @@ import org.junit.Test
  * hanya benar bila setiap fungsi di [AccessCatalog] benar-benar diperiksa di suatu tempat.
  *
  * Keterbatasan yang harus diketahui pembaca test ini: [diperiksa] dan [ditegakkanDiStore] adalah
- * daftar yang ditulis TANGAN di dalam test, bukan hasil membaca kode utama. Test di sini bisa
- * lulus walau tidak ada satu pun kode yang memeriksa fungsi tersebut. Yang benar-benar dikunci
- * hanyalah [setiapTitikJagaFungsiMasihAdaDiStore] (membaca CuciinStore.kt) dan
- * [mencabutFungsiMenolakTindakannyaUntukSetiapFungsi] (menguji AccessPolicy).
+ * daftar yang ditulis TANGAN di dalam test. Dua test di sini yang benar-benar membaca kode adalah
+ * [setiapTitikJagaFungsiMasihAdaDiStore] (menghitung titik jaga di CuciinStore.kt),
+ * [tidakAdaFungsiKatalogYangBelumDiperiksa] dan [daftarPemeriksaSesuaiKenyataanKode] (membaca
+ * seluruh sumber kode utama), serta [mencabutFungsiMenolakTindakannyaUntukSetiapFungsi]
+ * (menguji AccessPolicy). Daftar tangan itu sendiri dikunci oleh test yang membaca kode, supaya
+ * klaimnya tidak bisa menyimpang dari kenyataan.
  *
- * Keadaan per 1.10.26, diukur langsung ke kode: 8 dari 17 fungsi diperiksa, 9 belum
- * (queue.status, queue.handover, service.create, stock.write, inventory.write, whatsapp.send,
- * owner.manage, analytics.view, audit.view).
+ * Keadaan per 1.10.26 setelah perbaikan, diukur langsung ke kode: SELURUH 17 fungsi diperiksa,
+ * 15 di antaranya lewat titik jaga di CuciinStore.kt dan 2 lewat gerbang rute di RouteAccess.kt.
  */
 class AccessFunctionEnforcementTest {
 
@@ -30,12 +31,12 @@ class AccessFunctionEnforcementTest {
      * terlihat sebagai kegagalan test, bukan lolos diam-diam.
      */
     private val diperiksa: Set<String> = setOf(
-        "service.price",
+        "queue.status",
+        "queue.handover",
         "service.create",
         "service.correct",
         "service.payment",
-        "queue.status",
-        "queue.handover",
+        "service.price",
         "customer.write",
         "stock.write",
         "inventory.write",
@@ -45,9 +46,13 @@ class AccessFunctionEnforcementTest {
         "cash.close",
         "owner.manage",
         "owner.access",
+        // Dua fungsi ini diperiksa lewat gerbang rute di RouteAccess.kt, bukan di store.
         "analytics.view",
         "audit.view",
     )
+
+    /** Fungsi yang diperiksa lewat gerbang rute, bukan lewat titik jaga di store. */
+    private val diperiksaLewatRute: Set<String> = setOf("analytics.view", "audit.view")
 
     /**
      * Titik penjagaan yang harus ada di store, beserta pola dan jumlah minimalnya.
@@ -60,12 +65,26 @@ class AccessFunctionEnforcementTest {
      * `tolak("fungsi", ...)` untuk pemeriksaan yang menggabungkan [Role] lama dengan fungsi.
      */
     private val titikJaga: Map<String, Pair<String, Int>> = mapOf(
+        // queue
+        "queue.status" to ("boleh" to 1),      // advanceLaundry
+        "queue.handover" to ("boleh" to 1),    // markPickedUp
+        // service
+        "service.create" to ("boleh" to 1),    // saveNota
         "service.correct" to ("boleh" to 2),   // updateNotaLines + deleteNota
         "service.payment" to ("boleh" to 1),   // markLunas
-        "expense.write" to ("boleh" to 2),     // addExpense + deleteExpense
+        "service.price" to ("canAccess" to 2), // setCartPrice + canChangePrice
+        // pelanggan
+        "customer.write" to ("boleh" to 2),    // addCustomer + updateCustomer
+        // produk & aset
+        "stock.write" to ("boleh" to 2),       // editStock + editStocks
+        "inventory.write" to ("boleh" to 3),   // addInventory + updateInventory + deleteInventory
+        // absensi, WhatsApp, biaya, kas
         "attendance.write" to ("boleh" to 2),  // checkIn + checkOut
+        "whatsapp.send" to ("boleh" to 1),     // markWaSent
+        "expense.write" to ("boleh" to 2),     // addExpense + deleteExpense
         "cash.close" to ("boleh" to 1),        // closeCash
-        "customer.write" to ("tolak" to 1),    // deleteCustomer
+        // master data & kontrol akses
+        "owner.manage" to ("boleh" to 15),     // cabang, user, layanan, produk, jenis aset, template WA
         "owner.access" to ("tolak" to 1),      // assignAccessRole
     )
 
@@ -82,25 +101,6 @@ class AccessFunctionEnforcementTest {
             kurang.isEmpty(),
         )
     }
-
-    /**
-     * Fungsi katalog yang BELUM punya pemeriksa di kode utama.
-     *
-     * Daftar ini adalah utang yang diakui, bukan klaim bahwa semuanya beres. Diukur langsung
-     * ke kode per 1.10.26. Bila salah satu diperbaiki, test akan gagal dan meminta daftar ini
-     * diperbarui, sehingga jumlahnya tidak bisa diam-diam bertambah.
-     */
-    private val belumDiperiksa: Set<String> = setOf(
-        "queue.status",
-        "queue.handover",
-        "service.create",
-        "stock.write",
-        "inventory.write",
-        "whatsapp.send",
-        "owner.manage",
-        "analytics.view",
-        "audit.view",
-    )
 
     /** Seluruh sumber kode utama digabung, supaya pencarian tidak bergantung pada satu berkas. */
     private fun sumberUtama(): String {
@@ -124,24 +124,29 @@ class AccessFunctionEnforcementTest {
             .toSet()
     }
 
+    /**
+     * Tidak boleh ada fungsi katalog yang belum diperiksa sama sekali.
+     *
+     * Inilah janji layar Kontrol Akses Role: fungsi tanpa centang berarti tidak diizinkan.
+     * Bila sebuah fungsi tidak dipakai di kode mana pun, mencabut centangnya tidak mengubah
+     * apa pun dan janji itu bohong. Diukur dari sumber kode, bukan dari daftar di test ini.
+     */
     @Test
-    fun daftarFungsiBelumDiperiksaSesuaiKenyataanKode() {
-        val nyata = AccessCatalog.allFunctionKeys() - fungsiYangDipakaiDiKode()
-        assertEquals(
-            "Daftar fungsi yang belum diperiksa tidak lagi sesuai kode. Perbarui [belumDiperiksa] " +
-                "bila ada fungsi yang baru diperiksa, atau tegakkan fungsi yang masih hilang.",
-            belumDiperiksa,
-            nyata,
+    fun tidakAdaFungsiKatalogYangBelumDiperiksa() {
+        val belum = AccessCatalog.allFunctionKeys() - fungsiYangDipakaiDiKode()
+        assertTrue(
+            "Fungsi ini belum diperiksa di kode mana pun, sehingga centangnya di Kontrol Akses " +
+                "Role tidak berpengaruh: $belum",
+            belum.isEmpty(),
         )
     }
 
+    /** Dua fungsi laporan harus benar-benar dijaga lewat gerbang rute, bukan hanya modulnya. */
     @Test
-    fun fungsiYangSudahDitegakkanTidakKembaliKeDaftarBelumDiperiksa() {
-        val tumpangTindih = belumDiperiksa intersect fungsiYangDipakaiDiKode()
-        assertTrue(
-            "Fungsi ini sudah diperiksa di kode, jadi tidak boleh lagi ada di daftar utang: $tumpangTindih",
-            tumpangTindih.isEmpty(),
-        )
+    fun fungsiLaporanDiperiksaLewatGerbangRute() {
+        val gerbang = com.cuciin.laundryops.ui.RouteAccess
+        val hilang = diperiksaLewatRute.filterNot { it in gerbang.functionsInUse }
+        assertTrue("Fungsi ini tidak diperiksa gerbang rute mana pun: $hilang", hilang.isEmpty())
     }
 
     /**
@@ -150,16 +155,7 @@ class AccessFunctionEnforcementTest {
      * Daftar ini adalah janji yang sudah dipenuhi: mencabut fungsi ini dari role membuat
      * tindakannya ditolak, bukan hanya tombolnya disembunyikan.
      */
-    private val ditegakkanDiStore: Set<String> = setOf(
-        "service.correct",
-        "service.payment",
-        "service.price",
-        "expense.write",
-        "attendance.write",
-        "cash.close",
-        "customer.write",
-        "owner.access",
-    )
+    private val ditegakkanDiStore: Set<String> = titikJaga.keys
 
     @Test
     fun fungsiYangDiklaimDitegakkanBenarBenarDiperiksaDiStore() {
@@ -168,6 +164,18 @@ class AccessFunctionEnforcementTest {
         assertTrue(
             "Fungsi ini diklaim ditegakkan di store tetapi tidak diperiksa di sana: $hilang",
             hilang.isEmpty(),
+        )
+    }
+
+    /** Daftar tangan di atas harus sama dengan apa yang benar-benar dipakai kode. */
+    @Test
+    fun daftarPemeriksaSesuaiKenyataanKode() {
+        val nyata = fungsiYangDipakaiDiKode()
+        assertEquals(
+            "Daftar [diperiksa] menyimpang dari kenyataan kode. Fungsi yang tercatat tetapi tidak " +
+                "dipakai di kode akan menutupi janji Kontrol Akses Role, dan sebaliknya.",
+            diperiksa,
+            nyata,
         )
     }
 

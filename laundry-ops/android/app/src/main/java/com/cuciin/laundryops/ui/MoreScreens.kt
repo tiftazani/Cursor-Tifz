@@ -144,8 +144,8 @@ internal fun MoreScreen(nav: NavHostController) {
 internal fun routeAllowed(route: String): Boolean {
     val tab = NavTabs.routeOf(MenuOrder.destinationOf(route))
     if (tab?.hiddenForSupervisor == true && store.session.value?.role == Role.Supervisor) return false
-    val module = RouteAccess.moduleOf(route) ?: return true
-    return store.canAccess(module)
+    val gate = RouteAccess.gateOf(route) ?: return true
+    return store.canAccess(gate.module, gate.function)
 }
 
 /** Nama ikon di katalog dipetakan ke ikon sungguhan di sini supaya katalognya tetap murni. */

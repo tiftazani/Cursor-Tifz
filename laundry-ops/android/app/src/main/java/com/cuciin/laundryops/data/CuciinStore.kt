@@ -576,7 +576,7 @@ object CuciinStore {
     fun whatsappTemplate(): WhatsAppTemplate = whatsappTemplates.firstOrNull() ?: WhatsAppTemplate()
 
     fun saveWhatsAppTemplate(opening: String, content: String, closing: String): String? {
-        if (session.value?.role != Role.Owner) return "Hanya Owner yang dapat mengubah pesan WhatsApp"
+        if (!boleh("owner", "owner.manage")) return tolak("owner.manage", "Akun ini tidak dapat mengubah pesan WhatsApp")
         if (opening.isBlank() || content.isBlank() || closing.isBlank()) return "Pesan pembuka, isi, dan penutup wajib diisi"
         whatsappTemplates.clear()
         whatsappTemplates.add(WhatsAppTemplate(opening = opening.trim(), content = content.trim(), closing = closing.trim()))
@@ -755,7 +755,8 @@ object CuciinStore {
         bump()
     }
 
-    fun addBranch(name: String, code: String, location: String, maps: String): Branch {
+    fun addBranch(name: String, code: String, location: String, maps: String): Branch? {
+        if (!boleh("owner", "owner.manage")) return null
         val id = uniqueBranchId(name)
         val b = Branch(id, code.uppercase().take(4).ifBlank { "CAB" }, name.trim(), location.trim(), maps.trim())
         branches.add(b)
@@ -767,6 +768,7 @@ object CuciinStore {
     }
 
     fun updateBranch(id: String, name: String, code: String, location: String, maps: String) {
+        if (!boleh("owner", "owner.manage")) return
         val i = branches.indexOfFirst { it.id == id }
         if (i < 0) return
         branches[i] = branches[i].copy(
@@ -780,6 +782,7 @@ object CuciinStore {
     }
 
     fun updateBranchMap(id: String, maps: String) {
+        if (!boleh("owner", "owner.manage")) return
         val i = branches.indexOfFirst { it.id == id }
         if (i < 0 || maps.isBlank()) return
         branches[i] = branches[i].copy(mapsQuery = maps.trim())
@@ -788,6 +791,7 @@ object CuciinStore {
     }
 
     fun deleteBranch(id: String): String? {
+        if (!boleh("owner", "owner.manage")) return tolak("owner.manage", "Akun ini tidak dapat menghapus cabang")
         if (branches.size <= 1) return "Minimal satu cabang harus tersisa"
         if (notas.any { it.branchId == id }) return "Cabang memiliki riwayat Service dan tidak dapat dihapus"
         if (inventory.any { it.branchId == id } || expenses.any { it.branchId == id } ||
@@ -808,7 +812,8 @@ object CuciinStore {
         return null
     }
 
-    fun addCustomer(name: String, phone: String, address: String): Customer {
+    fun addCustomer(name: String, phone: String, address: String): Customer? {
+        if (!boleh("customer", "customer.write")) return null
         val c = Customer("c-${newId()}", name.trim(), address.trim(), phone.trim())
         customers.add(0, c)
         selectedCustomer.value = c
@@ -818,6 +823,7 @@ object CuciinStore {
     }
 
     fun updateCustomer(id: String, name: String, phone: String, address: String) {
+        if (!boleh("customer", "customer.write")) return
         val i = customers.indexOfFirst { it.id == id }
         if (i < 0) return
         customers[i] = customers[i].copy(name = name.trim(), phone = phone.trim(), address = address.trim())
@@ -837,6 +843,7 @@ object CuciinStore {
     }
 
     fun addStaff(name: String, email: String, role: Role, branchIds: List<String>, password: String = "", approved: Boolean = true): String? {
+        if (!boleh("owner", "owner.manage")) return tolak("owner.manage", "Akun ini tidak dapat menambah user")
         val em = email.trim()
         if (name.isBlank() || em.isBlank()) return "Nama dan email wajib"
         if (staff.any { it.email.equals(em, ignoreCase = true) }) return "Email sudah dipakai"
@@ -849,6 +856,7 @@ object CuciinStore {
     }
 
     fun updateStaff(email: String, name: String, role: Role, branchIds: List<String>, password: String? = null, approved: Boolean? = null, newEmail: String = email): String? {
+        if (!boleh("owner", "owner.manage")) return tolak("owner.manage", "Akun ini tidak dapat mengubah user")
         val i = staff.indexOfFirst { it.email.equals(email, ignoreCase = true) }
         if (i < 0) return "User tidak ketemu"
         val old = staff[i]
@@ -877,6 +885,7 @@ object CuciinStore {
     }
 
     fun deleteStaff(email: String): String? {
+        if (!boleh("owner", "owner.manage")) return tolak("owner.manage", "Akun ini tidak dapat menghapus user")
         val u = staff.find { it.email.equals(email, ignoreCase = true) } ?: return "User tidak ketemu"
         if (u.role == Role.Owner && staff.count { it.role == Role.Owner } <= 1) return "Owner terakhir tidak bisa dihapus"
         if (session.value?.email.equals(email, ignoreCase = true) == true) return "Tidak bisa hapus akun yang sedang login. Pakai Hapus akun saya."
@@ -899,6 +908,7 @@ object CuciinStore {
     }
 
     fun updateService(id: String, name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean, selfService: Boolean = false, commissionPerUnit: Int = 0, productKey: String = "") {
+        if (!boleh("owner", "owner.manage")) return
         val i = services.indexOfFirst { it.id == id }
         if (i < 0) return
         services[i] = services[i].copy(
@@ -916,6 +926,7 @@ object CuciinStore {
     }
 
     fun deleteService(id: String): String? {
+        if (!boleh("owner", "owner.manage")) return tolak("owner.manage", "Akun ini tidak dapat menghapus layanan")
         val s = services.find { it.id == id } ?: return "Layanan tidak ketemu"
         services.removeAll { it.id == id }
         cart.removeAll { it.service.id == id }
@@ -936,6 +947,7 @@ object CuciinStore {
     }
 
     fun updateProduct(key: String, name: String, min: Int, kind: ProductKind, unit: String) {
+        if (!boleh("owner", "owner.manage")) return
         val i = products.indexOfFirst { it.key == key || it.name == key }
         if (i < 0) return
         val old = products[i]
@@ -949,6 +961,7 @@ object CuciinStore {
     }
 
     fun deleteProduct(key: String): String? {
+        if (!boleh("owner", "owner.manage")) return tolak("owner.manage", "Akun ini tidak dapat menghapus produk")
         val p = products.find { it.key == key || it.name == key } ?: return "Produk tidak ketemu"
         products.removeAll { it.key == key || it.name == key }
         branchStocks.removeAll { it.productKey == p.key }
@@ -972,6 +985,7 @@ object CuciinStore {
         assetTypeId: String = "",
         photoPath: String = "",
     ): InventoryItem {
+        require(boleh("inventory", "inventory.write")) { tolak("inventory.write", "Akun ini tidak dapat menambah aset") }
         val row = InventoryItem(
             id = "inv-${newId()}", branchId = branchId, name = name.trim(), category = category,
             brand = brand.trim(), serialNumber = serialNumber.trim(), quantity = quantity.coerceAtLeast(0),
@@ -1013,6 +1027,7 @@ object CuciinStore {
     )
 
     fun addAssetType(code: String, name: String): String? {
+        if (!boleh("owner", "owner.manage")) return tolak("owner.manage", "Akun ini tidak dapat menambah jenis aset")
         val cleanCode = code.trim().uppercase().filter { it.isLetterOrDigit() }.take(4)
         val cleanName = name.trim()
         if (cleanName.isBlank()) return "Nama jenis aset wajib diisi"
@@ -1026,6 +1041,7 @@ object CuciinStore {
     }
 
     fun updateAssetType(row: AssetType) {
+        if (!boleh("owner", "owner.manage")) return
         val index = assetTypes.indexOfFirst { it.id == row.id }
         if (index < 0) return
         assetTypes[index] = row.copy(code = row.code.trim().uppercase().take(4), name = row.name.trim())
@@ -1034,6 +1050,7 @@ object CuciinStore {
 
     /** Jenis yang sudah dipakai aset tidak dihapus supaya kode aset lama tetap terbaca. */
     fun deleteAssetType(id: String): String? {
+        if (!boleh("owner", "owner.manage")) return tolak("owner.manage", "Akun ini tidak dapat menghapus jenis aset")
         if (inventory.any { it.assetTypeId == id }) return "Jenis ini masih dipakai aset. Nonaktifkan saja."
         assetTypes.removeAll { it.id == id }
         bump()
@@ -1044,6 +1061,7 @@ object CuciinStore {
         (assetTypes + defaultAssetTypes()).firstOrNull { it.id == id }?.name.orEmpty()
 
     fun updateInventory(row: InventoryItem) {
+        if (!boleh("inventory", "inventory.write")) return
         val index = inventory.indexOfFirst { it.id == row.id }
         if (index < 0) return
         inventory[index] = row.copy(name = row.name.trim(), quantity = row.quantity.coerceAtLeast(0), unit = row.unit.trim().ifBlank { "unit" })
@@ -1052,6 +1070,7 @@ object CuciinStore {
     }
 
     fun deleteInventory(id: String): String? {
+        if (!boleh("inventory", "inventory.write")) return tolak("inventory.write", "Akun ini tidak dapat menghapus aset")
         val row = inventory.firstOrNull { it.id == id } ?: return "Aset tidak ditemukan"
         inventory.removeAll { it.id == id }
         AssetPhotos.delete(row.photoPath)
@@ -1234,6 +1253,7 @@ object CuciinStore {
         sendWa: Boolean,
     ): Nota {
         val s = session.value!!
+        require(boleh("service", "service.create")) { tolak("service.create", "Akun ini tidak dapat membuat Service baru") }
         val permittedBranch = when (s.role) {
             Role.Owner -> branches.any { it.id == branchId }
             else -> branchId == s.branchId
@@ -1431,6 +1451,7 @@ object CuciinStore {
     }
 
     fun markWaSent(id: String) {
+        if (!boleh("whatsapp", "whatsapp.send")) return
         val n = notas.find { it.id == id } ?: return
         val t = Clock.nowMs()
         n.waSent = true
@@ -1440,6 +1461,7 @@ object CuciinStore {
     }
 
     fun advanceLaundry(id: String): String? {
+        if (!boleh("queue", "queue.status")) return tolak("queue.status", "Akun ini tidak dapat mengubah status pengerjaan")
         val s = session.value ?: return "Silakan masuk kembali"
         val n = notas.find { it.id == id } ?: return "Service tidak ditemukan"
         if (s.role != Role.Owner && s.branchId != n.branchId) return "Cabang Service tidak sesuai akun"
@@ -1471,6 +1493,7 @@ object CuciinStore {
     }
 
     fun markPickedUp(id: String): String? {
+        if (!boleh("queue", "queue.handover")) return tolak("queue.handover", "Akun ini tidak dapat menyerahkan pesanan ke pelanggan")
         val n = notas.find { it.id == id } ?: return "Nota tidak ditemukan"
         if (n.laundry != LaundryStatus.Selesai) return "Pesanan belum selesai dikerjakan"
         if (n.pay != PayStatus.Lunas) return "Lunasi pembayaran sebelum serah terima"
@@ -1492,10 +1515,12 @@ object CuciinStore {
     }
 
     fun editStock(product: String, branchId: String, kind: StockKind, qty: Int, occurredAtMs: Long = Clock.nowMs()) {
+        if (!boleh("stock", "stock.write")) return
         editStocks(mapOf(product to qty), branchId, kind, occurredAtMs)
     }
 
     fun editStocks(changes: Map<String, Int>, branchId: String, kind: StockKind, occurredAtMs: Long = Clock.nowMs()): Int {
+        if (!boleh("stock", "stock.write")) return 0
         val s = session.value ?: return 0
         if (s.role != Role.Owner && branchId != s.branchId) return 0
         val t = occurredAtMs

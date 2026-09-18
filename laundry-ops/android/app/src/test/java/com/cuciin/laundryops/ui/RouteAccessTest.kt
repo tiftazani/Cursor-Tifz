@@ -117,10 +117,10 @@ class RouteAccessTest {
         // Layar harus membaca pemetaan ini, bukan menyimpan daftar izinnya sendiri.
         val kode = baca("src/main/java/com/cuciin/laundryops/ui/MoreScreens.kt")
         assertTrue(
-            "MoreScreens harus memakai RouteAccess.moduleOf",
-            kode.contains("RouteAccess.moduleOf"),
+            "MoreScreens harus memakai RouteAccess.gateOf",
+            kode.contains("RouteAccess.gateOf"),
         )
-        assertNotNull(RouteAccess.moduleOf("analytics"))
+        assertNotNull(RouteAccess.gateOf("analytics"))
     }
 
     @Test

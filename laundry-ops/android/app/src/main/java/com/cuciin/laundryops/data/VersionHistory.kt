@@ -12,10 +12,19 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.26"
-    val currentCode: Int = 45
+    val currentName: String = "1.10.27"
+    val currentCode: Int = 46
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.27", code = 46, date = "18 Sep 2026",
+            notes = listOf(
+                "Perbaikan penting: seluruh 17 fungsi di Kontrol Akses Role kini benar-benar diperiksa. Sebelumnya 9 fungsi hanya menghiasi layar: mencabut centangnya tidak mengubah apa pun.",
+                "Fungsi yang kini ditegakkan: ubah status kerja, serahkan ke pelanggan, buat Service, ubah stok, ubah aset, kirim WhatsApp, kelola master data, lihat laporan, dan lihat riwayat.",
+                "Kontrol akses: tambah dan ubah pelanggan, seluruh perubahan cabang, user, layanan, produk, dan jenis aset kini ditolak sistem bila fungsinya dicabut, bukan hanya disembunyikan dari layar.",
+                "Laporan transaksi, laporan analitik, dan riwayat aktivitas kini memeriksa fungsinya sendiri, bukan hanya modulnya.",
+            ),
+        ),
         AppRelease(
             name = "1.10.26", code = 45, date = "18 Sep 2026",
             notes = listOf(

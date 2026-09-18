@@ -29,10 +29,45 @@ dengan token sungguhan. Rute tanpa auth hanya `/health` dan `/v1/registration`, 
 verifikasi perilaku butuh perangkat dengan login Firebase. Jalankan uji tulis end-to-end dari
 perangkat produksi saat APK 1.10.26 dibagikan.
 
-## 0. Pekerjaan terbaru (18 Sep, Hermes) — centang fungsi Kontrol Akses Role tidak berpengaruh
+## 0. Pekerjaan terbaru (18 Sep, Hermes) — seluruh 17 fungsi izin kini ditegakkan
 
-**Status: selesai, terverifikasi di emulator, versi 1.10.26 (versionCode 45), branch
-`codex/cuciin-1-8-1`.**
+**Status: selesai, gate hijau, versi 1.10.27 (versionCode 46), branch `codex/cuciin-1-8-1`.
+Belum diuji di perangkat.**
+
+**Berkas yang Hermes pegang: `data/CuciinStore.kt`, `ui/RouteAccess.kt`, `ui/MoreScreens.kt`,
+`ui/MasterScreens.kt`, `data/VersionHistory.kt`, `app/build.gradle.kts`, `CHANGELOG.md`,
+`app/src/test/.../AccessFunctionEnforcementTest.kt`, `app/src/test/.../RouteAccessTest.kt`,
+`releases/1.10.26-candidate/README.md`, `releases/1.10.27-candidate/`.
+Agen lain: jangan sentuh berkas itu sampai baris ini diperbarui.**
+
+Versi 1.10.26 baru menegakkan 8 dari 17 fungsi katalog. Sembilan sisanya hanya menghiasi layar:
+mencabut centangnya tidak mengubah perilaku apa pun, padahal layar Kontrol Akses Role
+menjanjikannya. Sekarang seluruh 17 diperiksa: **15 lewat titik jaga di `CuciinStore.kt`**,
+**2 lewat gerbang rute di `RouteAccess.kt`** yang kini memuat modul DAN fungsi.
+
+Titik jaga baru: `queue.status` (`advanceLaundry`), `queue.handover` (`markPickedUp`),
+`service.create` (`saveNota`), `stock.write` (`editStock`, `editStocks`), `inventory.write`
+(`addInventory`, `updateInventory`, `deleteInventory`), `whatsapp.send` (`markWaSent`),
+`customer.write` (`addCustomer`, `updateCustomer`), `owner.manage` (15 titik: cabang, user,
+layanan, produk, jenis aset, template WhatsApp), plus `analytics.view` dan `audit.view` di
+gerbang rute.
+
+Tanda tangan berubah: `addCustomer` dan `addBranch` kini mengembalikan nilai nullable;
+pemanggil di `MasterScreens.kt` menampilkan pesan penolakan.
+
+Test diperkuat supaya tidak bisa lulus tanpa kode yang memeriksa:
+`tidakAdaFungsiKatalogYangBelumDiperiksa` membaca seluruh sumber kode utama,
+`daftarPemeriksaSesuaiKenyataanKode` mengunci daftar tangan, dan
+`setiapTitikJagaFungsiMasihAdaDiStore` menghitung titik jaga per fungsi.
+
+Bukti test menangkap bug: hapus penjaga `queue.status` → 4 test gagal; hapus penjaga
+`owner.manage` di `addStaff` → 2 test gagal. Gate: **202 debug + 202 release lulus**, lint
+lulus, **53 test Worker lulus**. APK kandidat di `releases/1.10.27-candidate/`.
+
+## 0. Pekerjaan sebelumnya (18 Sep, Hermes) — centang fungsi Kontrol Akses Role tidak berpengaruh
+
+**Status: selesai, terverifikasi di emulator, versi 1.10.26 (versionCode 45). Perbaikan
+sisanya dilanjutkan di 1.10.27.**
 
 **Berkas yang Hermes pegang: `data/CuciinStore.kt`, `ui/OpsScreens.kt`, `ui/MoreScreens.kt`,
 `ui/BusinessScreens.kt`, `data/VersionHistory.kt`, `app/build.gradle.kts`, `CHANGELOG.md`,
@@ -40,8 +75,8 @@ perangkat produksi saat APK 1.10.26 dibagikan.
 Agen lain: jangan sentuh berkas itu sampai baris ini diperbarui.**
 
 Layar **Kontrol Akses Role** menjanjikan "Fungsi tanpa centang berarti tidak diizinkan".
-Dari 17 fungsi di `AccessCatalog`, hanya `analytics.view` dan `service.price` yang
-benar-benar diperiksa kode. Lima belas sisanya hanya menghiasi layar.
+Catatan: bagian ini sempat menulis "hanya `analytics.view` dan `service.price` yang diperiksa".
+Angka itu **salah**. Pengukuran ulang langsung ke kode: 8 dari 17 diperiksa, 9 belum.
 
 Alur picu yang terbukti di perangkat sebelum perbaikan: Owner mencabut centang **Koreksi
 Service** pada sebuah role, menetapkan role itu ke seorang Kasir, lalu Kasir membuka nota.

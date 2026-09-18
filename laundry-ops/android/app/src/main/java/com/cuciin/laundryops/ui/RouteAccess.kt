@@ -19,36 +19,51 @@ import com.cuciin.laundryops.data.AccessCatalog
  */
 internal object RouteAccess {
 
-    /** Rute yang tidak punya modul sendiri selalu boleh: akun, tema, dan riwayat versi. */
-    private val moduleByRoute: Map<String, String> = mapOf(
+    /** Modul dan fungsi yang diperiksa sebuah rute. */
+    data class Gate(val module: String, val function: String? = null)
+
+    /**
+     * Rute yang tidak punya modul sendiri selalu boleh: akun, tema, dan riwayat versi.
+     *
+     * Dua rute laporan memeriksa FUNGSI, bukan hanya modul. Sebelumnya keduanya hanya memeriksa
+     * modul `analytics` dan `audit`, sehingga fungsi `analytics.view` dan `audit.view` di
+     * katalog tidak pernah diperiksa: mencabut centangnya tidak menyembunyikan apa pun.
+     */
+    private val gateByRoute: Map<String, Gate> = mapOf(
         // Pekerjaan harian
-        "queue" to "queue",
-        "service" to "service",
-        "attendance" to "attendance",
-        "inventory" to "inventory",
+        "queue" to Gate("queue"),
+        "service" to Gate("service"),
+        "attendance" to Gate("attendance"),
+        "inventory" to Gate("inventory"),
         // Keuangan
-        "expenses" to "expense",
-        "cash" to "cash",
+        "expenses" to Gate("expense"),
+        "cash" to Gate("cash"),
         // Pelanggan
-        "customers" to "customer",
-        "wa" to "whatsapp",
-        "waArchive" to "whatsapp",
-        // Laporan: dua menu laporan memakai modul yang sama, riwayat aktivitas modulnya sendiri.
-        "analytics" to "analytics",
-        "analyticsReport" to "analytics",
-        "audit" to "audit",
+        "customers" to Gate("customer"),
+        "wa" to Gate("whatsapp"),
+        "waArchive" to Gate("whatsapp"),
+        // Laporan: dua menu laporan berbagi modul, riwayat aktivitas modulnya sendiri.
+        "analytics" to Gate("analytics", "analytics.view"),
+        "analyticsReport" to Gate("analytics", "analytics.view"),
+        "audit" to Gate("audit", "audit.view"),
         // Master data
-        "branches" to "owner",
-        "users" to "owner",
-        "services" to "owner",
-        "products" to "owner",
-        "accessRoles" to "owner",
-        "ownerSettings" to "owner",
+        "branches" to Gate("owner"),
+        "users" to Gate("owner"),
+        "services" to Gate("owner"),
+        "products" to Gate("owner"),
+        "accessRoles" to Gate("owner"),
+        "ownerSettings" to Gate("owner"),
     )
 
+    /** Gerbang izin sebuah rute, atau null bila rute itu selalu boleh. */
+    fun gateOf(route: String): Gate? = gateByRoute[route]
+
     /** Modul yang diperiksa sebuah rute, atau null bila rute itu selalu boleh. */
-    fun moduleOf(route: String): String? = moduleByRoute[route]
+    fun moduleOf(route: String): String? = gateByRoute[route]?.module
 
     /** Modul katalog yang dipakai setidaknya satu rute di layar Modul. */
-    val modulesInUse: Set<String> = moduleByRoute.values.toSet()
+    val modulesInUse: Set<String> = gateByRoute.values.map { it.module }.toSet()
+
+    /** Fungsi katalog yang diperiksa lewat gerbang rute. */
+    val functionsInUse: Set<String> = gateByRoute.values.mapNotNull { it.function }.toSet()
 }

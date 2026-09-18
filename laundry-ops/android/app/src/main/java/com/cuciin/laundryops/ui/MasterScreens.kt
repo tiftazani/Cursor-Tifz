@@ -118,7 +118,11 @@ internal fun CustomersScreen(nav: NavHostController, toast: (String) -> Unit) {
                         }
                         val e = editing
                         if (e == null) {
-                            store.addCustomer(name, phone, address)
+                            val c = store.addCustomer(name, phone, address)
+                            if (c == null) {
+                                toast("Akses Ubah pelanggan dicabut untuk role akun ini")
+                                return@PrimaryBtn
+                            }
                             toast("Pelanggan disimpan")
                             if (pickMode) nav.popBackStack()
                         } else {
@@ -257,8 +261,12 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
                             toast("Kode cabang sudah dipakai. Gunakan kode unik agar ID Service tidak bertabrakan.")
                             return@PrimaryBtn
                         }
-                        if (e == null) store.addBranch(name, code, location, maps)
-                        else store.updateBranch(e.id, name, code, location, maps)
+                        if (e == null) {
+                            if (store.addBranch(name, code, location, maps) == null) {
+                                toast("Akses Kelola master data dicabut untuk role akun ini")
+                                return@PrimaryBtn
+                            }
+                        } else store.updateBranch(e.id, name, code, location, maps)
                         toast("Cabang tersimpan")
                         creating = false
                         editingId = null

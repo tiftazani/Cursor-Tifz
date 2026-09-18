@@ -2,6 +2,60 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.27 — 18 Sep 2026 (versionCode 46)
+
+### Seluruh 17 fungsi Kontrol Akses Role kini benar-benar diperiksa
+
+Versi 1.10.26 menegakkan 8 dari 17 fungsi katalog. Sembilan sisanya hanya menghiasi layar:
+mencabut centangnya tidak mengubah perilaku apa pun. Versi ini menutup seluruhnya.
+
+Diukur langsung ke kode, bukan dari klaim:
+
+| Fungsi | Titik jaga |
+| --- | --- |
+| `queue.status` | `advanceLaundry` |
+| `queue.handover` | `markPickedUp` |
+| `service.create` | `saveNota` |
+| `service.correct` | `updateNotaLines`, `deleteNota` |
+| `service.payment` | `markLunas` |
+| `service.price` | `setCartPrice`, `canChangePrice` |
+| `customer.write` | `addCustomer`, `updateCustomer`, `deleteCustomer` |
+| `stock.write` | `editStock`, `editStocks` |
+| `inventory.write` | `addInventory`, `updateInventory`, `deleteInventory` |
+| `attendance.write` | `checkIn`, `checkOut` |
+| `whatsapp.send` | `markWaSent` |
+| `expense.write` | `addExpense`, `deleteExpense` |
+| `cash.close` | `closeCash` |
+| `owner.manage` | 15 titik: cabang, user, layanan, produk, jenis aset, template WhatsApp |
+| `owner.access` | `assignAccessRole` |
+| `analytics.view` | gerbang rute `analytics` dan `analyticsReport` |
+| `audit.view` | gerbang rute `audit` |
+
+Dua fungsi laporan diperiksa lewat `RouteAccess` yang kini memeriksa fungsi, bukan hanya modul.
+Sebelumnya mencabut `analytics.view` tidak menyembunyikan menu laporan, padahal layar Kontrol
+Akses Role menjanjikan sebaliknya.
+
+### Perubahan tanda tangan yang perlu diketahui
+
+`addCustomer` dan `addBranch` kini mengembalikan nilai nullable, karena keduanya dapat ditolak
+oleh izin. Pemanggil di `MasterScreens.kt` menampilkan pesan penolakan, bukan gagal diam-diam.
+
+### Perbaikan pada test penegakan izin
+
+`AccessFunctionEnforcementTest` sebelumnya dapat lulus walau tidak ada kode yang memeriksa,
+karena membandingkan katalog dengan daftar yang ditulis tangan di test itu sendiri. Sekarang:
+
+- `tidakAdaFungsiKatalogYangBelumDiperiksa` membaca seluruh sumber kode utama dan gagal bila ada
+  fungsi katalog yang belum diperiksa sama sekali.
+- `daftarPemeriksaSesuaiKenyataanKode` mengunci daftar tangan agar tidak menyimpang dari kode.
+- `setiapTitikJagaFungsiMasihAdaDiStore` menghitung titik jaga per fungsi, bukan sekadar mencari
+  keberadaan teks, dengan angka yang diukur langsung.
+
+Terbukti menangkap bug: menghapus penjaga `queue.status` menggagalkan 4 test, menghapus penjaga
+`owner.manage` pada `addStaff` menggagalkan 2 test.
+
+Gate: **202 test debug + 202 release lulus**, lint lulus, **53 test Worker lulus**.
+
 ## 1.10.26 — 18 Sep 2026 (versionCode 45)
 
 ### Centang fungsi di Kontrol Akses Role tidak berpengaruh penuh
