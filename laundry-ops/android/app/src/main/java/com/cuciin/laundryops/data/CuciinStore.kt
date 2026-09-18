@@ -352,10 +352,21 @@ object CuciinStore {
         return row
     }
 
+    /**
+     * Cabang untuk ditampilkan.
+     *
+     * Selalu mengembalikan nilai, tidak pernah melempar. Katalog cabang bisa kosong sesaat
+     * (basis data baru, impor belum jalan) atau memuat id yang belum tersinkron, dan versi
+     * sebelumnya memakai `first()` sehingga aplikasi berhenti pada dua keadaan itu. Ada 21
+     * pemanggil di layar, jadi satu id asing cukup untuk menutup aplikasi.
+     */
     fun branch(id: String = session.value?.branchId ?: viewBranch.value): Branch {
-        if (id == "all") return branches.first()
-        return branches.first { it.id == id }
+        if (id == "all") return branches.firstOrNull() ?: missingBranch
+        return branches.firstOrNull { it.id == id } ?: branches.firstOrNull() ?: missingBranch
     }
+
+    /** Cabang netral saat katalog benar-benar kosong. Kode dan namanya tidak menyesatkan. */
+    private val missingBranch = Branch("", "", "Cabang belum tersedia", "", "")
 
     private fun ensureBranchStocks() {
         val legacyMigration = branchStocks.isEmpty()
@@ -697,7 +708,13 @@ object CuciinStore {
     fun approve(name: String, ok: Boolean) {
         val i = staff.indexOfFirst { it.name == name }
         if (i >= 0) staff[i] = staff[i].copy(approved = ok)
-        log("${if (ok) "Setujui" else "Tolak"} $name", session.value?.branchId ?: "melati")
+        // Cabang audit diambil dari data nyata. Sebelumnya ada nilai tetap "melati" yang sudah
+        // tidak ada di katalog cabang, sehingga entri audit ini tidak pernah lolos filter
+        // per-cabang di pullChanges dan tidak sampai ke perangkat mana pun.
+        val auditBranch = session.value?.branchId
+            ?: staff.getOrNull(i)?.branchIds?.firstOrNull()
+            ?: branches.firstOrNull()?.id.orEmpty()
+        log("${if (ok) "Setujui" else "Tolak"} $name", auditBranch)
         bump()
     }
 
@@ -1100,8 +1117,10 @@ object CuciinStore {
     }
 
     fun nextNotaId(branchId: String): String {
-        val b = branches.first { it.id == branchId }
-        val prefix = "${b.code}-${Clock.yearMonth()}-"
+        // Kode cabang diambil dengan firstOrNull: cabang bisa belum ada di katalog saat impor atau
+        // sinkronisasi, dan first { } melempar sehingga pembuatan nota baru menutup aplikasi.
+        val b = branches.firstOrNull { it.id == branchId } ?: branches.firstOrNull()
+        val prefix = "${b?.code.orEmpty().ifBlank { "CAB" }}-${Clock.yearMonth()}-"
         val max = notas.filter { it.id.startsWith(prefix) }
             .mapNotNull { it.id.removePrefix(prefix).substringBefore('-').toIntOrNull() }
             .maxOrNull() ?: 0
@@ -1487,9 +1506,12 @@ object CuciinStore {
             piutang = piutang(notas.filter { it.branchId == bid }),
         )
         cashCloses.add(0, row)
+        // bid tidak mungkin "all" di sini karena baris di atasnya sudah mengembalikan null.
+        // Sebelumnya ada cabang tetap "melati" untuk kasus itu, padahal cabang tersebut sudah
+        // tidak ada sehingga entri auditnya tidak pernah sampai ke perangkat mana pun.
         log(
             "Tutup kas ${row.at} · tunai ${rp(row.tunai)} · QRIS ${rp(row.qris)} · transfer ${rp(row.transfer)} · piutang ${rp(row.piutang)}",
-            if (bid == "all") "melati" else bid,
+            bid,
         )
         bump()
         return row

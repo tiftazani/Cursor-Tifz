@@ -353,7 +353,7 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
         email = u?.email.orEmpty()
         pass = ""
         role = u?.role ?: Role.Kasir
-        branches = u?.branchIds?.toSet() ?: setOf(store.branches.first().id)
+        branches = u?.branchIds?.toSet() ?: setOfNotNull(store.branches.firstOrNull()?.id)
     }
     val selectedBranchNames = store.branches.filter { it.id in branches }.map { it.name.removePrefix("Cuciin ") }
     val selectedBranchValue = when (selectedBranchNames.size) {
@@ -399,7 +399,7 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
                     )
                     Spacer(Modifier.height(8.dp))
                     PrimaryBtn("Simpan") {
-                        val bids = branches.toList().ifEmpty { listOf(store.branches.first().id) }
+                        val bids = branches.toList().ifEmpty { listOfNotNull(store.branches.firstOrNull()?.id) }
                         val err = if (editing == null) {
                             store.addStaff(name, email, role, bids, pass, approved = true)
                         } else {
