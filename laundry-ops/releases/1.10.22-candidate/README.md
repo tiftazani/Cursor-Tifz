@@ -71,13 +71,18 @@ Kedua menu yang dilaporkan diuji ulang setelah perbaikan:
 | Antrian laundry | aplikasi keluar | membuka layar Antrian |
 | Service baru | aplikasi keluar | membuka layar Service baru |
 
-Seluruh menu di layar Modul disapu satu per satu dengan akun Kasir:
+Seluruh menu di layar Modul disapu satu per satu dengan akun Kasir, 22 dari 22 menu:
 
 ```text
-menu tampil dan diklik tanpa crash: 11
-menu tidak tampil untuk peran ini: 11
-CRASH: 0
+diklik tanpa crash : 12
+tidak tampil       : 10
+CRASH              : 0
 ```
+
+Catatan cara uji: `uiautomator` menulis karakter `&` sebagai `&amp;`, sehingga pencocokan nama
+menu seperti "Akun & profil" gagal bila XML-nya tidak di-decode lebih dulu. Sapuan pertama
+karena itu melaporkan angka yang salah (11 dan 11) dan melewatkan satu menu. Sapuan ulang
+dengan XML yang di-decode memberi angka di atas.
 
 ## Catatan
 
