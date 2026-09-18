@@ -1,0 +1,11 @@
+<resources>
+    <!--
+      Tambahan tema untuk Android 8.1 (API 27) ke atas.
+      windowLightNavigationBar baru ada sejak API 27, jadi dipisah agar perangkat lama tetap
+      bisa memasang aplikasi ini. Nilainya false karena bar dibuat tembus pandang dan isi di
+      belakangnya gelap.
+    -->
+    <style name="Theme.Cuciin" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

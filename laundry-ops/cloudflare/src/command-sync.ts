@@ -22,11 +22,12 @@ const ORG_ID = "cuciin";
 const MAX_COMMAND_BODY_BYTES = 512_000;
 const MAX_COMMANDS = 100;
 const MAX_CHANGE_LIMIT = 500;
-const OWNER_ONLY = new Set(["branch.upsert", "staff.upsert", "service.upsert", "product.upsert", "accessPolicy.upsert", "accessPolicy.delete", "whatsappTemplate.upsert", "whatsappTemplate.delete"]);
+const OWNER_ONLY = new Set(["branch.upsert", "staff.upsert", "service.upsert", "product.upsert", "accessRole.upsert", "accessRole.delete", "accessPolicy.upsert", "accessPolicy.delete", "whatsappTemplate.upsert", "whatsappTemplate.delete"]);
 const KNOWN_COMMANDS = new Set([
   "order.create", "order.update", "order.put", "order.delete", "order.status", "order.payment", "order.handover",
   "stock.batch", "expense.upsert", "expense.delete", "attendance.upsert", "attendance.delete", "customer.upsert",
-  "branch.upsert", "branch.delete", "staff.upsert", "staff.delete", "service.upsert", "service.delete", "product.upsert", "product.delete", "customer.delete", "inventory.upsert", "inventory.delete", "accessPolicy.upsert", "accessPolicy.delete", "whatsappTemplate.upsert", "whatsappTemplate.delete",
+  "payment.upsert",
+  "branch.upsert", "branch.delete", "staff.upsert", "staff.delete", "service.upsert", "service.delete", "product.upsert", "product.delete", "customer.delete", "inventory.upsert", "inventory.delete", "assetType.upsert", "assetType.delete", "accessRole.upsert", "accessRole.delete", "accessPolicy.upsert", "accessPolicy.delete", "whatsappTemplate.upsert", "whatsappTemplate.delete",
   "branchStock.put", "branchStock.delete", "stockMove.upsert", "stockMove.delete", "audit.upsert", "audit.delete", "cashClose.upsert", "cashClose.delete",
 ]);
 
@@ -120,7 +121,7 @@ export function parseCommand(raw: unknown): SyncCommand {
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{7,99}$/.test(commandId)) throw new CommandError(422, "commandId tidak valid");
   const wireEntityType=typeof raw.entityType === "string" ? raw.entityType.trim() : undefined;
   const operation=raw.operation === "delete" ? "delete" : "upsert";
-  const aliases:Record<string,string>={branch:"branch",staff:"staff",customer:"customer",service:"service",product:"product",inventory:"inventory",expense:"expense",attendance:"attendance",nota:"order",branchStock:"branchStock",stockMove:"stockMove",audit:"audit",cashClose:"cashClose",accessPolicy:"accessPolicy",whatsappTemplate:"whatsappTemplate"};
+  const aliases:Record<string,string>={branch:"branch",staff:"staff",customer:"customer",service:"service",product:"product",inventory:"inventory",assetType:"assetType",expense:"expense",attendance:"attendance",nota:"order",branchStock:"branchStock",stockMove:"stockMove",audit:"audit",cashClose:"cashClose",payment:"payment",accessRole:"accessRole",accessPolicy:"accessPolicy",whatsappTemplate:"whatsappTemplate"};
   let type=typeof raw.type === "string" ? raw.type.trim() : "";
   if(!type && wireEntityType && aliases[wireEntityType]) type=wireEntityType === "nota" ? (operation === "delete" ? "order.delete" : "order.put") : `${aliases[wireEntityType]}.${operation === "delete" ? "delete" : (wireEntityType === "branchStock" ? "put" : "upsert")}`;
   if(!type) throw new CommandError(422,"type atau entityType wajib diisi");
@@ -188,9 +189,12 @@ function customAccessRequirement(command: SyncCommand): { module: string; functi
   if (command.type.startsWith("stock") || command.type.startsWith("branchStock")) return {module:"stock",function:"stock.write"};
   if (command.type.startsWith("attendance")) return {module:"attendance",function:"attendance.write"};
   if (command.type.startsWith("customer")) return {module:"customer"};
+  if (command.type.startsWith("payment")) return {module:"service",function:"service.correct"};
   if (command.type.startsWith("inventory")) return {module:"inventory"};
+  if (command.type.startsWith("assetType")) return {module:"inventory"};
   if (command.type.startsWith("expense")) return {module:"expense"};
   if (command.type.startsWith("cashClose")) return {module:"cash"};
+  if (command.type.startsWith("accessRole")) return {module:"owner",function:"owner.access"};
   return null;
 }
 
@@ -297,6 +301,7 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
 
   if (command.type === "order.delete") {
     if (!existing) throw new CommandError(404, "Service tidak ditemukan");
+    if (existing.paid > 0) throw new CommandError(422, "Service yang sudah menerima pembayaran tidak dapat dihapus. Catat pengembalian dana terlebih dahulu.");
     const adjustments=await retailAdjustments(db,id,[]);
     statements.push(db.prepare(`DELETE FROM orders WHERE id=? AND organization_id=? AND updated_at=? AND ${gate}`).bind(id, ORG_ID, existing.updated_at, command.commandId, ORG_ID, token));
     statements.push(guardPreviousMutation(db,command,token));
@@ -307,22 +312,33 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
 
   if (["order.status", "order.payment", "order.handover"].includes(command.type)) {
     if (!existing) throw new CommandError(404, "Service tidak ditemukan");
+    // Snapshot materializer mengganti seluruh entity saat upsert, jadi payload parsial
+    // akan menghapus field lain. Susun ulang payload lengkap dari baris tersimpan.
+    const storedPayload=existing.payload_json ? JSON.parse(existing.payload_json) as JsonRecord : null;
+    const storedLines=(await db.prepare("SELECT service_id,service_name,quantity,unit,unit_price,handler_email,handler_name,commission_per_unit FROM order_lines WHERE order_id=? ORDER BY line_no").bind(id).all<{service_id:string;service_name:string;quantity:number;unit:string;unit_price:number;handler_email:string;handler_name:string;commission_per_unit:number}>()).results;
+    const canonicalFull:JsonRecord={...(storedPayload ?? {}),id,branchId:existing.branch_id,kasirEmail:existing.cashier_email,kasir:existing.cashier_name,customer:existing.customer_name,phone:existing.phone,total:existing.total,paid:existing.paid,pay:existing.payment_status,laundry:existing.work_status,payMethod:existing.payment_method,createdAt:typeof storedPayload?.createdAt==="string"?storedPayload.createdAt:String(existing.created_at),createdAtMs:existing.created_at,pickupAt:existing.estimated_finish,completedAt:existing.completed_at,pickedUpAt:existing.picked_up_at,waSent:existing.wa_sent===1,photos:[],lines:storedLines.map(line=>({serviceId:line.service_id,name:line.service_name,qty:line.quantity,unit:line.unit,unitPrice:line.unit_price,handledByEmail:line.handler_email,handledByName:line.handler_name,commissionPerUnit:line.commission_per_unit})),updatedAtMs:now};
+    delete (canonicalFull as JsonRecord).syncIntent;
     if (command.type === "order.status") {
       const status = requiredString(p, "workStatus", 80);
+      canonicalFull.laundry=status; canonicalFull.completedAt=p.completedAt ?? null;
       statements.push(db.prepare(`UPDATE orders SET work_status=?,completed_at=?,updated_at=? WHERE id=? AND organization_id=? AND updated_at=? AND ${gate}`).bind(status, p.completedAt ?? null, now, id, ORG_ID, existing.updated_at, command.commandId, ORG_ID, token));
     } else if (command.type === "order.payment") {
       const paid = integer(p, "paid");
       if (paid > existing.total) throw new CommandError(422,"Pembayaran melebihi grand total");
+      if (paid < existing.paid) throw new CommandError(422,"Pembayaran tercatat tidak dapat dikurangi tanpa pengembalian dana");
       const status = requiredString(p, "paymentStatus", 50);
       const method = requiredString(p, "paymentMethod", 50);
+      canonicalFull.paid=paid; canonicalFull.pay=status; canonicalFull.payMethod=method;
       statements.push(db.prepare(`UPDATE orders SET paid=?,payment_status=?,payment_method=?,updated_at=? WHERE id=? AND organization_id=? AND updated_at=? AND ?<=total AND ${gate}`).bind(paid,status,method,now,id,ORG_ID,existing.updated_at,paid,command.commandId,ORG_ID,token));
     } else {
       const pickedUpAt = requiredString(p, "pickedUpAt", 80);
+      canonicalFull.pickedUpAt=pickedUpAt;
       statements.push(db.prepare(`UPDATE orders SET picked_up_at=?,updated_at=? WHERE id=? AND organization_id=? AND updated_at=? AND ${gate}`).bind(pickedUpAt,now,id,ORG_ID,existing.updated_at,command.commandId,ORG_ID,token));
     }
+    statements.push(db.prepare(`UPDATE orders SET payload_json=? WHERE id=? AND organization_id=? AND ${gate}`).bind(JSON.stringify(canonicalFull),id,ORG_ID,command.commandId,ORG_ID,token));
     statements.push(guardPreviousMutation(db,command,token));
     statements.push(audit(db, command, identity, token, branchId, command.type, id, now));
-    return { statements, entityType: "order", entityId: id, branchId, changePayload: { ...p, id, branchId, updatedAt: now }, updatedAt:now };
+    return { statements, entityType: command.wireEntityType ?? "nota", entityId: id, branchId, changePayload: canonicalFull, updatedAt:now };
   }
 
   const linesRaw = p.lines;
@@ -346,6 +362,7 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
   const stockAdjustments=await retailAdjustments(db,id,lines);
   const paid = integer(p,"paid");
   if (paid > total) throw new CommandError(422, "Pembayaran melebihi grand total");
+  if (existing && paid < existing.paid) throw new CommandError(422, "Pembayaran tercatat tidak dapat dikurangi tanpa pengembalian dana");
   const cashierEmail = identity.role === "Owner" || identity.bootstrap ? (firstString(p,["cashierEmail","kasirEmail"],false,254).toLowerCase() || identity.email.toLowerCase()) : identity.email.toLowerCase();
   const cashierName = identity.role === "Owner" || identity.bootstrap ? (firstString(p,["cashierName","kasir"],false,160) || identity.name) : identity.name;
   const canonicalLines=lines.map(line=>({serviceId:line.serviceId,name:line.serviceName,qty:line.quantity,unit:line.unit,unitPrice:line.unitPrice,handledByEmail:line.handlerEmail,handledByName:line.handlerName,commissionPerUnit:line.commissionPerUnit}));
@@ -404,7 +421,13 @@ async function planStock(db: D1Database, command: SyncCommand, identity: SyncIde
     const payload={ id:moveId,branchId,productId:item.productId,product:item.productName,kind:item.mode,qty:item.quantity,by:identity.email.toLowerCase(),note:item.note,atMs:now };
     statements.push(db.prepare(`INSERT INTO stock_moves(id,organization_id,branch_id,payload_json,occurred_at,updated_at)
       SELECT ?,?,?,?,?,? WHERE ${commandGate()}`).bind(moveId,ORG_ID,branchId,JSON.stringify(payload),now,now,command.commandId,ORG_ID,token));
-    statements.push(journal(db,command,identity,token,"stock",`${branchId}:${item.productId}`,"upsert",branchId,payload,now));
+    // Riwayat stok dan saldo dijurnal sebagai entity yang dikenal materializer snapshot.
+    // Tipe "stock" tidak ada di CHANGE_DATASETS sehingga perubahan tidak sampai ke perangkat.
+    statements.push(db.prepare(`INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id)
+      SELECT ?,'stockMove',?,'upsert',?,?,?,?,? WHERE ${commandGate()}`).bind(ORG_ID,moveId,JSON.stringify(payload),now,branchId,identity.email.toLowerCase(),command.commandId,command.commandId,ORG_ID,token));
+    const balanceId=`${branchId}:${item.productId}`;
+    statements.push(db.prepare(`INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id)
+      SELECT ?,'branchStock',?,'upsert',json_object('branchId',?,'productKey',?,'stock',(SELECT quantity FROM branch_stocks WHERE branch_id=? AND product_id=?)),?,?,?,? WHERE ${commandGate()}`).bind(ORG_ID,balanceId,branchId,item.productId,branchId,item.productId,now,branchId,identity.email.toLowerCase(),command.commandId,command.commandId,ORG_ID,token));
   }
   statements.push(audit(db,command,identity,token,branchId,`Stok batch: ${items.length} produk`,null,now));
   return { statements,entityType:"stock-batch",entityId:command.commandId,branchId,changePayload:null };
@@ -482,6 +505,32 @@ async function planDerivedStock(db:D1Database, command:SyncCommand, identity:Syn
   return {statements:[],entityType:"derived-noop",entityId:command.entityId || `${branchId}:${productId}`,branchId,changePayload:null};
 }
 
+async function planPayment(db:D1Database, command:SyncCommand, identity:SyncIdentity, token:string, now:number):Promise<Plan> {
+  const p=command.payload;
+  const id=command.entityId || requiredString(p,"id",100);
+  const notaId=requiredString(p,"notaId",100);
+  const branchId=command.branchId || requiredString(p,"branchId",100);
+  assertBranch(identity,branchId);
+  const order=await db.prepare("SELECT branch_id,total,paid FROM orders WHERE id=? AND organization_id=?").bind(notaId,ORG_ID).first<{branch_id:string;total:number;paid:number}>();
+  if(!order || order.branch_id!==branchId) throw new CommandError(422,"Service pembayaran tidak ditemukan pada cabang ini");
+  const existing=await db.prepare("SELECT id FROM payments WHERE id=? AND organization_id=?").bind(id,ORG_ID).first<{id:string}>();
+  if(existing) throw new CommandError(409,"Pembayaran dengan ID ini sudah tercatat");
+  const amount=integer(p,"amount",1);
+  const recorded=await db.prepare("SELECT COALESCE(SUM(amount),0) AS amount FROM payments WHERE order_id=? AND organization_id=?").bind(notaId,ORG_ID).first<{amount:number}>();
+  if((recorded?.amount ?? 0) + amount > order.paid) throw new CommandError(422,"Pembayaran melebihi penerimaan Service");
+  const method=requiredString(p,"method",30);
+  if(!["Tunai","Qris","Transfer"].includes(method)) throw new CommandError(422,"Metode pembayaran tidak valid");
+  const atMs=integer(p,"atMs",1);
+  const payload={id,notaId,branchId,amount,method,atMs,at:optionalString(p,"at",80),by:identity.name};
+  const gate=commandGate();
+  const statements=[
+    db.prepare(`INSERT INTO payments(id,organization_id,order_id,branch_id,amount,method,received_at,received_by,payload_json,updated_at) SELECT ?,?,?,?,?,?,?,?,?,? WHERE ${gate}`).bind(id,ORG_ID,notaId,branchId,amount,method,atMs,identity.email.toLowerCase(),JSON.stringify(payload),now,command.commandId,ORG_ID,token),
+    guardPreviousMutation(db,command,token),
+    audit(db,command,identity,token,branchId,"Mencatat pembayaran",notaId,now),
+  ];
+  return {statements,entityType:"payment",entityId:id,branchId,changePayload:payload,updatedAt:now};
+}
+
 async function planGeneric(db:D1Database, command:SyncCommand, identity:SyncIdentity, token:string, now:number):Promise<Plan> {
   const p=command.payload;
   const id=command.entityId || requiredString(p,"id",100);
@@ -489,7 +538,7 @@ async function planGeneric(db:D1Database, command:SyncCommand, identity:SyncIden
   const kind=command.type.split(".")[0];
   const configs:Record<string,{table:string;entity:string;branch:boolean;idColumn?:string}>= {
     expense:{table:"expenses",entity:"expense",branch:true}, attendance:{table:"attendance",entity:"attendance",branch:true}, customer:{table:"customers",entity:"customer",branch:false},
-    branch:{table:"branches",entity:"branch",branch:false}, staff:{table:"staff",entity:"staff",branch:false,idColumn:"email"}, service:{table:"services",entity:"service",branch:false}, product:{table:"products",entity:"product",branch:false}, inventory:{table:"inventory_items",entity:"inventory",branch:true}, accessPolicy:{table:"access_policies",entity:"accessPolicy",branch:false,idColumn:"email"}, whatsappTemplate:{table:"whatsapp_templates",entity:"whatsappTemplate",branch:false},
+    branch:{table:"branches",entity:"branch",branch:false}, staff:{table:"staff",entity:"staff",branch:false,idColumn:"email"}, service:{table:"services",entity:"service",branch:false}, product:{table:"products",entity:"product",branch:false}, inventory:{table:"inventory_items",entity:"inventory",branch:true}, assetType:{table:"asset_types",entity:"assetType",branch:false}, accessRole:{table:"access_roles",entity:"accessRole",branch:false}, accessPolicy:{table:"access_policies",entity:"accessPolicy",branch:false,idColumn:"email"}, whatsappTemplate:{table:"whatsapp_templates",entity:"whatsappTemplate",branch:false},
   };
   const config=configs[kind];
   if(!config) throw new CommandError(422,"Command tidak didukung");
@@ -535,6 +584,8 @@ async function planGeneric(db:D1Database, command:SyncCommand, identity:SyncIden
   else if(kind==="product") statements.push(db.prepare(`INSERT INTO products(id,organization_id,name,minimum_stock,kind,unit,updated_at) SELECT ?,?,?,?,?,?,? WHERE ${gate} ON CONFLICT(id) DO UPDATE SET name=excluded.name,minimum_stock=excluded.minimum_stock,kind=excluded.kind,unit=excluded.unit,updated_at=excluded.updated_at`).bind(id,ORG_ID,requiredString(p,"name",200),typeof p.minimumStock === "number"?integer(p,"minimumStock"):integer(p,"min"),optionalString(p,"kind",80) || "BahanHabisPakai",optionalString(p,"unit",40) || "pcs",now,command.commandId,ORG_ID,token));
   else if(kind==="accessPolicy") statements.push(db.prepare(`INSERT INTO access_policies(email,organization_id,payload_json,updated_at) SELECT ?,?,?,? WHERE ${gate} ON CONFLICT(email,organization_id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at`).bind(requiredString(p,"email",254).toLowerCase(),ORG_ID,JSON.stringify({...p,email:requiredString(p,"email",254).toLowerCase()}),now,command.commandId,ORG_ID,token));
   else if(kind==="whatsappTemplate") statements.push(db.prepare(`INSERT INTO whatsapp_templates(id,organization_id,payload_json,updated_at) SELECT ?,?,?,? WHERE ${gate} ON CONFLICT(id,organization_id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at`).bind(id,ORG_ID,JSON.stringify({...p,id}),now,command.commandId,ORG_ID,token));
+  else if(kind==="assetType") statements.push(db.prepare(`INSERT INTO asset_types(id,organization_id,code,name,active,updated_at) SELECT ?,?,?,?,?,? WHERE ${gate} ON CONFLICT(id) DO UPDATE SET code=excluded.code,name=excluded.name,active=excluded.active,updated_at=excluded.updated_at`).bind(id,ORG_ID,requiredString(p,"code",8).toUpperCase(),requiredString(p,"name",120),p.active===false?0:1,now,command.commandId,ORG_ID,token));
+  else if(kind==="accessRole") statements.push(db.prepare(`INSERT INTO access_roles(id,organization_id,name,built_in,payload_json,updated_at) SELECT ?,?,?,?,?,? WHERE ${gate} ON CONFLICT(id) DO UPDATE SET name=excluded.name,payload_json=excluded.payload_json,updated_at=excluded.updated_at`).bind(id,ORG_ID,requiredString(p,"name",120),p.builtIn===true?1:0,JSON.stringify({...p,id}),now,command.commandId,ORG_ID,token));
   else statements.push(db.prepare(`INSERT INTO inventory_items(id,organization_id,branch_id,payload_json,updated_at) SELECT ?,?,?,?,? WHERE ${gate} ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,payload_json=excluded.payload_json,updated_at=excluded.updated_at`).bind(id,ORG_ID,branchId,JSON.stringify({...p,id,branchId,updatedAt:now}),now,command.commandId,ORG_ID,token));
   if(branchId) statements.push(audit(db,command,identity,token,branchId,command.type,null,now));
   const { passwordHash: _passwordHash, ...withoutLocalPassword } = p;
@@ -568,6 +619,7 @@ async function executeCommand(env:CommandEnv, command:SyncCommand, identity:Sync
   else if(command.type.startsWith("branchStock.")) plan=await planDerivedStock(env.DB,command,identity,token);
   else if(command.type.startsWith("stockMove.")) plan=await planStockMove(env.DB,command,identity,token,now);
   else if(command.type.startsWith("audit.") || command.type.startsWith("cashClose.")) plan=await planRawOperational(env.DB,command,identity,token,now);
+  else if(command.type.startsWith("payment.")) plan=await planPayment(env.DB,command,identity,token,now);
   else plan=await planGeneric(env.DB,command,identity,token,now);
   const initial=env.DB.prepare("INSERT OR IGNORE INTO processed_commands(command_id,organization_id,processed_at,command_type,actor_email,request_hash,execution_token,result_json) VALUES(?,?,?,?,?,?,?,NULL)").bind(command.commandId,ORG_ID,now,command.type,identity.email.toLowerCase(),requestHash,token);
   const operation=plan.operation ?? "upsert";

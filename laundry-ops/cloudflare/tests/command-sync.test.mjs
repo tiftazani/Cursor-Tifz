@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { attendanceRecordOwnedBy, canonicalHistoryPayload, cashCloseCreateAllowed, commandFailureResult, commandPermission, nextEntityVersion, orderUpsertAllowed, parseCommand, pullChanges, pushCommands, staffJournalScopes, stockMoveOrderReferenceAllowed, syncScopeKey, trustedCommission } from "../src/command-sync.ts";
 import { applyJournalToSnapshot, legacySnapshotWriteAllowed, visibleSnapshot } from "../src/index.ts";
+import { commandRequest, fakeD1, identities, rows, seedBaseline } from "./support/d1-harness.mjs";
 
 const migration = readFileSync(new URL("../migrations/0003_command_sync.sql", import.meta.url), "utf8");
 const commandSyncSource = readFileSync(new URL("../src/command-sync.ts", import.meta.url), "utf8");
@@ -93,6 +94,12 @@ test("komisi transaksi selalu berasal dari katalog server", () => {
   assert.match(commandSyncSource,/FROM services WHERE organization_id=\? AND active=1 AND id IN/);
 });
 
+test("jurnal pembayaran bersifat append-only dan tidak boleh melebihi penerimaan Service", () => {
+  assert.match(commandSyncSource,/INSERT INTO payments/);
+  assert.match(commandSyncSource,/Pembayaran melebihi penerimaan Service/);
+  assert.match(commandSyncSource,/Pembayaran tercatat tidak dapat dikurangi tanpa pengembalian dana/);
+});
+
 test("tutup kas bersifat append-only dan menolak ID yang sudah ada", () => {
   assert.equal(cashCloseCreateAllowed(null),true);
   assert.equal(cashCloseCreateAllowed("melati"),false);
@@ -135,6 +142,29 @@ test("envelope Android dipetakan tanpa mengganti nama entity Kotlin", () => {
   const deletion=parseCommand({commandId:"device-command-002",entityType:"attendance",entityId:"abs-1",operation:"delete",branchId:"melati",payload:null});
   assert.equal(deletion.type,"attendance.delete");
   assert.deepEqual(deletion.payload,{});
+});
+
+test("setiap entityType yang dikirim Android punya alias command", () => {
+  // Tanpa alias, command ditolak 422 dan perangkat mengulanginya tanpa henti.
+  const cases={
+    assetType:"assetType.upsert",
+    accessRole:"accessRole.upsert",
+    accessPolicy:"accessPolicy.upsert",
+    inventory:"inventory.upsert",
+    expense:"expense.upsert",
+    payment:"payment.upsert",
+    cashClose:"cashClose.upsert",
+    stockMove:"stockMove.upsert",
+    audit:"audit.upsert",
+    branchStock:"branchStock.put",
+    whatsappTemplate:"whatsappTemplate.upsert",
+  };
+  for (const [entityType, expected] of Object.entries(cases)) {
+    const command=parseCommand({commandId:`device-command-${entityType}`,entityType,entityId:"x-1",operation:"upsert",branchId:"melati",payload:{id:"x-1"}});
+    assert.equal(command.type,expected,`entityType ${entityType} harus dipetakan ke ${expected}`);
+  }
+  const removal=parseCommand({commandId:"device-command-remove",entityType:"assetType",entityId:"at-1",operation:"delete",branchId:"melati",payload:null});
+  assert.equal(removal.type,"assetType.delete");
 });
 
 test("kegagalan D1 sementara tidak ditandai sebagai penolakan permanen", () => {
@@ -231,4 +261,121 @@ test("snapshot PUT lama hanya tersedia untuk bootstrap privat", () => {
   assert.equal(legacySnapshotWriteAllowed({bootstrap:true},0),true);
   assert.equal(legacySnapshotWriteAllowed({bootstrap:true},1),false);
   assert.equal(legacySnapshotWriteAllowed({bootstrap:false},0),false);
+});
+
+test("migrasi nama Owner mengganti nama lewat jurnal, bukan hanya tabel", () => {
+  const sql = readFileSync(new URL("../migrations/0008_owner_name_neutral.sql", import.meta.url), "utf8");
+  // Nama netral harus diisi, dan perubahan wajib tercatat di jurnal supaya perangkat
+  // yang sudah memegang snapshot ikut menerima nama baru.
+  assert.match(sql, /UPDATE staff/);
+  assert.match(sql, /INSERT INTO sync_changes/);
+  assert.match(sql, /'Cuciin'/);
+  assert.match(sql, /owner-name-neutral-v1/);
+  // Jangan menyentuh alamat email: itu identitas akun Firebase.
+  assert.match(sql, /tiftazani\.khara@gmail\.com/);
+  // Satu entri per cabang. `pullChanges` menyaring entri staff dengan `branch_id IN (...)`,
+  // jadi entri satu cabang saja tidak akan sampai ke kasir di cabang lain.
+  assert.match(sql, /JOIN staff_branches/, "jurnal harus ditulis per cabang lewat join staff_branches");
+  assert.match(sql, /sc\.branch_id = sb\.branch_id/, "penjagaan idempoten harus per cabang, bukan global");
+  // Tidak ada indeks unik pada sync_changes, jadi idempotensi wajib memakai NOT EXISTS.
+  // Komentar dibuang dulu supaya penjelasan di dalam berkas tidak ikut terbaca sebagai perintah.
+  const tanpaKomentar = sql.split("\n").filter(line => !line.trimStart().startsWith("--")).join("\n");
+  assert.doesNotMatch(tanpaKomentar, /INSERT OR IGNORE/, "INSERT OR IGNORE tidak menjamin idempotensi di tabel ini");
+});
+
+test("jurnal staff ditulis satu entri per cabang, bukan satu saja", () => {
+  // Aturan yang dipakai kode Worker: satu entri untuk tiap cabang tugas.
+  assert.deepEqual(staffJournalScopes([], ["bunayya", "shelly"]), { deletes: [], upserts: ["bunayya", "shelly"] });
+  // Tanpa cabang, tetap satu entri tanpa cabang supaya tidak ada perangkat yang terlewat.
+  assert.deepEqual(staffJournalScopes([], []), { deletes: [], upserts: [null] });
+  // Cabang yang dilepas menghasilkan entri delete, sisanya upsert.
+  assert.deepEqual(staffJournalScopes(["bunayya", "shelly"], ["shelly"]), { deletes: ["bunayya"], upserts: ["shelly"] });
+});
+
+test("entri jurnal staff mengganti baris lama berdasarkan email", () => {
+  const base={staff:[
+    {name:"Tiftazani",email:"tiftazani.khara@gmail.com",role:"Owner"},
+    {name:"Ustutifa",email:"us.archuleta1207@gmail.com",role:"Owner"},
+  ],updatedAt:1};
+  const materialized=applyJournalToSnapshot(base,[
+    {sequence:1,entity_type:"staff",entity_id:"tiftazani.khara@gmail.com",operation:"upsert",
+     payload_json:JSON.stringify({name:"Cuciin",email:"tiftazani.khara@gmail.com",role:"Owner"}),
+     updated_at:2},
+  ],1);
+  assert.equal(materialized.staff.length,2,"baris lama harus diganti, bukan ditambah");
+  const owner=materialized.staff.find(row=>row.email==="tiftazani.khara@gmail.com");
+  assert.equal(owner.name,"Cuciin");
+  // Owner kedua tidak boleh ikut berubah.
+  const kedua=materialized.staff.find(row=>row.email==="us.archuleta1207@gmail.com");
+  assert.equal(kedua.name,"Ustutifa");
+});
+
+test("entri jurnal bertipe order tetap masuk ke notas saat materialisasi", () => {
+  const base={notas:[],deletedNotaIds:[],updatedAt:1};
+  const materialized=applyJournalToSnapshot(base,[
+    {sequence:1,entity_type:"order",entity_id:"MLT-9",operation:"upsert",payload_json:JSON.stringify({id:"MLT-9",customer:"Baru"}),updated_at:2},
+  ],1);
+  assert.deepEqual(materialized.notas.map(row=>row.id),["MLT-9"]);
+  const removed=applyJournalToSnapshot(materialized,[
+    {sequence:2,entity_type:"order",entity_id:"MLT-9",operation:"delete",payload_json:null,updated_at:3},
+  ],2);
+  assert.deepEqual(removed.notas,[]);
+  assert.deepEqual(removed.deletedNotaIds,["MLT-9"]);
+});
+
+test("order.payment tidak menghapus rincian Nota pada payload tersimpan", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  const created=await (await pushCommands(commandRequest([{
+    commandId:"nota-create-0001",type:"order.create",entityId:"MLT-1",branchId:"melati",
+    payload:{id:"MLT-1",branchId:"melati",customerName:"Pelanggan Uji",phone:"0812",total:20000,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:2,unit:"kg",unitPrice:10000}]},
+  }]),env,identities.kasir)).json();
+  assert.equal(created.results[0].accepted,true);
+
+  const paid=await (await pushCommands(commandRequest([{
+    commandId:"nota-pay-0001",type:"order.payment",entityId:"MLT-1",branchId:"melati",
+    payload:{paid:20000,paymentStatus:"Lunas",paymentMethod:"Tunai"},
+  }]),env,identities.kasir)).json();
+  assert.equal(paid.results[0].accepted,true);
+
+  const stored=JSON.parse(rows(env,"SELECT payload_json FROM orders WHERE id='MLT-1'")[0].payload_json);
+  assert.equal(stored.customer,"Pelanggan Uji","nama pelanggan tidak boleh hilang");
+  assert.equal(stored.lines.length,1,"rincian layanan tidak boleh hilang");
+  assert.equal(stored.paid,20000);
+  assert.equal(stored.pay,"Lunas");
+
+  const journal=rows(env,"SELECT entity_type,payload_json FROM sync_changes WHERE entity_type IN ('nota','order') ORDER BY sequence");
+  assert.equal(journal.length,2);
+  assert.equal(JSON.parse(journal[1].payload_json).customer,"Pelanggan Uji");
+});
+
+test("stock.batch menjurnal riwayat stok dan saldo sebagai entity yang dikenal perangkat", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO products(id,organization_id,name,minimum_stock,kind,unit,updated_at)
+    VALUES('detergen','cuciin','Detergen',1,'BahanHabisPakai','pcs',1);`);
+  const response=await pushCommands(commandRequest([{
+    commandId:"stock-batch-0001",type:"stock.batch",entityId:"batch-1",branchId:"melati",
+    payload:{branchId:"melati",items:[{productId:"detergen",productName:"Detergen",mode:"delta",quantity:5}]},
+  }]),env,identities.kasir);
+  const body=await response.json();
+  assert.equal(body.results[0].accepted,true);
+  assert.equal(rows(env,"SELECT quantity FROM branch_stocks WHERE branch_id='melati' AND product_id='detergen'")[0].quantity,5);
+  const types=rows(env,"SELECT entity_type FROM sync_changes WHERE entity_type IN ('stockMove','branchStock','stock') ORDER BY entity_type").map(row=>row.entity_type);
+  assert.deepEqual(types,["branchStock","stockMove"],"riwayat stok harus dijurnal dengan tipe yang dipahami materializer");
+});
+
+test("reproject memakai revisi jurnal terbaru supaya versi entity tidak mundur", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO sync_snapshots(organization_id,revision,payload_json,updated_at)
+    VALUES('cuciin',999,json_object('branches',json_array(),'staff',json_array(),'syncRevision',999),1);`);
+  env.db.exec(`INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at)
+    VALUES('cuciin','nota','MLT-7','upsert',json_object('id','MLT-7','branchId','melati','customer','Uji','total',1000,'paid',0,'pay','Belum','laundry','Masuk','createdAtMs',1),1789567083606);`);
+  const journal=env.db.prepare("SELECT COALESCE(MAX(sequence),0) AS revision FROM sync_changes WHERE organization_id=?").get("cuciin");
+  assert.equal(journal.revision,1,"jurnal punya revisi 1");
+  const snapshotRevision=env.db.prepare("SELECT revision FROM sync_snapshots WHERE organization_id=?").get("cuciin").revision;
+  assert.equal(snapshotRevision,999,"baris snapshot masih memakai revisi lama");
+  const chosen=Math.max(snapshotRevision,1,journal.revision);
+  assert.equal(chosen,999,"revisi yang dipakai tidak boleh lebih kecil dari revisi jurnal");
+  assert.ok(chosen>=journal.revision,"versi entity tidak boleh mundur di bawah revisi jurnal");
 });

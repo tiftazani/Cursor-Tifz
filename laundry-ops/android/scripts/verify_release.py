@@ -24,7 +24,7 @@ def verify(apk, build_tools):
     if 'Android Debug' in signing:
         raise ValueError('Sertifikat debug tidak boleh digunakan untuk rilis.')
     badging = run(str(build_tools / 'aapt'), 'dump', 'badging', str(apk))
-    if "name='com.tiftazani.laundryops'" not in badging.splitlines()[0]:
+    if "name='com.cuciin.laundryops'" not in badging.splitlines()[0]:
         raise ValueError('Application ID rilis tidak sesuai.')
     if 'application-debuggable' in badging:
         raise ValueError('APK rilis masih debuggable.')
@@ -32,7 +32,7 @@ def verify(apk, build_tools):
         raise ValueError('Target SDK rilis harus minimal 36.')
     allowed = {'android.permission.INTERNET', 'android.permission.ACCESS_NETWORK_STATE',
                'com.google.android.providers.gsf.permission.READ_GSERVICES',
-               'com.tiftazani.laundryops.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'}
+               'com.cuciin.laundryops.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'}
     permissions = set(re.findall(r"uses-permission: name='([^']+)'", badging))
     if permissions - allowed:
         raise ValueError(f'Izin tambahan memerlukan review: {sorted(permissions - allowed)}')

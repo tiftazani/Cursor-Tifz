@@ -1,10 +1,10 @@
 # Cuciin — operasional laundry
 
-Owner: **Tiftazani Khara**. Android Kotlin (`com.tiftazani.laundryops`) + mockup HTML.
+Owner: **Owner Cuciin**. Android Kotlin (`com.cuciin.laundryops`) + mockup HTML.
 
 ## Android
 
-Folder: [`android/`](./android). Versi sekarang **1.9.0** (versionCode 15). Changelog: [`android/CHANGELOG.md`](./android/CHANGELOG.md).
+Folder: [`android/`](./android). Versi sekarang **1.10.0** (versionCode 19). Changelog: [`android/CHANGELOG.md`](./android/CHANGELOG.md).
 
 Melanjutkan dengan coding agent lain: mulai dari [handover teknis](./AGENT_HANDOVER.md), [prompt siap-tempel](./AGENT_PROMPTS.md), dan [protokol kerja beberapa agent](./AGENT_WORKFLOW.md).
 

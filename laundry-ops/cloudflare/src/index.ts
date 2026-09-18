@@ -3,8 +3,25 @@ import { pullChanges, pushCommands, syncScopeKey } from "./command-sync.ts";
 interface Env {
   DB: D1Database;
   SYNC_SECRET?: string;
+  /** Satu project ID (format lama) atau beberapa dipisah koma. */
   FIREBASE_PROJECT_ID?: string;
+  FIREBASE_PROJECT_IDS?: string;
   ENVIRONMENT: string;
+}
+
+/**
+ * Daftar project Firebase yang tokennya diterima.
+ *
+ * Dipisah koma supaya masa peralihan identitas aplikasi tidak memutus perangkat
+ * yang masih memakai project lama. `FIREBASE_PROJECT_ID` tetap dibaca agar
+ * konfigurasi lama tidak langsung mati.
+ */
+export function firebaseProjectIds(env: { FIREBASE_PROJECT_ID?: string; FIREBASE_PROJECT_IDS?: string }): string[] {
+  const raw = env.FIREBASE_PROJECT_IDS ?? env.FIREBASE_PROJECT_ID ?? "";
+  return raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -58,25 +75,62 @@ async function sameSecret(given: string, expected: string): Promise<boolean> {
 
 type Identity = { uid?: string; email: string; name: string; role: "Owner" | "Kasir" | "Supervisor"; branchIds: string[]; bootstrap: boolean };
 
-async function authorize(request: Request, env: Env): Promise<Identity | null> {
+async function authenticatedFirebaseUser(request: Request, env: Env): Promise<{ sub: string; email: string } | null> {
   const bearer = request.headers.get("authorization")?.match(/^Bearer (.+)$/i)?.[1];
-  if (bearer && env.FIREBASE_PROJECT_ID) {
-    const firebaseUser = await firebaseIdentity(bearer, env.FIREBASE_PROJECT_ID);
-    if (firebaseUser?.email) {
-      let staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE firebase_uid=? AND approved=1 AND active=1").bind(firebaseUser.sub).first<{email:string;name:string;role:string}>();
-      if (!staff) {
-        staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE lower(email)=lower(?) AND approved=1 AND active=1").bind(firebaseUser.email).first<{email:string;name:string;role:string}>();
-        if (staff) await env.DB.prepare("UPDATE staff SET firebase_uid=? WHERE email=? AND firebase_uid IS NULL").bind(firebaseUser.sub, staff.email).run();
-      }
-      if (staff && ["Owner","Kasir","Supervisor"].includes(staff.role)) {
-        const branches = await env.DB.prepare("SELECT branch_id FROM staff_branches WHERE staff_email=? ORDER BY branch_id").bind(staff.email).all<{branch_id:string}>();
-        return { uid: firebaseUser.sub, email: firebaseUser.email, name: staff.name, role: staff.role as Identity["role"], branchIds: branches.results.map((row) => row.branch_id), bootstrap: false };
-      }
+  if (!bearer) return null;
+  for (const projectId of firebaseProjectIds(env)) {
+    const user = await firebaseIdentity(bearer, projectId);
+    if (user?.email) return user;
+  }
+  return null;
+}
+
+async function authorize(request: Request, env: Env): Promise<Identity | null> {
+  const firebaseUser = await authenticatedFirebaseUser(request, env);
+  if (firebaseUser) {
+    let staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE firebase_uid=? AND approved=1 AND active=1").bind(firebaseUser.sub).first<{email:string;name:string;role:string}>();
+    if (!staff) {
+      staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE lower(email)=lower(?) AND approved=1 AND active=1").bind(firebaseUser.email).first<{email:string;name:string;role:string}>();
+      if (staff) await env.DB.prepare("UPDATE staff SET firebase_uid=? WHERE email=? AND firebase_uid IS NULL").bind(firebaseUser.sub, staff.email).run();
+    }
+    if (staff && ["Owner","Kasir","Supervisor"].includes(staff.role)) {
+      const branches = await env.DB.prepare("SELECT branch_id FROM staff_branches WHERE staff_email=? ORDER BY branch_id").bind(staff.email).all<{branch_id:string}>();
+      return { uid: firebaseUser.sub, email: firebaseUser.email, name: staff.name, role: staff.role as Identity["role"], branchIds: branches.results.map((row) => row.branch_id), bootstrap: false };
     }
   }
   const key = request.headers.get("x-cuciin-key") ?? "";
   if (env.SYNC_SECRET && key && await sameSecret(key, env.SYNC_SECRET)) return { email: "bootstrap", name: "Bootstrap", role: "Owner", branchIds: [], bootstrap: true };
   return null;
+}
+
+async function registerAccount(request: Request, env: Env): Promise<Response> {
+  const firebaseUser = await authenticatedFirebaseUser(request, env);
+  if (!firebaseUser?.email) return json({ error: "Identitas Firebase tidak valid" }, 401);
+  const text = await request.text();
+  let body: JsonRecord;
+  try { body = JSON.parse(text) as JsonRecord; } catch { return json({ error: "Data pendaftaran tidak valid" }, 422); }
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const branchId = typeof body.branchId === "string" ? body.branchId.trim() : "";
+  const role = typeof body.role === "string" ? body.role : "";
+  if (!name || name.length > 160 || !email || email !== firebaseUser.email.toLowerCase() || !branchId || !["Owner", "Kasir", "Supervisor"].includes(role)) {
+    return json({ error: "Data pendaftaran tidak valid" }, 422);
+  }
+  const [existing, branch] = await Promise.all([
+    env.DB.prepare("SELECT email FROM staff WHERE lower(email)=lower(?)").bind(email).first<{email:string}>(),
+    env.DB.prepare("SELECT id FROM branches WHERE id=? AND organization_id=?").bind(branchId, ORG_ID).first<{id:string}>(),
+  ]);
+  if (existing) return json({ error: "Email sudah terdaftar atau masih menunggu persetujuan" }, 409);
+  if (!branch) return json({ error: "Cabang tidak ditemukan" }, 422);
+  const now = Date.now();
+  const payload = { name, email, role, branchIds: [branchId], approved: false };
+  await env.DB.batch([
+    env.DB.prepare("INSERT OR IGNORE INTO organizations(id,name,owner_email,created_at,updated_at) VALUES(?,?,?,?,?)").bind(ORG_ID, "Cuciin", "tiftazani.khara@gmail.com", now, now),
+    env.DB.prepare("INSERT INTO staff(email,organization_id,name,role,approved,active,firebase_uid,updated_at) VALUES(?,?,?,?,?,?,?,?)").bind(email, ORG_ID, name, role, 0, 1, firebaseUser.sub, now),
+    env.DB.prepare("INSERT INTO staff_branches(staff_email,branch_id) VALUES(?,?)").bind(email, branchId),
+    env.DB.prepare("INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id) VALUES(?,?,?,?,?,?,?,?,?)").bind(ORG_ID, "staff", email, "upsert", JSON.stringify(payload), now, branchId, email, `registration:${firebaseUser.sub}`),
+  ]);
+  return json({ status: "pending" }, 201);
 }
 
 function list(snapshot: JsonRecord, key: string): JsonRecord[] {
@@ -87,7 +141,7 @@ function str(row: JsonRecord, key: string, fallback = ""): string { return typeo
 function num(row: JsonRecord, key: string, fallback = 0): number { return typeof row[key] === "number" && Number.isFinite(row[key]) ? row[key] as number : fallback; }
 function bool(row: JsonRecord, key: string): number { return row[key] === true ? 1 : 0; }
 
-const BRANCH_DATASETS = ["branchStocks", "inventory", "expenses", "notas", "stockMoves", "audit", "cashCloses", "attendance"] as const;
+const BRANCH_DATASETS = ["branchStocks", "inventory", "expenses", "notas", "stockMoves", "audit", "cashCloses", "payments", "attendance"] as const;
 
 function rowKey(dataset: string, row: JsonRecord): string {
   if (dataset === "branchStocks") return `${str(row,"branchId")}|${str(row,"productKey")}`;
@@ -149,7 +203,7 @@ export type SnapshotJournalChange = {
 
 const CHANGE_DATASETS:Record<string,string>={
   branch:"branches",staff:"staff",customer:"customers",service:"services",product:"products",branchStock:"branchStocks",
-  inventory:"inventory",expense:"expenses",nota:"notas",stockMove:"stockMoves",audit:"audit",cashClose:"cashCloses",attendance:"attendance",accessPolicy:"accessPolicies",whatsappTemplate:"whatsappTemplates",
+  inventory:"inventory",assetType:"assetTypes",expense:"expenses",nota:"notas",order:"notas",stockMove:"stockMoves",audit:"audit",cashClose:"cashCloses",payment:"payments",attendance:"attendance",accessRole:"accessRoles",accessPolicy:"accessPolicies",whatsappTemplate:"whatsappTemplates",
 };
 
 function journalEntityId(dataset:string,row:JsonRecord):string {
@@ -171,7 +225,7 @@ export function applyJournalToSnapshot(base:JsonRecord,changes:SnapshotJournalCh
       if(payload && typeof payload==="object" && !Array.isArray(payload)) rows.push(payload as JsonRecord);
     }
     snapshot[dataset]=rows;
-    if(change.entity_type==="nota") {
+    if(change.entity_type==="nota" || change.entity_type==="order") {
       const deleted=new Set(listOfStrings(snapshot.deletedNotaIds));
       if(change.operation==="delete") deleted.add(change.entity_id); else deleted.delete(change.entity_id);
       snapshot.deletedNotaIds=[...deleted];
@@ -213,39 +267,61 @@ function withoutLocalCredentials(snapshot:JsonRecord):JsonRecord {
 }
 
 async function projectSnapshot(env: Env, snapshot: JsonRecord, updatedAt: number): Promise<void> {
+  // Satu nilai updated_at dipakai untuk semua tabel. Bila nilai itu lebih kecil
+  // dari updated_at baris yang sudah ada, versi entity mundur dan perangkat
+  // menolak sinkronisasi karena OCC. Naikkan ke nilai tertinggi yang ada.
+  // D1 membatasi jumlah term compound SELECT, jadi tiap tabel dihitung terpisah.
+  const ceilingSources: Array<[string, boolean]> = [
+    ["orders", true], ["branches", true], ["staff", true], ["services", true], ["products", true],
+    ["customers", true], ["branch_stocks", false], ["expenses", true], ["attendance", true],
+    ["inventory_items", true], ["stock_moves", true], ["cash_closes", true], ["payments", true],
+    ["access_policies", true], ["whatsapp_templates", true], ["asset_types", true], ["access_roles", true],
+  ];
+  const ceilings = await env.DB.batch<{highest: number | null}>(
+    ceilingSources.map(([table, scoped]) =>
+      scoped
+        ? env.DB.prepare(`SELECT MAX(updated_at) AS highest FROM ${table} WHERE organization_id=?`).bind(ORG_ID)
+        : env.DB.prepare(`SELECT MAX(updated_at) AS highest FROM ${table}`),
+    ),
+  );
+  const highest = ceilings.reduce((max, row) => Math.max(max, row.results?.[0]?.highest ?? 0), 0);
+  const version = Math.max(updatedAt, highest);
   const statements: D1PreparedStatement[] = [
-    env.DB.prepare("INSERT INTO organizations(id,name,owner_email,created_at,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET updated_at=excluded.updated_at").bind(ORG_ID, "Cuciin", "tiftazani.khara@gmail.com", updatedAt, updatedAt),
+    env.DB.prepare("INSERT INTO organizations(id,name,owner_email,created_at,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET updated_at=excluded.updated_at").bind(ORG_ID, "Cuciin", "tiftazani.khara@gmail.com", version, version),
   ];
   for (const deletedId of listOfStrings(snapshot.deletedNotaIds)) statements.push(env.DB.prepare("DELETE FROM orders WHERE id=? AND organization_id=?").bind(deletedId,ORG_ID));
-  for (const branch of list(snapshot, "branches")) statements.push(env.DB.prepare("INSERT INTO branches(id,organization_id,code,name,address,maps_query,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET code=excluded.code,name=excluded.name,address=excluded.address,maps_query=excluded.maps_query,updated_at=excluded.updated_at").bind(str(branch,"id"),ORG_ID,str(branch,"code"),str(branch,"name"),str(branch,"location"),str(branch,"mapsQuery"),updatedAt));
+  for (const branch of list(snapshot, "branches")) statements.push(env.DB.prepare("INSERT INTO branches(id,organization_id,code,name,address,maps_query,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET code=excluded.code,name=excluded.name,address=excluded.address,maps_query=excluded.maps_query,updated_at=excluded.updated_at").bind(str(branch,"id"),ORG_ID,str(branch,"code"),str(branch,"name"),str(branch,"location"),str(branch,"mapsQuery"),version));
   for (const person of list(snapshot, "staff")) {
     const email = str(person,"email").toLowerCase();
-    statements.push(env.DB.prepare("INSERT INTO staff(email,organization_id,name,role,approved,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET name=excluded.name,role=excluded.role,approved=excluded.approved,updated_at=excluded.updated_at").bind(email,ORG_ID,str(person,"name"),str(person,"role","Kasir"),bool(person,"approved"),updatedAt));
+    statements.push(env.DB.prepare("INSERT INTO staff(email,organization_id,name,role,approved,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET name=excluded.name,role=excluded.role,approved=excluded.approved,updated_at=excluded.updated_at").bind(email,ORG_ID,str(person,"name"),str(person,"role","Kasir"),bool(person,"approved"),version));
     const branchIds = Array.isArray(person.branchIds) ? person.branchIds : [];
     for (const branchId of branchIds) if (typeof branchId === "string") statements.push(env.DB.prepare("INSERT OR IGNORE INTO staff_branches(staff_email,branch_id) VALUES(?,?)").bind(email,branchId));
   }
-  for (const service of list(snapshot, "services")) statements.push(env.DB.prepare("INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,product_id,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,unit=excluded.unit,default_price=excluded.default_price,commission_per_unit=excluded.commission_per_unit,retail=excluded.retail,drop_out=excluded.drop_out,self_service=excluded.self_service,product_id=excluded.product_id,updated_at=excluded.updated_at").bind(str(service,"id"),ORG_ID,str(service,"name"),str(service,"unit"),num(service,"price"),num(service,"commissionPerUnit"),bool(service,"retail"),bool(service,"dropOut"),bool(service,"selfService"),str(service,"productKey") || null,updatedAt));
-  for (const customer of list(snapshot, "customers")) statements.push(env.DB.prepare("INSERT INTO customers(id,organization_id,name,phone,address,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,phone=excluded.phone,address=excluded.address,updated_at=excluded.updated_at").bind(str(customer,"id"),ORG_ID,str(customer,"name"),str(customer,"phone"),str(customer,"address"),updatedAt));
+  for (const service of list(snapshot, "services")) statements.push(env.DB.prepare("INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,product_id,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,unit=excluded.unit,default_price=excluded.default_price,commission_per_unit=excluded.commission_per_unit,retail=excluded.retail,drop_out=excluded.drop_out,self_service=excluded.self_service,product_id=excluded.product_id,updated_at=excluded.updated_at").bind(str(service,"id"),ORG_ID,str(service,"name"),str(service,"unit"),num(service,"price"),num(service,"commissionPerUnit"),bool(service,"retail"),bool(service,"dropOut"),bool(service,"selfService"),str(service,"productKey") || null,version));
+  for (const customer of list(snapshot, "customers")) statements.push(env.DB.prepare("INSERT INTO customers(id,organization_id,name,phone,address,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,phone=excluded.phone,address=excluded.address,updated_at=excluded.updated_at").bind(str(customer,"id"),ORG_ID,str(customer,"name"),str(customer,"phone"),str(customer,"address"),version));
   for (const product of list(snapshot, "products")) {
     const productId = str(product,"id").trim() || str(product,"name");
-    statements.push(env.DB.prepare("INSERT INTO products(id,organization_id,name,minimum_stock,kind,unit,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,minimum_stock=excluded.minimum_stock,kind=excluded.kind,unit=excluded.unit,updated_at=excluded.updated_at").bind(productId,ORG_ID,str(product,"name"),num(product,"min"),str(product,"kind","BahanHabisPakai"),str(product,"unit","pcs"),updatedAt));
+    statements.push(env.DB.prepare("INSERT INTO products(id,organization_id,name,minimum_stock,kind,unit,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,minimum_stock=excluded.minimum_stock,kind=excluded.kind,unit=excluded.unit,updated_at=excluded.updated_at").bind(productId,ORG_ID,str(product,"name"),num(product,"min"),str(product,"kind","BahanHabisPakai"),str(product,"unit","pcs"),version));
   }
-  for (const stock of list(snapshot, "branchStocks")) statements.push(env.DB.prepare("INSERT INTO branch_stocks(branch_id,product_id,quantity,updated_at) VALUES(?,?,?,?) ON CONFLICT(branch_id,product_id) DO UPDATE SET quantity=excluded.quantity,updated_at=excluded.updated_at").bind(str(stock,"branchId"),str(stock,"productKey"),num(stock,"stock"),updatedAt));
-  for (const item of list(snapshot, "inventory")) statements.push(env.DB.prepare("INSERT INTO inventory_items(id,organization_id,branch_id,payload_json,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(item,"id"),ORG_ID,str(item,"branchId"),JSON.stringify(item),updatedAt));
-  for (const expense of list(snapshot, "expenses")) statements.push(env.DB.prepare("INSERT INTO expenses(id,organization_id,branch_id,category,amount,occurred_at,officer,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,category=excluded.category,amount=excluded.amount,occurred_at=excluded.occurred_at,officer=excluded.officer,note=excluded.note,updated_at=excluded.updated_at").bind(str(expense,"id"),ORG_ID,str(expense,"branchId"),str(expense,"category"),num(expense,"amount"),num(expense,"occurredAtMs"),str(expense,"by"),str(expense,"note"),updatedAt));
+  for (const stock of list(snapshot, "branchStocks")) statements.push(env.DB.prepare("INSERT INTO branch_stocks(branch_id,product_id,quantity,updated_at) VALUES(?,?,?,?) ON CONFLICT(branch_id,product_id) DO UPDATE SET quantity=excluded.quantity,updated_at=excluded.updated_at").bind(str(stock,"branchId"),str(stock,"productKey"),num(stock,"stock"),version));
+  for (const item of list(snapshot, "inventory")) statements.push(env.DB.prepare("INSERT INTO inventory_items(id,organization_id,branch_id,payload_json,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(item,"id"),ORG_ID,str(item,"branchId"),JSON.stringify(item),version));
+  for (const expense of list(snapshot, "expenses")) statements.push(env.DB.prepare("INSERT INTO expenses(id,organization_id,branch_id,category,amount,occurred_at,officer,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,category=excluded.category,amount=excluded.amount,occurred_at=excluded.occurred_at,officer=excluded.officer,note=excluded.note,updated_at=excluded.updated_at").bind(str(expense,"id"),ORG_ID,str(expense,"branchId"),str(expense,"category"),num(expense,"amount"),num(expense,"occurredAtMs"),str(expense,"by"),str(expense,"note"),version));
   for (const nota of list(snapshot, "notas")) {
     const orderId = str(nota,"id");
-    statements.push(env.DB.prepare("INSERT INTO orders(id,organization_id,branch_id,cashier_email,cashier_name,customer_name,phone,total,paid,payment_status,payment_method,work_status,created_at,estimated_finish,completed_at,picked_up_at,wa_sent,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,cashier_email=excluded.cashier_email,cashier_name=excluded.cashier_name,customer_name=excluded.customer_name,phone=excluded.phone,total=excluded.total,paid=excluded.paid,payment_status=excluded.payment_status,payment_method=excluded.payment_method,work_status=excluded.work_status,created_at=excluded.created_at,estimated_finish=excluded.estimated_finish,completed_at=excluded.completed_at,picked_up_at=excluded.picked_up_at,wa_sent=excluded.wa_sent,updated_at=excluded.updated_at").bind(orderId,ORG_ID,str(nota,"branchId"),str(nota,"kasirEmail"),str(nota,"kasir"),str(nota,"customer"),str(nota,"phone"),num(nota,"total"),num(nota,"paid"),str(nota,"pay"),str(nota,"payMethod"),str(nota,"laundry"),num(nota,"createdAtMs"),str(nota,"pickupAt"),nota.completedAt ?? null,nota.pickedUpAt ?? null,bool(nota,"waSent"),updatedAt));
+    statements.push(env.DB.prepare("INSERT INTO orders(id,organization_id,branch_id,cashier_email,cashier_name,customer_name,phone,total,paid,payment_status,payment_method,work_status,created_at,estimated_finish,completed_at,picked_up_at,wa_sent,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,cashier_email=excluded.cashier_email,cashier_name=excluded.cashier_name,customer_name=excluded.customer_name,phone=excluded.phone,total=excluded.total,paid=excluded.paid,payment_status=excluded.payment_status,payment_method=excluded.payment_method,work_status=excluded.work_status,created_at=excluded.created_at,estimated_finish=excluded.estimated_finish,completed_at=excluded.completed_at,picked_up_at=excluded.picked_up_at,wa_sent=excluded.wa_sent,updated_at=excluded.updated_at").bind(orderId,ORG_ID,str(nota,"branchId"),str(nota,"kasirEmail"),str(nota,"kasir"),str(nota,"customer"),str(nota,"phone"),num(nota,"total"),num(nota,"paid"),str(nota,"pay"),str(nota,"payMethod"),str(nota,"laundry"),num(nota,"createdAtMs"),str(nota,"pickupAt"),nota.completedAt ?? null,nota.pickedUpAt ?? null,bool(nota,"waSent"),version));
     statements.push(env.DB.prepare("DELETE FROM order_lines WHERE order_id=?").bind(orderId));
     const lines = Array.isArray(nota.lines) ? nota.lines.filter((x): x is JsonRecord => Boolean(x) && typeof x === "object") : [];
     lines.forEach((line, index) => statements.push(env.DB.prepare("INSERT INTO order_lines(order_id,service_id,line_no,service_name,quantity,unit,unit_price,handler_email,handler_name,commission_per_unit) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(orderId,str(line,"serviceId"),index,str(line,"name"),num(line,"qty"),str(line,"unit"),num(line,"unitPrice"),str(line,"handledByEmail"),str(line,"handledByName"),num(line,"commissionPerUnit"))));
   }
-  for (const row of list(snapshot, "attendance")) statements.push(env.DB.prepare("INSERT INTO attendance(id,organization_id,branch_id,staff_email,staff_name,work_date,check_in_at,check_out_at,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET check_out_at=excluded.check_out_at,note=excluded.note,updated_at=excluded.updated_at").bind(str(row,"id"),ORG_ID,str(row,"branchId"),str(row,"staffEmail").toLowerCase(),str(row,"staffName"),str(row,"workDate"),num(row,"checkInAtMs"),typeof row.checkOutAtMs === "number" ? row.checkOutAtMs : null,str(row,"note"),updatedAt));
-  for (const policy of list(snapshot, "accessPolicies")) statements.push(env.DB.prepare("INSERT INTO access_policies(email,organization_id,payload_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(email,organization_id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(policy,"email").toLowerCase(),ORG_ID,JSON.stringify(policy),updatedAt));
-  for (const template of list(snapshot, "whatsappTemplates")) statements.push(env.DB.prepare("INSERT INTO whatsapp_templates(id,organization_id,payload_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(id,organization_id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(template,"id","business"),ORG_ID,JSON.stringify(template),updatedAt));
-  list(snapshot, "stockMoves").forEach((row, index) => statements.push(env.DB.prepare("INSERT INTO stock_moves(id,organization_id,branch_id,payload_json,occurred_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(row,"syncId") || `${str(row,"branchId")}:${num(row,"atMs")}:${str(row,"product")}:${index}`,ORG_ID,str(row,"branchId"),JSON.stringify(row),num(row,"atMs"),updatedAt)));
+  for (const row of list(snapshot, "attendance")) statements.push(env.DB.prepare("INSERT INTO attendance(id,organization_id,branch_id,staff_email,staff_name,work_date,check_in_at,check_out_at,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET check_out_at=excluded.check_out_at,note=excluded.note,updated_at=excluded.updated_at").bind(str(row,"id"),ORG_ID,str(row,"branchId"),str(row,"staffEmail").toLowerCase(),str(row,"staffName"),str(row,"workDate"),num(row,"checkInAtMs"),typeof row.checkOutAtMs === "number" ? row.checkOutAtMs : null,str(row,"note"),version));
+  for (const policy of list(snapshot, "accessPolicies")) statements.push(env.DB.prepare("INSERT INTO access_policies(email,organization_id,payload_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(email,organization_id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(policy,"email").toLowerCase(),ORG_ID,JSON.stringify(policy),version));
+  for (const template of list(snapshot, "whatsappTemplates")) statements.push(env.DB.prepare("INSERT INTO whatsapp_templates(id,organization_id,payload_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(id,organization_id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(template,"id","business"),ORG_ID,JSON.stringify(template),version));
+  for (const assetType of list(snapshot, "assetTypes")) statements.push(env.DB.prepare("INSERT INTO asset_types(id,organization_id,code,name,active,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET code=excluded.code,name=excluded.name,active=excluded.active,updated_at=excluded.updated_at").bind(str(assetType,"id"),ORG_ID,str(assetType,"code").toUpperCase(),str(assetType,"name"),assetType.active===false?0:1,version));
+  for (const accessRole of list(snapshot, "accessRoles")) statements.push(env.DB.prepare("INSERT INTO access_roles(id,organization_id,name,built_in,payload_json,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(accessRole,"id"),ORG_ID,str(accessRole,"name"),accessRole.builtIn===true?1:0,JSON.stringify(accessRole),version));
+  list(snapshot, "stockMoves").forEach((row, index) => statements.push(env.DB.prepare("INSERT INTO stock_moves(id,organization_id,branch_id,payload_json,occurred_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(row,"syncId") || `${str(row,"branchId")}:${num(row,"atMs")}:${str(row,"product")}:${index}`,ORG_ID,str(row,"branchId"),JSON.stringify(row),num(row,"atMs"),version)));
   list(snapshot, "audit").forEach((row, index) => statements.push(env.DB.prepare("INSERT INTO audit_logs(id,organization_id,branch_id,actor,action,order_id,occurred_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING").bind(str(row,"syncId") || `${str(row,"branchId")}:${num(row,"atMs")}:${index}`,ORG_ID,str(row,"branchId"),str(row,"user"),str(row,"action"),row.notaId ?? null,num(row,"atMs"))));
-  for (const row of list(snapshot, "cashCloses")) statements.push(env.DB.prepare("INSERT INTO cash_closes(id,organization_id,branch_id,payload_json,occurred_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(row,"id"),ORG_ID,str(row,"branchId"),JSON.stringify(row),num(row,"atMs"),updatedAt));
+  for (const row of list(snapshot, "cashCloses")) statements.push(env.DB.prepare("INSERT INTO cash_closes(id,organization_id,branch_id,payload_json,occurred_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(row,"id"),ORG_ID,str(row,"branchId"),JSON.stringify(row),num(row,"atMs"),version));
+  for (const payment of list(snapshot, "payments")) statements.push(env.DB.prepare("INSERT OR IGNORE INTO payments(id,organization_id,order_id,branch_id,amount,method,received_at,received_by,payload_json,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(str(payment,"id"),ORG_ID,str(payment,"notaId"),str(payment,"branchId"),num(payment,"amount"),str(payment,"method"),num(payment,"atMs"),str(payment,"by"),JSON.stringify(payment),version));
   for (let i = 0; i < statements.length; i += 80) await env.DB.batch(statements.slice(i, i + 80));
 }
 
@@ -297,6 +373,7 @@ export default {
         return json({ok:false,service:"cuciin-api",environment:env.ENVIRONMENT,database:"unavailable"},503);
       }
     }
+    if (url.pathname === "/v1/registration" && request.method === "POST") return registerAccount(request, env);
     const identity = await authorize(request, env);
     if (!identity) return json({ error: "Tidak terautentikasi" }, 401);
     if (url.pathname === "/v1/me" && request.method === "GET") {
@@ -307,8 +384,14 @@ export default {
       const row = await env.DB.prepare("SELECT revision,payload_json FROM sync_snapshots WHERE organization_id=?").bind(ORG_ID).first<{revision:number;payload_json:string}>();
       if (!row) return json({ error: "Snapshot belum tersedia" }, 404);
       const materialized=await materializedSnapshot(env,row);
-      await projectSnapshot(env, materialized.snapshot, row.revision);
-      return json({ ok: true, revision: row.revision, syncRevision:materialized.revision });
+      // Versi tabel normalisasi harus memakai revisi jurnal terbaru, bukan revisi
+      // baris snapshot yang bisa tertinggal jauh. Memakai revisi lama membuat
+      // updated_at entity mundur dan OCC menolak perubahan perangkat.
+      const journal=await env.DB.prepare("SELECT COALESCE(MAX(sequence),0) AS revision FROM sync_changes WHERE organization_id=?").bind(ORG_ID).first<{revision:number}>();
+      const version=Math.max(row.revision, materialized.revision, journal?.revision ?? 0);
+      await projectSnapshot(env, materialized.snapshot, version);
+      await env.DB.prepare("UPDATE sync_snapshots SET revision=? WHERE organization_id=? AND revision<=?").bind(version,ORG_ID,version).run();
+      return json({ ok: true, revision: version, syncRevision:materialized.revision });
     }
     if ((url.pathname === "/api/cuciin" || url.pathname === "/v1/snapshot") && request.method === "GET") {
       const materialized=await materializedSnapshot(env);

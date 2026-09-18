@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nama aplikasi khusus build debug.
+
+  Build debug dipasang berdampingan dengan versi release di HP yang sama (paketnya
+  com.cuciin.laundryops.debug). Tanpa nama berbeda, keduanya tampil sebagai "Cuciin" di
+  launcher dan mudah tertukar. Berkas ini hanya berlaku untuk varian debug; nama pada
+  versi release tetap "Cuciin" dari res/values/strings.xml.
+-->
+<resources>
+    <string name="app_name">Cuciin Debug</string>
+</resources>

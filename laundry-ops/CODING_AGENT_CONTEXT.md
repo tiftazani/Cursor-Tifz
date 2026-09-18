@@ -7,10 +7,11 @@ Repo: https://github.com/tiftazani/Cursor-Tifz
 Branch kerja: codex/cuciin-1-8-1
 PR aktif: https://github.com/tiftazani/Cursor-Tifz/pull/18
 Folder produk: laundry-ops/
-Versi source saat ini: 1.9.0 (versionCode 15)
-Android: Kotlin + Jetpack Compose, package com.tiftazani.laundryops
+Versi source saat ini: 1.10.0 (versionCode 19)
+Android: Kotlin + Jetpack Compose, package com.cuciin.laundryops
 Backend: Cloudflare Worker + D1, autentikasi Firebase Email/Password
 Endpoint produksi: https://cuciin-api.tiftazani-cuciin.workers.dev
+Firebase project: cuciin-ops (project lama cuciin-ops-tiftazani masih diterima selama masa peralihan)
 
 Sumber data utama adalah D1. Android wajib local-first: perubahan disimpan lokal dan masuk persistent outbox, dikirim sebagai command idempoten, lalu mengambil delta berdasarkan revision. Foto bukti hanya berada di perangkat dan tidak boleh dikirim ke cloud.
 Penerapan delta memakai pending-remote marker yang persisten; jangan menulis snapshot lokal sebelum marker tersimpan atau memajukan cursor sebelum snapshot lokal selesai. Scope role+cabang berasal dari server; perubahan scope wajib bootstrap ulang sebelum cursor dilanjutkan.
@@ -32,18 +33,21 @@ Aturan yang tidak boleh dilanggar:
 - Harga tiap baris Service boleh dikoreksi dan perubahan masuk audit trail.
 - Jangan force-push. Jangan menimpa perubahan agen lain. Periksa git status dan diff sebelum mengubah file.
 - Jangan menghidupkan kembali PUT snapshot setelah journal command aktif. Jangan menjalankan kompensasi stok penghapusan sebelum command penghapusan Service berhasil.
+- Jangan menghapus `cuciin-ops-tiftazani` dari `FIREBASE_PROJECT_IDS` di wrangler.toml selama masih ada perangkat yang memakai paket lama. Menghapusnya terlalu cepat memutus HP di 20 cabang.
+- Jangan menurunkan atau menghapus `versionCode`. Versi baru harus selalu lebih tinggi karena paket baru berdampingan dengan paket lama di perangkat yang sama.
 
 Area kode utama:
-- UI: laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/
-- Data/sync: laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/
-- Ekspor: laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/export/
+- UI: laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/
+- Data/sync: laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/
+- Ekspor: laundry-ops/android/app/src/main/java/com/cuciin/laundryops/export/
 - Worker: laundry-ops/cloudflare/src/
 - Skema D1: laundry-ops/cloudflare/migrations/
+- Firebase: laundry-ops/firebase/README.md
 - Operasional: laundry-ops/OPERATIONS_RUNBOOK.md
 
 Validasi minimum sebelum menyerahkan perubahan:
 cd laundry-ops/cloudflare && npm ci && npm run check
-cd laundry-ops/android && ./gradlew testDebugUnitTest lintDebug assembleDebug
+cd laundry-ops/android && ./gradlew testDebugUnitTest testReleaseUnitTest lintDebug lintRelease assembleDebug
 Jelaskan file yang diubah, alasan, hasil uji, migrasi yang diperlukan, dan risiko kompatibilitas. Jangan melakukan deploy produksi atau push bila tugas tidak secara eksplisit memintanya.
 ```
 

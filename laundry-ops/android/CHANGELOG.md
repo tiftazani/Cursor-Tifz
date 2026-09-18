@@ -2,6 +2,326 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.22 — 18 Sep 2026 (versionCode 41)
+
+### Perbaikan: aplikasi keluar saat menu Antrian atau Service diklik
+
+Dilaporkan Owner: mengklik "Antrian laundry" atau "Service baru" di layar Modul membuat
+aplikasi langsung keluar, untuk peran apa pun.
+
+Penyebabnya dari logcat:
+
+```
+java.lang.IllegalArgumentException: Navigation destination that matches route queue
+cannot be found in the navigation graph
+    at MoreScreens.kt:120
+```
+
+Katalog menu memakai nama menunya sendiri sebagai rute (`queue` dan `service`), sedangkan graf
+navigasi memakai `home` untuk Antrian dan `nota` untuk Service baru, karena kedua rute itu
+dipakai bersama tab bawah. `nav.navigate("queue")` karena itu melempar pengecualian, dan
+pengecualian itu tidak tertangkap sehingga aplikasi ditutup.
+
+Perbaikan: katalog menu memetakan rutenya ke rute graf lewat `MenuOrder.destinationOf`. Menu
+yang rutenya sudah sama tidak diubah.
+
+### Perbaikan: menu yang tidak boleh dipakai peran tertentu disembunyikan
+
+Layar Antrian dan tab bawah sudah menyembunyikan "Service baru" untuk SPV, tetapi menu Modul
+tetap menampilkannya. Server pun menolak pembuatan Service oleh SPV, jadi pesanannya akan gagal
+tersinkron tanpa penjelasan. Sekarang aturan tampil menu dibaca dari `NavTabs`, sumber yang sama
+dengan bar navigasi.
+
+### Pengunci
+
+`MenuRouteTest` membandingkan setiap rute menu dengan daftar `composable(...)` di `CuciinNav.kt`,
+jadi menu baru yang rutenya belum terdaftar akan gagal di test, bukan di tangan pengguna.
+Diperiksa juga seluruh pemanggilan `nav.navigate("...")` di kode: tidak ada rute lain yang
+menunjuk ke tujuan yang tidak ada.
+
+## 1.10.21 — 18 Sep 2026 (versionCode 40)
+
+### Nuansa biru Cuciin
+
+- Palet Light dan Dark diganti mengikuti warna logo dan gambar layar pembuka: biru `#0048B4`
+  dan biru langit `#D8E4F0`. Tema Light memakai latar biru langit sangat muda dengan aksen biru;
+  tema Dark memakai navy tua `#0A1220` dengan aksen biru langit `#7FB4FF`.
+- Kuning `#F7CA3A` dipertahankan sebagai aksen menu aktif, karena di logo pun kuning hadir
+  (gantungan baju) dan tanpa warna itu menu aktif tidak menonjol di antara semua biru.
+- Semua pasangan warna diuji WCAG AA: 28 dari 28 lulus di kedua tema.
+- Warna navy lama yang masih dipaku di `GlassCard` dan `OnboardingScreen` ikut disesuaikan.
+- Deskripsi tema di layar Theme Aplikasi diperbarui supaya tidak lagi menyebut pink dan hitam.
+
+### Preset tema Custom
+
+- Tema Custom kini punya tiga preset siap pakai: Biru Cuciin, Biru Cuciin Gelap, dan Magenta Jemur.
+  Tiap preset menampilkan rangkaian warnanya sebagai titik, jadi pengguna melihat kombinasinya
+  sebelum memilih.
+- Nilai bawaan tema Custom berubah menjadi Biru Cuciin, sejalan dengan tema Light.
+
+### Harga Service hanya untuk Owner
+
+- Fungsi baru `service.price` di katalog akses, ditandai bawaan khusus Owner.
+- Role bawaan Kasir dan Supervisor tidak memuat fungsi itu.
+- Ditegakkan berlapis: tombolnya disembunyikan, dan store menolak perubahannya. Jalur koreksi
+  Service juga dijaga, supaya kasir tidak bisa mengubah harga lewat koreksi nota.
+- Owner tetap boleh memberikan fungsi ini ke role lain lewat Kontrol Akses Role.
+- `ensureAccessRoles` sekarang menambal role bawaan yang tersimpan dengan fungsi bawaan baru,
+  karena isinya dibekukan saat pertama dibuat.
+
+## 1.10.20 — 18 Sep 2026 (versionCode 39)
+
+- Perbaikan: warna dialog pemilih tanggal dan jam kini mengikuti palet aplikasi.
+- Penyebab: `ui/DateTimeFields.kt` memakai `android.R.style.Theme_Material_Light_Dialog_Alert`
+  yang dipaku mati. Tema bawaan itu membawa aksen teal, sehingga tombol "Pilih" dan "Batal"
+  berwarna teal sementara tombol aplikasi berwarna magenta. Dua warna itu bertabrakan.
+- Perbaikan: tema sendiri `Theme.Cuciin.Picker` di `res/values/themes_picker.xml`, dengan aksen
+  `cuciin_accent` (#C1358F) dan latar `cuciin_dialog_surface`. Warna di `values/colors.xml`
+  disimpan sejalan dengan palet Compose di `ui/theme/Theme.kt`.
+- Locale Indonesia sekarang diambil dari konfigurasi Compose, bukan dari konteks mentah,
+  sehingga nama hari dan bulan tetap berbahasa Indonesia.
+- Berlaku di delapan tempat pemakaian lewat satu fungsi: filter periode (antrian, laporan,
+  riwayat aktivitas), estimasi selesai Service, tanggal kejadian stok, dan tanggal beli aset.
+- Empat test baru `PickerThemeTest` mengunci: tidak ada pemakaian tema bawaan Android, tema
+  dialog ada dan memakai aksen Cuciin, warna aksen sejalan dengan palet Compose, dan tidak ada
+  dialog sistem lain yang memakai tema bawaan.
+
+## 1.10.19 — 18 Sep 2026 (versionCode 38)
+
+### Perbaikan sebelum naik ke produksi: jurnal ditulis per cabang
+
+- Entri jurnal `staff` ditulis SATU PER CABANG, bukan satu saja.
+- Penyebab: `pullChanges` di `command-sync.ts` menyaring jurnal untuk pengguna non-Owner dengan
+  `branch_id IN (cabang pengguna)`, dan entri `staff` hanya lolos bila cabangnya cocok. Versi
+  pertama migrasi menulis satu entri untuk satu cabang saja, sehingga kasir dan SPV di cabang
+  lain tidak akan pernah menerima nama baru walaupun Owner melihatnya.
+- Ditemukan SEBELUM migrasi dijalankan ke produksi, lewat simulasi filter `pullChanges` untuk
+  tiap cabang. Setelah diperbaiki, kelima cabang menerima entri.
+- Idempotensi juga diperbaiki: `sync_changes` tidak punya indeks unik pada `command_id`, jadi
+  `INSERT OR IGNORE` tidak menjamin apa pun. Penjagaan sekarang memakai `NOT EXISTS` yang
+  membandingkan `command_id` DAN `branch_id`.
+- Perbaikan ini sisi server. APK tidak berubah, jadi versi tetap 1.10.19 dan perangkat yang
+  sudah terpasang tidak perlu memasang ulang.
+
+- Nama pemilik yang tampil di aplikasi tidak lagi memakai nama pribadi, tetapi nama usaha.
+  Aplikasi ini dijual ke banyak pemilik laundry, jadi nama di layar harus netral.
+- Nama pada data server diperbarui lewat migrasi `0008_owner_name_neutral.sql`. Perubahan
+  ditulis ke jurnal `sync_changes`, bukan hanya ke tabel, supaya perangkat yang sudah
+  memegang snapshot ikut menerima nama baru. Migrasi idempoten: dijalankan dua kali,
+  `rows_written` nol dan entri jurnal tetap satu.
+- Alamat email sengaja tidak diubah karena itu identitas akun Firebase; menggantinya akan
+  memutus login semua perangkat yang sudah terpasang.
+- Dua test Android baru menjaga nama pribadi tidak masuk kembali: satu mengunci nilai nama
+  bawaan, satu memindai seluruh berkas `src/main`, `src/main/res`, dan `src/debug`.
+- Dua test Worker baru mengunci isi migrasi dan cara jurnal staff mengganti baris lama.
+
+## 1.10.18 — 18 Sep 2026 (versionCode 37)
+
+- Perbaikan: tombol kedua di halaman terakhir layar pembuka dihilangkan.
+- Sebelumnya tombol itu bertulisan "Lihat panduan singkat" padahal kerjanya hanya menutup layar, jadi tulisannya menjanjikan hal yang tidak dilakukan.
+- Sekarang tombol kedua hanya muncul selama masih ada halaman berikutnya, dan isinya selalu "Lewati". Aturannya hidup di `Onboarding.hasSecondButton` / `Onboarding.secondLabel` dan dikunci tiga test baru.
+
+## 1.10.17 — 18 Sep 2026 (versionCode 36)
+
+- Perbaikan: judul halaman dan tombol di layar pembuka tidak lagi saling menimpa.
+- Penyebab: judul berada di dalam wadah berisi penuh layar dengan pengisi fleksibel, sementara tombol berada di wadah lain yang juga menempel di dasar layar; keduanya terdorong ke titik yang sama.
+- Perbaikan: seluruh isi (logo, judul, baris pendukung, titik halaman, tombol) disusun dalam SATU kolom yang mengalir dari atas ke bawah, dengan satu pengisi fleksibel di antara logo dan judul.
+- Judul panjang terbungkus dua baris dengan jarak cukup; diukur di emulator, judul berakhir di y 1825 dan tombol mulai di y 2033 (jarak 208 piksel).
+
+## 1.10.16 — 18 Sep 2026 (versionCode 35)
+
+- Layar pembuka tiga halaman sebelum halaman masuk: "Semua cabang dalam satu aplikasi", "Tetap jalan tanpa internet", "Akses sesuai peran".
+- Layar pembuka muncul sekali setelah aplikasi dipasang; bisa dibuka lagi lewat tautan "Tentang aplikasi" di halaman masuk.
+- Gambar layar pembuka memakai rasio 9:20 (841x1870) sehingga tidak terpotong di HP modern.
+- Halaman login memakai kartu kaca: latar navy 42% dengan isian bening dan garis putih tipis, wallpaper terlihat di belakangnya.
+- Perbaikan: bar putih 60px di bawah halaman login hilang. Penyebabnya padding Scaffold memotong area bar sistem sehingga latar Scaffold yang terang terlihat; layar penuh kini mengatur insetnya sendiri.
+- Bar sistem (status dan navigasi) dibuat tembus pandang dari tema, bukan diwarnai palet.
+- Tombol "Daftar akun baru", "Lupa kata sandi?", dan "Tentang aplikasi" ditata ulang di halaman masuk.
+
+## 1.10.15 — 17 Sep 2026 (versionCode 34)
+
+- Aplikasi versi debug kini bernama **Cuciin Debug** di layar HP, sehingga tidak tertukar dengan versi rilis yang terpasang berdampingan.
+- Nama versi rilis tetap **Cuciin**.
+- Nama berbeda diambil dari `app/src/debug/res/values/strings.xml`; berkas itu hanya berlaku untuk varian debug.
+
+## 1.10.14 — 17 Sep 2026 (versionCode 33)
+
+- Perbaikan: setelah membuka Service baru lewat tombol di layar Antrian, tab Antrian dan tab lain tidak lagi macet.
+- Penyebab: perpindahan tab memakai `popUpTo(saveState)` berpasangan dengan `restoreState`, yang hanya benar untuk graf navigasi bertingkat. Pada graf datar di sini kombinasi itu membuat tab diam tanpa pesan.
+- Perbaikan: satu panggilan `navigate` dengan `launchSingleTop` dan `popUpTo("home")` tanpa saveState/restoreState.
+- Aturan perpindahan hidup di `ui/NavTransition.kt` dan dikunci `NavTransitionContractTest.kt`.
+- Menekan tab yang sedang aktif tidak lagi menambah entri ke stack.
+
+## 1.10.13 — 17 Sep 2026 (versionCode 32)
+
+- Perbaikan: layar login tidak lagi terpotong saat keyboard Android terbuka.
+- Saat ruang sempit (keyboard terbuka atau layar pendek) isi dipadatkan dan boleh digulir; sebelumnya layar dirancang tanpa gulir sama sekali sehingga bagian bawah terpotong.
+- Saat keyboard muncul, layar menggulir otomatis secukupnya supaya kartu isian terlihat penuh.
+- Aturan tata letak hidup di `ui/LoginLayout.kt` dan dikunci `LoginLayoutTest.kt`.
+- Saat keyboard tertutup pada layar normal, tampilan tetap satu layar penuh tanpa gulir.
+
+## 1.10.12 — 17 Sep 2026 (versionCode 31)
+
+- Perbaikan: bar navigasi bawah kini tampil di layar Service seperti di tab lain.
+- Rute berbar diturunkan dari katalog tab (`ui/NavTabs.kt`), bukan disalin ulang; salinan itu yang dulu tertinggal "nota".
+- Animasi perpindahan layar: geser halus disertai pudar, arah mengikuti maju atau mundur.
+- Animasi tekan pada tombol dan kartu status, plus angka kartu yang menghitung naik saat berubah.
+- Baris daftar muncul mengalir satu per satu (dibatasi beberapa baris pertama agar daftar panjang tetap ringan).
+- Bar navigasi bawah muncul dan hilang dengan lembut saat berpindah ke layar tanpa bar.
+- Semua durasi memakai token `ui/Motion.kt` dan mengikuti skala animasi sistem; bila animasi dimatikan, tidak ada gerak.
+
+## 1.10.11 — 17 Sep 2026 (versionCode 30)
+
+- Menu Modul disusun ulang: Pekerjaan harian, Keuangan, Pelanggan, Laporan, Master data, lalu Aplikasi paling bawah.
+- Theme Aplikasi dan Riwayat versi pindah ke bagian Aplikasi; Riwayat versi kini di urutan paling bawah.
+- Menu baru **Atur urutan menu**: panah naik dan turun per menu, tombol pindah bagian, panah per judul bagian, dan tombol Kembalikan urutan awal.
+- Susunan menu hidup di `ui/MenuOrder.kt` (katalog murni) dan disimpan per HP lewat `ui/MenuPrefs.kt`; tidak ikut tersinkron.
+- Susunan tersimpan dirapikan terhadap katalog, sehingga menu baru dari pembaruan tetap muncul di bagian bawaannya.
+
+## 1.10.10 — 17 Sep 2026 (versionCode 29)
+
+- Menu baru **Theme Aplikasi**: Light, Dark, dan Custom.
+- Light memakai latar terang dengan aksen pink; Dark memakai latar hitam dengan tulisan terang.
+- Custom mengatur enam warna (utama, tombol, latar, kartu, teks, header) lewat slider R/G/B, kode hex, dan pratinjau langsung.
+- Warna teks di atas tombol dan header dihitung otomatis agar selalu kontras.
+- Pengaturan tema pindah dari Akun & Profil ke menunya sendiri; tidak ikut tersinkron antarperangkat.
+- Perbaikan server: entityType `assetType` dikenali saat parsing command, sehingga perintah aset tidak lagi ditolak 422.
+- Perbaikan: ID baris baru selalu unik, sehingga penambahan banyak data sekaligus tidak saling menimpa.
+- Perbaikan: catatan aktivitas tetap aman meski daftar cabang belum terisi.
+- Urutan menu Modul disusun ulang: Pekerjaan harian, Keuangan, Pelanggan, Laporan, Master data, lalu Aplikasi paling bawah.
+- Theme Aplikasi dan Riwayat versi pindah ke bagian Aplikasi; keduanya bukan laporan operasional.
+- Susunan menu dipindah ke `ui/MenuOrder.kt` supaya urutannya dapat diperiksa unit test.
+
+## 1.10.9 — 17 Sep 2026 (versionCode 28)
+
+- Filter periode di layar utama menyediakan pilihan dua tanggal tertentu, bukan hanya periode cepat.
+- Laporan transaksi, laporan analitik, dan nota pelanggan dicetak ulang mengikuti desain terbaru.
+- Laporan transaksi hanya mencetak bagian yang dipilih; tabel kosong tidak dipertahankan demi tata letak.
+- Persentase donut memakai satu angka desimal; legenda memuat swatch, nama, nominal, dan persen.
+- Seluruh tabel memakai baris membungkus dengan tinggi menyesuaikan, sehingga tidak ada teks terpotong.
+- Kepala tabel diulang pada halaman baru; satu transaksi tidak terpotong antarhalaman.
+- Tata letak PDF dipusatkan di `data/ReportPdf.kt`; `FileExports` hanya meneruskan ke modul tersebut.
+
+## 1.10.8 — 17 Sep 2026 (versionCode 27)
+
+- Lembar pilihan modul memakai kotak centang: terisi penuh saat dipilih, kosong bergaris saat tidak.
+- Setiap baris menampilkan label "Dipilih" atau "Tidak dipilih" sehingga status tidak bergantung pada warna saja.
+- Baris terpilih diberi latar berbeda; tersedia hitungan "1 dari 12 modul dipilih" serta tombol Pilih semua dan Kosongkan.
+- Tombol Selesai selalu terlihat penuh; daftar panjang digulir di dalam area terbatas.
+- Pilihan tunggal memakai radio, pilihan banyak memakai kotak centang.
+
+## 1.10.7 — 17 Sep 2026 (versionCode 26)
+
+- Tampilan utama memakai dua filter sebaris: periode dengan bawaan hari ini, dan cabang.
+- Tiga kartu status di bawah filter: Sedang dikerjakan, Cucian telat, dan Selesai; ketuk untuk menyaring daftar.
+- Cucian telat berarti estimasi selesai sudah lewat tetapi pengerjaan belum selesai.
+- Menu baru Kontrol Akses Role; pengguna melekat ke satu role yang menentukan modul dan fungsinya.
+- Checklist modul dan fungsi dengan kotak centang, hitungan seperti 2/2, dan ringkasan pilihan.
+- Role baru dapat dibuat; role bawaan hanya dapat diubah hak aksesnya.
+- Kontrol akses pengguna dipindahkan dari Pengaturan Owner ke Kontrol Akses Role.
+
+## 1.10.6 — 17 Sep 2026 (versionCode 25)
+
+- Menu Aset & mesin cabang menjadi Daftar Aset Cabang dengan filter cabang dan jenis aset berupa dropdown.
+- Registrasi aset berada di layar terpisah, bukan formulir di dalam daftar.
+- Aset ID dibuat otomatis dari kode cabang, kode jenis aset, dan nomor urut tiga digit; tidak diisi manual.
+- Form aset memuat merek, nomor seri, jumlah, satuan, kondisi, tanggal beli, catatan, dan foto aset.
+- Kondisi aset dipilih lewat kartu Normal, Perlu perbaikan, atau Rusak.
+- Katalog jenis aset dapat ditambah; jenis yang sudah dipakai tidak dapat dihapus.
+- Foto aset hanya tersimpan di perangkat dan tidak dikirim ke server.
+
+## 1.10.5 — 17 Sep 2026 (versionCode 24)
+
+- Sistem ukuran layar Android diseragamkan: margin compact 16dp, jarak internal 8dp, dan jarak antarbagian 16dp.
+- Menu Modul berubah dari grid kartu menjadi daftar berkelompok yang lebih cepat dipindai.
+- Antrian Owner menampilkan dua filter per baris dan Service sebagai daftar lazy berbentuk baris, bukan kartu transaksi besar.
+- Pengaturan Owner memakai filter ringkas serta sheet multi-select untuk modul dan fungsi; tombol Selesai tidak tertutup gesture bar.
+- Diagram donat aplikasi dan PDF kini memakai warna kategorikal berbeda, label persen, serta legenda dengan pembulatan yang konsisten.
+- Grafik tren yang hanya memiliki satu periode menjadi batang horizontal berlabel sehingga tidak menyisakan panel kosong.
+
+## 1.10.4 — 17 Sep 2026 (versionCode 23)
+
+- PDF dan CSV laporan transaksi memuat seluruh bagian yang dipilih di filter Tampilan laporan: Ringkasan, Per cabang, Per kasir, Komisi petugas, dan Rincian.
+- Tabel bagian yang panjang berpindah halaman dengan kepala tabel berulang, jadi tidak ada baris yang hilang atau terpotong.
+- PDF laporan analitik menampilkan diagram batang tren omzet bulanan dan dua diagram donat (omzet per cabang dan penerimaan per metode), bukan hanya tabel.
+- PDF laporan analitik mencetak seluruh Service pada filter dengan halaman lanjutan; sebelumnya hanya 12 baris pertama.
+- Tombol Excel pada laporan analitik mengekspor semua tabel yang tampil di layar.
+- Bilah filter diperkecil dan disusun dua per baris sehingga tidak lagi memenuhi layar.
+
+## 1.10.3 — 17 Sep 2026 (versionCode 22)
+
+- Laporan transaksi dan laporan analitik dipisah menjadi dua menu terpisah di Modul.
+- Laporan analitik menangkap seluruh data yang terlihat akun, bukan hanya satu periode, dengan filter periode, cabang, kasir, dan jenis data yang semuanya multi-select.
+- Jenis data yang dapat disaring: status pembayaran, status pengerjaan, metode pembayaran, dan status pengambilan.
+- Diagram batang tren omzet bulanan dengan penanda rata-rata, dan diagram donat untuk omzet per cabang serta penerimaan per metode.
+- Peringkat kasir dan rekonsiliasi kas (omzet, kas diterima, piutang, biaya, hasil kas) dalam satu layar.
+- PDF laporan analitik baru dengan tabel yang memakai palet dan gaya kepala tabel yang sama dengan laporan transaksi.
+- Nama kasir dan petugas di laporan, PDF, dan CSV mengikuti nama terkini dari Daftar User; email tetap menjadi identitas stabil.
+- Laporan transaksi memakai box daftar dengan gulir internal sehingga ribuan transaksi tidak memanjangkan layar.
+
+## 1.10.2 — 17 Sep 2026 (versionCode 21)
+
+- Penerimaan pembayaran disimpan sebagai jurnal per waktu dan metode. Pembayaran bertahap kini masuk kas pada waktu sebenarnya, bukan dipindahkan ke tanggal Service dibuat.
+- Koreksi atau hapus Service yang sudah menerima pembayaran ditolak hingga ada proses pengembalian dana tercatat. Pembayaran tidak dapat diturunkan diam-diam.
+- Tutup kas dibuat per cabang dan hanya sekali per hari. Perhitungan kas memakai jurnal pembayaran.
+- Status Service bergerak berurutan: Menunggu dikerjakan, Sedang dikerjakan, lalu Selesai.
+- Pendaftaran Owner, Kasir, dan SPV menjadi permohonan server-side yang menunggu persetujuan Owner aktif. Akun Firebase dibatalkan bila permohonan ditolak server.
+- Beranda memadatkan penyaring status antrean dan pembayaran ke FilterBar serta bottom sheet daftar, bukan kartu status besar atau chip berderet.
+
+## 1.10.1 — 16 Sep 2026 (versionCode 20)
+
+- Layar masuk kini satu layar tanpa gulir dengan logo Cuciin di tengah atas. Kotak slogan dan masuk cepat berdasarkan peran dihapus.
+- Autentikasi hanya menggunakan email dan kata sandi akun. Server menentukan peran dan cakupan cabang setelah login.
+- Pemilih cabang dan user di layar operasional memakai FilterBar dan daftar di bottom sheet, bukan deretan chip atau kartu.
+- Rincian laporan transaksi memakai `LazyColumn` per Service dan membuka detail transaksi, sehingga laporan besar tidak merender seluruh baris sekaligus.
+- PDF laporan transaksi, stok, dan nota diselaraskan dengan palet biru Cuciin dan label Bahasa Indonesia.
+- Reproject snapshot Worker memakai versi jurnal terbaru agar versi optimistic concurrency tidak mundur.
+
+## 1.10.0 — 16 Sep 2026 (versionCode 19)
+
+### Tampilan
+
+- Seluruh aplikasi memakai sistem desain baru: kanvas putih bersih, teks near-black (#222222), satu warna aksen merah, tombol utama gelap, dan sudut membulat 8 sampai 20 piksel. Warna aksen tidak lagi dipakai untuk bidang luas.
+- Warna aksen disesuaikan agar lolos WCAG AA. Rausch Red (#ff385c) hanya 3.52:1 di atas putih, jadi tema Terang memakai #d92e4a (4.73:1), tema Gelap memakai #ff8098 (6.01:1 di kartu gelap), dan tema Warna-warni tetap memakai plum #c2185b. Seluruh 51 pasangan token diuji dengan rumus kontras, 0 gagal.
+- Tombol utama memakai near-black seperti pola Primary Dark, bukan warna merek. Warna aksen hanya untuk satu aksi paling utama per layar.
+- Radius mengikuti token bersama `CuciinShape`: tombol dan kolom isian 8, lencana 14, kartu 20, hero 32, pil penuh.
+- Tombol kembali menjadi bulat abu di semua layar, mengikuti pola Circular Navigation.
+- Tema tetap empat pilihan seperti sebelumnya: Ikut sistem, Terang, Gelap, dan Warna-warni. Semuanya memakai bahasa bentuk baru.
+
+### Laporan transaksi
+
+- Header menyebut data yang benar-benar diambil: rentang tanggal, jumlah cabang, dan jumlah Service. Sebelumnya hanya judul dan nama Owner.
+- Pemilih periode berubah dari deretan kartu chip menjadi satu bilah ringkas berisi periode aktif, rentang tanggal, dan jumlah cabang, dengan lembar pilihan. Pilihan cepat menampilkan rentang tanggalnya masing-masing.
+- Ringkasan per cabang dan per kasir menjadi daftar baris di dalam satu kartu, bukan tumpukan kartu terpisah.
+- Filter petugas tetap memakai chip karena jumlahnya sedikit.
+
+### Daftar cabang
+
+- Kartu per cabang diganti daftar baris: kode cabang, nama, kota, jumlah kasir, dan jumlah SPV. Puluhan cabang kini terbaca tanpa menggulir jauh.
+- Ditambahkan kolom pencarian nama, kode, atau alamat, dengan keadaan kosong yang menjelaskan kata kunci yang tidak cocok.
+- Cabang yang belum punya SPV ditandai teks, bukan warna atau titik dekoratif.
+- Tombol tambah pindah ke bilah atas sebagai ikon lingkaran.
+
+### Ikon
+
+- Ikon aplikasi baru: mesin cuci dengan tumpukan lipatan laundry, tiga lapis yang mengecil ke atas dan tepi atas bergelombang supaya terbaca sebagai kain, bukan alas.
+- Ikon digambar dengan garis di atas near-black, bukan bidang biru penuh, dan tetap benar saat Android memakai versi monokrom untuk ikon bertema.
+- Tanda di dalam aplikasi memakai bentuk yang sama agar identitasnya konsisten.
+
+### Identitas aplikasi
+
+- Identitas aplikasi berpindah ke paket `com.cuciin.laundryops`. Android menganggap paket ini aplikasi berbeda, jadi versi lama tetap terpasang dan harus dicopot manual setelah versi ini masuk. Data lokal lama (foto absensi, cache, outbox) tidak berpindah; data operasional di server tidak terpengaruh.
+- Firebase Authentication berpindah dari project `cuciin-ops-tiftazani` ke `cuciin-ops`. Kedua app Android (`com.cuciin.laundryops` dan `.debug`) terdaftar di project baru, sidik jari sertifikat rilis dan debug sudah ditambahkan.
+- Worker menerima ID token dari **kedua** project selama masa peralihan (`FIREBASE_PROJECT_IDS`). HP yang belum diperbarui tetap dapat bekerja seperti biasa, sehingga tidak ada pemutusan serentak di 20 cabang.
+- Halaman reset kata sandi memakai domain `cuciin-ops.web.app`, locale project `id`, dan `callbackUri` diarahkan ke domain itu.
+- Nama Owner di aplikasi dan di seluruh data server menjadi `Tiftazani`; alamat email Owner tidak diubah. Owner kedua `us.archuleta1207@gmail.com` memakai nama `Ustutifa`.
+
+## 1.9.3 — 15 Sep 2026 (versionCode 18)
+
+- Pesan di dialog reset kata sandi menjelaskan bahwa tautan harus dibuka dari email yang sama, dan memberi langkah bila alamatnya terpotong oleh aplikasi email atau pemindai tautan. Sebelumnya pengguna hanya diberi tahu tautan sudah dikirim.
+- Halaman reset kata sandi Firebase kini memakai domain `cuciin-ops-tiftazani.web.app`, bukan `firebaseapp.com`, dan tampil berbahasa Indonesia. Email reset juga berbahasa Indonesia mengikuti locale project.
+- Tautan reset wajib membawa `mode`, `oobCode`, `apiKey`, dan `lang`. Bila salah satu hilang, Firebase menampilkan "The selected page mode is invalid." sebelum memproses kode.
+
 ## 1.9.2 — 15 Sep 2026 (versionCode 17)
 
 - Tema tampilan bisa dipilih di Akun & profil untuk semua peran: Ikut sistem, Terang, Gelap, dan Warna-warni. Pilihan disimpan per akun di HP itu saja, terpisah dari data operasional dan sinkronisasi.

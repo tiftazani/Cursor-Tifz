@@ -1,0 +1,21 @@
+name = "cuciin-api-debug"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+workers_dev = true
+preview_urls = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cuciin-debug-db"
+database_id = "57dcf151-00a3-489f-9202-e0a9c48e5ae1"
+migrations_dir = "migrations"
+
+[vars]
+ENVIRONMENT = "debug"
+# Identitas Firebase tetap sama agar Owner dapat memakai kredensialnya sendiri,
+# tetapi semua data operasional debug masuk hanya ke D1 test.
+FIREBASE_PROJECT_IDS = "cuciin-ops,cuciin-ops-tiftazani"
+
+[observability]
+enabled = true
+head_sampling_rate = 1

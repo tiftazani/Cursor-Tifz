@@ -1,9 +1,167 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 15 September 2026, 19:05 WIB (oleh Hermes).
+Terakhir diperbarui: 18 September 2026, 10:36 WIB (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
+
+## 0. Pekerjaan yang sedang berjalan (17 Sep, Hermes)
+
+**Tujuan:** sistem layout konsisten, menu aset cabang, Kontrol Akses Role, dan tampilan utama baru.
+
+**Sudah diterapkan ke produksi dan diverifikasi:**
+
+- Migrasi `0006_asset_types.sql` (tabel `asset_types`, 6 jenis bawaan) dan `0007_access_roles.sql` (tabel `access_roles`, 3 role bawaan) sudah diterapkan ke D1 produksi.
+- Worker produksi dideploy ulang (version `445117ac-cd1b-4a84-a10a-b5fb2d001560`) dan mengenal command `assetType.*` serta `accessRole.*`.
+- Dibaca balik: `migrations list` memuat 0001 sampai 0007, `PRAGMA table_info(access_roles)` sesuai, 3 baris role bawaan, `/health` ok revision 356, dan data produksi tidak berubah (5 orders, 4 branches, 8 staff).
+
+**Perubahan aplikasi yang sudah diverifikasi di emulator:**
+
+- `OpsScreens.kt`: tampilan utama memakai dua filter sebaris (periode bawaan hari ini dan cabang) serta tiga kartu status yang dapat diketuk: Sedang dikerjakan, Cucian telat, Selesai. Cucian telat = estimasi selesai lewat tetapi pengerjaan belum selesai.
+- `AccessScreens.kt` (baru): daftar role, editor role dengan checklist modul dan fungsi, serta pemilih role per pengguna.
+- `AccessCatalog.kt` (baru): katalog modul dan fungsi, satu sumber untuk layar dan pemeriksaan izin.
+- `AccessPolicy.kt` (baru): penentu izin yang dapat diuji tanpa Android; Owner selalu penuh, role menentukan modul dan fungsi, kebijakan per pengguna hanya mempersempit.
+- `AccessPolicyTest.kt` (baru): 11 test lulus.
+- `OwnerSettingsScreen.kt`: kontrol akses pengguna dipindahkan ke menu Kontrol Akses Role; layar ini hanya memuat template WhatsApp.
+- `MoreScreens.kt`: menu baru "Kontrol Akses Role" di grup Master data.
+
+**Gate yang lulus:** 68 unit test debug dan 68 unit test release (0 gagal), lint debug dan release, APK debug dan release, AAB, `verify_release.py`, dan `npm run check` Worker (40 test). Kandidat `releases/1.10.8-candidate/` sudah dibuat dan checksum-nya diverifikasi.
+
+**Perbaikan 1.10.8:** lembar pilihan sekarang membedakan jenis pilihan secara bentuk, bukan hanya warna. Pilihan banyak memakai kotak centang (terisi penuh saat dipilih, kosong bergaris saat tidak), tiap baris menampilkan label "Dipilih" atau "Tidak dipilih", baris terpilih berlatar berbeda, dan tersedia hitungan "1 dari 12 modul dipilih" plus tombol Pilih semua dan Kosongkan. Tombol Selesai dibatasi `heightIn(max = 560.dp)` dengan daftar `weight(1f)` sehingga selalu terlihat penuh (terukur 46px di emulator). Pilihan tunggal tetap memakai radio tanpa label tambahan.
+
+**1.10.9 (17 Sep):** filter periode di layar utama menambah pilihan "Pilih dua tanggal" (`customRange` + `DateTimeFields` di dalam sheet periode yang kini dapat digulir). Ketiga PDF dicetak ulang mengikuti desain terlampir melalui modul baru `data/ReportPdf.kt`: laporan transaksi (kartu metrik, rekonsiliasi berdampingan dengan per cabang, tabel rincian 10 kolom, hanya bagian yang dipilih yang dicetak), laporan analitik (donut dengan total di tengah dan legenda lengkap), dan nota pelanggan (kapsul status terpisah, ringkasan pembayaran dengan total navy). Baris tabel PDF membungkus dengan tinggi adaptif sehingga tidak ada elipsis. Gate lulus: 68 test debug + 68 test release, lint, APK/AAB, `verify_release.py`, checksum `releases/1.10.9-candidate/`.
+
+**1.10.10 (17 Sep):** menu baru **Theme Aplikasi** (`ui/ThemeScreen.kt`) berisi Light, Dark, dan Custom. `CuciinThemeMode` kini tiga nilai; `CuciinCustomTheme` menyimpan enam warna ARGB yang diatur lewat slider R/G/B, kode hex, dan pratinjau langsung; `toPalette()` menurunkan seluruh token sisanya dan `readableOn()` menghitung warna teks di atas tombol/header agar selalu kontras. Pengaturan tema dihapus dari `ProfilScreen` dan diganti pintasan. Ditemukan dan diperbaiki bug server: alias `assetType` hilang di `parseCommand` sehingga 23 perintah aset tertahan 422; ditambah test yang mengiterasi seluruh entityType. Worker debug dan produksi sudah dideploy ulang (produksi version `a8f7f1f2-89ec-4266-b00e-f8653da9fc6f`); antrean perangkat kembali 0. Gate lulus: 72 test debug + 72 release, lint, APK/AAB, `verify_release.py`, `npm run check` (41 test), checksum `releases/1.10.10-candidate/`.
+
+**1.10.10 (17 Sep, lanjutan):** pengisian data awal dipindah ke jalur Excel, bukan dari dalam aplikasi. Alat baru di `laundry-ops/scripts/`: `fetch_d1_reference.py` (membaca acuan entitas dari D1) dan `import_template_to_d1.py` (Excel -> SQL + jurnal `sync_changes`). Template `releases/1.10.10-candidate/template-data-cuciin.xlsx` berisi sembilan sheet, dan panduannya di `PANDUAN-IMPOR-EXCEL.md`. Alur diuji di D1 uji: 8 baris masuk, 8 entri jurnal, dan idempoten saat dijalankan dua kali. Perbaikan menyertai yang tetap dipakai: `CuciinStore.newId()` (UUID) dan `branches.firstOrNull()?.id.orEmpty()` pada catatan audit.
+
+**1.10.10 (17 Sep, urutan menu):** susunan menu layar Modul dirapikan dan dipindah ke `ui/MenuOrder.kt` supaya dapat diuji tanpa Android. Bagian yang tampil berurutan: Pekerjaan harian, Keuangan, Pelanggan, Laporan, Master data, lalu Aplikasi paling bawah. "Theme Aplikasi" keluar dari bagian laporan dan "Riwayat versi" kini di urutan paling bawah. Layar `MoreScreens.kt` hanya merender katalog; ikon dan ringkasan disimpan sebagai nama di katalog lalu dipetakan di layar. Test baru `MenuOrderTest.kt` (13 test) mengunci urutan bagian, urutan isi tiap bagian, dan penyaringan izin tanpa mengubah urutan. Gate lulus: 85 test debug + 85 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.10-candidate/` diperbarui. Pengaturan urutan menu oleh pengguna (naik/turun) belum dibuat, menunggu keputusan Owner.
+
+**1.10.11 (17 Sep, pengaturan urutan menu):** menu Modul kini dapat disusun pengguna. Susunan hidup di `ui/MenuOrder.kt` (`MenuOrder` katalog murni + `MenuLayout` susunan yang berlaku) dan disimpan per HP lewat `ui/MenuPrefs.kt`; tidak ikut tersinkron, sama seperti tema. Layar baru `ui/MenuOrderScreen.kt` dengan pintasan di paling atas layar Modul: panah naik dan turun per menu, tombol pindah bagian, panah per judul bagian, serta tombol Kembalikan urutan awal. Susunan tersimpan dirapikan terhadap katalog sehingga menu baru dari pembaruan tetap muncul di bagian bawaannya. Bagian bawaan berurutan: Pekerjaan harian, Keuangan, Pelanggan, Laporan, Master data, Aplikasi. Gate lulus: 98 test debug + 98 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.11-candidate/`. Diuji di emulator: geser menu, pindah bagian (Theme Aplikasi ke Keuangan), dan susunan bertahan setelah aplikasi dibuka ulang.
+
+**1.10.12 (17 Sep, bar navigasi + animasi):** diperbaiki bug bar navigasi bawah yang hilang hanya di layar Service: daftar rute berbar ditulis ulang terpisah di `CuciinNav.kt` dan rute `nota` tertinggal. Sekarang rute berbar selalu diturunkan dari katalog tab baru `ui/NavTabs.kt` (tab, label, izin) dan dikunci `NavBarContractTest.kt`. Animasi ditambahkan lewat `ui/Motion.kt` (durasi mengikuti skala animasi sistem; bila animasi dimatikan, gerak mati): geser dan pudar saat pindah layar dengan arah maju/mundur, efek tekan pada tombol dan kartu status, angka kartu status menghitung naik, baris antrian muncul mengalir (`ui/components/EnterOnce.kt`, dibatasi 6 baris), bar bawah muncul dan hilang lembut. Semua hanya alpha, geser, dan skala lewat graphicsLayer supaya ringan di HP kelas bawah. Gate lulus: 104 test debug + 104 test release, lint, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.12-candidate/`. Uji emulator: bar terbaca di kelima tab; animasi terbukti dengan rekaman layar pada skala animasi 8x; waktu render 50th 16ms dan 99th 18ms.
+
+**1.10.13 (17 Sep, login + keyboard):** diperbaiki layar login yang terpotong saat keyboard Android muncul. Penyebabnya layar login dirancang satu layar penuh tanpa gulir, sehingga saat ruang menyusut 300-400dp bagian bawah (tulisan "Lupa kata sandi?" dan tombol "Daftar akun") terpotong tanpa cara menjangkaunya. Aturan tata letak baru hidup di `ui/LoginLayout.kt` dan dikunci `LoginLayoutTest.kt`: ruang lega tetap satu layar penuh tanpa gulir, ruang sempit dipadatkan dan boleh digulir, dan saat keyboard terbuka layar menggulir otomatis ke kartu isian lewat `BringIntoViewRequester`. Gate lulus: 109 test debug + 109 test release, lint, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.13-candidate/`. Diuji di emulator pada lima tinggi ruang (2400 sampai 1100 piksel).
+
+**1.10.14 (17 Sep, tab macet):** diperbaiki tab Antrian yang tidak bisa diklik setelah layar Service dibuka lewat tombol "Service baru". Penyebab: perpindahan tab memakai `popUpTo("home") { saveState = true }` berpasangan `restoreState = true`, pola untuk graf navigasi bertingkat, sedangkan graf Cuciin datar; pada keadaan setelah `nota` dibuka lewat tombol, `navigate` tidak menghasilkan perpindahan apa pun. Perbaikan: satu panggilan `navigate` dengan `launchSingleTop` + `popUpTo("home")` tanpa saveState/restoreState, dan tab aktif tidak dinavigasi ulang. Aturan hidup di `ui/NavTransition.kt`, dikunci `NavTransitionContractTest.kt`. Gate lulus: 115 test debug + 115 test release, lint, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.14-candidate/`. Diuji di emulator: kelima tab dari layar Service, bolak-balik lima putaran, lewat tab maupun tombol, dan setelah tombol kembali.
+
+**1.10.15 (17 Sep, nama debug):** aplikasi varian debug kini bernama **Cuciin Debug** di layar HP, sedangkan versi rilis tetap **Cuciin**. Namanya diambil dari `app/src/debug/res/values/strings.xml` (hanya berlaku untuk varian debug), bukan dari `res/values/strings.xml` bersama. Dibaca balik dari APK: debug `application-label:'Cuciin Debug'`, rilis `application-label:'Cuciin'`. Sekaligus ditegaskan: bug tab macet hanya ada di rilis 1.10.13 ke bawah; perbaikannya dibuktikan ada di dalam APK rilis 1.10.14 dan 1.10.15 (kelas `NavTransition` ditemukan di `classes.dex`, tidak ada di 1.10.13). Gate lulus: 115 test debug + 115 test release, lint, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.15-candidate/`.
+
+**1.10.16 (18 Sep, layar pembuka + login kaca):** tiga hal dikerjakan sekaligus. (1) Layar pembuka baru `ui/OnboardingScreen.kt` + `ui/OnboardingPrefs.kt`: tiga halaman geser, muncul sekali setelah pemasangan, bisa dibuka lagi lewat tautan "Tentang aplikasi" di halaman masuk. Gambar rasio 9:20 (841x1870) dari Owner, dikompres ke webp ~200 KB per gambar. (2) Halaman login memakai kartu kaca gelap (`ui/GlassCard.kt`): latar navy 42%, isian bening dengan garis putih tipis. Kaca gelap dipilih karena wallpaper login ramai dan kaca terang membuat tulisan putih kehilangan kontras. (3) Bar putih 60px di bawah halaman login diperbaiki: sebabnya `Scaffold` memotong area bar sistem dari konten, sehingga latar Scaffold terang terlihat di bagian yang tidak tertutup wallpaper. Layar penuh kini melewatkan padding Scaffold dan mengatur insetnya sendiri; bar sistem dibuat tembus pandang dari tema. Atribut tema yang butuh API lebih baru dipisah ke `values-v27` dan `values-v29` karena minSdk 26 (lint menangkap ini). Gate lulus: 121 test debug + 121 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.16-candidate/`.
+
+**1.10.17 (18 Sep, tumpang tindih judul pembuka):** diperbaiki judul halaman layar pembuka yang tertimpa tombol. Sebabnya tata letak dua wadah berisi penuh layar: judul terdorong ke dasar oleh pengisi fleksibel di dalam wadahnya, sementara tombol berada di wadah lain yang juga menempel di dasar. Perbaikan: seluruh isi (logo, judul, baris pendukung, titik halaman, tombol) disusun satu kolom yang mengalir dari atas ke bawah dengan satu pengisi fleksibel di antara logo dan judul. Diukur di emulator sebelum/sesudah: judul y 2187-2211 (tertimpa) menjadi y 1651-1825; jarak judul ke tombol 13 px menjadi 208 px. Gate lulus: 121 test debug + 121 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.17-candidate/`.
+
+**1.10.18 (18 Sep, tombol kedua layar pembuka):** di halaman terakhir layar pembuka, tombol kedua bertulisan "Lihat panduan singkat" padahal kerjanya hanya menutup layar. Sekarang tombol kedua hanya muncul selama masih ada halaman berikutnya dan isinya selalu "Lewati"; di halaman terakhir dihilangkan karena tombol utamanya sudah "Masuk ke akun". Aturannya hidup di `Onboarding.primaryLabel`, `Onboarding.hasSecondButton`, dan `Onboarding.secondLabel` supaya bisa diuji tanpa Android, dikunci tiga test baru. Gate lulus: 124 test debug + 124 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.18-candidate/`. Diuji di emulator: halaman 3 hanya memuat satu tombol.
+
+**Kebijakan artefak Git (18 Sep):** `.gitignore` kini menutup `laundry-ops/releases/*-candidate/*.apk` dan `*.aab`. Sebelumnya repo menyimpan 304 MB APK terlacak dan `.git` sudah 671 MB; kandidat 1.10.2 sampai 1.10.17 belum pernah masuk Git dan totalnya 826 MB, sehingga dimasukkan hanya catatannya (README, SHA256SUMS, PANDUAN-IMPOR-EXCEL.md, template Excel). Artefak kandidat yang sedang berlaku ditambahkan dengan `git add -f`. Kode 1.10.2 sampai 1.10.18 sudah di-commit (commit `3e8e631` dan `4e98767`), belum dipush.
+
+**1.10.19 (18 Sep, nama pemilik netral):** nama yang tampil di aplikasi tidak lagi memakai nama pribadi, tetapi nama usaha. Aplikasi ini dijual ke banyak pemilik laundry sehingga nama di layar harus netral. Alamat email sengaja tidak diubah karena itu identitas akun Firebase; menggantinya memutus login semua perangkat. Yang diubah: `CuciinStore.ownerName`, `cloudflare/scripts/seed-debug.sql`, `mockup/index.html`, `mockup/app.js`, dan fixture `SyncProtocolTest.kt`. Migrasi baru `cloudflare/migrations/0008_owner_name_neutral.sql` mengganti nama di tabel `staff` **dan** menulis jurnal `sync_changes`, karena snapshot perangkat dibentuk dari snapshot tersimpan plus jurnal; kalau hanya tabel yang diubah, perangkat yang sudah memegang salinan tetap menampilkan nama lama. Migrasi idempoten (dijalankan dua kali: `rows_written` 5 lalu 0, entri jurnal tetap 1). Dua test Android baru (`OwnerNameTest`, `NoPersonalNameInSourcesTest`) dan dua test Worker baru mengunci aturan ini. Bukti APK: `strings classes*.dex` hanya menyisakan dua kemunculan, yaitu URL Worker dan alamat email. Gate lulus: 130 test debug + 130 test release, 43 test Worker, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.19-candidate/`.
+
+**Migrasi 0008 sudah diterapkan ke PRODUKSI (18 Sep, 02:40 WIB):** nama Owner di tabel `staff` produksi menjadi "Cuciin", dengan 4 entri jurnal (satu per cabang: bunayya, laupay-kirab, laupay-dayeuh, shelly). Dijalankan ulang: `rows_written` nol, entri tetap 4, total jurnal tetap 397. Backup sebelum migrasi sudah dipindah ke tempat permanen: `~/Documents/ChatGPT/Laundry/firebase-migration/backup-d1/pre-owner-name-neutral-20260918-0235.sql` (496 KB, berisi data: 8 staff, 4 cabang, 7 orders, 393 entri jurnal). Cara memulihkannya ada di `CARA-RESTORE.md` di folder yang sama.
+
+**BUG YANG DITEMUKAN SEBELUM MIGRASI JALAN, dan pelajarannya:** versi pertama migrasi 0008 menulis SATU entri jurnal saja. Itu salah total. `pullChanges` di `command-sync.ts` menyaring jurnal untuk pengguna non-Owner dengan `branch_id IN (cabang pengguna)` dan entri `staff` hanya lolos bila cabangnya cocok, sehingga kasir dan SPV di cabang lain tidak akan pernah menerima nama baru walaupun Owner melihatnya. Aturan yang benar ada di `staffJournalScopes`: satu entri per cabang tugas. **Setiap migrasi yang menyentuh entitas `staff` wajib menulis satu entri jurnal per cabang, bukan satu saja.** Bug ini ketahuan dengan menyimulasikan filter `pullChanges` per cabang di D1 uji sebelum menyentuh produksi; cara itu wajib dipakai lagi untuk migrasi sejenis.
+
+**Idempotensi `sync_changes`:** tabel itu TIDAK punya indeks unik pada `command_id`, jadi `INSERT OR IGNORE` tidak menjamin apa pun. Penjagaan idempoten wajib memakai `NOT EXISTS` yang membandingkan `command_id` DAN `branch_id`.
+
+**PENTING untuk agent lain:** `NoPersonalNameInSourcesTest` akan GAGAL bila ada yang menambahkan kembali kata "tiftazani" di `src/main`, `src/main/res`, atau `src/debug` selain sebagai bagian alamat email `tiftazani.khara@gmail.com`. Itu disengaja.
+
+**1.10.20 (18 Sep, warna dialog pemilih tanggal):** dilaporkan Owner bahwa warna kotak pemilih tanggal terlihat aneh. Penyebabnya `ui/DateTimeFields.kt` memakai `android.R.style.Theme_Material_Light_Dialog_Alert` yang dipaku mati; tema bawaan itu membawa aksen teal sehingga tombol "Pilih" dan "Batal" berwarna teal sementara tombol aplikasi magenta. Perbaikan: tema sendiri `Theme.Cuciin.Picker` di `res/values/themes_picker.xml` dengan aksen `cuciin_accent` (#C1358F), warnanya disimpan sejalan dengan palet Compose di `ui/theme/Theme.kt`. Berlaku di delapan tempat pemakaian lewat satu fungsi (filter periode, estimasi selesai Service, tanggal kejadian stok, tanggal beli aset). Dibuktikan per piksel dari tangkapan layar: warna dominan dialog `#C1358F`, warna teal nol. Empat test baru `PickerThemeTest` mengunci supaya tema bawaan Android tidak kembali dipakai. Gate lulus: 135 test debug + 135 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.20-candidate/`.
+
+**ATURAN untuk agent lain:** jangan pakai `android.R.style.*` untuk dialog di aplikasi ini. Dialog sistem tidak mewarisi palet Compose, jadi warnanya akan berbeda dari tombol aplikasi. Pakai `R.style.Theme_Cuciin_Picker` lewat `pickerContext()` di `ui/DateTimeFields.kt`. `PickerThemeTest` akan gagal bila aturan ini dilanggar.
+
+**1.10.21 (18 Sep, nuansa biru + preset tema + harga khusus Owner):** tiga hal. (1) Palet Light dan Dark diganti mengikuti warna logo dan gambar layar pembuka: biru #0048B4 dan biru langit #D8E4F0. Light: latar #F4F8FD, kartu putih, aksen #0048B4, header #00306E, teks #0B1A2E. Dark: latar #0A1220, kartu #121C2E, aksen #7FB4FF, teks #EAF2FC. Kuning #F7CA3A dipertahankan sebagai aksen menu aktif karena di logo pun kuning hadir. 28 dari 28 pasangan warna lulus WCAG AA. Warna navy lama yang dipaku di `GlassCard` dan `OnboardingScreen` ikut disesuaikan. (2) Tema Custom kini punya tiga preset di `CuciinCustomTheme.presets`: Biru Cuciin (bawaan), Biru Cuciin Gelap, dan Magenta Jemur. (3) Fungsi baru `service.price` di `AccessCatalog`, ditandai `ownerOnlyByDefault`; tombol "Ubah harga" disembunyikan untuk yang tidak berhak dan `CuciinStore.setCartPrice` mengembalikan Boolean sehingga menolak perubahannya. Jalur koreksi Service juga dijaga. `ensureAccessRoles` kini menambal role bawaan yang tersimpan dengan `AccessCatalog.builtInFunctionsFor`, karena isi role dibekukan saat pertama dibuat. Gate lulus: 147 test debug + 147 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.21-candidate/`.
+
+**ATURAN untuk agent lain (harga):** jangan menambahkan jalur baru yang menulis `unitPrice` tanpa memeriksa `store.canChangePrice()`. Harga adalah data uang. `ServicePriceAccessTest` akan gagal bila aturan ini dilanggar.
+
+**1.10.22 (18 Sep, menu Modul menutup aplikasi):** dilaporkan Owner bahwa mengklik "Antrian laundry" atau "Service baru" di layar Modul membuat aplikasi langsung keluar untuk peran apa pun. Penyebab dari logcat: `IllegalArgumentException: Navigation destination that matches route queue cannot be found in the navigation graph` di `MoreScreens.kt:120`. Katalog menu memakai nama menunya sendiri sebagai rute (`queue`, `service`), sedangkan graf navigasi memakai `home` dan `nota` karena kedua rute itu dipakai bersama tab bawah. Perbaikan: `MenuOrder.destinationOf` memetakan rute menu ke rute graf. Sekaligus disamakan: menu yang tabnya disembunyikan untuk SPV (Service baru, WA menunggu) kini ikut disembunyikan di menu Modul, karena server menolak pembuatan Service oleh SPV sehingga pesanannya akan gagal tersinkron tanpa penjelasan. Pengunci: `MenuRouteTest` membandingkan tiap rute menu dengan daftar `composable(...)` di `CuciinNav.kt`. Gate lulus: 153 test debug + 153 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.22-candidate/`. Disapu di emulator dengan DUA akun supaya menu khusus Owner ikut teruji: Kasir 12 diklik tanpa crash + 10 tidak tampil, Owner 10 diklik tanpa crash + 0 tidak tampil. Total 22 dari 22 menu teruji, 0 crash. **Catatan penting: sapuan pertama dijalankan pada build 1.10.21 yang masih terpasang, bukan APK 1.10.22.** `adb install -r` gagal diam-diam sehingga versi lama tetap terpasang; selalu periksa `dumpsys package ... | grep versionName` setelah memasang, jangan percaya keluaran install saja.
+
+**ATURAN untuk agent lain (rute menu):** setiap menu baru di `MenuOrder.catalog` wajib punya rute yang terdaftar di `CuciinNav.kt`, atau dipetakan lewat `MenuOrder.destinationOf`. `MenuRouteTest` akan gagal bila aturan ini dilanggar. Jangan menambah `nav.navigate("...")` dengan rute yang tidak ada di graf: Compose Navigation melempar pengecualian dan aplikasi langsung keluar.
+
+**Menunggu perintah Owner:**
+- Penghapusan data contoh (dummy) di produksi belum dijalankan. Jangan hapus tanpa backup dan perintah eksplisit.
+- Berkas Excel berisi data nyata belum diterima, jadi belum ada data yang ditembakkan ke D1 produksi.
+
+**Catatan penting:** role dan pengguna sekarang tersimpan sebagai `accessRoles` pada snapshot dan `staff.accessRoleId`. Pengguna tanpa `accessRoleId` otomatis memakai role bawaan sesuai peran lamanya, jadi data lama tetap berjalan tanpa migrasi khusus.
+
+## 0a. Klaim file Hermes saat ini
+
+```
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/components/Widgets.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/UiMetrics.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MoreScreens.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MenuOrder.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MenuOrderScreen.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MenuPrefs.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/NavTabs.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/NavTransition.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/OnboardingScreen.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/OnboardingPrefs.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/GlassCard.kt
+laundry-ops/android/app/src/main/res/values-v27/themes.xml
+laundry-ops/android/app/src/main/res/values-v29/themes.xml
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/OnboardingScreen.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/LoginLayout.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/AuthScreens.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/Motion.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/components/Motion.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/components/EnterOnce.kt
+laundry-ops/android/app/src/test/java/com/cuciin/laundryops/ui/MenuOrderTest.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/OpsScreens.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/OwnerSettingsScreen.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/BusinessScreens.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/AssetScreens.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/AccessScreens.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/AnalyticsReportScreen.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/FileExports.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/ChartPalette.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/AssetCodes.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/AssetPhotos.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/AccessCatalog.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/AccessPolicy.kt
+laundry-ops/cloudflare/migrations/0006_asset_types.sql
+laundry-ops/cloudflare/migrations/0007_access_roles.sql
+laundry-ops/cloudflare/migrations/0008_owner_name_neutral.sql
+```
+
+## 0b. Riwayat klaim sebelumnya (16 Sep, Hermes)
+
+**Tujuan:** menerapkan sistem desain Jemur ke seluruh aplikasi, mengganti ikon, memigrasikan data cabang dan akun operasional, serta memperbaiki tiga layar yang dikeluhkan Owner.
+
+**Klaim file Hermes untuk pekerjaan ini:**
+
+```
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/theme/Theme.kt        (palet Jemur + CuciinShape + navSelected)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/components/Widgets.kt (komponen bersama)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/UiMetrics.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MoreScreens.kt        (laporan, periode, riwayat aktivitas)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/MasterScreens.kt      (daftar cabang, Daftar User)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/AuthScreens.kt        (latar login, masuk cepat)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/CuciinNav.kt          (navigasi bawah navy + kuning)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/BusinessScreens.kt    (istilah aset, absensi)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/OpsScreens.kt         (ikon layanan, ekspor)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/CuciinStore.kt      (seed 4 cabang + 6 kasir, demoLogin)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/VersionHistory.kt
+laundry-ops/android/app/src/main/res/mipmap-*/                                        (ikon launcher dari zip)
+laundry-ops/android/app/src/main/res/drawable-nodpi/                                  (logo + latar login)
+laundry-ops/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher*.xml
+laundry-ops/cloudflare/src/command-sync.ts                                            (payload penuh order.*, jurnal stock.batch)
+laundry-ops/cloudflare/src/index.ts                                                   (CHANGE_DATASETS order, tombstone)
+laundry-ops/cloudflare/tests/command-sync.test.mjs                                    (3 test baru)
+```
+
+**Codex: jangan menyunting file di atas sampai pekerjaan ini selesai dan dicatat di sini.**
+
+**Aturan yang berubah dan wajib dipatuhi siapa pun:**
+
+1. **Arah visual adalah Jemur, bukan Airbnb.** Struktur navy (`heroA` #0D164B), aksi utama pink (`prim` #C1358F), aksen kuning hanya untuk item navigasi aktif (`navSelected` #F7CA3A), permukaan putih, sudut membulat 14 sampai 26.
+2. **Tombol utama memakai navy** (`PrimaryBtn`, `TealDeep`), bukan near-black. `AccentBtn` pink hanya untuk satu aksi paling utama per layar.
+3. **Radius mengikuti `CuciinShape`**, bukan angka bebas: tombol 14, kartu 20, lencana 14, pil 9999.
+4. **Target sentuh minimum 44dp.** Tombol kembali, `SelectChip`, dan tombol tambah cabang sudah dinaikkan; jangan dikembalikan ke 40dp.
+5. **Daftar panjang memakai `ListCard` + `ListRow` + `RowDivider`**, bukan tumpukan `CardBlock`. Cabang, user, dan riwayat aktivitas sudah memakai pola ini.
+6. **Semua pasangan warna wajib lolos WCAG.** Pink asli gagal sebagai teks kecil; teks kecil memakai `TealDeep` navy atau `primDeep`. Jalankan `contrast-check.py` setelah mengubah palet.
+7. **Metadata minimum 12sp dan tanpa all-caps.** `Chip` dan `Eyebrow` tidak lagi mengubah teks menjadi huruf kapital.
+8. **Nama menu pengguna adalah "Daftar User"** dan menampilkan Owner, Kasir, serta SPV dengan pencarian dan penyaring peran.
+
 
 ## 1. Titik berangkat yang sudah diverifikasi
 
@@ -11,119 +169,123 @@ Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **
 |---|---|---|
 | Repo lokal | `/Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz` | satu-satunya clone; `~/Cursor-Tifz` bukan clone repo ini |
 | Branch | `codex/cuciin-1-8-1` | `git status -sb` |
-| HEAD | `67903dc` — sama dengan `origin/codex/cuciin-1-8-1` (0 ahead / 0 behind) | `git rev-list --left-right --count HEAD...origin/...` |
-| PR | #18, OPEN, mergeable, semua check hijau | `gh pr view 18` |
-| Android | **1.9.2 (versionCode 17)** | `app/build.gradle.kts` |
-| Worker produksi | versi `71310107-4ec5-48f8-aedb-481be9107649` (15:10 WIB) | `wrangler deployments list --name cuciin-api` |
-| Skema D1 produksi | migrasi `0003` dan `0004` sudah diterapkan | `wrangler d1 execute cuciin-db --remote --command "SELECT name FROM d1_migrations"` |
-| Health produksi | `ok`, database `ready` | `curl .../health` |
-| Test Worker | 29 lulus (20 lama + 9 baru untuk accessPolicy dan whatsappTemplate) | `cd cloudflare && npm run check` |
-| Konfigurasi cloud build | `signing-private/cuciin-cloud.properties` (di luar repo) | `app/build.gradle.kts` |
+| Android | **1.10.0 (versionCode 19)** | `app/build.gradle.kts` |
+| Paket aplikasi | `com.cuciin.laundryops` (+ `.debug`) | `app/build.gradle.kts` |
+| Firebase project | **`cuciin-ops`** (lama: `cuciin-ops-tiftazani`) | `firebase/README.md` |
+| Worker produksi | versi `09ce0c80-70eb-4655-994f-a8cece811921` | `wrangler deployments list` |
+| Health produksi | `ok`, database `ready`, revision 286 | `curl .../health` |
+| Test Worker | 38 lulus | `cd cloudflare && npm run check` |
+| Test Android | 94 lulus (47 debug + 47 rilis), lint 0 error | `./gradlew testDebugUnitTest testReleaseUnitTest lintDebug` |
+| Kandidat rilis | `releases/1.10.0-candidate/` | folder + `SHA256SUMS` |
+| Data produksi | 4 cabang, 8 akun (2 Owner + 6 Kasir), 0 data operasional dummy | `wrangler d1 execute cuciin-db --remote` |
 
-Working tree bersih. Tidak ada pekerjaan setengah jadi yang menggantung.
+## 2. Perpindahan identitas aplikasi (16 September 2026)
 
-## 2. Riwayat singkat 15 September
+Ini perubahan besar yang mengubah banyak hal sekaligus. Ringkasannya:
 
-1. Codex berhenti 12:32 karena kuota, meninggalkan perubahan belum di-commit dan 5 error compile di `ui/MasterScreens.kt`.
-2. Hermes mencatat kondisi itu, mem-backup patch-nya, dan menahan diri (tidak menyentuh kode).
-3. Codex lanjut setelah kuota terbuka, menyelesaikan 8 item permintaan 12:24, dan commit `a801f0b` pukul 15:11 lalu push.
-4. Hermes menambah **fitur tema** (1.9.2): Terang, Gelap, Warna-warni, dan Ikut sistem, dapat dipilih semua peran di Akun & profil. Commit `72b9dbb`.
-5. Hermes menyiapkan kandidat `releases/1.9.2-candidate/` dan menyegarkan `RELEASE_READINESS.md`.
-6. Ketahuan build debug tidak pernah memuat alamat cloud. Diperbaiki di `46154d1`: konfigurasi dibaca dari file privat di luar repo, dan build gagal bila alamat kosong.
-7. Seluruh jejak Cuciin dihapus dari project Vercel `cuan-yuk-guys` (`f21776a`), karena Cuciin menumpang di sana.
+| Sebelum | Sesudah |
+|---|---|
+| Paket `com.tiftazani.laundryops` | Paket `com.cuciin.laundryops` |
+| Firebase project `cuciin-ops-tiftazani` | Firebase project `cuciin-ops` |
+| Domain reset `cuciin-ops-tiftazani.web.app` | Domain reset `cuciin-ops.web.app` |
+| Nama Owner `Tiftazani Khara` | Nama Owner `Tiftazani` (Owner kedua memakai `Ustutifa`) |
+| Worker menerima 1 project | Worker menerima **2 project** selama peralihan |
 
-## 3. Status delapan item permintaan 15 Sep
+Yang **tidak** berubah: Worker URL, D1, skema database, signing key, dan seluruh data operasional.
 
-| # | Item | Status | Bukti |
-|---|---|---|---|
-| 1 | Retail ↔ Produk stok saling terhubung | Selesai | `services.product_id` di D1, `productKey` di model, `linkedProduct()`, pengurangan stok saat Nota dibuat dan dikoreksi |
-| 2 | Akun & Profil: info cabang benar | Selesai | `ProfilScreen` memakai penugasan pengguna, bukan cabang tampilan Owner |
-| 3 | Inventory digabung ke Produk stok, stok multi-cabang | Selesai | Produk stok menyatukan barang jual + bahan habis pakai; mesin/aset pindah ke menu "Aset & mesin cabang"; `addProduct` menerima `Set<String>` cabang |
-| 4 | Hanya Owner boleh koreksi Service setelah nota terkirim | Selesai | Ditegakkan di store Android **dan** di Worker |
-| 5 | Foto absensi kamera + cap tanggal/waktu di gambar | Selesai | `data/AttendancePhotos.kt`, `AttendanceScreen`, `file_paths.xml`; path foto tidak pernah dikirim ke server |
-| 6 | User access control (modul + fungsi) | Selesai | `OwnerSettingsScreen.kt`; tabel `access_policies`; Worker menegakkan policy pada command (403 "Akses fungsi ini dibatasi oleh Owner") |
-| 7 | Template WhatsApp (pembuka, isi, penutup) | Selesai | `OwnerSettingsScreen.kt`; tabel `whatsapp_templates`; `ReceiptText.format(…, template)` |
+Konsekuensi yang wajib diketahui siapa pun yang menyentuh repo ini:
 
-## 4. Yang masih kurang (bukan bug, tapi belum lengkap)
+1. **APK baru tidak menimpa APK lama.** Paket berbeda berarti aplikasi berbeda di mata Android. Versi lama tetap terpasang dan harus dicopot manual.
+2. **Data lokal tidak berpindah.** Foto absensi, cache, dan outbox versi lama tetap di aplikasi lama.
+3. **Jangan hapus project lama dari `FIREBASE_PROJECT_IDS`** sampai seluruh perangkat 20 cabang sudah pindah. Menghapusnya terlalu cepat akan memutus HP yang belum diperbarui.
+4. **Konfigurasi Firebase API punya quirk.** Endpoint `config` selalu mengembalikan app pertama untuk semua permintaan, jadi konfigurasi app debug disusun manual dari `mobilesdk_app_id` yang sebenarnya. Rinciannya di `firebase/README.md`.
 
-1. **Sisi Vercel belum dibersihkan.** Repo sudah tidak punya route Cuciin, tapi project `cuan-tif` dan alias/custom domain-nya masih perlu ditinjau dari dashboard Vercel. Dijadwalkan Owner, belum dikerjakan.
-2. **PR #18 sedang menunggu merge.** Kontrak, test, dan dokumen sudah lengkap di cabang; `main` belum memuat 1.9.2 sampai PR di-merge.
-
-Yang sudah ditutup 15 Sep malam: kontrak `accessPolicy`/`whatsappTemplate` di `SYNC_API.md`, 9 test Worker baru, dan `AGENT_HANDOVER.md` yang kini menyebut 1.9.2 / versionCode 17 / commit `9bd026f`.
-
-## 5. Klaim file (berlaku sampai handover berikutnya)
+## 3. Klaim file (berlaku sampai handover berikutnya)
 
 Aturan: satu file satu pemilik. Kalau butuh mengubah file milik agent lain, minta lewat chat/PR, jangan edit langsung.
 
-### Bebas — tidak ada yang memegang
-
-Semua file kode dalam keadaan bersih dan ter-commit. Siapa pun boleh mengambil area berikut dengan mencatatnya di sini lebih dulu.
-
-### Pegangan Hermes (bila tugas server dilanjutkan)
+### Pegangan Hermes (selesai 16 Sep 10:35, sudah di-commit lokal)
 
 ```
-laundry-ops/cloudflare/SYNC_API.md
-laundry-ops/cloudflare/migrations/0005_*.sql          (bila perlu)
-laundry-ops/cloudflare/tests/*.mjs
-laundry-ops/AGENT_STATUS.md                            (dokumen ini)
-```
-
-### Pegangan Codex (bila tugas UI/rilis dilanjutkan)
-
-```
+laundry-ops/cloudflare/src/index.ts              (FIREBASE_PROJECT_IDS + firebaseProjectIds)
+laundry-ops/cloudflare/wrangler.toml             (dua project selama peralihan)
+laundry-ops/cloudflare/tests/firebase-project-migration.test.mjs   (baru, 6 test)
+laundry-ops/cloudflare/README.md
+laundry-ops/firebase/README.md
+laundry-ops/firebase/.firebaserc
+laundry-ops/android/app/build.gradle.kts         (paket, versi 1.10.0)
+laundry-ops/android/app/proguard-rules.pro
+laundry-ops/android/app/google-services.json.example
 laundry-ops/android/CHANGELOG.md
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/VersionHistory.kt
 laundry-ops/android/RELEASE_READINESS.md
-laundry-ops/releases/
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/CuciinStore.kt   (nama Owner)
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/VersionHistory.kt
+laundry-ops/releases/1.10.0-candidate/           (baru)
+laundry-ops/releases/cuciin-release.apk
+laundry-ops/releases/cuciin-debug.apk
+laundry-ops/README.md
+laundry-ops/AGENT_STATUS.md                      (dokumen ini)
 ```
 
-Catatan 15 Sep 19:05: **pekerjaan Hermes selesai dan sudah di-push** (`f21776a`). Android 1.9.2 / versionCode 17, kandidat rilis lengkap, jejak Vercel dihapus. Tidak ada pekerjaan setengah jadi di working tree. File yang disentuh Hermes:
+Skrip migrasi dan backup ada di luar repo: `~/Documents/ChatGPT/Laundry/cuciin-theme-mockup/` dan `~/Documents/ChatGPT/Laundry/firebase-migration/`.
+
+### Pegangan Codex (area UI/rilis)
 
 ```
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/theme/Theme.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/theme/ThemePrefs.kt   (baru)
-laundry-ops/android/app/src/main/res/values/colors.xml
-laundry-ops/android/app/src/main/res/values/themes.xml
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/MoreScreens.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/AuthScreens.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/CuciinNav.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/OpsScreens.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/ui/components/Widgets.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/MainActivity.kt
-laundry-ops/android/CHANGELOG.md
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/VersionHistory.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/ui/**
+laundry-ops/android/app/src/test/java/com/cuciin/laundryops/ui/**
+laundry-ops/android/app/src/main/res/**
 ```
 
-Mockup, skrip kontras, dan bukti tangkapan layar ada di `~/Documents/ChatGPT/Laundry/cuciin-theme-mockup/`.
-
-Sebelum menyentuh file di atas, jalankan `git diff` dan `git log --oneline -5` lebih dulu: versi, changelog, dan `VersionHistory` sudah naik ke 1.9.2, dan berkas kandidat rilis sudah diperbarui. APK kandidat lama (1.5.1 sampai 1.7.1) **sengaja dibiarkan** sebagai arsip meski masih memuat alamat Vercel lama; jangan hapus tanpa izin Owner.
+Hermes tidak menyentuh area itu pada pekerjaan ini kecuali dua baris nama Owner di `CuciinStore.kt` dan `VersionHistory.kt`.
 
 ### Pegangan bersama — jangan disunting tanpa bicara dulu
 
 ```
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/CuciinStore.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/Models.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/SyncProtocol.kt
-laundry-ops/android/app/src/main/java/com/tiftazani/laundryops/data/ReceiptText.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/CuciinStore.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/Models.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/SyncProtocol.kt
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/ReceiptText.kt
 laundry-ops/cloudflare/src/command-sync.ts
 laundry-ops/cloudflare/src/index.ts
+laundry-ops/cloudflare/SYNC_API.md
 ```
 
 File-file itu menyimpan aturan uang, stok, komisi, otorisasi, dan protokol sinkronisasi. Perubahan di sana wajib lewat review dan test, bukan suntingan cepat.
 
-## 6. Urutan kerja yang disarankan
+## 4. Yang masih kurang
 
-1. Merge PR #18 ke `main` supaya `main` memuat 1.9.2 (keputusan Owner).
-2. Tinjau project Vercel `cuan-tif` dari dashboard (alias, custom domain, riwayat deploy).
+1. **Seluruh perangkat 20 cabang belum pindah ke paket baru.** Setelah semua pindah, `cuciin-ops-tiftazani` boleh dihapus dari `FIREBASE_PROJECT_IDS` lalu project lama dinonaktifkan.
+2. **APK lama tidak bisa lagi menulis ke server.** Sejak jurnal command aktif, PUT snapshot ditolak 426 untuk pengguna biasa, jadi APK 1.8.1 hanya bisa membaca. Perangkat lama harus dicopot setelah 1.10.0 dipasang.
+3. **Data lokal perangkat yang sudah terpasang tidak ikut berubah.** Seed 4 cabang dan 6 kasir hanya berlaku untuk instalasi bersih; perangkat yang sudah menyimpan snapshot lama akan menerima data server saat sinkronisasi. Migrasi seed berversi belum dibuat.
+4. **Nama "tiftazani" masih ada di tiga tempat yang terkunci eksternal** dan tidak bisa diubah tanpa biaya besar:
+   - URL Worker `cuciin-api.tiftazani-cuciin.workers.dev` (subdomain akun Cloudflare)
+   - Repo GitHub `tiftazani/Cursor-Tifz`
+   - Email Owner `tiftazani.khara@gmail.com` (dipertahankan atas permintaan Owner)
+5. **Isi template email reset** masih bawaan Firebase (`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`).
+6. **PR #18 dan #19** masih terbuka; `main` belum memuat 1.9.2 sampai 1.10.0.
+7. **Kata sandi awal `test1234`** wajib diubah semua akun sebelum data nyata dipakai.
+8. **State loading dan error di layar data belum lengkap.** Beranda dan riwayat aktivitas sudah menampilkan `SyncNotice` saat server belum terhubung, tetapi layar lain belum. Hanya layar masuk yang punya indikator proses panjang.
+9. **Sebagian daftar sudah jadi baris.** Pelanggan, layanan, produk, aset, biaya, persediaan, riwayat stok, riwayat WA, dan ringkasan petugas laporan sudah memakai `ListCard` + `ListRow`. Tabel laporan keuangan diganti kartu bertingkat per Service supaya terbaca di layar sempit.
+10. **Alamat lengkap Shelly belum ada**, jadi kolom alamat dan tautan peta cabang itu masih kosong.
+11. **Backup pascamigrasi sudah dibuat** di `firebase-migration/backup-d1/post-migration-rev286-20260916.sql` (revision 286, 4 cabang, 8 akun, integrity ok). Backup lama `pre-real-data-20260916.sql` adalah kondisi sebelum migrasi dan tidak bisa direstore sendirian.
 
-## 7. Lingkungan build di mesin ini
+## 5. Urutan kerja yang disarankan
+
+1. Merge PR ke `main` supaya `main` memuat 1.10.0 (keputusan Owner).
+2. Pilot 1.10.0 di dua perangkat, cocokkan laporan dengan server.
+3. Setelah pilot bersih, distribusikan ke 20 cabang dan copot APK lama dari tiap perangkat.
+4. Setelah seluruh perangkat melapor versi 1.10.0, hapus project lama dari `FIREBASE_PROJECT_IDS`, deploy Worker, lalu nonaktifkan project Firebase lama.
+
+## 6. Lingkungan build di mesin ini
 
 ```sh
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+export CUCIIN_SIGNING_PROPERTIES=/Users/tiftazani/Documents/ChatGPT/Laundry/signing-private/cuciin-signing.properties
 cd laundry-ops/android && ./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
 
-`android/local.properties` sudah diisi `sdk.dir=/opt/homebrew/share/android-commandlinetools` (di-gitignore, jangan di-commit). Node 26.7.0 dan npm 11.19.0 tersedia untuk `npm run check`. Wrangler 4.131.1 sudah terautentikasi sebagai `tiftazani.khara@gmail.com`.
+`android/local.properties` sudah diisi `sdk.dir=/opt/homebrew/share/android-commandlinetools` (di-gitignore, jangan di-commit). Node 26.7.0 dan npm 11.19.0 tersedia untuk `npm run check`. Wrangler 4.131.1 sudah terautentikasi.
 
 Catatan: macOS di mesin ini tidak punya `timeout`/`gtimeout`. Jangan pakai perintah itu untuk membatasi proses panjang.

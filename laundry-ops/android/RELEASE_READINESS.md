@@ -1,26 +1,39 @@
-# Cuciin 1.9.2 — kesiapan rilis
+# Cuciin 1.10.1 — kesiapan rilis
 
-Status: kandidat rilis operasional yang sudah lulus pemeriksaan kode, build, migrasi produksi, dan uji integrasi API pada 15 September 2026. Owner tetap harus menyelesaikan validasi perangkat, rotasi akun, saldo awal, backup terjadwal pertama, dan keputusan go-live. APK bertanda tangan tidak menjamin hilangnya peringatan Play Protect pada distribusi di luar store.
+Status: kandidat rilis operasional yang menjalani ulang pemeriksaan kode, build, dan verifikasi cloud pada 16 September 2026. Owner tetap harus menyelesaikan validasi perangkat, rotasi akun, saldo awal, backup terjadwal pertama, dan keputusan go-live. APK bertanda tangan tidak menjamin hilangnya peringatan Play Protect pada distribusi di luar store.
+
+## Perpindahan identitas aplikasi (16 September 2026)
+
+Paket aplikasi berpindah dari `com.tiftazani.laundryops` ke `com.cuciin.laundryops`, dan Firebase Authentication berpindah dari project `cuciin-ops-tiftazani` ke `cuciin-ops`.
+
+Konsekuensi yang perlu diketahui sebelum distribusi:
+
+- Android menganggap paket baru sebagai **aplikasi berbeda**. Versi lama tetap terpasang di HP dan tidak otomatis tergantikan; keduanya harus dicopot manual setelah versi baru dipasang. Data lokal lama (foto absensi, cache, outbox) tidak berpindah.
+- Data operasional di D1 **tidak terpengaruh**. Seluruh transaksi, stok, pelanggan, dan audit tetap utuh.
+- Selama masa peralihan, Worker menerima ID token dari **kedua** project Firebase (`FIREBASE_PROJECT_IDS`), sehingga HP yang belum diperbarui tetap bekerja. Hapus project lama dari daftar itu hanya setelah seluruh perangkat berpindah.
+- Seluruh akun operasional dibuat ulang di project baru. Kata sandi awal `test1234` dan wajib diubah dari Profil sebelum data nyata dipakai.
+- Alamat email Owner tidak diubah; hanya nama tampilan yang menjadi `Cuciin`.
 
 ## Bukti verifikasi kandidat
 
 - Android: 47 unit test debug dan 47 unit test rilis lulus, lint debug/rilis tanpa error, APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
-- APK rilis: non-debuggable, application ID `com.tiftazani.laundryops`, versionCode `17`, versionName `1.9.2`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB.
+- APK rilis: non-debuggable, application ID `com.cuciin.laundryops`, versionCode `20`, versionName `1.10.1`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB.
 - SHA-256 sertifikat rilis cocok dengan fingerprint yang dicatat: `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`.
-- Cloudflare: migrasi `0003_command_sync.sql` dan `0004_operational_links.sql` sudah diterapkan ke D1 produksi, dan Worker versi `71310107-4ec5-48f8-aedb-481be9107649` aktif.
-- Health produksi mengembalikan database `ready`. Uji command pelanggan membuktikan retry command yang sama tidak menggandakan mutasi; penghapusan dan delta revision juga berhasil.
-- Backup sebelum migrasi sudah diuji dengan `PRAGMA integrity_check = ok`. Penyimpanan backup produksi terjadwal ke tujuan privat belum ditetapkan oleh Owner; workflow repository publik tidak menyimpan artifact database.
-- Checksum APK/AAB kandidat dicatat pada `laundry-ops/releases/1.9.2-candidate/SHA256SUMS`.
+- Firebase: 7 akun (2 Owner, 3 Kasir, 2 Supervisor) login berhasil di project `cuciin-ops`; kedua app Android terdaftar dengan sidik jari SHA-1 dan SHA-256.
+- Worker: 39 test lulus, termasuk penjagaan revisi reproject dan penerimaan dua project Firebase.
+- Uji integrasi nyata: token project **baru** dan token project **lama** dua-duanya diterima `/v1/me` (HTTP 200); login penuh dari APK paket baru sampai masuk dashboard berhasil di emulator.
+- Data D1 produksi: seluruh nama pribadi diganti; yang tersisa hanya alamat email Owner yang memang dipertahankan.
 
 ## Yang disiapkan
 
-- Application ID rilis `com.tiftazani.laundryops`, versi `1.9.2`, versionCode `17`, target Android 16/API 36.
+- Application ID rilis `com.cuciin.laundryops`, versi `1.10.1`, versionCode `20`, target Android 16/API 36.
 - APK non-debuggable dan AAB dengan kunci rilis terpisah. Build rilis berhenti bila konfigurasi penandatanganan tidak tersedia.
 - Kunci privat dan kata sandi berada di luar repo, pada folder `signing-private` di sebelah folder repo; izin folder 700 dan berkas rahasia 600. Cadangkan keduanya ke penyimpanan privat yang aman sebelum dipakai untuk distribusi. Jangan mengganti kunci sembarangan setelah aplikasi terpasang.
 - Rilis menolak akun tanpa kata sandi dan tidak menampilkan masuk cepat. Sesuai konfigurasi operasional saat ini, akun awal memakai `test1234` dan wajib diubah dari Profil sebelum dipakai untuk data nyata.
 - Kegagalan Firebase tidak melewati autentikasi melalui fallback lokal pada rilis. Pendaftaran gagal tidak ditampilkan sebagai berhasil.
 - HTTPS wajib, backup Android dinonaktifkan, FileProvider tidak diekspor dan hanya membagikan direktori bukti/ekspor. Tidak meminta izin SMS, aksesibilitas, kontak, atau instal aplikasi.
 - Path dan berkas foto bukti dikeluarkan dari snapshot cloud; sinkronisasi mempertahankan foto lokal yang ada pada masing-masing HP.
+- Pemulihan kata sandi: halaman reset Firebase memakai domain `cuciin-ops.web.app` dan berbahasa Indonesia. Dialog di aplikasi menjelaskan cara membuka tautan bila alamatnya terpotong aplikasi email atau pemindai tautan. Isi template email masih bawaan Firebase karena perubahan isi ditolak API (`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`); rinciannya di `firebase/README.md`.
 - Tema tampilan dapat dipilih setiap pengguna di Akun & profil: Ikut sistem, Terang, Gelap, dan Warna-warni. Pilihan disimpan di preferensi HP itu saja, terpisah dari data operasional dan sinkronisasi, sehingga tiap perangkat bebas berbeda.
 - Kontras teks setiap tema dijaga minimal 4.5:1 dan batas kontrol minimal 3:1 memakai perhitungan rumus WCAG. Status bar dan navigation bar mengikuti tema aktif.
 - Penyimpanan bersifat local-first: perubahan ditulis ke file lokal atomik dan persistent outbox sebelum dikirim. Command baru dihapus setelah acknowledgement, retry mempertahankan ID yang sama, dan perangkat mengambil delta berurutan dengan pagination revision.
@@ -46,7 +59,7 @@ Cloudflare Workers + D1 dapat dimulai dari paket gratis dan dinaikkan ke paket b
 
 Worker memverifikasi Firebase ID token menggunakan kunci publik Google, mendukung secret bootstrap melalui Cloudflare Secrets, memakai query terparameter, dan tidak menyimpan kata sandi. Command per entitas dicatat idempoten, delta dibatasi cabang, koreksi Service memakai optimistic concurrency, dan stok dijaga nonnegatif secara atomik. Foto bukti tetap disimpan di perangkat. QRIS tetap pencatatan metode pembayaran.
 
-Resource produksi aktif: Worker `cuciin-api` versi `71310107-4ec5-48f8-aedb-481be9107649`, D1 `cuciin-db` di APAC, dan proyek Firebase `cuciin-ops-tiftazani`. Health check produksi lulus pada 15 September 2026 dengan revision 40; endpoint snapshot tanpa autentikasi mengembalikan 401. Petunjuk migrasi, deploy, pemulihan, dan build ada di `laundry-ops/cloudflare/README.md`.
+Resource produksi aktif: Worker `cuciin-api` versi `a539b2e0-49e2-4d1f-a6cf-8d4912c1a7a7`, D1 `cuciin-db` di APAC, dan proyek Firebase `cuciin-ops` (project lama `cuciin-ops-tiftazani` masih diterima selama masa peralihan). Health check produksi lulus pada 16 September 2026; endpoint snapshot tanpa autentikasi mengembalikan 401. Petunjuk migrasi, deploy, pemulihan, dan build ada di `laundry-ops/cloudflare/README.md`.
 
 ## Build ulang
 
