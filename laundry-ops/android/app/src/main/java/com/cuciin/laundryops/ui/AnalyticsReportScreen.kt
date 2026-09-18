@@ -164,7 +164,12 @@ internal fun AnalyticsReportScreen(nav: NavHostController) {
     val selesai = rangeRows.count { it.pickedUpAt != null }
     val belumLunas = rangeRows.count { it.pay != PayStatus.Lunas }
 
-    val periodLabel = if (customRange) "Rentang sendiri" else analyticsPeriods.first { it.first == period }.second
+    // `reportPeriod` bisa berisi nilai yang tidak ada di daftar ini: lembar periode di layar lain
+    // menawarkan "hari" dan "minggu", dan nilai tersimpan dari versi lama ikut dipulihkan. Karena
+    // itu pemetaannya memakai firstOrNull dengan cadangan, bukan first { } yang melempar dan
+    // menutup aplikasi.
+    val periodLabel = if (customRange) "Rentang sendiri"
+    else analyticsPeriods.firstOrNull { it.first == period }?.second ?: periodRangeLabel(period)
     val rangeLabel = if (customRange) "${DisplayDates.date(from)} sampai ${DisplayDates.date(until)}" else if (period == "semua") "Seluruh riwayat tercatat" else periodRangeLabel(period)
     val branchLabel = if (selectedBranches.isEmpty()) "Semua cabang" else "${selectedBranches.size} cabang dipilih"
     val kasirLabel = if (selectedKasir.isEmpty()) "Semua kasir" else "${selectedKasir.size} kasir dipilih"

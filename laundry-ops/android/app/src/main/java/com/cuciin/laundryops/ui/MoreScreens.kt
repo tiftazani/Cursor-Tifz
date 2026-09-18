@@ -130,8 +130,10 @@ internal fun MoreScreen(nav: NavHostController) {
 }
 
 /**
- * Izin satu rute. Menu yang butuh izin Owner diperiksa lewat modul owner, sisanya lewat
- * modulnya sendiri. Rute yang tidak punya modul (akun, tema, versi) selalu boleh.
+ * Izin satu rute.
+ *
+ * Modul yang diperiksa dibaca dari [RouteAccess] supaya setiap modul di katalog izin benar-benar
+ * diperiksa di suatu tempat; rute yang tidak punya modul (akun, tema, versi) selalu boleh.
  *
  * Menu yang tabnya disembunyikan untuk SPV juga disembunyikan di sini. Aturannya dibaca dari
  * [NavTabs], sumber yang sama dengan bar navigasi, supaya menu Modul tidak pernah menampilkan
@@ -142,18 +144,8 @@ internal fun MoreScreen(nav: NavHostController) {
 internal fun routeAllowed(route: String): Boolean {
     val tab = NavTabs.routeOf(MenuOrder.destinationOf(route))
     if (tab?.hiddenForSupervisor == true && store.session.value?.role == Role.Supervisor) return false
-    return when (route) {
-        "attendance" -> store.canAccess("attendance")
-        "analytics", "analyticsReport", "branches", "users", "services", "products", "audit", "ownerSettings", "accessRoles" -> store.canAccess("owner")
-        "inventory" -> store.canAccess("inventory")
-        "expenses" -> store.canAccess("expense")
-        "customers" -> store.canAccess("customer")
-        "wa", "waArchive" -> store.canAccess("whatsapp")
-        "cash" -> store.canAccess("cash")
-        "queue" -> store.canAccess("queue")
-        "service" -> store.canAccess("service")
-        else -> true
-    }
+    val module = RouteAccess.moduleOf(route) ?: return true
+    return store.canAccess(module)
 }
 
 /** Nama ikon di katalog dipetakan ke ikon sungguhan di sini supaya katalognya tetap murni. */

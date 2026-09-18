@@ -2,6 +2,63 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.23 — 18 Sep 2026 (versionCode 42)
+
+### Perbaikan izin: dua menu Laporan memakai modul izin yang salah
+
+Ditemukan saat sapuan regresi menyeluruh setelah 1.10.22 masuk `main`.
+
+`AccessCatalog` memuat 12 modul izin, tetapi hanya 10 yang pernah diperiksa. Dua modul,
+`analytics` dan `audit`, terdaftar di katalog dan bisa dicentang di layar Kontrol Akses Role,
+tetapi **tidak pernah diperiksa** saat menu dibuka. Dua akibatnya:
+
+1. Mencentang atau mengosongkan modul Laporan di Kontrol Akses Role tidak mengubah apa pun.
+2. Role bawaan Supervisor sudah memuat modul `analytics` beserta fungsi `analytics.view`, tetapi
+   menu "Laporan transaksi", "Laporan analitik", dan "Riwayat aktivitas" tetap terkunci untuknya
+   karena menu memeriksa modul `owner`. Izin yang diberikan katalog tidak pernah berlaku.
+
+Perbaikan: pemetaan rute ke modul izin dipindah ke `ui/RouteAccess.kt` supaya dapat diuji tanpa
+Android dan tidak lagi hidup di dalam layar. `RouteAccessTest` mengunci agar setiap modul di
+katalog benar-benar diperiksa di suatu tempat.
+
+### Perbaikan: Riwayat aktivitas memakai cabang yang sudah tidak ada
+
+Dua tempat di `CuciinStore` memakai cabang tetap `"melati"` yang sudah tidak ada di katalog
+cabang. Entri audit dengan cabang itu tidak pernah lolos filter per-cabang di `pullChanges`
+Worker (`branch_id IN (cabang pengguna)`), sehingga catatannya tidak sampai ke perangkat mana pun
+dan Riwayat aktivitas tampak kosong untuk kejadian itu. Sekarang cabangnya diambil dari data
+nyata.
+
+### Perbaikan: aplikasi menutup sendiri saat katalog cabang belum tersedia
+
+`CuciinStore.branch()` memakai `first()` dan `first { }` yang melempar `NoSuchElementException`.
+Katalog cabang bisa kosong sesaat (basis data baru, impor belum jalan) atau memuat id yang belum
+tersinkron. Ada 29 pemanggil di seluruh kode utama, jadi satu keadaan itu cukup untuk menutup
+aplikasi. Sekarang selalu mengembalikan nilai, dengan cabang pengganti bernama "Cabang belum
+tersedia".
+
+Tiga tempat lain dengan pola sama ikut diperbaiki: `MasterScreens` (dua tempat, formulir user)
+dan `nextNotaId` (pembuatan nota baru).
+
+### Pengerasan: laporan analitik tidak lagi bergantung pada pola yang melempar
+
+Pemetaan label periode di layar analitik memakai `first { }` yang melempar
+`NoSuchElementException` bila nilainya tidak ada di daftar. Setelah ditelusuri, nilai itu adalah
+state lokal layar yang hanya bisa diisi dari daftar yang sama, jadi **tidak ada jalur nyata yang
+memicunya**. Perubahan ke `firstOrNull` dengan cadangan tetap dilakukan sebagai pengerasan supaya
+menambah pilihan periode baru tidak bisa mematikan layar, dan `ReportPeriodTest` mengunci polanya.
+
+Catatan jujur: ini bukan bug yang pernah terjadi, dan tidak boleh dilaporkan seolah-olah begitu.
+
+### Pengunci
+
+Empat test baru: `RouteAccessTest`, `AuditBranchTest`, `ReportPeriodTest`, dan penambahan pada
+`MenuRouteTest`. Setiap test dibuktikan gagal saat bug-nya dikembalikan, lalu lulus setelah
+diperbaiki.
+
+Gate: 169 test debug dan 169 test release (0 gagal), lint debug dan release, APK serta AAB
+bertanda tangan.
+
 ## 1.10.22 — 18 Sep 2026 (versionCode 41)
 
 ### Perbaikan: aplikasi keluar saat menu Antrian atau Service diklik

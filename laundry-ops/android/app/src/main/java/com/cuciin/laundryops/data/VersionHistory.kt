@@ -12,10 +12,19 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.22"
-    val currentCode: Int = 41
+    val currentName: String = "1.10.23"
+    val currentCode: Int = 42
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.23", code = 42, date = "18 Sep 2026",
+            notes = listOf(
+                "Perbaikan izin: dua menu Laporan memakai izin yang salah sehingga SPV yang berhak tetap terkunci, sementara mencentang modul Laporan di Kontrol Akses Role tidak berpengaruh apa pun.",
+                "Perbaikan: Riwayat aktivitas tidak lagi memakai cabang lama yang sudah tidak ada, sehingga catatannya ikut tersinkron ke perangkat.",
+                "Perbaikan: aplikasi tidak lagi menutup sendiri saat katalog cabang belum tersedia, misalnya pada basis data baru atau saat impor belum dijalankan.",
+                "Pengerasan: pemetaan label periode di laporan analitik tidak lagi memakai pola yang melempar pengecualian, sehingga menambah pilihan periode baru tidak bisa mematikan layar.",
+            ),
+        ),
         AppRelease(
             name = "1.10.22", code = 41, date = "18 Sep 2026",
             notes = listOf(

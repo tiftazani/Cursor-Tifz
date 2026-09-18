@@ -77,6 +77,20 @@ Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **
 
 **ATURAN untuk agent lain (rute menu):** setiap menu baru di `MenuOrder.catalog` wajib punya rute yang terdaftar di `CuciinNav.kt`, atau dipetakan lewat `MenuOrder.destinationOf`. `MenuRouteTest` akan gagal bila aturan ini dilanggar. Jangan menambah `nav.navigate("...")` dengan rute yang tidak ada di graf: Compose Navigation melempar pengecualian dan aplikasi langsung keluar.
 
+**1.10.23 (18 Sep, sapuan regresi setelah 1.10.22 masuk main):** tiga bug nyata ditemukan, semuanya jenis yang lolos build hijau.
+
+1. **Dua menu Laporan memakai modul izin yang salah, dan dua modul katalog tidak pernah diperiksa.** `AccessCatalog` memuat 12 modul, hanya 10 yang pernah diperiksa. Modul `analytics` dan `audit` bisa dicentang di Kontrol Akses Role tetapi tidak pernah diperiksa, sehingga mencentangnya tidak berpengaruh. Lebih buruk: role bawaan Supervisor memuat modul `analytics` beserta fungsi `analytics.view`, tetapi menu "Laporan transaksi", "Laporan analitik", dan "Riwayat aktivitas" memeriksa modul `owner` sehingga tetap terkunci untuknya. Perbaikan: pemetaan rute ke modul dipindah ke `ui/RouteAccess.kt` (dapat diuji tanpa Android), dan `RouteAccessTest` mengunci agar setiap modul katalog benar-benar diperiksa di suatu tempat.
+2. **Riwayat aktivitas memakai cabang `"melati"` yang sudah tidak ada** di dua tempat `CuciinStore` (persetujuan user dan tutup kas tanpa cabang). Entri audit dengan cabang itu tidak pernah lolos filter per-cabang `pullChanges`, jadi catatannya tidak sampai ke perangkat mana pun.
+3. **`CuciinStore.branch()` melempar `NoSuchElementException`** karena memakai `first()` dan `first { }`. Katalog cabang bisa kosong sesaat atau memuat id yang belum tersinkron, dan ada 29 pemanggil di seluruh kode utama. Sekarang selalu mengembalikan nilai dengan cabang pengganti. Tiga tempat lain ikut diperbaiki: dua di `MasterScreens` dan `nextNotaId`.
+
+Satu klaim awal dikoreksi sendiri: bug periode laporan analitik **tidak pernah bisa terjadi dari UI** (nilainya state lokal layar yang hanya diisi dari daftar yang sama), jadi statusnya pengerasan, bukan perbaikan. Sudah disebut begitu di `CHANGELOG.md`, `VersionHistory.kt`, dan README kandidat.
+
+Pengunci: `RouteAccessTest`, `AuditBranchTest`, `BranchLookupTest`, `ReportPeriodTest`. Setiap test dibuktikan gagal saat bug-nya dikembalikan. Gate lulus: 173 test debug + 173 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`. Diuji di emulator pada versi terpasang yang sudah diverifikasi: ketiga menu Laporan terbuka, CRASH 0. Checksum `releases/1.10.23-candidate/`.
+
+**ATURAN untuk agent lain (modul izin):** setiap modul di `AccessCatalog` wajib dipakai setidaknya satu rute di `RouteAccess` atau satu tab di `NavTabs`. Menambah modul katalog tanpa memakai modulnya di salah satu tempat itu membuat hak akses yang tidak pernah berlaku. `RouteAccessTest` akan gagal.
+
+**ATURAN untuk agent lain (cabang):** jangan memakai `branches.first()` atau `branches.first { }`. Pakai `firstOrNull` dengan cadangan; katalog cabang bisa kosong atau memuat id yang belum tersinkron, dan pemanggilnya ada di banyak layar. `AuditBranchTest` dan `BranchLookupTest` akan gagal bila pola itu kembali.
+
 **Menunggu perintah Owner:**
 - Penghapusan data contoh (dummy) di produksi belum dijalankan. Jangan hapus tanpa backup dan perintah eksplisit.
 - Berkas Excel berisi data nyata belum diterima, jadi belum ada data yang ditembakkan ke D1 produksi.
