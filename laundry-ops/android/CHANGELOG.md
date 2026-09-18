@@ -40,6 +40,30 @@ tersedia".
 Tiga tempat lain dengan pola sama ikut diperbaiki: `MasterScreens` (dua tempat, formulir user)
 dan `nextNotaId` (pembuatan nota baru).
 
+### Perbaikan: uang yang diterima sebelum jurnal ada hilang dari laporan kas
+
+Ditemukan saat mengaudit tally pembayaran, setelah Owner bertanya apakah aplikasi sudah
+benar-benar bebas bug.
+
+`paymentRecords()` membuang SELURUH `paid` sebuah nota begitu nota itu punya SATU entri jurnal.
+Nota yang dibayar sebagian SEBELUM jurnal pembayaran ada, lalu dilunasi setelahnya, kehilangan
+bagian lamanya. Contoh: nota dengan `paid` 30.000 dilunasi 45.000; jurnal memuat 45.000, tetapi
+penerimaan yang dilaporkan hanya 45.000 padahal uang yang diterima 75.000. Selisih 30.000 hilang
+dari laporan kas dan tutup kas.
+
+Ada nota produksi yang sedang dalam kondisi ini (`LPD-2609-0001-E4AF2`: paid 35.000 dengan satu
+entri jurnal), jadi kerugiannya bukan hanya teoretis: begitu nota itu dilunasi, 35.000 akan hilang
+dari laporan.
+
+Perbaikan: penerimaan lama dihitung sebagai SELISIH antara `paid` nota dan jumlah jurnalnya.
+Aturannya dipindah ke `data/PaymentTally.kt` supaya dapat diuji tanpa Android, dan dikunci
+`PaymentLedgerTallyTest`.
+
+Catatan cara uji: versi pertama test ini menyalin ulang logikanya di dalam test, sehingga test itu
+tetap LULUS walaupun bug-nya dikembalikan; artinya tidak mengunci apa pun. Setelah aturannya
+dipindah ke fungsi murni, test yang sama GAGAL saat bug dikembalikan (2 test) dan lulus setelah
+diperbaiki.
+
 ### Pengerasan: laporan analitik tidak lagi bergantung pada pola yang melempar
 
 Pemetaan label periode di layar analitik memakai `first { }` yang melempar

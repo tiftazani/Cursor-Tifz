@@ -87,6 +87,14 @@ Satu klaim awal dikoreksi sendiri: bug periode laporan analitik **tidak pernah b
 
 Pengunci: `RouteAccessTest`, `AuditBranchTest`, `BranchLookupTest`, `ReportPeriodTest`. Setiap test dibuktikan gagal saat bug-nya dikembalikan. Gate lulus: 173 test debug + 173 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`. Diuji di emulator pada versi terpasang yang sudah diverifikasi: ketiga menu Laporan terbuka, CRASH 0. Checksum `releases/1.10.23-candidate/`.
 
+**1.10.24 (18 Sep, uang hilang dari laporan kas):** ditemukan saat Owner bertanya apakah aplikasi sudah benar-benar bebas bug. `paymentRecords()` membuang SELURUH `paid` sebuah nota begitu nota itu punya SATU entri jurnal, sehingga nota yang dibayar sebagian SEBELUM jurnal pembayaran ada lalu dilunasi kehilangan bagian lamanya dari laporan kas dan tutup kas. Dibuktikan di perangkat dengan skenario yang benar: cara lama melaporkan 236.000 dari uang sebenarnya 266.000 (hilang 30.000); cara baru melaporkan 266.000. Aturannya dipindah ke `data/PaymentTally.kt` dan dikunci `PaymentLedgerTallyTest`. Gate lulus: 184 test debug + 184 test release, lint, APK/AAB bertanda tangan, `verify_release.py`. Checksum `releases/1.10.24-candidate/`.
+
+**PELAJARAN cara menguji (penting):** test pengunci TIDAK BOLEH menyalin ulang logika yang diuji. Versi pertama `PaymentLedgerTallyTest` menulis ulang perhitungannya di dalam test sehingga tetap LULUS walaupun bug-nya dikembalikan; itu tidak mengunci apa pun. Pindahkan aturannya ke fungsi murni di kode produksi, panggil dari test, lalu BUKTIKAN test gagal saat bug dikembalikan.
+
+**PELAJARAN kedua:** uji harus memakai kondisi yang benar-benar membedakan cara lama dan baru. Uji pertama saya memakai nota yang jurnalnya sudah mencakup seluruh `paid` sehingga kedua cara sama; itu tidak membuktikan apa pun. Kondisi berbahaya: nota TANPA jurnal yang lalu mendapat jurnal untuk pembayaran berikutnya.
+
+**ATURAN untuk agent lain (penerimaan uang):** penerimaan lama = `paid` nota dikurangi jumlah jurnalnya, bukan seluruh `paid` dan bukan nol. Jangan mengubah `PaymentTally.legacyAmount` tanpa menjalankan `PaymentLedgerTallyTest` dengan bug dikembalikan.
+
 **ATURAN untuk agent lain (modul izin):** setiap modul di `AccessCatalog` wajib dipakai setidaknya satu rute di `RouteAccess` atau satu tab di `NavTabs`. Menambah modul katalog tanpa memakai modulnya di salah satu tempat itu membuat hak akses yang tidak pernah berlaku. `RouteAccessTest` akan gagal.
 
 **ATURAN untuk agent lain (cabang):** jangan memakai `branches.first()` atau `branches.first { }`. Pakai `firstOrNull` dengan cadangan; katalog cabang bisa kosong atau memuat id yang belum tersinkron, dan pemanggilnya ada di banyak layar. `AuditBranchTest` dan `BranchLookupTest` akan gagal bila pola itu kembali.
