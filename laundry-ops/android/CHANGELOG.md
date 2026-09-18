@@ -2,6 +2,49 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.25 — 18 Sep 2026 (versionCode 44)
+
+### Antrean sinkronisasi macet permanen karena satu perubahan bermasalah
+
+Ditemukan saat menguji alur tulis end-to-end di emulator: mencatat biaya operasional
+berhasil tersimpan di perangkat, tetapi **tidak pernah sampai ke server**. Log perangkat
+menampilkan `Sinkronisasi ditolak server (422)` berulang, dan antrean berisi 11 perintah
+tidak berkurang sama sekali.
+
+Tiga sebabnya bertumpuk, semuanya di `cloudflare/src/command-sync.ts`:
+
+1. **`payment.delete` tidak ada di `KNOWN_COMMANDS`.** Perangkat membentuk command
+   `delete` untuk setiap entitas yang hilang dari snapshot (`SyncProjection`), termasuk
+   `payment` ketika sebuah Service dihapus. Worker hanya mengenal `payment.upsert`, jadi
+   setiap penghapusan pembayaran ditolak `422 Tipe command tidak didukung`.
+2. **Satu command yang gagal di-parse membatalkan SELURUH batch.** `pushCommands`
+   memakai `raw.commands.map(parseCommand)` di dalam satu `try`; satu command rusak
+   membuat seluruh request dijawab 422 **tanpa `results`**. Sisi perangkat hanya bisa
+   memindahkan command ke daftar `rejected` kalau `results` ada, sehingga tidak ada satu
+   pun command yang bisa dibuang dan antreannya macet selamanya.
+3. **Command yang ditolak permanen menahan command sesudahnya.** Setelah satu command
+   gagal, sisa batch diberi status `retryable` supaya urutan terjaga. Untuk penolakan
+   permanen (4xx) ini salah: command berikutnya ikut `retryable` selamanya.
+
+Perbaikan:
+
+- `payment.delete` ditambahkan ke `KNOWN_COMMANDS` beserta `planPayment` untuk operasi
+  hapus. Pembayaran yang sudah tidak ada dianggap selesai (idempoten), bukan ditolak,
+  karena command bisa terkirim ulang setelah barisnya hilang.
+- `pushCommands` mem-parse command satu per satu. Command yang sah tetap dijalankan;
+  yang rusak dilaporkan `rejected` dengan `commandId`-nya supaya perangkat bisa
+  membuangnya dari antrean.
+- Rantai hanya dihentikan oleh gangguan sementara (`>= 500` atau galat non-CommandError),
+  bukan oleh penolakan permanen.
+
+Bukti di emulator: antrean 11 perintah yang macet menjadi `pending 0, rejected 0`;
+revisi perangkat naik 670 ke 674; biaya `cost-5caba443-d84f` (Rp 15.000) muncul di D1
+debug; audit `Menghapus pembayaran` tercatat di server.
+
+Dikunci oleh `cloudflare/tests/queue-stall.test.mjs` (4 test) dan
+`cloudflare/tests/wire-contract.test.mjs` (3 test). Ketujuhnya **terbukti gagal** saat
+perilaku lama dikembalikan satu per satu. Gate Worker naik 44 menjadi 51 test.
+
 ## 1.10.23 — 18 Sep 2026 (versionCode 42)
 
 ### Perbaikan izin: dua menu Laporan memakai modul izin yang salah

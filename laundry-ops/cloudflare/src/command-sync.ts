@@ -26,7 +26,7 @@ const OWNER_ONLY = new Set(["branch.upsert", "staff.upsert", "service.upsert", "
 const KNOWN_COMMANDS = new Set([
   "order.create", "order.update", "order.put", "order.delete", "order.status", "order.payment", "order.handover",
   "stock.batch", "expense.upsert", "expense.delete", "attendance.upsert", "attendance.delete", "customer.upsert",
-  "payment.upsert",
+  "payment.upsert", "payment.delete",
   "branch.upsert", "branch.delete", "staff.upsert", "staff.delete", "service.upsert", "service.delete", "product.upsert", "product.delete", "customer.delete", "inventory.upsert", "inventory.delete", "assetType.upsert", "assetType.delete", "accessRole.upsert", "accessRole.delete", "accessPolicy.upsert", "accessPolicy.delete", "whatsappTemplate.upsert", "whatsappTemplate.delete",
   "branchStock.put", "branchStock.delete", "stockMove.upsert", "stockMove.delete", "audit.upsert", "audit.delete", "cashClose.upsert", "cashClose.delete",
 ]);
@@ -508,6 +508,19 @@ async function planDerivedStock(db:D1Database, command:SyncCommand, identity:Syn
 async function planPayment(db:D1Database, command:SyncCommand, identity:SyncIdentity, token:string, now:number):Promise<Plan> {
   const p=command.payload;
   const id=command.entityId || requiredString(p,"id",100);
+  if(command.type==="payment.delete") {
+    const existing=await db.prepare("SELECT order_id,branch_id FROM payments WHERE id=? AND organization_id=?").bind(id,ORG_ID).first<{order_id:string;branch_id:string}>();
+    // Pembayaran yang sudah tidak ada dianggap selesai. Command dari perangkat bisa
+    // terkirim ulang setelah barisnya hilang, dan menolaknya akan menahan antrean.
+    if(!existing) return {statements:[],entityType:"payment",entityId:id,branchId:command.branchId || null,operation:"delete",changePayload:null};
+    assertBranch(identity,existing.branch_id);
+    const statements=[
+      db.prepare(`DELETE FROM payments WHERE id=? AND organization_id=? AND ${commandGate()}`).bind(id,ORG_ID,command.commandId,ORG_ID,token),
+      guardPreviousMutation(db,command,token),
+      audit(db,command,identity,token,existing.branch_id,"Menghapus pembayaran",existing.order_id,now),
+    ];
+    return {statements,entityType:"payment",entityId:id,branchId:existing.branch_id,operation:"delete",changePayload:null,updatedAt:now};
+  }
   const notaId=requiredString(p,"notaId",100);
   const branchId=command.branchId || requiredString(p,"branchId",100);
   assertBranch(identity,branchId);
@@ -650,10 +663,30 @@ export async function pushCommands(request:Request, env:CommandEnv, identity:Syn
   if(new TextEncoder().encode(text).byteLength>MAX_COMMAND_BODY_BYTES) return response({error:"Payload command terlalu besar"},413);
   let raw:unknown; try { raw=JSON.parse(text); } catch { return response({error:"JSON tidak valid"},400); }
   if(!isObject(raw) || !Array.isArray(raw.commands) || raw.commands.length<1 || raw.commands.length>MAX_COMMANDS) return response({error:`commands harus berisi 1–${MAX_COMMANDS} item`},422);
-  let commands:SyncCommand[];
-  try { commands=raw.commands.map(parseCommand); } catch(error) { return error instanceof CommandError ? response({error:error.message,detail:error.detail},error.status) : response({error:"Command tidak valid"},422); }
-  if(new Set(commands.map(c=>c.commandId)).size!==commands.length) return response({error:"commandId dalam satu request tidak boleh duplikat"},422);
   const results:JsonRecord[]=[];
+  let commands:SyncCommand[]=[];
+  // Satu command yang tidak valid tidak boleh menahan seluruh antrean perangkat.
+  // Batch yang gagal di-parse seluruhnya dulu membuat klien menerima 422 tanpa
+  // results, sehingga perangkat tidak tahu command mana yang harus dibuang dan
+  // antreannya macet selamanya. Sekarang command yang sah tetap dijalankan.
+  const parsed:Array<SyncCommand|null>=[];
+  for(const item of raw.commands) {
+    if(!isObject(item)) { results.push({commandId:"",accepted:false,status:"rejected",code:422,error:"Command tidak valid"}); parsed.push(null); continue; }
+    try { parsed.push(parseCommand(item)); }
+    catch(error) {
+      const commandId=typeof item.commandId === "string" ? item.commandId.trim() : "";
+      results.push(error instanceof CommandError
+        ? {commandId,accepted:false,status:"rejected",code:error.status,error:error.message,detail:error.detail}
+        : {commandId,accepted:false,status:"rejected",code:422,error:"Command tidak valid"});
+      parsed.push(null);
+    }
+  }
+  commands=parsed.filter((command):command is SyncCommand => command !== null);
+  const seenIds=new Set<string>();
+  for(const command of commands) {
+    if(seenIds.has(command.commandId)) return response({error:"commandId dalam satu request tidak boleh duplikat"},422);
+    seenIds.add(command.commandId);
+  }
   let priorFailure=false;
   for(const command of commands) {
     if(priorFailure) {
@@ -664,7 +697,11 @@ export async function pushCommands(request:Request, env:CommandEnv, identity:Syn
     catch(error) {
       if(!(error instanceof CommandError) || error.status >= 500) console.error("command_retryable",command.commandId,error);
       results.push(commandFailureResult(command.commandId,error));
-      priorFailure=true;
+      // Hanya gangguan sementara yang menahan command berikutnya. Command yang
+      // ditolak permanen (4xx) sudah dilaporkan ke perangkat dan akan dibuang dari
+      // antrean; menghentikan rantai di sini membuat command sesudahnya berstatus
+      // retryable selamanya sehingga seluruh antrean perangkat macet.
+      priorFailure = !(error instanceof CommandError) || error.status >= 500;
     }
   }
   const acknowledgedCommandIds=results.filter(item=>item.accepted===true).map(item=>String(item.commandId));
