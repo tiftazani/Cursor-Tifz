@@ -50,7 +50,8 @@ menjalankan `parseCommand` Worker terhadap 11 perintah nyata dari perangkat.
 - **Absensi**: layar terbuka; tombol "Absen masuk" sengaja nonaktif sampai foto
   diambil (perilaku benar, bukan bug).
 - **Ekspor laporan**: CSV 1.738 byte 22 baris, PDF 1,1 MB, keduanya valid.
-- **Sapu 22 menu**: 0 crash.
+- **Sapu 22 menu**: 0 crash. Diverifikasi ulang di 1.10.25 dengan resep navigasi yang
+  benar: **27 pemeriksaan, 0 gagal, 0 crash**.
 - **Pelunasan lewat UI**: nota `SHL-2609-0001-A34F8` sisa Rp 45.000 dilunasi (Tunai);
   perangkat `paid` 30.000 ke 75.000; D1 menerima `pay-fa4ead29` Rp 45.000, `orders.paid`
   75.000, dan audit `menerima Rp 45.000 · Tunai`.
