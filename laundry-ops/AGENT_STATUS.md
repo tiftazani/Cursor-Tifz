@@ -93,6 +93,18 @@ Pengunci: `RouteAccessTest`, `AuditBranchTest`, `BranchLookupTest`, `ReportPerio
 
 **PELAJARAN kedua:** uji harus memakai kondisi yang benar-benar membedakan cara lama dan baru. Uji pertama saya memakai nota yang jurnalnya sudah mencakup seluruh `paid` sehingga kedua cara sama; itu tidak membuktikan apa pun. Kondisi berbahaya: nota TANPA jurnal yang lalu mendapat jurnal untuk pembayaran berikutnya.
 
+**Nama Owner akhirnya sampai ke perangkat (18 Sep, sore):** masalah lama "header Modul masih Tiftazani - Owner" ternyata punya DUA sebab yang keduanya harus diperbaiki, dan yang kedua baru ketahuan sekarang.
+
+1. Migrasi `0008_owner_name_neutral.sql` diterapkan ke D1 **produksi** pada 02:40 tapi TIDAK ke D1 **debug**. Sekarang sudah diterapkan ke debug juga (`changes: 2`), idempoten (`rows_written: 0` saat dijalankan ulang), 5 entri jurnal. Backup sebelum migrasi: `~/Documents/ChatGPT/Laundry/firebase-migration/backup-d1/pre-0008-debug-20260918-1555.sql` (884 KB, teruji bisa dipulihkan: 9 staff, 7 branches, 7 orders, nama Owner masih Tiftazani).
+
+2. **`sync_snapshots` di debug masih memuat nama lama.** Perangkat menerima data dari snapshot penuh saat bootstrap dan dari jurnal saat sync biasa. Migrasi hanya memperbaiki tabel `staff` dan jurnal, TIDAK snapshot. Karena entri jurnal migrasi bernomor 581-585 sedangkan revision perangkat sudah 662, perangkat tidak pernah menariknya. Perbaikan: snapshot debug diperbaiki langsung (`staff.name` -> Cuciin), lalu ditulis entri jurnal BARU bernomor 663-667 (satu per cabang) supaya perangkat ikut menerimanya. Hasil: perangkat revision 667 dan header layar Modul berbunyi **"Cuciin - Owner"**.
+
+**ATURAN untuk agent lain (migrasi entitas staff):** memperbaiki tabel dan jurnal TIDAK cukup. Snapshot server juga harus diperbaiki, dan kalau perangkat sudah punya revision lebih tinggi dari nomor entri jurnal, tulis entri jurnal BARU dengan nomor di atas revision perangkat. Urutan lengkapnya ada di skill `cuciin`.
+
+**ATURAN untuk agent lain (ganti nama tampilan):** jangan ubah nama orang di catatan historis. Dari 72 kemunculan nama pribadi di snapshot, hanya 1 (`staff[].name`) yang boleh diubah; 71 sisanya ada di `audit[].user`, `stockMoves[].by`, `notas[].kasir`, `notas[].lines[].handledByName`, dan `payments[].by` — itu fakta masa lalu dan mengubahnya memalsukan riwayat.
+
+**PR #16 ditutup:** sudah usang (paket `com.tiftazani` dan `LoginGate.kt` tidak ada lagi di main) dan bertentangan dengan aturan "tidak ada masuk cepat tanpa kata sandi untuk peran apa pun". PR #9, #6, #5 tidak menyentuh `laundry-ops` (proyek lain).
+
 **ATURAN untuk agent lain (penerimaan uang):** penerimaan lama = `paid` nota dikurangi jumlah jurnalnya, bukan seluruh `paid` dan bukan nol. Jangan mengubah `PaymentTally.legacyAmount` tanpa menjalankan `PaymentLedgerTallyTest` dengan bug dikembalikan.
 
 **ATURAN untuk agent lain (modul izin):** setiap modul di `AccessCatalog` wajib dipakai setidaknya satu rute di `RouteAccess` atau satu tab di `NavTabs`. Menambah modul katalog tanpa memakai modulnya di salah satu tempat itu membuat hak akses yang tidak pernah berlaku. `RouteAccessTest` akan gagal.
