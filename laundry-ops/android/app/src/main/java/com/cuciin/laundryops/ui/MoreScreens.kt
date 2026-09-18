@@ -623,11 +623,29 @@ internal fun AuditScreen(nav: NavHostController) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val s = store.session.value ?: return
     val bid = if (s.role == Role.Owner) store.viewBranch.value else s.branchId
+    var showBranchSheet by remember { mutableStateOf(false) }
+    if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            if (s.role == Role.Owner) {
+                store.branches.forEach { branch ->
+                    FilterSheetRow(bid == branch.id, branch.name, "Tutup kas per cabang") {
+                        store.viewBranch.value = branch.id
+                        store.touchStatus()
+                        showBranchSheet = false
+                    }
+                }
+            } else {
+                FilterSheetRow(true, store.branch(bid).name, "Cabang tugas Anda") { showBranchSheet = false }
+            }
+        }
+    }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(ui.gap)) {
         item {
             ScreenHeader(
@@ -635,6 +653,20 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
                 "${s.name} · ${if (bid == "all") "semua cabang" else store.branch(bid).name}",
                 onBack = { nav.popBackStack() },
             )
+        }
+        if (s.role == Role.Owner) {
+            // Pemilih cabang harus ada di layar ini. Sebelumnya layar hanya meminta "Pilih satu
+            // cabang" tanpa menyediakan pemilihnya, sehingga Owner yang melihat semua cabang
+            // menemui jalan buntu dan harus memilih cabang di tab Antrian lebih dulu.
+            item {
+                FilterBar(
+                    label = "Cabang",
+                    value = if (bid == "all") "Belum dipilih" else store.branch(bid).name,
+                    detail = "Tutup kas dibuat per cabang",
+                    icon = Icons.Outlined.Storefront,
+                    onClick = { showBranchSheet = true },
+                )
+            }
         }
         item {
             CardBlock {

@@ -431,6 +431,30 @@ object CuciinStore {
         return AccessPolicy.can(me, accessRoles, policy, module, function)
     }
 
+    /**
+     * Penjaga fungsi tulis yang sensitif.
+     *
+     * Layar Kontrol Akses Role menjanjikan "Fungsi tanpa centang berarti tidak diizinkan".
+     * Janji itu hanya benar bila setiap fungsi katalog benar-benar diperiksa. Sebelumnya yang
+     * menentukan hanyalah modul dan [Role] lama, sehingga mencabut centang sebuah fungsi tidak
+     * mengubah apa pun: seorang Kasir yang role-nya sudah dicabut fungsi `service.correct` tetap
+     * bisa mengoreksi dan menghapus transaksi.
+     *
+     * Dua lapis tetap berlaku dan tidak saling menggantikan:
+     * 1. [Role] menjaga batas lama yang tidak dapat diubah dari layar (Supervisor tidak mengoreksi,
+     *    cabang sendiri saja, nota yang sudah dikirim hanya Owner).
+     * 2. Fungsi katalog menjaga centang di Kontrol Akses Role, dan inilah lapis yang bisa diatur.
+     */
+    private fun boleh(modul: String, fungsi: String): Boolean = canAccess(modul, fungsi)
+
+    /** Pesan penolakan yang menyebut fungsi mana yang dicabut, supaya tidak membingungkan. */
+    private fun tolak(fungsi: String): String =
+        "Akses ${AccessCatalog.functionLabel(fungsi)} dicabut untuk role akun ini"
+
+    /** Pesan untuk pemeriksaan gabungan Role dan fungsi. */
+    private fun tolak(fungsi: String, alasan: String): String =
+        if (boleh(AccessCatalog.moduleOf(fungsi).orEmpty(), fungsi)) alasan else tolak(fungsi)
+
     /** Role yang melekat pada pengguna yang sedang masuk, dipakai untuk menampilkan hak aksesnya. */
     fun currentAccessRole(): AccessRole? {
         val s = session.value ?: return null
@@ -516,7 +540,7 @@ object CuciinStore {
 
     /** Memindahkan pengguna ke role lain; aksesnya langsung mengikuti role tersebut. */
     fun assignAccessRole(email: String, roleId: String): String? {
-        if (session.value?.role != Role.Owner) return "Hanya Owner yang dapat mengubah role pengguna"
+        if (session.value?.role != Role.Owner) return tolak("owner.access", "Hanya Owner yang dapat mengubah role pengguna")
         val index = staff.indexOfFirst { it.email.equals(email, true) }
         if (index < 0) return "Pengguna tidak ditemukan"
         if (roleId.isNotBlank() && accessRoles.none { it.id == roleId }) return "Role tidak ditemukan"
@@ -803,7 +827,7 @@ object CuciinStore {
     }
 
     fun deleteCustomer(id: String): String? {
-        if (session.value?.role != Role.Owner) return "Hanya Owner yang dapat menghapus pelanggan"
+        if (session.value?.role != Role.Owner) return tolak("customer.write", "Hanya Owner yang dapat menghapus pelanggan")
         val c = customers.find { it.id == id } ?: return "Pelanggan tidak ketemu"
         customers.removeAll { it.id == id }
         if (selectedCustomer.value?.id == id) selectedCustomer.value = null
@@ -1036,8 +1060,9 @@ object CuciinStore {
         return null
     }
 
-    fun addExpense(branchId: String, category: ExpenseCategory, amount: Int, occurredAtMs: Long, note: String): Expense {
-        val s = session.value!!
+    fun addExpense(branchId: String, category: ExpenseCategory, amount: Int, occurredAtMs: Long, note: String): Expense? {
+        val s = session.value ?: return null
+        if (!boleh("expense", "expense.write")) return null
         val row = Expense(
             id = "cost-${newId()}", branchId = branchId, category = category,
             amount = amount.coerceAtLeast(0), occurredAtMs = occurredAtMs,
@@ -1050,6 +1075,7 @@ object CuciinStore {
     }
 
     fun deleteExpense(id: String): String? {
+        if (!boleh("expense", "expense.write")) return tolak("expense.write")
         val row = expenses.firstOrNull { it.id == id } ?: return "Biaya tidak ditemukan"
         expenses.removeAll { it.id == id }
         log("Biaya ${row.category.label} ${rp(row.amount)} dihapus", row.branchId)
@@ -1071,6 +1097,7 @@ object CuciinStore {
 
     fun checkIn(branchId: String, note: String = "", photoPath: String = ""): String? {
         val s = session.value ?: return "Silakan masuk kembali"
+        if (!boleh("attendance", "attendance.write")) return tolak("attendance.write")
         if (s.role != Role.Owner && branchId != s.branchId) return "Cabang absensi tidak sesuai akun"
         if (s.role == Role.Owner && branches.none { it.id == branchId }) return "Cabang tidak ditemukan"
         if (todayAttendance(s.email) != null) return "Anda sudah absen masuk hari ini"
@@ -1095,6 +1122,7 @@ object CuciinStore {
 
     fun checkOut(note: String = "", photoPath: String = ""): String? {
         val s = session.value ?: return "Silakan masuk kembali"
+        if (!boleh("attendance", "attendance.write")) return tolak("attendance.write")
         val index = attendance.indexOfFirst {
             it.staffEmail.equals(s.email, true) && it.workDate == Clock.dateKey() && it.checkOutAtMs == null
         }
@@ -1286,6 +1314,9 @@ object CuciinStore {
         val index = notas.indexOfFirst { it.id == id }
         if (index < 0) return "Service tidak ditemukan"
         val old = notas[index]
+        if (!boleh("service", "service.correct")) {
+            return tolak("service.correct", "Akun ini tidak dapat mengoreksi Service tersebut")
+        }
         if (s.role == Role.Supervisor || (s.role != Role.Owner && s.branchId != old.branchId)) {
             return "Akun ini tidak dapat mengoreksi Service tersebut"
         }
@@ -1371,6 +1402,9 @@ object CuciinStore {
     fun deleteNota(id: String): String? {
         val s = session.value ?: return "Silakan masuk kembali"
         val old = notas.firstOrNull { it.id == id } ?: return "Service tidak ditemukan"
+        if (!boleh("service", "service.correct")) {
+            return tolak("service.correct", "Akun ini tidak dapat menghapus Service tersebut")
+        }
         if (s.role == Role.Supervisor || (s.role != Role.Owner && s.branchId != old.branchId)) {
             return "Akun ini tidak dapat menghapus Service tersebut"
         }
@@ -1420,6 +1454,9 @@ object CuciinStore {
     fun markLunas(id: String, method: PayMethod = PayMethod.Tunai): String? {
         val s = session.value ?: return "Silakan masuk kembali"
         val n = notas.find { it.id == id } ?: return "Service tidak ditemukan"
+        if (!boleh("service", "service.payment")) {
+            return tolak("service.payment", "Akun ini tidak dapat mencatat pembayaran Service tersebut")
+        }
         if (s.role == Role.Supervisor || (s.role != Role.Owner && s.branchId != n.branchId)) return "Akun ini tidak dapat mencatat pembayaran Service tersebut"
         val remaining = (n.total - n.paid).coerceAtLeast(0)
         if (remaining == 0 || n.pay == PayStatus.Lunas) return "Pembayaran Service sudah lunas"
@@ -1502,6 +1539,7 @@ object CuciinStore {
 
     fun closeCash(): CashClose? {
         val s = session.value ?: return null
+        if (!boleh("cash", "cash.close")) return null
         val bid = if (s.role == Role.Owner) viewBranch.value else s.branchId
         if (bid == "all") return null
         val t = Clock.nowMs()

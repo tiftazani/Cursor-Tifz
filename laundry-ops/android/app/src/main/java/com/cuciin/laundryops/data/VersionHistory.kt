@@ -12,10 +12,19 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.25"
-    val currentCode: Int = 44
+    val currentName: String = "1.10.26"
+    val currentCode: Int = 45
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.26", code = 45, date = "18 Sep 2026",
+            notes = listOf(
+                "Perbaikan penting: centang fungsi di Kontrol Akses Role kini benar-benar berlaku. Sebelumnya yang menentukan hanya modul dan peran lama, sehingga mencabut centang sebuah fungsi tidak mengubah apa pun.",
+                "Koreksi Service, penghapusan Service, pencatatan pembayaran, biaya operasional, absensi, tutup kas, dan penghapusan pelanggan sekarang ditolak sistem bila fungsinya dicabut dari role, bukan hanya tombolnya disembunyikan.",
+                "Perbaikan: layar Tutup kas kini punya pemilih cabang sendiri. Sebelumnya Owner yang melihat semua cabang hanya diminta memilih satu cabang tanpa ada cara memilihnya di layar itu.",
+                "Pesan penolakan menyebut nama fungsi yang dicabut supaya jelas kenapa tindakannya tidak diizinkan.",
+            ),
+        ),
         AppRelease(
             name = "1.10.25", code = 44, date = "18 Sep 2026",
             notes = listOf(

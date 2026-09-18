@@ -887,7 +887,7 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
                 if (s?.role != Role.Supervisor) GhostBtn("Tambah foto dari galeri", icon = Icons.Outlined.AddPhotoAlternate) { pick.launch("image/*") }
             }
         }
-        if (s?.role != Role.Supervisor) {
+        if (s?.role != Role.Supervisor && store.canAccess("service", "service.correct")) {
             item {
                 CardBlock {
                     SectionLabel("Koreksi Service")

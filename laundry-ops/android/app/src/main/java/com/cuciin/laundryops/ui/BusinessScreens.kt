@@ -77,8 +77,11 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 DateTimeFields(parsedTime, { time = DisplayDates.encode(it) }, "Waktu biaya")
                 Field(note, { note = it }, "Keterangan / penerima")
                 PrimaryBtn("Simpan biaya", enabled = (amount.toIntOrNull() ?: 0) > 0 && note.isNotBlank(), icon = Icons.Outlined.Check) {
-                    businessStore.addExpense(branchId, category, amount.toInt(), parsedTime.atZone(Clock.ZONE).toInstant().toEpochMilli(), note)
-                    toast("Biaya tercatat di ${businessStore.branch(branchId).name}"); amount = ""; note = ""; creating = false
+                    val tersimpan = businessStore.addExpense(branchId, category, amount.toInt(), parsedTime.atZone(Clock.ZONE).toInstant().toEpochMilli(), note)
+                    if (tersimpan == null) toast("Akses Catat biaya dicabut untuk role akun ini")
+                    else {
+                        toast("Biaya tercatat di ${businessStore.branch(branchId).name}"); amount = ""; note = ""; creating = false
+                    }
                 }
                 GhostBtn("Batal") { creating = false }
             }

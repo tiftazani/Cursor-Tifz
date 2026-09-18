@@ -1,11 +1,47 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 18 September 2026, 18:35 WIB (oleh Hermes).
+Terakhir diperbarui: 18 September 2026 (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
-## 0a. Pekerjaan terbaru (18 Sep, Hermes) — kemacetan antrean sinkronisasi
+## 0. Pekerjaan terbaru (18 Sep, Hermes) — centang fungsi Kontrol Akses Role tidak berpengaruh
+
+**Status: selesai, terverifikasi di emulator, versi 1.10.26 (versionCode 45), branch
+`codex/cuciin-1-8-1`.**
+
+**Berkas yang Hermes pegang: `data/CuciinStore.kt`, `ui/OpsScreens.kt`, `ui/MoreScreens.kt`,
+`ui/BusinessScreens.kt`, `data/VersionHistory.kt`, `app/build.gradle.kts`, `CHANGELOG.md`,
+`app/src/test/.../AccessFunctionEnforcementTest.kt`, `releases/1.10.26-candidate/`.
+Agen lain: jangan sentuh berkas itu sampai baris ini diperbarui.**
+
+Layar **Kontrol Akses Role** menjanjikan "Fungsi tanpa centang berarti tidak diizinkan".
+Dari 17 fungsi di `AccessCatalog`, hanya `analytics.view` dan `service.price` yang
+benar-benar diperiksa kode. Lima belas sisanya hanya menghiasi layar.
+
+Alur picu yang terbukti di perangkat sebelum perbaikan: Owner mencabut centang **Koreksi
+Service** pada sebuah role, menetapkan role itu ke seorang Kasir, lalu Kasir membuka nota.
+Kartu **Koreksi Service** tetap tampil dan tetap bisa menyimpan, walau centangnya sudah
+dicabut. Sebabnya jalur uang itu dijaga peran lama (`role != Supervisor`), bukan fungsi
+katalog.
+
+Perbaikan: `CuciinStore` punya helper `boleh(modul, fungsi)` dan `tolak(fungsi, pesan)` yang
+menanyakan `AccessPolicy` pada `AccessCatalog` untuk role sesi. Jalur yang kini dijaga
+fungsi: `service.correct` (koreksi dan hapus Service), `service.payment` (pelunasan),
+`expense.write` (tambah/hapus biaya), `attendance.write` (absen masuk/keluar), `cash.close`
+(tutup kas), `customer.write` (hapus pelanggan), `owner.access` (ubah role pengguna).
+
+Temuan kedua: layar **Tutup kas** meminta "Pilih satu cabang" tanpa menyediakan pemilih
+cabang, sehingga buntu bagi Owner yang melihat semua cabang. Kini layar itu punya pemilih
+cabang sendiri.
+
+Bukti: `AccessFunctionEnforcementTest` (200 test debug + 200 release lulus) terbukti gagal
+ketika tiga penjagaan berbeda dikembalikan ke bug-nya satu per satu. Uji perangkat: pemilih
+cabang Tutup kas 8/8 OK; Kasir tidak lagi melihat kartu Koreksi Service; Owner tetap
+melihatnya dan editor terbuka penuh; data perangkat tidak berubah, tally tetap cocok.
+Rincian ada di `releases/1.10.26-candidate/README.md`.
+
+## 0a. Pekerjaan sebelumnya (18 Sep, Hermes) — kemacetan antrean sinkronisasi
 
 **Status: selesai, terverifikasi di emulator, commit `47d5171` + `2d1bd48` di branch
 `codex/cuciin-1-8-1` (sudah di-rebase di atas `origin/main` `0c84ad6`, tidak bercabang).**

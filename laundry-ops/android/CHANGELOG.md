@@ -2,6 +2,53 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.26 — 18 Sep 2026 (versionCode 45)
+
+### Centang fungsi di Kontrol Akses Role tidak berpengaruh
+
+Layar **Kontrol Akses Role** menjanjikan "Fungsi tanpa centang berarti tidak diizinkan".
+Janji itu tidak dipegang kode. Dari 17 fungsi di `AccessCatalog`, hanya dua yang benar-benar
+diperiksa: `analytics.view` dan `service.price`. Lima belas sisanya hanya menghiasi layar.
+
+Akibatnya bisa dibuktikan dari alur nyata di perangkat:
+
+1. Owner membuka **Kontrol Akses Role**, mencabut centang **Koreksi Service** pada sebuah role,
+   lalu menyimpan.
+2. Owner menetapkan role itu kepada seorang Kasir di **Daftar User**.
+3. Kasir login, kartu **Koreksi Service** tetap muncul, dan ia tetap bisa mengoreksi sekaligus
+   menghapus Service.
+
+Penyebabnya jalur uang itu dijaga dengan peran lama `Role != Supervisor`, bukan dengan fungsi
+katalog. Pencabutan centang tidak pernah sampai ke sana.
+
+Perbaikan:
+
+- `CuciinStore` punya helper `boleh(modul, fungsi)` dan `tolak(fungsi, pesan)` yang menanyakan
+  `AccessPolicy` pada `AccessCatalog` untuk role yang melekat pada sesi.
+- Jalur yang kini dijaga fungsi, bukan peran: koreksi Service (`service.correct`), hapus Service
+  (`service.correct`), catat pembayaran (`service.payment`), tambah dan hapus biaya
+  (`expense.write`), absen masuk dan keluar (`attendance.write`), tutup kas (`cash.close`),
+  hapus pelanggan (`customer.write`), dan ubah role pengguna (`owner.access`).
+- Kartu **Koreksi Service** di layar detail Service ikut memakai `canAccess`, sehingga tombolnya
+  hilang bersamaan dengan penolakan di store.
+- Pesan penolakan menyebut fungsi yang dicabut, misalnya "Akun ini tidak dapat mengoreksi
+  Service tersebut (service.correct)".
+
+### Layar Tutup kas buntu saat melihat semua cabang
+
+Layar **Tutup kas** meminta "Pilih satu cabang" tetapi tidak menyediakan pemilih cabang.
+`viewBranch` hanya di-set dari filter tab Antrian, dan kembali ke "semua cabang" setiap aplikasi
+dibuka ulang. Owner yang melihat semua cabang tidak punya cara memenuhi permintaan layarnya
+sendiri. Kini layar Tutup kas punya pemilih cabang sendiri.
+
+### Pengunci regresi
+
+`AccessFunctionEnforcementTest` memeriksa dua hal: setiap fungsi di `AccessCatalog` punya
+pemeriksa di kode utama, dan setiap titik penjagaan yang sudah ada tetap ada dengan jumlah yang
+diharapkan. Jumlah diperiksa, bukan sekadar keberadaan teks, karena koreksi dan hapus memakai
+fungsi yang sama dan satu di antaranya pernah lolos. Test ini terbukti gagal ketika tiga
+penjagaan berbeda (`service.correct`, `service.payment`, `cash.close`) dihapus satu per satu.
+
 ## 1.10.25 — 18 Sep 2026 (versionCode 44)
 
 ### Antrean sinkronisasi macet permanen karena satu perubahan bermasalah
