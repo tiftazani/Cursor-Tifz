@@ -71,18 +71,21 @@ Kedua menu yang dilaporkan diuji ulang setelah perbaikan:
 | Antrian laundry | aplikasi keluar | membuka layar Antrian |
 | Service baru | aplikasi keluar | membuka layar Service baru |
 
-Seluruh menu di layar Modul disapu satu per satu dengan akun Kasir, 22 dari 22 menu:
+Seluruh menu di layar Modul disapu satu per satu, **22 dari 22 menu**, dengan dua akun berbeda
+supaya menu khusus Owner juga teruji:
 
-```text
-diklik tanpa crash : 12
-tidak tampil       : 10
-CRASH              : 0
-```
+| Peran | Diklik tanpa crash | Tidak tampil | Crash |
+|---|---|---|---|
+| Kasir | 12 | 10 | 0 |
+| Owner | 10 | 0 | 0 |
+
+Dengan akun Owner, kesepuluh menu yang hanya boleh dibuka Owner (Daftar Aset Cabang, Laporan
+transaksi, Laporan analitik, Riwayat aktivitas, Cabang, Daftar User, Layanan & harga, Produk
+stok, Kontrol Akses Role, Pengaturan Owner) semuanya terbuka tanpa membuat aplikasi keluar.
 
 Catatan cara uji: `uiautomator` menulis karakter `&` sebagai `&amp;`, sehingga pencocokan nama
 menu seperti "Akun & profil" gagal bila XML-nya tidak di-decode lebih dulu. Sapuan pertama
-karena itu melaporkan angka yang salah (11 dan 11) dan melewatkan satu menu. Sapuan ulang
-dengan XML yang di-decode memberi angka di atas.
+karena itu melaporkan angka yang salah dan melewatkan satu menu.
 
 ## Catatan
 
