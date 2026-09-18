@@ -1,9 +1,59 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 18 September 2026, 10:36 WIB (oleh Hermes).
+Terakhir diperbarui: 18 September 2026, 18:35 WIB (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
+
+## 0a. Pekerjaan terbaru (18 Sep, Hermes) — kemacetan antrean sinkronisasi
+
+**Status: selesai, terverifikasi di emulator, commit `47d5171` + `2d1bd48` di branch
+`codex/cuciin-1-8-1` (sudah di-rebase di atas `origin/main` `0c84ad6`, tidak bercabang).**
+
+Ditemukan saat menguji alur tulis end-to-end, bukan saat membaca kode: mencatat biaya
+operasional berhasil tersimpan di perangkat tetapi **tidak pernah sampai ke server**.
+Log perangkat menampilkan `CuciinCloud: Sinkronisasi ditolak server (422)` berulang dan
+antrean berisi 11 perintah tidak berkurang.
+
+Tiga sebab bertumpuk di `cloudflare/src/command-sync.ts`:
+
+1. `payment.delete` ada di wire protocol perangkat (`SyncProjection`) tetapi tidak ada di
+   `KNOWN_COMMANDS`; setiap penghapusan pembayaran ditolak
+   `422 Tipe command tidak didukung` dan menahan antreannya.
+2. Satu command yang gagal di-parse membatalkan **seluruh** batch dengan 422 **tanpa
+   `results`** (`raw.commands.map(parseCommand)` di dalam satu `try`). Sisi perangkat
+   hanya bisa memindahkan command ke daftar `rejected` kalau `results` ada, sehingga tidak
+   ada satu pun yang bisa dibuang dan antreannya macet permanen.
+3. Command yang ditolak permanen (4xx) membuat command sesudahnya berstatus `retryable`
+   selamanya (`priorFailure=true` tanpa membedakan jenis galat).
+
+Perbaikan: `payment.delete` ditambahkan ke `KNOWN_COMMANDS` beserta `planPayment` untuk
+operasi hapus (idempoten bila baris sudah hilang); `pushCommands` mem-parse per command dan
+melaporkan yang rusak satu per satu; rantai hanya dihentikan gangguan sementara.
+
+**Berkas yang disentuh Hermes (jangan disunting bersamaan):**
+
+- `cloudflare/src/command-sync.ts`
+- `cloudflare/tests/queue-stall.test.mjs` (baru, 4 test)
+- `cloudflare/tests/wire-contract.test.mjs` (baru, 3 test)
+- `android/app/build.gradle.kts`, `android/CHANGELOG.md`,
+  `android/app/src/main/java/com/cuciin/laundryops/data/VersionHistory.kt`
+- `releases/1.10.25-candidate/` (README + SHA256SUMS; APK tidak ikut Git)
+
+**Bukti:**
+
+| Pemeriksaan | Hasil |
+| --- | --- |
+| Gate Worker | 51 test lulus (naik dari 44) |
+| Gate Android | 191 test debug + 191 test release, 0 gagal |
+| Test pengunci | 7 test, terbukti gagal saat perilaku lama dikembalikan satu per satu |
+| Antrean perangkat | pending 11 ke 0, rejected 0, revision 670 ke 674 |
+| Data sampai server | biaya `cost-5caba443-d84f` muncul di D1 debug |
+| Uji ulang 1.10.25 | biaya baru langsung tersinkron, pending 0, revision 679 ke 686 |
+| Peran SPV di 1.10.25 | header `Aida · SPV`; Laporan transaksi & analitik TERBUKA; Riwayat aktivitas TIDAK TAMPIL; crash 0 |
+
+Worker debug `cuciin-api-debug` sudah dideploy ulang (version `5599e3c2-f7f1-4a17-b53a-c3a46e05c9ed`).
+**Worker produksi belum dideploy** dan sengaja menunggu keputusan Owner.
 
 ## 0. Pekerjaan yang sedang berjalan (17 Sep, Hermes)
 
