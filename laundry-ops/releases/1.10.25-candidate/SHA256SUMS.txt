@@ -1,0 +1,2 @@
+b3a3e4cdc67e1e4fb4ade85e20f9f0f92c7a9f3639b128af550f838a7ba7f58c  cuciin-1.10.25-release.apk
+21d0d3dd6ae02e3c74c3cc699981378ffda27b68b75b97d1d7a6c0b3a9f0226b  cuciin-1.10.25-debug-test.apk
