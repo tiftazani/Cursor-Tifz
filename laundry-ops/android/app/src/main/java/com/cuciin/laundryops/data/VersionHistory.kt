@@ -12,10 +12,16 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.23"
-    val currentCode: Int = 42
+    val currentName: String = "1.10.24"
+    val currentCode: Int = 43
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.24", code = 43, date = "18 Sep 2026",
+            notes = listOf(
+                "Perbaikan penting: uang yang diterima sebelum jurnal pembayaran ada tidak lagi hilang dari laporan kas dan tutup kas. Sebelumnya nota yang dibayar sebagian lalu dilunasi kehilangan bagian pembayaran lamanya.",
+            ),
+        ),
         AppRelease(
             name = "1.10.23", code = 42, date = "18 Sep 2026",
             notes = listOf(

@@ -622,13 +622,26 @@ object CuciinStore {
 
     fun omzet(rows: List<Nota> = periodNotas()): Int = rows.sumOf { it.total }
 
-    /** Pembayaran lama tanpa jurnal diperlakukan sebagai penerimaan pada waktu nota dibuat. */
+    /**
+     * Pembayaran lama tanpa jurnal diperlakukan sebagai penerimaan pada waktu nota dibuat.
+     *
+     * Sebagian nota dibayar SEBELUM jurnal pembayaran ada, lalu menerima pembayaran berikutnya
+     * setelah jurnal aktif. Untuk nota seperti itu, jurnalnya hanya memuat pembayaran yang baru;
+     * bagian lamanya tidak punya entri sendiri. Karena itu yang dicatat sebagai penerimaan lama
+     * adalah SELISIH antara `paid` nota dan jumlah jurnalnya, bukan seluruh `paid` dan bukan nol.
+     *
+     * Versi sebelumnya membuang seluruh `paid` nota begitu nota itu punya SATU entri jurnal,
+     * sehingga uang yang diterima sebelum jurnal ada hilang dari laporan kas dan tutup kas.
+     */
     fun paymentRecords(rows: List<Nota> = visibleNotas()): List<PaymentRecord> {
         val byNota = rows.associateBy { it.id }
         val recorded = payments.filter { it.notaId in byNota }
-        val recordedNotaIds = recorded.mapTo(hashSetOf()) { it.notaId }
-        val legacy = rows.filter { it.id !in recordedNotaIds && it.paid > 0 }.map { nota ->
-            PaymentRecord("legacy-${nota.id}", nota.id, nota.branchId, nota.paid, nota.payMethod, nota.createdAtMs, nota.createdAt, nota.kasir)
+        val recordedPerNota = recorded.groupBy { it.notaId }
+        val legacy = rows.mapNotNull { nota ->
+            val sumJurnal = recordedPerNota[nota.id]?.sumOf { it.amount } ?: 0
+            val selisih = PaymentTally.legacyAmount(nota.paid, sumJurnal)
+            if (selisih <= 0) null
+            else PaymentRecord("legacy-${nota.id}", nota.id, nota.branchId, selisih, nota.payMethod, nota.createdAtMs, nota.createdAt, nota.kasir)
         }
         return (recorded + legacy).filter { it.amount > 0 }
     }
