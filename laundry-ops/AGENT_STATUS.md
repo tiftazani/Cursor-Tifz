@@ -31,8 +31,8 @@ perangkat produksi saat APK 1.10.26 dibagikan.
 
 ## 0. Pekerjaan terbaru (18 Sep, Hermes) — seluruh 17 fungsi izin kini ditegakkan
 
-**Status: selesai, gate hijau, versi 1.10.27 (versionCode 46), branch `codex/cuciin-1-8-1`.
-Belum diuji di perangkat.**
+**Status: selesai, gate hijau, teruji di perangkat, versi 1.10.27 (versionCode 46), branch
+`codex/cuciin-1-8-1`.**
 
 **Berkas yang Hermes pegang: `data/CuciinStore.kt`, `ui/RouteAccess.kt`, `ui/MoreScreens.kt`,
 `ui/MasterScreens.kt`, `data/VersionHistory.kt`, `app/build.gradle.kts`, `CHANGELOG.md`,
@@ -63,6 +63,12 @@ Test diperkuat supaya tidak bisa lulus tanpa kode yang memeriksa:
 Bukti test menangkap bug: hapus penjaga `queue.status` → 4 test gagal; hapus penjaga
 `owner.manage` di `addStaff` → 2 test gagal. Gate: **202 debug + 202 release lulus**, lint
 lulus, **53 test Worker lulus**. APK kandidat di `releases/1.10.27-candidate/`.
+
+Uji perangkat pada APK debug 1.10.27 (emulator 1080x2400): `uji_owner1027b.py` **10/10 OK**,
+termasuk **Simpan Service sampai tersimpan (notas 7 → 8, omzet 277.000 → 282.000)** dan tiga
+menu laporan tetap terbuka untuk Owner; `uji_izin5.py` **7/7 OK** (Kasir tidak melihat kartu
+Koreksi Service maupun tombol Hapus). Data uji dibersihkan lewat aplikasi: notas kembali 7,
+tally `277.000 = 221.000 + 56.000` cocok, target tercatat di `deletedNotaIds`.
 
 ## 0. Pekerjaan sebelumnya (18 Sep, Hermes) — centang fungsi Kontrol Akses Role tidak berpengaruh
 

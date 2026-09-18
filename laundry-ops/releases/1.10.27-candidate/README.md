@@ -92,6 +92,33 @@ Gate pada versi ini: **202 test debug + 202 release lulus**, lint lulus, **53 te
 | Label aplikasi release | `Cuciin` |
 | Tanda tangan | V3.0 valid, `CN=Tiftazani Khara, OU=Cuciin` |
 
+## Uji perangkat (emulator 1080x2400, density 420, APK debug 1.10.27)
+
+Risiko utama versi ini: 26 titik penjaga baru bisa memblokir alur SAH, bukan hanya yang dicabut.
+Karena itu yang diuji adalah alur tulis Owner, bukan sekadar membuka layar.
+
+`uji_owner1027b.py` — **10/10 OK, 0 gagal, 0 crash**:
+
+| Pemeriksaan | Hasil |
+| --- | --- |
+| Sesi Owner terdeteksi dari header `Cuciin · Owner` | OK |
+| Laporan transaksi terbuka | OK |
+| Laporan analitik terbuka | OK |
+| Riwayat aktivitas terbuka | OK |
+| Tambah layanan ke keranjang | OK, "1 layanan dipilih" |
+| Pilih pelanggan | OK |
+| Ringkasan Periksa Service | OK, "Total Service" tampil |
+| **Simpan Service sampai TERSIMPAN** | OK, **notas 7 → 8**, omzet 277.000 → 282.000 |
+| Crash | 0 fatal |
+
+`uji_izin5.py` — **7/7 OK**: sesi Kasir tidak melihat kartu Koreksi Service dan tidak melihat
+tombol Hapus, sementara "Catat pelunasan" tetap ada.
+
+Data uji dibersihkan **lewat aplikasi** (tombol Hapus Service + konfirmasi), bukan dengan
+menyunting berkas perangkat, supaya command delete benar-benar terbentuk. Hasil akhir:
+notas 8 → 7, omzet kembali 277.000, tally `277.000 = 221.000 + 56.000` cocok, dan
+`BNY-2609-0004-52A48` tercatat di `deletedNotaIds`.
+
 ## Yang belum dikerjakan
 
 - Belum ada instrumented test (`androidTest`); verifikasi UI masih titik-sampel lewat adb.
