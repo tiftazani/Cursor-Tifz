@@ -12,10 +12,18 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.19"
-    val currentCode: Int = 38
+    val currentName: String = "1.10.20"
+    val currentCode: Int = 39
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.20", code = 39, date = "18 Sep 2026",
+            notes = listOf(
+                "Perbaikan: warna dialog pemilih tanggal dan jam kini mengikuti warna aplikasi.",
+                "Sebelumnya tombol Pilih dan Batal berwarna teal bawaan Android sehingga terlihat tidak cocok dengan tombol aplikasi yang berwarna magenta.",
+                "Berlaku di semua tempat yang memilih tanggal: filter periode, estimasi selesai Service, tanggal kejadian stok, tanggal beli aset, dan laporan.",
+            ),
+        ),
         AppRelease(
             name = "1.10.19", code = 38, date = "18 Sep 2026",
             notes = listOf(

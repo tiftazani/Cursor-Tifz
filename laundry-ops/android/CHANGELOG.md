@@ -2,6 +2,23 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.20 — 18 Sep 2026 (versionCode 39)
+
+- Perbaikan: warna dialog pemilih tanggal dan jam kini mengikuti palet aplikasi.
+- Penyebab: `ui/DateTimeFields.kt` memakai `android.R.style.Theme_Material_Light_Dialog_Alert`
+  yang dipaku mati. Tema bawaan itu membawa aksen teal, sehingga tombol "Pilih" dan "Batal"
+  berwarna teal sementara tombol aplikasi berwarna magenta. Dua warna itu bertabrakan.
+- Perbaikan: tema sendiri `Theme.Cuciin.Picker` di `res/values/themes_picker.xml`, dengan aksen
+  `cuciin_accent` (#C1358F) dan latar `cuciin_dialog_surface`. Warna di `values/colors.xml`
+  disimpan sejalan dengan palet Compose di `ui/theme/Theme.kt`.
+- Locale Indonesia sekarang diambil dari konfigurasi Compose, bukan dari konteks mentah,
+  sehingga nama hari dan bulan tetap berbahasa Indonesia.
+- Berlaku di delapan tempat pemakaian lewat satu fungsi: filter periode (antrian, laporan,
+  riwayat aktivitas), estimasi selesai Service, tanggal kejadian stok, dan tanggal beli aset.
+- Empat test baru `PickerThemeTest` mengunci: tidak ada pemakaian tema bawaan Android, tema
+  dialog ada dan memakai aksen Cuciin, warna aksen sejalan dengan palet Compose, dan tidak ada
+  dialog sistem lain yang memakai tema bawaan.
+
 ## 1.10.19 — 18 Sep 2026 (versionCode 38)
 
 ### Perbaikan sebelum naik ke produksi: jurnal ditulis per cabang

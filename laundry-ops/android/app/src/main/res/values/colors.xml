@@ -2,4 +2,18 @@
     <!-- Latar ikon adaptif mengikuti struktur navy Jemur. -->
     <color name="navy">#0D164B</color>
     <color name="foam">#FFFFFF</color>
+
+    <!--
+      Warna dialog pemilih tanggal dan jam.
+
+      Nilainya harus sejalan dengan palet Compose di `ui/theme/Theme.kt` (Terang):
+      prim #C1358F, ink #15151F, muted #5F6373, primSoft #FBEAF5, card #FFFFFF.
+      Disimpan di sini karena dialog sistem dibangun dari sumber daya Android, bukan Compose,
+      sehingga tidak bisa membaca palet Compose langsung.
+    -->
+    <color name="cuciin_accent">#C1358F</color>
+    <color name="cuciin_accent_soft">#FBEAF5</color>
+    <color name="cuciin_dialog_surface">#FFFFFF</color>
+    <color name="cuciin_ink">#15151F</color>
+    <color name="cuciin_muted">#5F6373</color>
 </resources>

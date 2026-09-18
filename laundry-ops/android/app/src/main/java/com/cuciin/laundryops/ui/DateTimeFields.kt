@@ -2,6 +2,7 @@ package com.cuciin.laundryops.ui
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.Context
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -10,9 +11,11 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.cuciin.laundryops.R
 import com.cuciin.laundryops.data.Clock
 import com.cuciin.laundryops.ui.components.GhostBtn
 import com.cuciin.laundryops.ui.theme.Muted
@@ -42,11 +45,34 @@ internal object DisplayDates {
     }
 }
 
+/**
+ * Konteks untuk dialog pemilih tanggal dan jam.
+ *
+ * Dialog sistem dibangun dari sumber daya Android, bukan Compose, jadi warnanya tidak ikut
+ * palet aplikasi dengan sendirinya. Sebelumnya kode ini memakai
+ * `android.R.style.Theme_Material_Light_Dialog_Alert` yang dipaku mati, sehingga tombol
+ * "Pilih" dan "Batal" berwarna teal bawaan Android sementara tombol aplikasi berwarna magenta.
+ *
+ * Sekarang dialog memakai `Theme.Cuciin.Picker`, yang mewarnai aksennya dari palet Cuciin
+ * (`values/colors.xml`) sehingga tanggal terpilih dan kedua tombolnya sejalan dengan
+ * tampilan aplikasi. Locale dipaksa ke Indonesia supaya nama hari dan bulan ikut berbahasa
+ * Indonesia walau bahasa HP bukan Indonesia.
+ */
+@Composable
+private fun pickerContext(): Context {
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    return android.view.ContextThemeWrapper(context, R.style.Theme_Cuciin_Picker).apply {
+        val localized = Configuration(configuration)
+        localized.setLocale(DisplayDates.locale)
+        applyOverrideConfiguration(localized)
+    }
+}
+
 /** Structured date/time controls. Stored nota strings remain compatible with older clients. */
 @Composable
 internal fun DateTimeFields(value: LocalDateTime, onChange: (LocalDateTime) -> Unit, label: String) {
-    val context = LocalContext.current
-    val localized = android.view.ContextThemeWrapper(context, android.R.style.Theme_Material_Light_Dialog_Alert).apply { applyOverrideConfiguration(Configuration(context.resources.configuration).apply { setLocale(DisplayDates.locale) }) }
+    val localized = pickerContext()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, fontSize = 13.sp, color = Muted)
         GhostBtn(DisplayDates.date(value), icon = Icons.Outlined.CalendarMonth) {
