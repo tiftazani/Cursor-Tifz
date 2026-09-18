@@ -10,11 +10,16 @@ import org.junit.Test
  *
  * Layar Kontrol Akses Role menjanjikan "Fungsi tanpa centang berarti tidak diizinkan". Janji itu
  * hanya benar bila setiap fungsi di [AccessCatalog] benar-benar diperiksa di suatu tempat.
- * Sebelumnya 15 dari 17 fungsi tidak pernah diperiksa sama sekali: yang menentukan hanyalah
- * modul dan [Role] lama, sehingga mencabut centang sebuah fungsi tidak mengubah apa pun.
  *
- * Aturan yang dikunci di sini: setiap fungsi punya pemeriksa yang bisa dipanggil, dan pencabutan
- * fungsi benar-benar ditolak oleh [AccessPolicy].
+ * Keterbatasan yang harus diketahui pembaca test ini: [diperiksa] dan [ditegakkanDiStore] adalah
+ * daftar yang ditulis TANGAN di dalam test, bukan hasil membaca kode utama. Test di sini bisa
+ * lulus walau tidak ada satu pun kode yang memeriksa fungsi tersebut. Yang benar-benar dikunci
+ * hanyalah [setiapTitikJagaFungsiMasihAdaDiStore] (membaca CuciinStore.kt) dan
+ * [mencabutFungsiMenolakTindakannyaUntukSetiapFungsi] (menguji AccessPolicy).
+ *
+ * Keadaan per 1.10.26, diukur langsung ke kode: 8 dari 17 fungsi diperiksa, 9 belum
+ * (queue.status, queue.handover, service.create, stock.write, inventory.write, whatsapp.send,
+ * owner.manage, analytics.view, audit.view).
  */
 class AccessFunctionEnforcementTest {
 
@@ -78,12 +83,64 @@ class AccessFunctionEnforcementTest {
         )
     }
 
+    /**
+     * Fungsi katalog yang BELUM punya pemeriksa di kode utama.
+     *
+     * Daftar ini adalah utang yang diakui, bukan klaim bahwa semuanya beres. Diukur langsung
+     * ke kode per 1.10.26. Bila salah satu diperbaiki, test akan gagal dan meminta daftar ini
+     * diperbarui, sehingga jumlahnya tidak bisa diam-diam bertambah.
+     */
+    private val belumDiperiksa: Set<String> = setOf(
+        "queue.status",
+        "queue.handover",
+        "service.create",
+        "stock.write",
+        "inventory.write",
+        "whatsapp.send",
+        "owner.manage",
+        "analytics.view",
+        "audit.view",
+    )
+
+    /** Seluruh sumber kode utama digabung, supaya pencarian tidak bergantung pada satu berkas. */
+    private fun sumberUtama(): String {
+        val akar = java.io.File("src/main/java/com/cuciin/laundryops")
+        check(akar.isDirectory) { "Sumber kode utama tidak ditemukan di ${akar.absolutePath}" }
+        return akar.walkTopDown()
+            .filter { it.isFile && it.extension == "kt" && it.name != "AccessCatalog.kt" }
+            .joinToString("\n") { it.readText() }
+    }
+
+    /**
+     * Fungsi yang benar-benar dipakai sebagai nama fungsi di luar katalog.
+     *
+     * Dihitung dari kode, bukan dari daftar di test ini. Inilah yang membedakan test yang
+     * mengunci keadaan dari test yang hanya mengulang klaim penulisnya.
+     */
+    private fun fungsiYangDipakaiDiKode(): Set<String> {
+        val sumber = sumberUtama()
+        return AccessCatalog.allFunctionKeys()
+            .filter { sumber.contains("\"$it\"") }
+            .toSet()
+    }
+
     @Test
-    fun setiapFungsiKatalogPunyaPemeriksa() {
-        val yatim = AccessCatalog.allFunctionKeys() - diperiksa
+    fun daftarFungsiBelumDiperiksaSesuaiKenyataanKode() {
+        val nyata = AccessCatalog.allFunctionKeys() - fungsiYangDipakaiDiKode()
+        assertEquals(
+            "Daftar fungsi yang belum diperiksa tidak lagi sesuai kode. Perbarui [belumDiperiksa] " +
+                "bila ada fungsi yang baru diperiksa, atau tegakkan fungsi yang masih hilang.",
+            belumDiperiksa,
+            nyata,
+        )
+    }
+
+    @Test
+    fun fungsiYangSudahDitegakkanTidakKembaliKeDaftarBelumDiperiksa() {
+        val tumpangTindih = belumDiperiksa intersect fungsiYangDipakaiDiKode()
         assertTrue(
-            "Fungsi tanpa pemeriksa membuat centangnya di Kontrol Akses Role tidak berpengaruh: $yatim",
-            yatim.isEmpty(),
+            "Fungsi ini sudah diperiksa di kode, jadi tidak boleh lagi ada di daftar utang: $tumpangTindih",
+            tumpangTindih.isEmpty(),
         )
     }
 

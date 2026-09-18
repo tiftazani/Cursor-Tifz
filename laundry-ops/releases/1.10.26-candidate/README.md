@@ -18,8 +18,17 @@ APK tidak di-commit ke Git (aturan `.gitignore` baris 37-38); hanya berkas ini d
 ### 1. Centang fungsi di Kontrol Akses Role tidak berpengaruh (bug nyata)
 
 Layar Kontrol Akses Role menjanjikan "Fungsi tanpa centang berarti tidak diizinkan".
-Dari 17 fungsi di `AccessCatalog`, hanya dua yang benar-benar diperiksa kode:
-`analytics.view` dan `service.price`. Lima belas sisanya hanya menghiasi layar.
+Dari 17 fungsi di `AccessCatalog`, **8 yang benar-benar diperiksa** kode dan **9 tidak**:
+`queue.status`, `queue.handover`, `service.create`, `stock.write`, `inventory.write`,
+`whatsapp.send`, `owner.manage`, `analytics.view`, `audit.view`. Yang diperiksa:
+`attendance.write`, `cash.close`, `customer.write`, `expense.write`, `owner.access`,
+`service.correct`, `service.payment`, `service.price`.
+
+Catatan koreksi: catatan ini sempat menulis "hanya 2 dari 17 diperiksa". Angka itu salah.
+Angka di atas hasil pengukuran ulang langsung ke kode sumber.
+
+Modul lebih baik daripada fungsi: 11 dari 12 modul diperiksa lewat `RouteAccess`, sisanya
+(`stock`) lewat katalog tab di `NavTabs`.
 
 Alur picu yang terbukti di perangkat sebelum perbaikan:
 

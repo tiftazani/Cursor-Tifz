@@ -4,11 +4,17 @@ Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `ve
 
 ## 1.10.26 — 18 Sep 2026 (versionCode 45)
 
-### Centang fungsi di Kontrol Akses Role tidak berpengaruh
+### Centang fungsi di Kontrol Akses Role tidak berpengaruh penuh
 
-Layar **Kontrol Akses Role** menjanjikan "Fungsi tanpa centang berarti tidak diizinkan".
-Janji itu tidak dipegang kode. Dari 17 fungsi di `AccessCatalog`, hanya dua yang benar-benar
-diperiksa: `analytics.view` dan `service.price`. Lima belas sisanya hanya menghiasi layar.
+Layar Kontrol Akses Role menjanjikan "Fungsi tanpa centang berarti tidak diizinkan".
+Janji itu tidak sepenuhnya dipegang kode. Dari 17 fungsi di `AccessCatalog`, **8 yang
+diperiksa** dan **9 tidak**: `queue.status`, `queue.handover`, `service.create`,
+`stock.write`, `inventory.write`, `whatsapp.send`, `owner.manage`, `analytics.view`,
+`audit.view`. Modul sendiri lebih baik: 11 dari 12 diperiksa lewat `RouteAccess`, sisanya
+(`stock`) lewat katalog tab di `NavTabs`.
+
+Catatan koreksi: catatan versi ini sempat menulis "hanya 2 dari 17 fungsi diperiksa".
+Angka itu salah dan sudah diganti dengan hasil pengukuran ulang langsung ke kode.
 
 Akibatnya bisa dibuktikan dari alur nyata di perangkat:
 
