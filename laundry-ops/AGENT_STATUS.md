@@ -5,6 +5,30 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
+## 0b. Worker PRODUKSI sudah di-deploy (18 Sep, Hermes)
+
+**Status: selesai. Version ID `0a3735c3-ef1b-4549-a437-dfe4b458177c`, deployed
+2026-09-18T14:10:57Z.**
+
+Produksi terakhir di-deploy 17 Sep 11:06, jadi perbaikan antrean sinkronisasi dari 18 Sep
+(`bd55890` + `4c2e0a6`) belum ada di sana. Sekarang sudah.
+
+Yang dibuktikan:
+- Bundle lokal dari commit HEAD identik dengan yang di-upload (build deterministik, SHA256
+  sama pada dua build berturut-turut: `4a8efceb1148610bfa66ceccc3c463f1be460ec71d3a5dde482da922d37934ba`).
+- Perbaikan A/B/C/D benar-benar ada di bundle: `payment.delete`, `order.delete`, `retryable`,
+  hasil per-perintah (`results`).
+- Tidak ada migrasi baru yang perlu dijalankan; `0008` sudah diterapkan di produksi
+  sebelumnya. Deploy ini hanya mengganti kode Worker.
+- Data produksi tidak tersentuh: `orders 8`, `payments 4`, `staff 8`, `branches 4`,
+  `access_roles 4`, `sync_changes 403`, revision 403 (sama sebelum dan sesudah deploy).
+- Gate sebelum deploy: Worker 53 test lulus, `npm run check` lulus.
+
+Yang **belum** dibuktikan: perilaku perbaikan A/B/C/D di produksi belum pernah dijalankan
+dengan token sungguhan. Rute tanpa auth hanya `/health` dan `/v1/registration`, jadi
+verifikasi perilaku butuh perangkat dengan login Firebase. Jalankan uji tulis end-to-end dari
+perangkat produksi saat APK 1.10.26 dibagikan.
+
 ## 0. Pekerjaan terbaru (18 Sep, Hermes) — centang fungsi Kontrol Akses Role tidak berpengaruh
 
 **Status: selesai, terverifikasi di emulator, versi 1.10.26 (versionCode 45), branch
