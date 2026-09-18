@@ -12,10 +12,20 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.20"
-    val currentCode: Int = 39
+    val currentName: String = "1.10.21"
+    val currentCode: Int = 40
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.21", code = 40, date = "18 Sep 2026",
+            notes = listOf(
+                "Tampilan memakai nuansa biru Cuciin, senada dengan logo dan layar pembuka.",
+                "Tema Light memakai biru dan biru langit; tema Dark memakai navy tua dengan aksen biru langit.",
+                "Tema Custom kini punya preset siap pakai: Biru Cuciin, Biru Cuciin Gelap, dan Magenta Jemur.",
+                "Perbaikan: hanya Owner yang dapat mengubah harga Service. Kasir dan SPV tidak melihat tombolnya, dan sistem menolak perubahannya.",
+                "Fungsi Ubah harga Service dapat diatur di Kontrol Akses Role, bawaannya hanya Owner.",
+            ),
+        ),
         AppRelease(
             name = "1.10.20", code = 39, date = "18 Sep 2026",
             notes = listOf(

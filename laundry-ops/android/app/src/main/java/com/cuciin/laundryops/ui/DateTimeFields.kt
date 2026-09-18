@@ -1,26 +1,33 @@
 package com.cuciin.laundryops.ui
 
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
-import android.content.Context
-import android.content.res.Configuration
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.cuciin.laundryops.R
 import com.cuciin.laundryops.data.Clock
 import com.cuciin.laundryops.ui.components.GhostBtn
 import com.cuciin.laundryops.ui.theme.Muted
 import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -43,51 +50,85 @@ internal object DisplayDates {
         val endExclusiveMs = until.plusMinutes(1).atZone(Clock.ZONE).toInstant().toEpochMilli()
         return timestampMs >= startMs && timestampMs < endExclusiveMs
     }
+
+    /**
+     * Titik tengah hari UTC dari sebuah tanggal lokal.
+     *
+     * Pemilih tanggal Material3 memakai UTC sebagai acuan harinya. Memakai tengah hari, bukan
+     * tengah malam, supaya tanggal tidak bergeser satu hari di zona waktu mana pun.
+     */
+    fun toPickerUtcMillis(value: LocalDateTime): Long =
+        value.toLocalDate().atStartOfDay(ZoneOffset.UTC).plusHours(12).toInstant().toEpochMilli()
+
+    /** Kembalikan pilihan pemilih tanggal ke tanggal lokal, dengan jam yang sudah ada. */
+    fun fromPickerUtcMillis(millis: Long, keepTime: LocalDateTime): LocalDateTime =
+        Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate().atTime(keepTime.toLocalTime())
 }
 
 /**
- * Konteks untuk dialog pemilih tanggal dan jam.
+ * Pemilih tanggal dan jam.
  *
- * Dialog sistem dibangun dari sumber daya Android, bukan Compose, jadi warnanya tidak ikut
- * palet aplikasi dengan sendirinya. Sebelumnya kode ini memakai
- * `android.R.style.Theme_Material_Light_Dialog_Alert` yang dipaku mati, sehingga tombol
- * "Pilih" dan "Batal" berwarna teal bawaan Android sementara tombol aplikasi berwarna magenta.
+ * Memakai komponen Compose Material3, bukan dialog bawaan Android. Ada dua alasan:
  *
- * Sekarang dialog memakai `Theme.Cuciin.Picker`, yang mewarnai aksennya dari palet Cuciin
- * (`values/colors.xml`) sehingga tanggal terpilih dan kedua tombolnya sejalan dengan
- * tampilan aplikasi. Locale dipaksa ke Indonesia supaya nama hari dan bulan ikut berbahasa
- * Indonesia walau bahasa HP bukan Indonesia.
+ * 1. Dialog bawaan Android tidak mewarisi palet aplikasi. Dulu dialognya memakai tema bawaan
+ *    yang membawa aksen teal, sehingga tombol "Pilih" dan "Batal" berbeda warna dari seluruh
+ *    tombol aplikasi.
+ * 2. Dialog bawaan juga selalu terang. Di tema Gelap dan Custom, dialog itu muncul sebagai
+ *    kotak putih menyolok di atas latar gelap.
+ *
+ * Dengan komponen Compose, warnanya diambil dari `MaterialTheme.colorScheme` yang sudah
+ * diturunkan dari palet Cuciin lewat `materialScheme()`. Jadi warnanya ikut berubah sendiri
+ * saat tema diganti, termasuk tema Custom yang warnanya diatur pengguna.
  */
-@Composable
-private fun pickerContext(): Context {
-    val context = LocalContext.current
-    val configuration = LocalConfiguration.current
-    return android.view.ContextThemeWrapper(context, R.style.Theme_Cuciin_Picker).apply {
-        val localized = Configuration(configuration)
-        localized.setLocale(DisplayDates.locale)
-        applyOverrideConfiguration(localized)
-    }
-}
-
-/** Structured date/time controls. Stored nota strings remain compatible with older clients. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DateTimeFields(value: LocalDateTime, onChange: (LocalDateTime) -> Unit, label: String) {
-    val localized = pickerContext()
+    var showDate by remember { mutableStateOf(false) }
+    var showTime by remember { mutableStateOf(false) }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, fontSize = 13.sp, color = Muted)
-        GhostBtn(DisplayDates.date(value), icon = Icons.Outlined.CalendarMonth) {
-            DatePickerDialog(localized, { _, y, m, d -> onChange(value.withYear(y).withMonth(1).withDayOfMonth(1).withMonth(m + 1).withDayOfMonth(d)) }, value.year, value.monthValue - 1, value.dayOfMonth).apply {
-                setButton(DatePickerDialog.BUTTON_POSITIVE, "Pilih", this)
-                setButton(DatePickerDialog.BUTTON_NEGATIVE, "Batal", this)
-                show()
-            }
+        GhostBtn(DisplayDates.date(value), icon = Icons.Outlined.CalendarMonth) { showDate = true }
+        GhostBtn("${DisplayDates.time(value)} WIB", icon = Icons.Outlined.Schedule) { showTime = true }
+    }
+
+    if (showDate) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = DisplayDates.toPickerUtcMillis(value))
+        DatePickerDialog(
+            onDismissRequest = { showDate = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { onChange(DisplayDates.fromPickerUtcMillis(it, value)) }
+                    showDate = false
+                }) { Text("Pilih") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDate = false }) { Text("Batal") }
+            },
+        ) {
+            // Judul dan headline bawaan dibuang supaya dialognya pendek dan tidak menutupi
+            // layar. Tombol pindah mode disembunyikan karena tampilan kalender sudah cukup.
+            DatePicker(state = state, title = null, headline = null, showModeToggle = false)
         }
-        GhostBtn("${DisplayDates.time(value)} WIB", icon = Icons.Outlined.Schedule) {
-            TimePickerDialog(localized, { _, hour, minute -> onChange(value.withHour(hour).withMinute(minute).withSecond(0).withNano(0)) }, value.hour, value.minute, true).apply {
-                setButton(TimePickerDialog.BUTTON_POSITIVE, "Pilih", this)
-                setButton(TimePickerDialog.BUTTON_NEGATIVE, "Batal", this)
-                show()
-            }
-        }
+    }
+
+    if (showTime) {
+        val state = rememberTimePickerState(initialHour = value.hour, initialMinute = value.minute, is24Hour = true)
+        AlertDialog(
+            onDismissRequest = { showTime = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    onChange(value.withHour(state.hour).withMinute(state.minute).withSecond(0).withNano(0))
+                    showTime = false
+                }) { Text("Pilih") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTime = false }) { Text("Batal") }
+            },
+            text = {
+                // TimePicker diletakkan di tengah supaya lingkarannya tidak terpotong di layar sempit.
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { TimePicker(state = state) }
+            },
+        )
     }
 }

@@ -20,6 +20,7 @@ object AccessCatalog {
             FunctionDef("service.create", "Buat Service", "Mencatat transaksi baru"),
             FunctionDef("service.correct", "Koreksi Service", "Mengubah atau menghapus transaksi"),
             FunctionDef("service.payment", "Catat pembayaran", "Menerima pembayaran dan mengubah status bayar"),
+            FunctionDef("service.price", "Ubah harga Service", "Mengganti harga layanan pada satu transaksi dari harga katalog"),
         )),
         ModuleDef("customer", "Pelanggan", "Kontak pelanggan laundry", listOf(
             FunctionDef("customer.write", "Ubah pelanggan", "Menambah dan mengubah kontak pelanggan"),
@@ -55,6 +56,33 @@ object AccessCatalog {
     )
 
     val moduleKeys: Set<String> = modules.map { it.key }.toSet()
+
+    /**
+     * Fungsi yang secara bawaan hanya boleh dilakukan Owner.
+     *
+     * Dipakai untuk dua hal: menyembunyikan tombolnya di layar, dan menolak perubahannya di
+     * store walaupun tombolnya berhasil ditekan. Owner tetap boleh memberikan fungsi ini ke
+     * role lain lewat Kontrol Akses Role; daftar ini hanya nilai bawaan, bukan larangan keras.
+     */
+    val ownerOnlyByDefault: Set<String> = setOf("service.price")
+
+    /** Modul yang memuat sebuah fungsi, atau null bila fungsinya tidak dikenal. */
+    fun moduleOf(function: String): String? =
+        modules.firstOrNull { module -> module.functions.any { it.key == function } }?.key
+
+    /**
+     * Fungsi yang ditambahkan otomatis ke role bawaan tertentu pada versi ini.
+     *
+     * Dipakai untuk menambal role bawaan yang sudah tersimpan di server: isinya dibekukan saat
+     * pertama dibuat, sehingga fungsi yang baru muncul di katalog tidak akan pernah masuk
+     * tanpa daftar ini. Owner sendiri tidak perlu ditambal karena selalu dianggap penuh.
+     */
+    fun builtInFunctionsFor(roleId: String): Set<String> = when (roleId) {
+        // Bawaannya hanya Owner yang boleh mengubah harga, jadi tidak ada yang ditambahkan
+        // ke Kasir maupun Supervisor. Daftar ini disengaja kosong sampai ada fungsi bawaan
+        // baru untuk mereka.
+        else -> emptySet()
+    }
 
     fun functionsOf(module: String): List<FunctionDef> = modules.firstOrNull { it.key == module }?.functions.orEmpty()
 

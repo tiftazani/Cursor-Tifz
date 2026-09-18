@@ -75,7 +75,7 @@ fun GlassSurface(
     Surface(
         modifier = modifier,
         shape = GlassCard.shape,
-        color = Color(0xFF0D164B).copy(alpha = alpha),
+        color = Color(0xFF00306E).copy(alpha = alpha),
         border = BorderStroke(1.dp, Color.White.copy(alpha = GlassCard.BORDER_ALPHA)),
     ) {
         Column(

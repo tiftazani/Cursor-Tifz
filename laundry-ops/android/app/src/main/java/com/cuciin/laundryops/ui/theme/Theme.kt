@@ -26,13 +26,15 @@ import androidx.core.view.WindowCompat
  * Setiap tema memakai nama token yang sama supaya seluruh layar tidak perlu diubah.
  * Nilainya dijaga agar teks lolos WCAG AA 4.5:1 dan batas kontrol lolos 3:1.
  *
- * Bentuk visual mengikuti guideline Jemur: struktur navy, aksi utama pink,
- * aksen kuning untuk navigasi aktif, surface putih, serta sudut membulat terukur.
- * Pink terang tidak dipakai untuk teks kecil bila kontrasnya tidak memenuhi WCAG AA.
+ * Nuansa warna mengikuti logo dan gambar layar pembuka: biru Cuciin #0048B4 dipadukan dengan
+ * biru langit #D8E4F0. Tema gelap memakai pasangan gelapnya, navy tua dengan aksen biru langit.
+ * Kuning #F7CA3A tetap dipakai sebagai aksen menu aktif karena di logo pun kuning hadir
+ * (gantungan baju), dan tanpa warna itu menu aktif tidak menonjol di antara semua biru.
  *
  * Tema Custom dibentuk dari enam warna pilihan pengguna. Warna teks di atas tombol dan
  * header tidak ikut dipilih manual: nilainya dihitung dari terang gelapnya warna tersebut
- * supaya tulisan tetap terbaca berapa pun warna yang dipilih.
+ * supaya tulisan tetap terbaca berapa pun warna yang dipilih. Tersedia tiga preset siap pakai,
+ * termasuk Biru Cuciin dan versi gelapnya.
  */
 enum class CuciinThemeMode(val label: String) {
     Terang("Light"),
@@ -50,8 +52,33 @@ data class CuciinCustomTheme(
     val hero: Int,
 ) {
     companion object {
-        /** Titik awal tema Custom: sama dengan tema Light supaya langsung terpakai. */
-        val Default = CuciinCustomTheme(
+        /**
+         * Biru Cuciin: titik awal tema Custom.
+         *
+         * Dipakai sebagai preset siap pakai sekaligus nilai bawaan, supaya pengguna yang membuka
+         * Custom langsung melihat warna yang sejalan dengan tema Light, bukan warna asing.
+         */
+        val BiruCuciin = CuciinCustomTheme(
+            primary = 0xFF0048B4.toInt(),
+            button = 0xFF0048B4.toInt(),
+            background = 0xFFF4F8FD.toInt(),
+            card = 0xFFFFFFFF.toInt(),
+            ink = 0xFF0B1A2E.toInt(),
+            hero = 0xFF00306E.toInt(),
+        )
+
+        /** Biru Cuciin versi gelap: latar navy tua, aksen biru langit. */
+        val BiruCuciinGelap = CuciinCustomTheme(
+            primary = 0xFF7FB4FF.toInt(),
+            button = 0xFF7FB4FF.toInt(),
+            background = 0xFF0A1220.toInt(),
+            card = 0xFF121C2E.toInt(),
+            ink = 0xFFEAF2FC.toInt(),
+            hero = 0xFF0E1B2E.toInt(),
+        )
+
+        /** Magenta lama, disimpan supaya pengguna yang menyukainya masih bisa memakainya. */
+        val MagentaJemur = CuciinCustomTheme(
             primary = 0xFFC1358F.toInt(),
             button = 0xFFC1358F.toInt(),
             background = 0xFFF7F7F9.toInt(),
@@ -59,6 +86,16 @@ data class CuciinCustomTheme(
             ink = 0xFF15151F.toInt(),
             hero = 0xFF0D164B.toInt(),
         )
+
+        /** Preset yang ditawarkan di layar Theme Aplikasi, berurutan. */
+        val presets: List<Pair<String, CuciinCustomTheme>> = listOf(
+            "Biru Cuciin" to BiruCuciin,
+            "Biru Cuciin Gelap" to BiruCuciinGelap,
+            "Magenta Jemur" to MagentaJemur,
+        )
+
+        /** Titik awal tema Custom. Sama dengan preset pertama supaya tidak ada kejutan. */
+        val Default = BiruCuciin
     }
 }
 
@@ -103,25 +140,28 @@ data class CuciinPalette(
 
 private val Terang = CuciinPalette(
     dark = false,
-    bg = Color(0xFFF7F7F9),
+    // Nuansa diambil dari logo dan gambar layar pembuka: biru #0048B4 dan biru langit #D8E4F0.
+    bg = Color(0xFFF4F8FD),
     card = Color(0xFFFFFFFF),
-    line = Color(0xFF757784),
-    lineSoft = Color(0xFFECECF1),
-    ink = Color(0xFF15151F),
-    muted = Color(0xFF5F6373),
-    prim = Color(0xFFC1358F),
-    primDeep = Color(0xFF0D164B),
-    primSoft = Color(0xFFFBEAF5),
+    line = Color(0xFF6E7C90),
+    lineSoft = Color(0xFFDCE6F2),
+    ink = Color(0xFF0B1A2E),
+    muted = Color(0xFF54637A),
+    prim = Color(0xFF0048B4),
+    primDeep = Color(0xFF00306E),
+    primSoft = Color(0xFFE3EDFB),
     onPrim = Color(0xFFFFFFFF),
     coral = Color(0xFFB3261E),
     green = Color(0xFF1F7A4D),
     amber = Color(0xFF8A5A00),
+    // Kuning dipertahankan: di logo pun kuning dipakai untuk gantungan baju, dan tanpa
+    // warna ini menu aktif tidak menonjol di antara semua biru.
     gold = Color(0xFFF7CA3A),
-    heroA = Color(0xFF0D164B),
-    heroB = Color(0xFF19245F),
+    heroA = Color(0xFF00306E),
+    heroB = Color(0xFF0054C0),
     onHero = Color(0xFFFFFFFF),
     navSelected = Color(0xFFF7CA3A),
-    surface = Color(0xFFFBEAF5),
+    surface = Color(0xFFE3EDFB),
 )
 
 /**
@@ -130,25 +170,26 @@ private val Terang = CuciinPalette(
  */
 private val Gelap = CuciinPalette(
     dark = true,
-    bg = Color(0xFF000000),
-    card = Color(0xFF121212),
-    line = Color(0xFF6E6E6E),
-    lineSoft = Color(0xFF2A2A2A),
-    ink = Color(0xFFF2F2F2),
-    muted = Color(0xFFB8B8B8),
-    prim = Color(0xFFF08AC8),
-    primDeep = Color(0xFFFFB1DD),
-    primSoft = Color(0xFF2A1A26),
-    onPrim = Color(0xFF000000),
+    // Pasangan gelap dari palet terang: navy tua sebagai latar, biru langit sebagai aksen.
+    bg = Color(0xFF0A1220),
+    card = Color(0xFF121C2E),
+    line = Color(0xFF5A6A82),
+    lineSoft = Color(0xFF233149),
+    ink = Color(0xFFEAF2FC),
+    muted = Color(0xFFA8B8CC),
+    prim = Color(0xFF7FB4FF),
+    primDeep = Color(0xFFBBD8FF),
+    primSoft = Color(0xFF16263F),
+    onPrim = Color(0xFF001A3D),
     coral = Color(0xFFFFB4AB),
     green = Color(0xFF70D6A0),
     amber = Color(0xFFFFD180),
     gold = Color(0xFFF7CA3A),
-    heroA = Color(0xFF16181D),
-    heroB = Color(0xFF23262E),
+    heroA = Color(0xFF0E1B2E),
+    heroB = Color(0xFF16263F),
     onHero = Color(0xFFFFFFFF),
     navSelected = Color(0xFFF7CA3A),
-    surface = Color(0xFF1E1E1E),
+    surface = Color(0xFF16263F),
 )
 
 internal val LightPalette = Terang
@@ -262,6 +303,14 @@ internal fun materialScheme(p: CuciinPalette) = if (p.dark) darkColorScheme(
     onSurfaceVariant = p.muted,
     primaryContainer = p.primSoft,
     onPrimaryContainer = p.prim,
+    // Material3 memakai surfaceContainerHigh sebagai latar dialog. Nilai bawaannya ungu
+    // pucat (#ECE6F0) sehingga dialog pemilih tanggal tidak senada dengan palet aplikasi.
+    // Diturunkan dari palet Cuciin supaya ikut berubah saat tema diganti.
+    surfaceContainerLowest = p.card,
+    surfaceContainerLow = p.card,
+    surfaceContainer = p.card,
+    surfaceContainerHigh = p.card,
+    surfaceContainerHighest = p.primSoft,
     errorContainer = Color(0xFF3A1F22),
     onErrorContainer = p.coral,
     outline = p.line,
@@ -284,6 +333,12 @@ internal fun materialScheme(p: CuciinPalette) = if (p.dark) darkColorScheme(
     onSurfaceVariant = p.muted,
     primaryContainer = p.primSoft,
     onPrimaryContainer = p.primDeep,
+    // Lihat catatan di cabang gelap: latar dialog Material3 diambil dari surfaceContainerHigh.
+    surfaceContainerLowest = p.card,
+    surfaceContainerLow = p.card,
+    surfaceContainer = p.card,
+    surfaceContainerHigh = p.card,
+    surfaceContainerHighest = p.primSoft,
     errorContainer = Color(0xFFFFE9E4),
     onErrorContainer = p.coral,
     outline = p.line,

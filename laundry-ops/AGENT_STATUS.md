@@ -1,6 +1,6 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 18 September 2026, 08:45 WIB (oleh Hermes).
+Terakhir diperbarui: 18 September 2026, 09:40 WIB (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
@@ -68,6 +68,10 @@ Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **
 **1.10.20 (18 Sep, warna dialog pemilih tanggal):** dilaporkan Owner bahwa warna kotak pemilih tanggal terlihat aneh. Penyebabnya `ui/DateTimeFields.kt` memakai `android.R.style.Theme_Material_Light_Dialog_Alert` yang dipaku mati; tema bawaan itu membawa aksen teal sehingga tombol "Pilih" dan "Batal" berwarna teal sementara tombol aplikasi magenta. Perbaikan: tema sendiri `Theme.Cuciin.Picker` di `res/values/themes_picker.xml` dengan aksen `cuciin_accent` (#C1358F), warnanya disimpan sejalan dengan palet Compose di `ui/theme/Theme.kt`. Berlaku di delapan tempat pemakaian lewat satu fungsi (filter periode, estimasi selesai Service, tanggal kejadian stok, tanggal beli aset). Dibuktikan per piksel dari tangkapan layar: warna dominan dialog `#C1358F`, warna teal nol. Empat test baru `PickerThemeTest` mengunci supaya tema bawaan Android tidak kembali dipakai. Gate lulus: 135 test debug + 135 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.20-candidate/`.
 
 **ATURAN untuk agent lain:** jangan pakai `android.R.style.*` untuk dialog di aplikasi ini. Dialog sistem tidak mewarisi palet Compose, jadi warnanya akan berbeda dari tombol aplikasi. Pakai `R.style.Theme_Cuciin_Picker` lewat `pickerContext()` di `ui/DateTimeFields.kt`. `PickerThemeTest` akan gagal bila aturan ini dilanggar.
+
+**1.10.21 (18 Sep, nuansa biru + preset tema + harga khusus Owner):** tiga hal. (1) Palet Light dan Dark diganti mengikuti warna logo dan gambar layar pembuka: biru #0048B4 dan biru langit #D8E4F0. Light: latar #F4F8FD, kartu putih, aksen #0048B4, header #00306E, teks #0B1A2E. Dark: latar #0A1220, kartu #121C2E, aksen #7FB4FF, teks #EAF2FC. Kuning #F7CA3A dipertahankan sebagai aksen menu aktif karena di logo pun kuning hadir. 28 dari 28 pasangan warna lulus WCAG AA. Warna navy lama yang dipaku di `GlassCard` dan `OnboardingScreen` ikut disesuaikan. (2) Tema Custom kini punya tiga preset di `CuciinCustomTheme.presets`: Biru Cuciin (bawaan), Biru Cuciin Gelap, dan Magenta Jemur. (3) Fungsi baru `service.price` di `AccessCatalog`, ditandai `ownerOnlyByDefault`; tombol "Ubah harga" disembunyikan untuk yang tidak berhak dan `CuciinStore.setCartPrice` mengembalikan Boolean sehingga menolak perubahannya. Jalur koreksi Service juga dijaga. `ensureAccessRoles` kini menambal role bawaan yang tersimpan dengan `AccessCatalog.builtInFunctionsFor`, karena isi role dibekukan saat pertama dibuat. Gate lulus: 147 test debug + 147 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.21-candidate/`.
+
+**ATURAN untuk agent lain (harga):** jangan menambahkan jalur baru yang menulis `unitPrice` tanpa memeriksa `store.canChangePrice()`. Harga adalah data uang. `ServicePriceAccessTest` akan gagal bila aturan ini dilanggar.
 
 **Menunggu perintah Owner:**
 - Penghapusan data contoh (dummy) di produksi belum dijalankan. Jangan hapus tanpa backup dan perintah eksplisit.

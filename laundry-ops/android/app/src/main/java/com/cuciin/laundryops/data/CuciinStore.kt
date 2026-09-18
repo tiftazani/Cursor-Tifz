@@ -433,10 +433,39 @@ object CuciinStore {
 
     fun roleById(id: String): AccessRole? = AccessPolicy.roleById(accessRoles, id)
 
-    /** Role bawaan dibuat otomatis saat pertama dibuka supaya instalasi lama tetap punya katalog. */
+    /**
+     * Memastikan katalog role tersedia dan role bawaan mengikuti katalog terbaru.
+     *
+     * Katalog bisa bertambah seiring versi aplikasi (misalnya fungsi "Ubah harga Service").
+     * Role bawaan yang sudah tersimpan di server tidak otomatis memuat fungsi baru itu, karena
+     * isinya dibekukan saat pertama dibuat. Tanpa penambalan ini, fitur baru tidak akan pernah
+     * berlaku walaupun kodenya sudah ada.
+     *
+     * Hanya fungsi yang ditandai bawaan untuk role itu yang ditambahkan, dan hanya bila
+     * modulnya memang sudah dimiliki role tersebut. Fungsi yang sudah dicabut Owner tidak
+     * dihidupkan kembali: yang ditambal hanya fungsi yang belum pernah ada di versi mana pun,
+     * yaitu yang ditandai di [AccessCatalog.builtInFunctionsFor].
+     */
     fun ensureAccessRoles() {
-        if (accessRoles.isNotEmpty()) return
-        accessRoles.addAll(AccessCatalog.builtInRoles())
+        if (accessRoles.isEmpty()) {
+            accessRoles.addAll(AccessCatalog.builtInRoles())
+            return
+        }
+        var berubah = false
+        val hasil = accessRoles.map { role ->
+            val tambahan = AccessCatalog.builtInFunctionsFor(role.id).filter { fn ->
+                fn !in role.functions && AccessCatalog.moduleOf(fn) in role.modules
+            }
+            if (tambahan.isEmpty()) role
+            else {
+                berubah = true
+                role.copy(functions = role.functions + tambahan)
+            }
+        }
+        if (berubah) {
+            accessRoles.clear()
+            accessRoles.addAll(hasil)
+        }
     }
 
     fun saveAccessRole(role: AccessRole): String? {
@@ -1097,10 +1126,25 @@ object CuciinStore {
         revision.intValue++
     }
 
-    fun setCartPrice(svcId: String, price: Int) {
+    /**
+     * Mengubah harga layanan pada satu transaksi.
+     *
+     * Ditolak untuk siapa pun yang tidak punya fungsi `service.price`. Bawaannya hanya Owner,
+     * tetapi Owner boleh memberikannya ke role lain lewat Kontrol Akses Role.
+     *
+     * Pemeriksaan ini wajib ada di sini, bukan hanya dengan menyembunyikan tombolnya. Tombol
+     * yang disembunyikan tetap bisa dilewati lewat jalur lain, sedangkan data harga adalah
+     * data uang yang tidak boleh berubah tanpa izin.
+     */
+    fun setCartPrice(svcId: String, price: Int): Boolean {
+        if (!canAccess("service", "service.price")) return false
         cart.find { it.service.id == svcId }?.unitPrice = price.coerceAtLeast(0)
         revision.intValue++
+        return true
     }
+
+    /** Apakah pengguna yang sedang masuk boleh mengubah harga Service. */
+    fun canChangePrice(): Boolean = canAccess("service", "service.price")
 
     fun setCartHandler(svcId: String, email: String) {
         if (session.value?.role != Role.Owner) return

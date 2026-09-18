@@ -6,6 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
@@ -38,11 +40,12 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.cuciin.laundryops.data.rp
 import com.cuciin.laundryops.ui.components.CardBlock
+import com.cuciin.laundryops.ui.components.pressScale
+import com.cuciin.laundryops.ui.components.rememberTapFeedback
 import com.cuciin.laundryops.ui.components.GhostBtn
 import com.cuciin.laundryops.ui.components.PrimaryBtn
 import com.cuciin.laundryops.ui.components.ScreenHeader
 import com.cuciin.laundryops.ui.components.SectionLabel
-import com.cuciin.laundryops.ui.components.rememberTapFeedback
 import com.cuciin.laundryops.ui.theme.CuciinCustomTheme
 import com.cuciin.laundryops.ui.theme.CuciinShape
 import com.cuciin.laundryops.ui.theme.CuciinThemeMode
@@ -50,6 +53,7 @@ import com.cuciin.laundryops.ui.theme.Card
 import com.cuciin.laundryops.ui.theme.Ink
 import com.cuciin.laundryops.ui.theme.Line
 import com.cuciin.laundryops.ui.theme.LineSoft
+import com.cuciin.laundryops.ui.theme.Mist
 import com.cuciin.laundryops.ui.theme.Muted
 import com.cuciin.laundryops.ui.theme.OnPrim
 import com.cuciin.laundryops.ui.theme.Teal
@@ -89,7 +93,7 @@ internal fun ThemeScreen(nav: NavHostController) {
             CardBlock {
                 SectionLabel("Mode tema")
                 Text(
-                    "Light memakai latar terang dengan aksen pink, Dark memakai latar hitam, dan Custom membebaskan Anda memilih warnanya sendiri.",
+                    "Light memakai latar terang dengan aksen biru, Dark memakai latar navy tua, dan Custom membebaskan Anda memilih warnanya sendiri.",
                     color = Muted,
                     fontSize = 12.sp,
                     lineHeight = 17.sp,
@@ -106,6 +110,25 @@ internal fun ThemeScreen(nav: NavHostController) {
         }
         item { ThemePreview() }
         if (mode == CuciinThemeMode.Custom) {
+            item {
+                CardBlock {
+                    SectionLabel("Preset warna")
+                    Text(
+                        "Pilih salah satu untuk langsung memakai rangkaian warnanya, lalu sesuaikan bila perlu.",
+                        color = Muted,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                    )
+                    CuciinCustomTheme.presets.forEach { (nama, preset) ->
+                        PresetRow(
+                            nama = nama,
+                            preset = preset,
+                            selected = custom == preset,
+                            onClick = { applyCustom(preset) },
+                        )
+                    }
+                }
+            }
             item {
                 CardBlock {
                     SectionLabel("Warna custom")
@@ -172,8 +195,8 @@ internal fun ThemeScreen(nav: NavHostController) {
 }
 
 private fun themeModeDetail(mode: CuciinThemeMode): String = when (mode) {
-    CuciinThemeMode.Terang -> "Latar terang dengan aksen pink dan header navy"
-    CuciinThemeMode.Gelap -> "Latar hitam dengan tulisan terang"
+    CuciinThemeMode.Terang -> "Latar biru langit dengan aksen biru dan header biru tua"
+    CuciinThemeMode.Gelap -> "Latar navy tua dengan aksen biru langit"
     CuciinThemeMode.Custom -> "Atur warna utama, tombol, latar, kartu, teks, dan header"
 }
 
@@ -206,6 +229,53 @@ private fun ThemeModeRow(label: String, detail: String, selected: Boolean, onCli
             Text(detail, color = Muted, fontSize = 12.sp, lineHeight = 16.sp)
         }
         if (selected) Icon(Icons.Outlined.Check, "Dipilih", tint = Teal, modifier = Modifier.size(20.dp))
+    }
+}
+
+/**
+ * Satu preset warna: nama, rangkaian warnanya sebagai titik-titik, dan penanda bila sedang
+ * dipakai. Rangkaian titik dipakai supaya pengguna melihat kombinasinya sebelum memilih,
+ * bukan hanya membaca namanya.
+ */
+@Composable
+private fun PresetRow(nama: String, preset: CuciinCustomTheme, selected: Boolean, onClick: () -> Unit) {
+    val tap = rememberTapFeedback()
+    val source = remember { MutableInteractionSource() }
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) Mist else Card,
+        border = BorderStroke(1.dp, if (selected) TealDeep else Line),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .pressScale(source)
+            .clickable(interactionSource = source, indication = null) { tap(); onClick() },
+    ) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                listOf(preset.primary, preset.background, preset.card, preset.ink, preset.hero).forEach { warna ->
+                    Box(
+                        Modifier
+                            .size(18.dp)
+                            .clip(CircleShape)
+                            .background(Color(warna))
+                            .border(BorderStroke(1.dp, LineSoft), CircleShape),
+                    )
+                }
+            }
+            Text(
+                nama,
+                color = Ink,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f),
+            )
+            if (selected) Text("Dipakai", color = TealDeep, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 

@@ -2,6 +2,36 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.21 — 18 Sep 2026 (versionCode 40)
+
+### Nuansa biru Cuciin
+
+- Palet Light dan Dark diganti mengikuti warna logo dan gambar layar pembuka: biru `#0048B4`
+  dan biru langit `#D8E4F0`. Tema Light memakai latar biru langit sangat muda dengan aksen biru;
+  tema Dark memakai navy tua `#0A1220` dengan aksen biru langit `#7FB4FF`.
+- Kuning `#F7CA3A` dipertahankan sebagai aksen menu aktif, karena di logo pun kuning hadir
+  (gantungan baju) dan tanpa warna itu menu aktif tidak menonjol di antara semua biru.
+- Semua pasangan warna diuji WCAG AA: 28 dari 28 lulus di kedua tema.
+- Warna navy lama yang masih dipaku di `GlassCard` dan `OnboardingScreen` ikut disesuaikan.
+- Deskripsi tema di layar Theme Aplikasi diperbarui supaya tidak lagi menyebut pink dan hitam.
+
+### Preset tema Custom
+
+- Tema Custom kini punya tiga preset siap pakai: Biru Cuciin, Biru Cuciin Gelap, dan Magenta Jemur.
+  Tiap preset menampilkan rangkaian warnanya sebagai titik, jadi pengguna melihat kombinasinya
+  sebelum memilih.
+- Nilai bawaan tema Custom berubah menjadi Biru Cuciin, sejalan dengan tema Light.
+
+### Harga Service hanya untuk Owner
+
+- Fungsi baru `service.price` di katalog akses, ditandai bawaan khusus Owner.
+- Role bawaan Kasir dan Supervisor tidak memuat fungsi itu.
+- Ditegakkan berlapis: tombolnya disembunyikan, dan store menolak perubahannya. Jalur koreksi
+  Service juga dijaga, supaya kasir tidak bisa mengubah harga lewat koreksi nota.
+- Owner tetap boleh memberikan fungsi ini ke role lain lewat Kontrol Akses Role.
+- `ensureAccessRoles` sekarang menambal role bawaan yang tersimpan dengan fungsi bawaan baru,
+  karena isinya dibekukan saat pertama dibuat.
+
 ## 1.10.20 — 18 Sep 2026 (versionCode 39)
 
 - Perbaikan: warna dialog pemilih tanggal dan jam kini mengikuti palet aplikasi.

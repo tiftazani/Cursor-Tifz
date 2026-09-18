@@ -5,15 +5,19 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Dialog pemilih tanggal dan jam memakai warna aplikasi, bukan warna bawaan Android.
+ * Pemilih tanggal dan jam memakai komponen Compose, bukan dialog bawaan Android.
  *
- * Pernah terjadi: dialog memakai `android.R.style.Theme_Material_Light_Dialog_Alert` yang
- * dipaku mati, sehingga tombol "Pilih" dan "Batal" berwarna teal bawaan Android sementara
- * seluruh tombol aplikasi berwarna magenta. Dua warna itu bertabrakan dan terlihat sebagai
- * bug di layar pemilih tanggal.
+ * Dua masalah pernah terjadi karena memakai dialog bawaan:
  *
- * Test ini membaca berkas sumber langsung supaya pola itu tidak kembali masuk, termasuk lewat
- * penambahan dialog baru di masa depan.
+ * 1. Dialognya memakai `android.R.style.Theme_Material_Light_Dialog_Alert` yang dipaku mati.
+ *    Tema bawaan itu membawa aksen teal, sehingga tombol "Pilih" dan "Batal" berbeda warna
+ *    dari seluruh tombol aplikasi.
+ * 2. Dialog bawaan selalu terang. Di tema Gelap dan Custom, dialog itu muncul sebagai kotak
+ *    putih menyolok di atas latar gelap.
+ *
+ * Komponen Compose mengambil warna dari `MaterialTheme.colorScheme`, yang sudah diturunkan
+ * dari palet Cuciin, jadi warnanya ikut berubah saat tema diganti. Test ini menjaga supaya
+ * dialog bawaan Android tidak dipakai lagi.
  */
 class PickerThemeTest {
 
@@ -23,58 +27,65 @@ class PickerThemeTest {
 
     private fun baca(relatif: String): String = File(appDir, relatif).readText()
 
+    /** Buang komentar supaya penjelasan tentang cara lama tidak terbaca sebagai pemakaian. */
+    private fun tanpaKomentar(kode: String): String = kode.split("\n")
+        .filter { baris ->
+            val t = baris.trimStart()
+            !t.startsWith("//") && !t.startsWith("*") && !t.startsWith("/*")
+        }
+        .joinToString("\n")
+
     @Test
-    fun dialogPemilihTidakMemakaiTemaBawaanAndroid() {
-        val kode = baca("src/main/java/com/cuciin/laundryops/ui/DateTimeFields.kt")
-        // Komentar dibuang dulu: penjelasan tentang tema lama memang menyebut namanya.
-        val tanpaKomentar = kode.split("\n")
-            .filter { !it.trimStart().startsWith("//") && !it.trimStart().startsWith("*") && !it.trimStart().startsWith("/*") }
-            .joinToString("\n")
+    fun pemilihTanggalTidakMemakaiDialogBawaanAndroid() {
+        val kode = tanpaKomentar(baca("src/main/java/com/cuciin/laundryops/ui/DateTimeFields.kt"))
         assertTrue(
-            "Dialog pemilih tidak boleh memakai tema bawaan Android karena membawa warna teal. " +
-                "Pakai R.style.Theme_Cuciin_Picker.",
-            !tanpaKomentar.contains("android.R.style"),
+            "Pemilih tanggal tidak boleh memakai dialog bawaan Android: warnanya tidak ikut " +
+                "palet aplikasi dan selalu terang.",
+            !kode.contains("android.app.DatePickerDialog") && !kode.contains("android.app.TimePickerDialog"),
         )
         assertTrue(
-            "Dialog pemilih harus memakai R.style.Theme_Cuciin_Picker",
-            tanpaKomentar.contains("R.style.Theme_Cuciin_Picker"),
+            "Pemilih tanggal harus memakai komponen Compose Material3",
+            kode.contains("androidx.compose.material3.DatePickerDialog") &&
+                kode.contains("androidx.compose.material3.TimePicker"),
         )
     }
 
     @Test
-    fun temaDialogAdaDanMemakaiAksenCuciin() {
-        val tema = baca("src/main/res/values/themes_picker.xml")
-        assertTrue("tema dialog harus ada", tema.contains("Theme.Cuciin.Picker"))
-        assertTrue("aksen harus memakai warna Cuciin", tema.contains("cuciin_accent"))
-    }
-
-    @Test
-    fun warnaAksenDialogSejalanDenganPaletCompose() {
-        // Kalau salah satu berubah tanpa yang lain, dialog dan tombol aplikasi akan berbeda warna.
-        val warna = baca("src/main/res/values/colors.xml")
-        val tema = baca("src/main/java/com/cuciin/laundryops/ui/theme/Theme.kt")
-        assertTrue("cuciin_accent harus #C1358F", warna.contains("""<color name="cuciin_accent">#C1358F</color>"""))
-        assertTrue("palet Compose harus memuat prim #C1358F", tema.contains("Color(0xFFC1358F)"))
-    }
-
-    @Test
-    fun tidakAdaDialogSistemLainYangMemakaiTemaBawaan() {
+    fun tidakAdaDialogSistemYangMemakaiTemaBawaanAndroid() {
         val uiDir = File(appDir, "src/main/java/com/cuciin/laundryops/ui")
         val pelanggar = uiDir.walkTopDown()
             .filter { it.isFile && it.extension == "kt" }
-            .filter { berkas ->
-                // Komentar dibuang dulu: penjelasan tentang tema lama memang menyebut namanya,
-                // dan itu tidak boleh dianggap sebagai pemakaian.
-                berkas.readText().split("\n")
-                    .filter { baris ->
-                        val t = baris.trimStart()
-                        !t.startsWith("//") && !t.startsWith("*") && !t.startsWith("/*")
-                    }
-                    .joinToString("\n")
-                    .contains("android.R.style")
-            }
+            .filter { tanpaKomentar(it.readText()).contains("android.R.style") }
             .map { it.name }
             .toList()
         assertTrue("Dialog sistem yang memakai tema bawaan Android: $pelanggar", pelanggar.isEmpty())
+    }
+
+    @Test
+    fun tidakAdaTemaDialogKhususDiSumberDaya() {
+        // Tema XML hanya perlu kalau memakai dialog bawaan Android. Dengan dialog Compose,
+        // tema itu jadi kode mati yang membingungkan.
+        val tema = File(appDir, "src/main/res/values/themes_picker.xml")
+        assertTrue("themes_picker.xml tidak dipakai lagi dan tidak boleh ada", !tema.exists())
+    }
+
+    @Test
+    fun warnaPemilihTidakDipakuDiSumberDaya() {
+        // Warna dialog harus datang dari palet Compose, bukan dari nilai yang ditulis terpisah
+        // di colors.xml. Kalau ditulis terpisah, tema Custom tidak akan ikut terpakai.
+        val warna = baca("src/main/res/values/colors.xml")
+        assertTrue(
+            "Warna dialog tidak boleh dipaku di colors.xml",
+            !warna.contains("cuciin_accent") && !warna.contains("cuciin_dialog_surface"),
+        )
+    }
+
+    @Test
+    fun konversiTanggalPemilihMemakaiTengahHariUtc() {
+        // Pemilih Material3 memakai acuan UTC. Tengah malam bisa menggeser tanggal satu hari
+        // di zona waktu tertentu, jadi konversinya harus lewat tengah hari.
+        val kode = baca("src/main/java/com/cuciin/laundryops/ui/DateTimeFields.kt")
+        assertTrue("konversi harus memakai ZoneOffset.UTC", kode.contains("ZoneOffset.UTC"))
+        assertTrue("konversi harus memakai tengah hari", kode.contains("plusHours(12)"))
     }
 }

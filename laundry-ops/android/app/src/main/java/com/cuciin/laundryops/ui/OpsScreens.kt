@@ -412,7 +412,7 @@ internal fun NotaScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
             items(services.filter { selected -> selected.id == selectedServiceId && cart.none { it.service.id == selected.id } }, key = { it.id }) { svc ->
-                ServiceTile(svc, 0.0, svc.price, onAdd = {
+                ServiceTile(svc, 0.0, svc.price, bolehUbahHarga = false, onAdd = {
                     tap(); store.addToCart(svc)
                     val added = store.cart.find { it.service.id == svc.id }?.qty ?: 0.0
                     feedback = "${svc.name} ditambahkan · ${quantity(added)} ${svc.unit}"
@@ -423,15 +423,19 @@ internal fun NotaScreen(nav: NavHostController, toast: (String) -> Unit) {
                 Text("Jumlah, harga per satuan, dan layanan dapat dikoreksi sebelum pembayaran.", color = Muted, fontSize = 12.sp)
             }
             items(cart, key = { it.service.id }) { line ->
-                ServiceTile(line.service, line.qty, line.unitPrice, onAdd = {
+                ServiceTile(line.service, line.qty, line.unitPrice, bolehUbahHarga = store.canChangePrice(), onAdd = {
                     tap(); store.addToCart(line.service)
                     feedback = "Jumlah ${line.service.name} ditambah"
                 }, onChange = { target ->
                     tap(); store.cartDelta(line.service.id, target - line.qty)
                     feedback = "Jumlah ${line.service.name} diperbarui"
                 }, onPriceChange = { price ->
-                    tap(); store.setCartPrice(line.service.id, price)
-                    feedback = "Harga ${line.service.name} menjadi ${rp(price)} / ${line.service.unit}"
+                    tap()
+                    feedback = if (store.setCartPrice(line.service.id, price)) {
+                        "Harga ${line.service.name} menjadi ${rp(price)} / ${line.service.unit}"
+                    } else {
+                        "Hanya Owner yang dapat mengubah harga"
+                    }
                 }, onRemove = {
                     tap(); store.cartDelta(line.service.id, -line.qty)
                     feedback = "${line.service.name} dihapus dari Service"
@@ -487,7 +491,7 @@ private fun serviceIcon(service: ServiceItem): ImageVector {
 }
 
 @Composable
-private fun ServiceTile(svc: ServiceItem, qty: Double, unitPrice: Int, onAdd: () -> Unit, onChange: (Double) -> Unit, onPriceChange: (Int) -> Unit, onRemove: () -> Unit) {
+private fun ServiceTile(svc: ServiceItem, qty: Double, unitPrice: Int, bolehUbahHarga: Boolean, onAdd: () -> Unit, onChange: (Double) -> Unit, onPriceChange: (Int) -> Unit, onRemove: () -> Unit) {
     var editingQty by remember { mutableStateOf(false) }
     var editingPrice by remember { mutableStateOf(false) }
     var value by remember { mutableStateOf("") }
@@ -512,8 +516,12 @@ private fun ServiceTile(svc: ServiceItem, qty: Double, unitPrice: Int, onAdd: ()
                     FilledIconButton(onClick = onAdd, modifier = Modifier.size(48.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = Teal)) { Icon(Icons.Outlined.Add, "Tambah jumlah ${svc.name}") }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GhostBtn("Ubah harga · ${rp(unitPrice)}", Modifier.weight(1f), icon = Icons.Outlined.Edit) {
-                        priceValue = unitPrice.toString(); editingPrice = true
+                    // Tombol ubah harga hanya muncul bila pengguna memang berhak. Menyembunyikan
+                    // tombol saja tidak cukup sebagai pengaman; store tetap menolaknya.
+                    if (bolehUbahHarga) {
+                        GhostBtn("Ubah harga · ${rp(unitPrice)}", Modifier.weight(1f), icon = Icons.Outlined.Edit) {
+                            priceValue = unitPrice.toString(); editingPrice = true
+                        }
                     }
                     TextButton(onClick = onRemove, modifier = Modifier.heightIn(min = 50.dp)) {
                         Icon(Icons.Outlined.DeleteOutline, null, tint = Coral)
@@ -535,7 +543,7 @@ private fun ServiceTile(svc: ServiceItem, qty: Double, unitPrice: Int, onAdd: ()
             }
         }, confirmButton = { TextButton(enabled = valid, onClick = { onChange(parsed!!); editingQty = false }) { Text("Simpan jumlah") } }, dismissButton = { TextButton(onClick = { editingQty = false }) { Text("Batal") } })
     }
-    if (editingPrice) {
+    if (editingPrice && bolehUbahHarga) {
         val parsed = priceValue.toIntOrNull()
         AlertDialog(onDismissRequest = { editingPrice = false }, title = { Text("Harga ${svc.name}") }, text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -613,12 +621,17 @@ internal fun PreviewScreen(nav: NavHostController, toast: (String) -> Unit) {
         if (feedback.isNotBlank()) item { FeedbackBanner(feedback) }
         item { SectionLabel("Rincian Service") }
         items(cart, key = { it.service.id }) { line ->
-            ServiceTile(line.service, line.qty, line.unitPrice, onAdd = {
+            ServiceTile(line.service, line.qty, line.unitPrice, bolehUbahHarga = store.canChangePrice(), onAdd = {
                 tap(); store.addToCart(line.service); feedback = "Jumlah ${line.service.name} ditambah"
             }, onChange = { target ->
                 tap(); store.cartDelta(line.service.id, target - line.qty); feedback = "Jumlah ${line.service.name} diperbarui"
             }, onPriceChange = { price ->
-                tap(); store.setCartPrice(line.service.id, price); feedback = "Harga ${line.service.name} diperbarui"
+                tap()
+                feedback = if (store.setCartPrice(line.service.id, price)) {
+                    "Harga ${line.service.name} diperbarui"
+                } else {
+                    "Hanya Owner yang dapat mengubah harga"
+                }
             }, onRemove = {
                 tap(); store.cartDelta(line.service.id, -line.qty); feedback = "${line.service.name} dihapus dari Service"
             })
@@ -747,12 +760,17 @@ internal fun QueueEditScreen(nav: NavHostController, id: String, toast: (String)
         items(draft, key = { it.serviceId }) { line ->
             val service = store.services.firstOrNull { it.id == line.serviceId }
                 ?: ServiceItem(line.serviceId, line.name, line.unit, line.unitPrice, retail = false, dropOut = nota.dropOut)
-            ServiceTile(service, line.qty, line.unitPrice, onAdd = {
+            ServiceTile(service, line.qty, line.unitPrice, bolehUbahHarga = store.canChangePrice(), onAdd = {
                 draft = draft.map { if (it.serviceId == line.serviceId) it.copy(qty = it.qty + 1.0) else it }
             }, onChange = { qty ->
                 draft = draft.map { if (it.serviceId == line.serviceId) it.copy(qty = qty) else it }.filter { it.qty > 0.0 }
             }, onPriceChange = { price ->
-                draft = draft.map { if (it.serviceId == line.serviceId) it.copy(unitPrice = price) else it }
+                // Koreksi harga pada nota yang sudah dibuat juga dijaga izinnya. Tanpa ini,
+                // kasir bisa mengubah harga lewat jalur koreksi walau tombolnya disembunyikan
+                // di jalur pembuatan Service baru.
+                if (store.canChangePrice()) {
+                    draft = draft.map { if (it.serviceId == line.serviceId) it.copy(unitPrice = price) else it }
+                }
             }, onRemove = {
                 draft = draft.filterNot { it.serviceId == line.serviceId }
             })

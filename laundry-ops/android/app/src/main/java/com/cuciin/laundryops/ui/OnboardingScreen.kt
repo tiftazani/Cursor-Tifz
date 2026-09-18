@@ -95,7 +95,7 @@ internal fun OnboardingScreen(nav: NavHostController, onDone: () -> Unit) {
     val tap = rememberTapFeedback()
     val page = Onboarding.pages[pager.currentPage.coerceIn(0, Onboarding.lastIndex)]
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF0D164B))) {
+    Box(Modifier.fillMaxSize().background(Color(0xFF00306E))) {
 
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { index ->
             Image(
@@ -109,12 +109,12 @@ internal fun OnboardingScreen(nav: NavHostController, onDone: () -> Unit) {
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
-                    0f to Color(0xFF0D164B).copy(alpha = .58f),
-                    0.14f to Color(0xFF0D164B).copy(alpha = .14f),
+                    0f to Color(0xFF00306E).copy(alpha = .58f),
+                    0.14f to Color(0xFF00306E).copy(alpha = .14f),
                     0.30f to Color.Transparent,
                     0.44f to Color.Transparent,
-                    0.60f to Color(0xFF0D164B).copy(alpha = .62f),
-                    1f to Color(0xFF0D164B).copy(alpha = .95f),
+                    0.60f to Color(0xFF00306E).copy(alpha = .62f),
+                    1f to Color(0xFF00306E).copy(alpha = .95f),
                 )
             )
         )
@@ -182,7 +182,7 @@ internal fun OnboardingScreen(nav: NavHostController, onDone: () -> Unit) {
                 },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp),
                 shape = CuciinShape.button,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF0D164B)),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF00306E)),
             ) {
                 Text(
                     Onboarding.primaryLabel(pager.currentPage),

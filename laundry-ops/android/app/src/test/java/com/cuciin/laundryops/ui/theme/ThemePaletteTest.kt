@@ -34,10 +34,56 @@ class ThemePaletteTest {
     }
 
     @Test
-    fun darkMemakaiLatarHitam() {
+    fun darkMemakaiLatarNavyTua() {
         val gelap = paletteFor(CuciinThemeMode.Gelap, systemDark = true)
-        assertEquals("Dark harus berlatar hitam", androidx.compose.ui.graphics.Color(0xFF000000), gelap.bg)
+        // Latar gelap memakai navy tua, bukan hitam pekat, supaya senada dengan nuansa biru
+        // logo dan gambar layar pembuka. Yang penting: cukup gelap untuk tema gelap, dan
+        // kartunya tetap terbedakan dari latar.
+        assertTrue("Latar Dark harus gelap", gelap.bg.luminance() < 0.1f)
         assertTrue("Kartu Dark tidak boleh sama dengan latar", gelap.card != gelap.bg)
+        assertTrue("Kartu Dark harus lebih terang dari latar", gelap.card.luminance() > gelap.bg.luminance())
+    }
+
+    @Test
+    fun nuansaBiruDipakaidiLightDanDark() {
+        // Palet mengikuti warna logo: biru #0048B4 dan biru langit. Yang dijaga di sini:
+        // aksen Light memang biru (kanal biru paling besar), dan aksen Dark lebih terang
+        // supaya terbaca di atas latar gelap.
+        val terang = paletteFor(CuciinThemeMode.Terang, systemDark = false)
+        val gelap = paletteFor(CuciinThemeMode.Gelap, systemDark = true)
+
+        assertTrue("Aksen Light harus biru", terang.prim.blue > terang.prim.red && terang.prim.blue > terang.prim.green)
+        assertTrue("Aksen Dark harus biru", gelap.prim.blue > gelap.prim.red && gelap.prim.blue > gelap.prim.green)
+        assertTrue("Aksen Dark harus lebih terang dari aksen Light", gelap.prim.luminance() > terang.prim.luminance())
+        // Kuning aksen menu dipertahankan di kedua tema.
+        assertEquals(terang.navSelected, gelap.navSelected)
+    }
+
+    @Test
+    fun presetBiruCuciinSejalanDenganTemaLight() {
+        val terang = paletteFor(CuciinThemeMode.Terang, systemDark = false)
+        val preset = CuciinCustomTheme.BiruCuciin.toPalette()
+        // Preset bawaan harus menghasilkan warna yang sama dengan tema Light, supaya pengguna
+        // yang membuka Custom tidak melihat warna yang berbeda dari biasanya.
+        assertEquals(terang.bg, preset.bg)
+        assertEquals(terang.card, preset.card)
+        assertEquals(terang.prim, preset.prim)
+        assertEquals(terang.ink, preset.ink)
+        assertEquals(terang.heroA, preset.heroA)
+    }
+
+    @Test
+    fun presetDitawarkanDanBisaDipilih() {
+        val nama = CuciinCustomTheme.presets.map { it.first }
+        assertTrue("Preset Biru Cuciin harus ditawarkan", "Biru Cuciin" in nama)
+        assertTrue("Preset gelap juga ditawarkan", "Biru Cuciin Gelap" in nama)
+        // Preset pertama adalah nilai bawaan tema Custom.
+        assertEquals(CuciinCustomTheme.presets.first().second, CuciinCustomTheme.Default)
+        // Setiap preset harus menghasilkan palet yang bisa dipakai, bukan warna kosong.
+        CuciinCustomTheme.presets.forEach { (label, preset) ->
+            val p = preset.toPalette()
+            assertTrue("Preset $label harus punya aksen", p.prim.luminance() != p.bg.luminance())
+        }
     }
 
     @Test
