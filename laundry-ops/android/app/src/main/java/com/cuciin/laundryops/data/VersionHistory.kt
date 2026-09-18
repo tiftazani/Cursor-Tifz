@@ -12,10 +12,17 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.21"
-    val currentCode: Int = 40
+    val currentName: String = "1.10.22"
+    val currentCode: Int = 41
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.22", code = 41, date = "18 Sep 2026",
+            notes = listOf(
+                "Perbaikan penting: menu Antrian laundry dan Service baru di layar Modul tidak lagi menutup aplikasi saat diklik.",
+                "Menu yang hanya untuk peran tertentu kini disembunyikan dari layar Modul, sejalan dengan tab di bawah.",
+            ),
+        ),
         AppRelease(
             name = "1.10.21", code = 40, date = "18 Sep 2026",
             notes = listOf(

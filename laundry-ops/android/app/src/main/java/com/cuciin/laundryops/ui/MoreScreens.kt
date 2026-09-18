@@ -117,7 +117,7 @@ internal fun MoreScreen(nav: NavHostController) {
                     SectionLabel(title)
                     ListCard {
                         entries.forEachIndexed { index, entry ->
-                            ModuleRow(entry.label, entry.summary, menuIcon(entry.icon)) { tap(); nav.navigate(entry.route) }
+                            ModuleRow(entry.label, entry.summary, menuIcon(entry.icon)) { tap(); nav.navigate(MenuOrder.destinationOf(entry.route)) }
                             if (index < entries.lastIndex) RowDivider()
                         }
                     }
@@ -132,18 +132,28 @@ internal fun MoreScreen(nav: NavHostController) {
 /**
  * Izin satu rute. Menu yang butuh izin Owner diperiksa lewat modul owner, sisanya lewat
  * modulnya sendiri. Rute yang tidak punya modul (akun, tema, versi) selalu boleh.
+ *
+ * Menu yang tabnya disembunyikan untuk SPV juga disembunyikan di sini. Aturannya dibaca dari
+ * [NavTabs], sumber yang sama dengan bar navigasi, supaya menu Modul tidak pernah menampilkan
+ * pintu yang tidak bisa dipakai. Sebelumnya SPV melihat "Service baru" di menu Modul padahal
+ * layar Antrian dan tab bawah menyembunyikannya, dan server pun menolak pembuatan Service
+ * oleh SPV, sehingga pesanannya gagal tersinkron tanpa penjelasan.
  */
-internal fun routeAllowed(route: String): Boolean = when (route) {
-    "attendance" -> store.canAccess("attendance")
-    "analytics", "analyticsReport", "branches", "users", "services", "products", "audit", "ownerSettings", "accessRoles" -> store.canAccess("owner")
-    "inventory" -> store.canAccess("inventory")
-    "expenses" -> store.canAccess("expense")
-    "customers" -> store.canAccess("customer")
-    "wa", "waArchive" -> store.canAccess("whatsapp")
-    "cash" -> store.canAccess("cash")
-    "queue" -> store.canAccess("queue")
-    "service" -> store.canAccess("service")
-    else -> true
+internal fun routeAllowed(route: String): Boolean {
+    val tab = NavTabs.routeOf(MenuOrder.destinationOf(route))
+    if (tab?.hiddenForSupervisor == true && store.session.value?.role == Role.Supervisor) return false
+    return when (route) {
+        "attendance" -> store.canAccess("attendance")
+        "analytics", "analyticsReport", "branches", "users", "services", "products", "audit", "ownerSettings", "accessRoles" -> store.canAccess("owner")
+        "inventory" -> store.canAccess("inventory")
+        "expenses" -> store.canAccess("expense")
+        "customers" -> store.canAccess("customer")
+        "wa", "waArchive" -> store.canAccess("whatsapp")
+        "cash" -> store.canAccess("cash")
+        "queue" -> store.canAccess("queue")
+        "service" -> store.canAccess("service")
+        else -> true
+    }
 }
 
 /** Nama ikon di katalog dipetakan ke ikon sungguhan di sini supaya katalognya tetap murni. */

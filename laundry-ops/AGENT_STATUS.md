@@ -1,6 +1,6 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 18 September 2026, 09:40 WIB (oleh Hermes).
+Terakhir diperbarui: 18 September 2026, 10:36 WIB (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
@@ -72,6 +72,10 @@ Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **
 **1.10.21 (18 Sep, nuansa biru + preset tema + harga khusus Owner):** tiga hal. (1) Palet Light dan Dark diganti mengikuti warna logo dan gambar layar pembuka: biru #0048B4 dan biru langit #D8E4F0. Light: latar #F4F8FD, kartu putih, aksen #0048B4, header #00306E, teks #0B1A2E. Dark: latar #0A1220, kartu #121C2E, aksen #7FB4FF, teks #EAF2FC. Kuning #F7CA3A dipertahankan sebagai aksen menu aktif karena di logo pun kuning hadir. 28 dari 28 pasangan warna lulus WCAG AA. Warna navy lama yang dipaku di `GlassCard` dan `OnboardingScreen` ikut disesuaikan. (2) Tema Custom kini punya tiga preset di `CuciinCustomTheme.presets`: Biru Cuciin (bawaan), Biru Cuciin Gelap, dan Magenta Jemur. (3) Fungsi baru `service.price` di `AccessCatalog`, ditandai `ownerOnlyByDefault`; tombol "Ubah harga" disembunyikan untuk yang tidak berhak dan `CuciinStore.setCartPrice` mengembalikan Boolean sehingga menolak perubahannya. Jalur koreksi Service juga dijaga. `ensureAccessRoles` kini menambal role bawaan yang tersimpan dengan `AccessCatalog.builtInFunctionsFor`, karena isi role dibekukan saat pertama dibuat. Gate lulus: 147 test debug + 147 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.21-candidate/`.
 
 **ATURAN untuk agent lain (harga):** jangan menambahkan jalur baru yang menulis `unitPrice` tanpa memeriksa `store.canChangePrice()`. Harga adalah data uang. `ServicePriceAccessTest` akan gagal bila aturan ini dilanggar.
+
+**1.10.22 (18 Sep, menu Modul menutup aplikasi):** dilaporkan Owner bahwa mengklik "Antrian laundry" atau "Service baru" di layar Modul membuat aplikasi langsung keluar untuk peran apa pun. Penyebab dari logcat: `IllegalArgumentException: Navigation destination that matches route queue cannot be found in the navigation graph` di `MoreScreens.kt:120`. Katalog menu memakai nama menunya sendiri sebagai rute (`queue`, `service`), sedangkan graf navigasi memakai `home` dan `nota` karena kedua rute itu dipakai bersama tab bawah. Perbaikan: `MenuOrder.destinationOf` memetakan rute menu ke rute graf. Sekaligus disamakan: menu yang tabnya disembunyikan untuk SPV (Service baru, WA menunggu) kini ikut disembunyikan di menu Modul, karena server menolak pembuatan Service oleh SPV sehingga pesanannya akan gagal tersinkron tanpa penjelasan. Pengunci: `MenuRouteTest` membandingkan tiap rute menu dengan daftar `composable(...)` di `CuciinNav.kt`. Gate lulus: 153 test debug + 153 test release, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.22-candidate/`. Disapu di emulator dengan akun Kasir: 11 menu diklik, 0 crash.
+
+**ATURAN untuk agent lain (rute menu):** setiap menu baru di `MenuOrder.catalog` wajib punya rute yang terdaftar di `CuciinNav.kt`, atau dipetakan lewat `MenuOrder.destinationOf`. `MenuRouteTest` akan gagal bila aturan ini dilanggar. Jangan menambah `nav.navigate("...")` dengan rute yang tidak ada di graf: Compose Navigation melempar pengecualian dan aplikasi langsung keluar.
 
 **Menunggu perintah Owner:**
 - Penghapusan data contoh (dummy) di produksi belum dijalankan. Jangan hapus tanpa backup dan perintah eksplisit.

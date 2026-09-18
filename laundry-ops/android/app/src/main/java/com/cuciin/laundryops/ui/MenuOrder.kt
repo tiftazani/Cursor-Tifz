@@ -79,6 +79,24 @@ internal object MenuOrder {
 
     val allRoutes: List<String> = catalog.map { it.route }
 
+    /**
+     * Rute menu ke rute yang benar-benar terdaftar di graf navigasi.
+     *
+     * Sebagian menu memakai nama yang berbeda dari rutenya, karena rute itu dipakai bersama
+     * tab bawah. Contoh: "Antrian laundry" adalah tab `home`, dan "Service baru" adalah `nota`
+     * yang juga menerima argumen saat dibuka dari daftar antrian.
+     *
+     * Sebelumnya katalog mengirim nama menunya sendiri, dan `nav.navigate("queue")` melempar
+     * `IllegalArgumentException` sehingga aplikasi langsung keluar saat menu itu diklik.
+     */
+    private val routeTargets: Map<String, String> = mapOf(
+        "queue" to "home",
+        "service" to "nota",
+    )
+
+    /** Rute graf untuk sebuah menu. Menu yang tidak dipetakan memakai namanya sendiri. */
+    fun destinationOf(route: String): String = routeTargets[route] ?: route
+
     fun specOf(route: String): Spec? = catalog.firstOrNull { it.route == route }
 
     /** Susunan bawaan, sebelum pengguna mengubah apa pun. */

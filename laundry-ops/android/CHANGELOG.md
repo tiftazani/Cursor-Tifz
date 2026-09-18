@@ -2,6 +2,43 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.22 — 18 Sep 2026 (versionCode 41)
+
+### Perbaikan: aplikasi keluar saat menu Antrian atau Service diklik
+
+Dilaporkan Owner: mengklik "Antrian laundry" atau "Service baru" di layar Modul membuat
+aplikasi langsung keluar, untuk peran apa pun.
+
+Penyebabnya dari logcat:
+
+```
+java.lang.IllegalArgumentException: Navigation destination that matches route queue
+cannot be found in the navigation graph
+    at MoreScreens.kt:120
+```
+
+Katalog menu memakai nama menunya sendiri sebagai rute (`queue` dan `service`), sedangkan graf
+navigasi memakai `home` untuk Antrian dan `nota` untuk Service baru, karena kedua rute itu
+dipakai bersama tab bawah. `nav.navigate("queue")` karena itu melempar pengecualian, dan
+pengecualian itu tidak tertangkap sehingga aplikasi ditutup.
+
+Perbaikan: katalog menu memetakan rutenya ke rute graf lewat `MenuOrder.destinationOf`. Menu
+yang rutenya sudah sama tidak diubah.
+
+### Perbaikan: menu yang tidak boleh dipakai peran tertentu disembunyikan
+
+Layar Antrian dan tab bawah sudah menyembunyikan "Service baru" untuk SPV, tetapi menu Modul
+tetap menampilkannya. Server pun menolak pembuatan Service oleh SPV, jadi pesanannya akan gagal
+tersinkron tanpa penjelasan. Sekarang aturan tampil menu dibaca dari `NavTabs`, sumber yang sama
+dengan bar navigasi.
+
+### Pengunci
+
+`MenuRouteTest` membandingkan setiap rute menu dengan daftar `composable(...)` di `CuciinNav.kt`,
+jadi menu baru yang rutenya belum terdaftar akan gagal di test, bukan di tangan pengguna.
+Diperiksa juga seluruh pemanggilan `nav.navigate("...")` di kode: tidak ada rute lain yang
+menunjuk ke tujuan yang tidak ada.
+
 ## 1.10.21 — 18 Sep 2026 (versionCode 40)
 
 ### Nuansa biru Cuciin
