@@ -472,4 +472,46 @@ class SyncProtocolTest {
         assertEquals(0, legacy.state.revision)
         assertFalse(legacy.state.bootstrapped)
     }
+
+    /**
+     * Snapshot non-Owner tidak memuat master data tingkat organisasi, dan selisih itu TIDAK boleh
+     * dibaca sebagai penghapusan.
+     *
+     * Insiden nyata: login sebagai Supervisor menghasilkan enam `assetType.delete` (semua jenis
+     * aset organisasi) karena `asset_types` tidak punya kolom cabang sehingga tidak ikut disaring.
+     * Perintah itu diterima Worker pada saat itu dan akan menghapus jenis aset untuk semua cabang.
+     */
+    @Test fun nonOwnerTidakMenyimpulkanDeleteUntukEntitasTanpaCabang() {
+        val outbox = SyncOutbox(
+            SyncClientState(
+                revision = 5,
+                shadow = listOf(entity("assetType", "at-setrika"), entity("expense", "e-1", "melati")),
+                bootstrapped = true,
+                scopeKey = "supervisor:melati",
+            ),
+        )
+        // Snapshot Supervisor hanya memuat entitas bercabang; jenis aset tidak ada di dalamnya.
+        val dibuat = outbox.enqueue(
+            listOf(entity("expense", "e-1", "melati", value = 2)),
+            10,
+            "melati",
+            setOf("melati"),
+            Role.Supervisor,
+        )
+        assertEquals(listOf("expense.upsert"), dibuat.map { it.entityType + "." + it.operation })
+    }
+
+    /** Owner tetap boleh menghapus master data organisasi: aturan di atas hanya menahan non-Owner. */
+    @Test fun ownerTetapMenyimpulkanDeleteUntukEntitasTanpaCabang() {
+        val outbox = SyncOutbox(
+            SyncClientState(
+                revision = 5,
+                shadow = listOf(entity("assetType", "at-setrika")),
+                bootstrapped = true,
+                scopeKey = "owner",
+            ),
+        )
+        val dibuat = outbox.enqueue(emptyList(), 10, null, null, Role.Owner)
+        assertEquals(listOf("assetType.delete"), dibuat.map { it.entityType + "." + it.operation })
+    }
 }

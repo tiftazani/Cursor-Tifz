@@ -83,6 +83,14 @@ test("otorisasi membatasi role, cabang, dan absensi orang lain", () => {
   assert.equal(attendanceRecordOwnedBy(kasir,"KASIR@CUCIIN.ID"),true);
   assert.equal(attendanceRecordOwnedBy(owner,"oranglain@cuciin.id"),true);
   assert.equal(commandPermission(owner,"service.upsert").allowed,true);
+  // Jenis aset adalah master data organisasi: tanpa aturan ini Kasir atau SPV bisa menghapusnya
+  // untuk semua cabang, sementara aplikasi menjaganya dengan owner.manage.
+  assert.equal(commandPermission(kasir,"assetType.delete").allowed,false);
+  assert.equal(commandPermission(spv,"assetType.delete").allowed,false);
+  assert.equal(commandPermission(kasir,"assetType.upsert").allowed,false);
+  assert.equal(commandPermission(spv,"assetType.upsert").allowed,false);
+  assert.equal(commandPermission(owner,"assetType.delete").allowed,true);
+  assert.equal(commandPermission(owner,"assetType.upsert").allowed,true);
 });
 
 test("komisi transaksi selalu berasal dari katalog server", () => {

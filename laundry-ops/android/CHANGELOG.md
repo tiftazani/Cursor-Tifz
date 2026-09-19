@@ -203,6 +203,43 @@ modul. Ketiganya memang menyimpan data, tetapi penolakan fungsinya sudah tampil 
 benar di layar, dan memperketat gerbangnya akan mencabut akses MEMBACA laporan dari role kustom
 yang sah. Tidak ada kerugian nyata yang terbukti dari bentuk itu.
 
+## 1.10.29 — 19 Sep 2026
+
+Perbaikan dua lapis untuk satu insiden data: berpindah akun ke peran non-Owner menghasilkan enam
+perintah `assetType.delete` untuk **seluruh jenis aset organisasi**.
+
+Sebabnya dua cacat yang saling menutupi:
+
+1. **Android** — `SyncOutbox.enqueue` membandingkan `shadow` dengan snapshot yang baru masuk. Snapshot
+   non-Owner disaring per cabang, sedangkan master data tingkat organisasi (`branchId == null`:
+   cabang, staff, layanan, produk, jenis aset, role) tidak punya cabang sehingga tidak ikut disaring.
+   Entitas itu lalu terbaca sebagai "sudah dihapus" dan perangkat menyusun perintah delete.
+2. **Worker** — `assetType.upsert` dan `assetType.delete` tidak ada di `OWNER_ONLY`, padahal
+   `asset_types` tidak punya kolom cabang dan `deleteAssetType` di aplikasi dijaga `owner.manage`.
+   Gerbang lebih longgar dari penjaganya, jadi perintah itu diterima.
+
+Perbaikan:
+
+- `SyncOutbox.enqueue` tidak lagi menyimpulkan delete untuk entitas tanpa cabang bila aktornya bukan
+  Owner. Sejalan dengan izin Worker: seluruh delete tanpa cabang memang Owner-only.
+- `OWNER_ONLY` di Worker menerima `assetType.upsert` dan `assetType.delete`.
+
+Test pengunci, keduanya terbukti GAGAL saat perbaikan dikembalikan:
+
+- Android: `nonOwnerTidakMenyimpulkanDeleteUntukEntitasTanpaCabang` (GAGAL saat penjaga dilepas) dan
+  `ownerTetapMenyimpulkanDeleteUntukEntitasTanpaCabang` (memastikan Owner tidak ikut dikunci).
+- Worker: jenis aset ditolak untuk Kasir dan Supervisor, diterima untuk Owner.
+
+Test Android 218 lulus (debug+release), lint bersih, test Worker 56 lulus.
+
+## 1.10.28 — 19 Sep 2026
+
+Perbaikan kelas A sampai H pada izin akses. Ringkas: A (crash `require(boleh(...))`), B (penolakan
+diam), C (gerbang rute lebih longgar dari penjaganya), D (tombol dikunci nama peran), E (pintu alur
+tulis tidak diperiksa), F (`require()` validasi lain masih melempar), G (layar ber-gerbang fungsi
+masih dikunci nama peran), H (hasil fungsi yang bisa menolak dibuang di layar, dan dua pemeriksa
+Service yang berbeda isi).
+
 ## 1.10.27 — 18 Sep 2026 (versionCode 46)
 
 ### Seluruh 17 fungsi Kontrol Akses Role kini benar-benar diperiksa

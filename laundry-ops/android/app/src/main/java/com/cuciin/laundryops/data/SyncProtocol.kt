@@ -203,6 +203,17 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
             val source = current ?: old ?: return@forEach
             val branch = source.branchId ?: defaultBranchId
             if (allowedBranchIds != null && branch != null && branch !in allowedBranchIds) return@forEach
+            // Penghapusan hanya boleh DISIMPULKAN untuk entitas yang memang dapat dihapus aktor ini.
+            //
+            // Snapshot yang diterima non-Owner disaring server, sedangkan entitas tingkat organisasi
+            // (branchId == null: cabang, staff, layanan, produk, jenis aset, role) tidak punya cabang
+            // untuk disaring. Bila snapshot itu tidak memuat entitas tersebut, selisihnya terbaca
+            // sebagai "sudah dihapus" dan perangkat mengirim perintah delete untuk seluruh organisasi.
+            // Insiden nyata: login Supervisor menghasilkan enam `assetType.delete` untuk semua cabang,
+            // dan `assetType.delete` belum Owner-only di Worker sehingga perintah itu diterima.
+            //
+            // Aturan ini sejalan dengan izin Worker: seluruh delete tanpa cabang memang Owner-only.
+            if (current == null && source.branchId == null && actorRole != null && actorRole != Role.Owner) return@forEach
             var payload = if (source.entityType == "branchStock" && current?.payload is JsonObject) {
                 val oldStock = (old?.payload as? JsonObject)?.get("stock")?.jsonPrimitive?.intOrNull ?: 0
                 val newStock = current.payload["stock"]?.jsonPrimitive?.intOrNull ?: 0

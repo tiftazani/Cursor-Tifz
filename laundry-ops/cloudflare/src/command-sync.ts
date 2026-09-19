@@ -22,7 +22,14 @@ const ORG_ID = "cuciin";
 const MAX_COMMAND_BODY_BYTES = 512_000;
 const MAX_COMMANDS = 100;
 const MAX_CHANGE_LIMIT = 500;
-const OWNER_ONLY = new Set(["branch.upsert", "staff.upsert", "service.upsert", "product.upsert", "accessRole.upsert", "accessRole.delete", "accessPolicy.upsert", "accessPolicy.delete", "whatsappTemplate.upsert", "whatsappTemplate.delete"]);
+// Master data tingkat organisasi (tanpa cabang) hanya boleh diubah Owner.
+//
+// `assetType` sebelumnya tidak ada di daftar ini, padahal `asset_types` tidak punya kolom cabang
+// dan aplikasi menjaganya dengan `owner.manage`. Akibatnya Kasir atau Supervisor dapat membuat dan
+// MENGHAPUS jenis aset untuk seluruh organisasi. Insiden nyata: perangkat yang berpindah ke akun
+// Supervisor menyusun enam `assetType.delete` untuk semua cabang, dan tanpa aturan ini Worker
+// menerimanya.
+const OWNER_ONLY = new Set(["branch.upsert", "staff.upsert", "service.upsert", "product.upsert", "assetType.upsert", "assetType.delete", "accessRole.upsert", "accessRole.delete", "accessPolicy.upsert", "accessPolicy.delete", "whatsappTemplate.upsert", "whatsappTemplate.delete"]);
 const KNOWN_COMMANDS = new Set([
   "order.create", "order.update", "order.put", "order.delete", "order.status", "order.payment", "order.handover",
   "stock.batch", "expense.upsert", "expense.delete", "attendance.upsert", "attendance.delete", "customer.upsert",
