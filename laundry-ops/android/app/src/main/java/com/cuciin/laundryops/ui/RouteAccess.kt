@@ -25,14 +25,21 @@ internal object RouteAccess {
     /**
      * Rute yang tidak punya modul sendiri selalu boleh: akun, tema, dan riwayat versi.
      *
-     * Dua rute laporan memeriksa FUNGSI, bukan hanya modul. Sebelumnya keduanya hanya memeriksa
-     * modul `analytics` dan `audit`, sehingga fungsi `analytics.view` dan `audit.view` di
-     * katalog tidak pernah diperiksa: mencabut centangnya tidak menyembunyikan apa pun.
+     * Rute yang punya fungsi WAJIB memeriksanya, bukan hanya modulnya. Modul dan fungsi adalah
+     * dua lapis: memegang modul `service` tidak berarti boleh MEMBUAT Service. Sebelumnya rute
+     * "Service baru" hanya memeriksa modul `service`, sedangkan `saveNota` memeriksa fungsi
+     * `service.create`. Role kustom yang dicentang modul `service` tanpa fungsi `service.create`
+     * melihat menunya, mengisi formulirnya, lalu aplikasi MATI saat menekan Simpan karena
+     * `saveNota` memakai `require`. Gerbang yang lebih longgar dari penjaganya bukan sekadar
+     * tidak rapi: ia membuka jalan menuju kegagalan yang tidak dapat dipahami pengguna.
+     *
+     * Fungsi yang dipakai di sini harus fungsi yang benar-benar diperiksa saat MENYIMPAN pada
+     * alur utama rute itu, bukan fungsi sekunder.
      */
     private val gateByRoute: Map<String, Gate> = mapOf(
         // Pekerjaan harian
         "queue" to Gate("queue"),
-        "service" to Gate("service"),
+        "service" to Gate("service", "service.create"),
         "attendance" to Gate("attendance"),
         "inventory" to Gate("inventory"),
         // Keuangan
@@ -46,13 +53,15 @@ internal object RouteAccess {
         "analytics" to Gate("analytics", "analytics.view"),
         "analyticsReport" to Gate("analytics", "analytics.view"),
         "audit" to Gate("audit", "audit.view"),
-        // Master data
-        "branches" to Gate("owner"),
-        "users" to Gate("owner"),
-        "services" to Gate("owner"),
-        "products" to Gate("owner"),
-        "accessRoles" to Gate("owner"),
-        "ownerSettings" to Gate("owner"),
+        // Master data: seluruh menu di sini menulis data induk, dan store memeriksa owner.manage
+        // untuk menambah, mengubah, maupun menghapus. Memeriksa modul saja tidak cukup: role
+        // kustom bisa saja diberi modul `owner` tanpa fungsi `owner.manage`.
+        "branches" to Gate("owner", "owner.manage"),
+        "users" to Gate("owner", "owner.manage"),
+        "services" to Gate("owner", "owner.manage"),
+        "products" to Gate("owner", "owner.manage"),
+        "accessRoles" to Gate("owner", "owner.access"),
+        "ownerSettings" to Gate("owner", "owner.manage"),
     )
 
     /** Gerbang izin sebuah rute, atau null bila rute itu selalu boleh. */

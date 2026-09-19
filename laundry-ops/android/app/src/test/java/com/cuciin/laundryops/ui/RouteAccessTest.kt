@@ -1,6 +1,9 @@
 package com.cuciin.laundryops.ui
 
 import com.cuciin.laundryops.data.AccessCatalog
+import com.cuciin.laundryops.data.AccessPolicy
+import com.cuciin.laundryops.data.Role
+import com.cuciin.laundryops.data.Staff
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -132,6 +135,82 @@ class RouteAccessTest {
         assertFalse(
             "Tidak boleh ada rute menu yang tidak dikenal pemetaan",
             tanpaModul.any { it !in setOf("profil", "theme", "versions") },
+        )
+    }
+
+    /**
+     * Gerbang rute tidak boleh lebih longgar dari penjaga yang dipanggil saat menyimpan.
+     *
+     * Bug yang dikunci: rute "Service baru" hanya memeriksa modul `service`, sedangkan
+     * `saveNota` memeriksa fungsi `service.create`. Role kustom dengan modul `service` tanpa
+     * fungsi `service.create` melihat menunya, mengisi formulirnya, lalu aplikasi MATI saat
+     * menekan Simpan karena `saveNota` memakai `require`.
+     *
+     * Aturan yang diuji: setiap fungsi yang diperiksa store pada alur utama sebuah rute harus
+     * juga diperiksa gerbang rute itu.
+     */
+    @Test
+    fun gerbangRuteTidakLebihLonggarDariPenjagaStore() {
+        // Fungsi yang diperiksa saat menyimpan pada alur utama rute.
+        val penjagaAlurUtama = mapOf(
+            "service" to "service.create",      // saveNota
+            "branches" to "owner.manage",        // addBranch + updateBranch
+            "users" to "owner.manage",           // addStaff + updateStaff
+            "services" to "owner.manage",        // addService + updateService
+            "products" to "owner.manage",        // addProduct + updateProduct
+            "ownerSettings" to "owner.manage",   // saveWhatsAppTemplate
+            "accessRoles" to "owner.access",     // assignAccessRole
+        )
+        val longgar = penjagaAlurUtama.filter { (rute, fungsi) ->
+            RouteAccess.gateOf(rute)?.function != fungsi
+        }
+        assertTrue(
+            "Gerbang rute ini lebih longgar dari penjaga saat menyimpan, sehingga pengguna bisa " +
+                "membuka layarnya lalu gagal atau aplikasi mati saat menekan Simpan:\n" +
+                longgar.entries.joinToString("\n") { "  ${it.key} harus memeriksa ${it.value}" },
+            longgar.isEmpty(),
+        )
+    }
+
+    /**
+     * Supervisor bawaan tidak boleh lolos gerbang "Service baru".
+     *
+     * Role bawaan Supervisor memuat MODUL `service` tetapi TIDAK memuat fungsi `service.create`.
+     * Kalau gerbangnya hanya memeriksa modul, Supervisor akan melihat menu yang membuatnya
+     * menabrak penjaga saat menyimpan. Menu itu memang sudah disembunyikan lewat
+     * `hiddenForSupervisor`, tetapi aturan izin tidak boleh bergantung pada pengecualian nama
+     * peran: role kustom dengan bentuk izin yang sama akan tetap terkena.
+     */
+    @Test
+    fun supervisorBawaanTidakLolosGerbangServiceBaru() {
+        val supervisor = AccessCatalog.builtInRoles().first { it.id == "role-supervisor" }
+        assertTrue("Supervisor memuat modul service", "service" in supervisor.modules)
+        assertFalse("Supervisor tidak memuat fungsi service.create", "service.create" in supervisor.functions)
+
+        val gerbang = RouteAccess.gateOf("service")
+        assertNotNull("Rute service harus punya gerbang", gerbang)
+        val lolos = AccessPolicy.can(
+            staff = Staff("Uji", "uji@contoh.com", Role.Supervisor, listOf("b1"), accessRoleId = "role-supervisor"),
+            roles = listOf(supervisor),
+            policy = null,
+            module = gerbang!!.module,
+            function = gerbang.function,
+        )
+        assertFalse("Supervisor tidak boleh lolos gerbang Service baru", lolos)
+    }
+
+    @Test
+    fun ownerTetapLolosSeluruhGerbangRute() {
+        // Perbaikan ini tidak boleh mengunci Owner dari menunya sendiri.
+        val owner = Staff("Owner", "owner@contoh.com", Role.Owner, listOf("b1"))
+        val terkunci = MenuOrder.allRoutes.filter { rute ->
+            val g = RouteAccess.gateOf(rute) ?: return@filter false
+            !AccessPolicy.can(owner, emptyList(), null, g.module, g.function)
+        }
+        assertTrue(
+            "Owner terkunci dari menu ini oleh gerbang rutenya sendiri:\n" +
+                terkunci.joinToString("\n") { "  $it" },
+            terkunci.isEmpty(),
         )
     }
 }

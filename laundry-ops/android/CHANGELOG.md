@@ -43,7 +43,26 @@ dikembalikan:
   `?.let`, atau pemeriksa izin. Test ini menemukan satu call site nyata yang mengabaikan hasilnya
   (`markWaSent` di layar nota) saat pertama dijalankan.
 
-Titik jaga `owner.manage` naik dari 15 ke 17. Test Android 205 lulus (dari 202), Worker 53 lulus.
+### Kelas C — gerbang rute lebih longgar dari penjaganya
+
+Rute "Service baru" hanya memeriksa MODUL `service`, sedangkan `saveNota` memeriksa FUNGSI
+`service.create`. Role kustom yang dicentang modul `service` tanpa fungsi `service.create` melihat
+menunya, mengisi formulirnya, lalu aplikasi mati saat menekan Simpan. Menu itu memang sudah
+disembunyikan untuk Supervisor lewat `hiddenForSupervisor`, tetapi aturan izin tidak boleh
+bergantung pada pengecualian nama peran: role kustom dengan bentuk izin yang sama tetap terkena.
+
+Gerbang rute kini memeriksa fungsi yang benar-benar diperiksa saat MENYIMPAN pada alur utama rute:
+`service` memeriksa `service.create`, dan seluruh menu master data memeriksa `owner.manage`
+(`accessRoles` memeriksa `owner.access`). Sebelumnya keenam menu master data hanya memeriksa modul.
+
+Tiga test pengunci baru, sudah dibuktikan GAGAL saat gerbang dikembalikan menjadi hanya-modul:
+
+- `gerbangRuteTidakLebihLonggarDariPenjagaStore` — memetakan fungsi penjaga alur utama tiap rute.
+- `supervisorBawaanTidakLolosGerbangServiceBaru` — Supervisor memuat modul `service` tanpa fungsi
+  `service.create`, jadi gerbang hanya-modul pasti meloloskannya.
+- `ownerTetapLolosSeluruhGerbangRute` — perbaikan ini tidak boleh mengunci Owner dari menunya.
+
+Titik jaga `owner.manage` naik dari 15 ke 17. Test Android 208 lulus (dari 205), Worker 53 lulus.
 
 ## 1.10.27 — 18 Sep 2026 (versionCode 46)
 
