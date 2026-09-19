@@ -44,7 +44,9 @@ internal object RouteAccess {
         "inventory" to Gate("inventory"),
         // Keuangan
         "expenses" to Gate("expense"),
-        "cash" to Gate("cash"),
+        // Tutup kas memeriksa fungsi `cash.close`, bukan hanya modulnya: role kustom bisa
+        // memegang modul `cash` tanpa fungsi itu, dan `closeCash` menolak lewat `boleh`.
+        "cash" to Gate("cash", "cash.close"),
         // Pelanggan
         "customers" to Gate("customer"),
         "wa" to Gate("whatsapp"),

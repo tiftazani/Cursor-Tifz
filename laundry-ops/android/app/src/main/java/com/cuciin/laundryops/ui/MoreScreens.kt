@@ -688,11 +688,17 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
         } else {
             item {
                 PrimaryBtn("Tutup kas hari ini") {
-                    val row = store.closeCash()
-                    if (row == null) toast("Kas cabang ini sudah ditutup hari ini")
+                    // Pesan penolakan dibaca dari store, bukan ditebak layar. Sebelumnya izin yang
+                    // dicabut dilaporkan sebagai "sudah ditutup hari ini", yang tidak benar.
+                    val tolakKas = store.cashCloseReject()
+                    if (tolakKas != null) toast(tolakKas)
                     else {
-                        toast("Kas ditutup ${row.at}")
-                        nav.popBackStack()
+                        val row = store.closeCash()
+                        if (row == null) toast("Kas cabang ini sudah ditutup hari ini")
+                        else {
+                            toast("Kas ditutup ${row.at}")
+                            nav.popBackStack()
+                        }
                     }
                 }
             }

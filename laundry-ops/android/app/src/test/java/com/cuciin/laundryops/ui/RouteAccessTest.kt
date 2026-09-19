@@ -160,6 +160,7 @@ class RouteAccessTest {
             "products" to "owner.manage",        // addProduct + updateProduct
             "ownerSettings" to "owner.manage",   // saveWhatsAppTemplate
             "accessRoles" to "owner.access",     // assignAccessRole
+            "cash" to "cash.close",              // closeCash
         )
         val longgar = penjagaAlurUtama.filter { (rute, fungsi) ->
             RouteAccess.gateOf(rute)?.function != fungsi
@@ -334,6 +335,45 @@ class RouteAccessTest {
     }
 
     /**
+     * Layar harus membaca pesan penolakan store lebih dulu, bukan menebak sendiri.
+     *
+     * `saveNota` dan `closeCash` memeriksa izin dengan `check`/`boleh` dan gagal secara diam
+     * (`null`). Selama layar menebak sebabnya, penolakan izin dilaporkan sebagai hal lain:
+     * "Pembayaran sudah lunas", atau "Kas cabang ini sudah ditutup hari ini" padahal kasnya tidak
+     * ditutup. Test ini mengunci urutannya: pemeriksa penolakan dipanggil SEBELUM fungsinya.
+     */
+    @Test
+    fun layarMembacaPesanPenolakanSebelumMemanggilFungsi() {
+        val pasangan = listOf(
+            Triple("OpsScreens.kt", "fun save(openWa: Boolean)", "notaReject(" to "store.saveNota("),
+            Triple("MoreScreens.kt", "Tutup kas hari ini", "cashCloseReject()" to "store.closeCash()"),
+        )
+        val pelanggaran = mutableListOf<String>()
+        for ((nama, penanda, pasang) in pasangan) {
+            val sumber = File("src/main/java/com/cuciin/laundryops/ui/$nama").readText()
+            val mulai = sumber.indexOf(penanda)
+            if (mulai < 0) {
+                pelanggaran.add("$nama: penanda '$penanda' tidak ditemukan")
+                continue
+            }
+            val badan = sumber.substring(mulai, (mulai + 1200).coerceAtMost(sumber.length))
+            val (tolak, simpan) = pasang
+            val posTolak = badan.indexOf(tolak)
+            val posSimpan = badan.indexOf(simpan)
+            if (posTolak < 0) pelanggaran.add("$nama: tidak memanggil $tolak")
+            else if (posSimpan < 0) pelanggaran.add("$nama: tidak memanggil $simpan")
+            else if (posTolak > posSimpan) {
+                pelanggaran.add("$nama: $simpan dipanggil sebelum $tolak, jadi penolakan tidak terbaca")
+            }
+        }
+        assertTrue(
+            "Layar memanggil fungsi yang bisa menolak tanpa membaca pesannya lebih dulu:\n" +
+                pelanggaran.joinToString("\n"),
+            pelanggaran.isEmpty(),
+        )
+    }
+
+    /**
      * Dua pemeriksa Service tidak boleh berbeda isi.
      *
      * `notaReject` (dipakai UI, mengembalikan pesan) dan `saveNota` (penjaga lapis kedua, melempar)
@@ -400,6 +440,81 @@ class RouteAccessTest {
             "Pemeriksaan izin memakai fungsi yang tidak ada di katalog, sehingga selalu false:\n" +
                 asing.joinToString("\n") { "  ${it.first} / ${it.second}" },
             asing.isEmpty(),
+        )
+    }
+
+    /**
+     * Hasil fungsi store yang bisa MENOLAK tidak boleh dibuang di layar.
+     *
+     * Kelas bug B: fungsi store mengembalikan pesan penolakan (`String?`), tetapi UI memanggilnya
+     * sebagai pernyataan berdiri sendiri lalu menampilkan pesan SUKSES. Pengguna melihat
+     * "WhatsApp dibuka untuk nota ini" padahal `markWaSent` menolak karena izin atau cabang, dan
+     * datanya tidak berubah. Penolakan yang tidak pernah dibaca sama saja tidak ada.
+     *
+     * Aturan yang diuji, dihitung per panggilan dengan tanda kurung berimbang:
+     * 1. hasilnya dibungkus dari DEPAN (`val x = `, `finish(...)`, `toast(...)`, `return ...`), atau
+     * 2. hasilnya dirantai dari BELAKANG (`?.`, `.let`, `.also`, `?:`), atau
+     * 3. panggilan itu sendiri adalah nilai blok (`else { store.foo(...) }`), yaitu berdiri sendiri
+     *    tanpa pernyataan lain di belakangnya pada baris yang sama.
+     *
+     * Sisanya berarti hasilnya dibuang. Pemeriksaan dilakukan pada pernyataan, bukan seluruh baris,
+     * supaya `toast(...)` yang kebetulan berada di belakang panggilan tidak dianggap memakai hasil.
+     */
+    @Test
+    fun hasilFungsiYangBisaMenolakTidakDibuang() {
+        val sumber = File("src/main/java/com/cuciin/laundryops/data/CuciinStore.kt").readText()
+        val bisaMenolak = Regex("""\n    fun (\w+)\([^)]*\)\s*:\s*String\?""")
+            .findAll(sumber).map { it.groupValues[1] }.toSet()
+        assertTrue("Tidak ada fungsi String? yang terbaca di CuciinStore.kt", bisaMenolak.isNotEmpty())
+
+        val berkas = listOf(
+            "OpsScreens.kt", "AssetScreens.kt", "MasterScreens.kt", "MoreScreens.kt",
+            "AccessScreens.kt", "OwnerSettingsScreen.kt",
+        )
+        // Hasil dibungkus dari depan.
+        val dariDepan = Regex("""=\s|\bfinish\(|\btoast\(|\breturn\s|\?:""")
+        // Hasil dirantai dari belakang.
+        val dariBelakang = Regex("""^\s*\?\.|^\s*\.let|^\s*\.also|^\s*\?:""")
+        // Sisa setelah panggilan yang hanya penutup, tanda panggilan itu nilai blok.
+        val hanyaPenutup = Regex("""^[;)}]*$""")
+        // Awalan yang hanya rangka blok (`} else `, `) { `), tanda panggilan itu nilai blok.
+        val hanyaRangka = Regex("""^[\s}{);]*(else)?[\s}{);]*$""")
+        val dibuang = mutableListOf<String>()
+        for (nama in berkas) {
+            val f = File("src/main/java/com/cuciin/laundryops/ui/$nama")
+            if (!f.exists()) continue
+            for ((i, baris) in f.readLines().withIndex()) {
+                val b = baris.trim()
+                if (b.startsWith("//") || b.startsWith("*")) continue
+                for (fn in bisaMenolak) {
+                    val panggil = Regex("""\b(?:store|assetStore|accessStore)\.$fn\(""").find(b) ?: continue
+                    val buka = panggil.range.last
+                    var d = 0
+                    var tutup = b.length - 1
+                    var j = buka
+                    while (j < b.length) {
+                        if (b[j] == '(') d++
+                        if (b[j] == ')') { d--; if (d == 0) { tutup = j; break } }
+                        j++
+                    }
+                    val depan = b.substring(0, panggil.range.first)
+                        .lastIndexOfAny(charArrayOf(';', '{', '}')).let { if (it < 0) 0 else it + 1 }
+                    val sebelum = b.substring(depan, panggil.range.first)
+                    val sesudah = b.substring(tutup + 1)
+                    val nilaiBlok = hanyaPenutup.matches(sesudah.trim()) && hanyaRangka.matches(sebelum)
+                    val dipakai = dariDepan.containsMatchIn(sebelum) ||
+                        dariBelakang.containsMatchIn(sesudah) ||
+                        nilaiBlok
+                    if (!dipakai) {
+                        dibuang.add("$nama:${i + 1}  $fn()  ${b.substring(depan).take(95)}")
+                    }
+                }
+            }
+        }
+        assertTrue(
+            "Hasil fungsi yang bisa menolak dibuang, sehingga penolakan tidak pernah terlihat " +
+                "oleh pengguna dan UI melaporkan sukses palsu:\n" + dibuang.joinToString("\n"),
+            dibuang.isEmpty(),
         )
     }
 }

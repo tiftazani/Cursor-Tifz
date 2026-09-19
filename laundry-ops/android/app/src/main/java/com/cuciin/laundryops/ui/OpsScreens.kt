@@ -695,7 +695,7 @@ internal fun BayarScreen(nav: NavHostController, toast: (String) -> Unit) {
         saving = true
         val n = store.saveNota(cust, cart, paid, pickupValue, method, branchId, sendWa = false)
         if (openWa) {
-            try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${store.waMe(n.phone)}?text=${Uri.encode(store.notaText(n))}"))); if (store.canSendWa()) store.markWaSent(n.id) }
+            try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${store.waMe(n.phone)}?text=${Uri.encode(store.notaText(n))}"))); store.markWaSent(n.id)?.let(toast) }
             catch (_: android.content.ActivityNotFoundException) { toast("Service tersimpan. WhatsApp belum tersedia.") }
         } else toast("Service ${n.id} berhasil disimpan")
         nav.navigate("queue/${n.id}") { popUpTo("home") }
@@ -915,8 +915,7 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
                     PrimaryBtn(if (n.waSent) "Buka kembali WhatsApp" else "Kirim melalui WhatsApp", icon = Icons.Outlined.Send) {
                         try {
                             ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${store.waMe(n.phone)}?text=${Uri.encode(store.notaText(n))}")))
-                            if (store.canSendWa()) { store.markWaSent(id); toast("WhatsApp dibuka untuk nota ini") }
-                            else toast("Akses Kirim WhatsApp dicabut untuk role akun ini")
+                            store.markWaSent(id)?.let { toast(it) } ?: toast("WhatsApp dibuka untuk nota ini")
                         } catch (_: android.content.ActivityNotFoundException) { toast("WhatsApp belum tersedia di perangkat ini") }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

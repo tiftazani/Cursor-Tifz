@@ -1633,13 +1633,30 @@ object CuciinStore {
      */
     internal fun newId(): String = UUID.randomUUID().toString().take(13)
 
+    /**
+     * Alasan tutup kas tidak dapat dilakukan, atau null bila boleh.
+     *
+     * Sebelumnya layar hanya bisa membedakan "berhasil" dan "sudah ditutup", sehingga akun yang
+     * izinnya dicabut melihat pesan "Kas cabang ini sudah ditutup hari ini" padahal kasnya sama
+     * sekali tidak ditutup. Penolakan izin harus punya pesannya sendiri.
+     */
+    fun cashCloseReject(): String? {
+        val s = session.value ?: return "Silakan masuk kembali"
+        if (!boleh("cash", "cash.close")) return tolak("cash.close", "Akun ini tidak dapat menutup kas")
+        val bid = if (s.role == Role.Owner) viewBranch.value else s.branchId
+        if (bid == "all") return "Pilih satu cabang sebelum menutup kas"
+        val t = Clock.nowMs()
+        if (cashCloses.any { it.branchId == bid && Clock.dateKey(it.atMs) == Clock.dateKey(t) }) {
+            return "Kas cabang ini sudah ditutup hari ini"
+        }
+        return null
+    }
+
     fun closeCash(): CashClose? {
         val s = session.value ?: return null
-        if (!boleh("cash", "cash.close")) return null
+        if (cashCloseReject() != null) return null
         val bid = if (s.role == Role.Owner) viewBranch.value else s.branchId
-        if (bid == "all") return null
         val t = Clock.nowMs()
-        if (cashCloses.any { it.branchId == bid && Clock.dateKey(it.atMs) == Clock.dateKey(t) }) return null
         val received = paymentRecords(notas.filter { it.branchId == bid }).filter { it.atMs >= Clock.todayStartMs() }
         val row = CashClose(
             id = "kas-$bid-$t-${syncEventId().take(8)}",
