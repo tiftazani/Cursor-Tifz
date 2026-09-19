@@ -102,7 +102,13 @@ internal fun CustomersScreen(nav: NavHostController, toast: (String) -> Unit) {
     }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), state = listState, verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Pelanggan", if (pickMode) "Ketuk nama untuk memilih pelanggan" else "Kontak pelanggan laundry Anda", onBack = { nav.popBackStack() }) }
-        if (!creating && editing == null) item { PrimaryBtn("Pelanggan baru", icon = Icons.Outlined.Add) { creating = true; editing = null; fill(null) } }
+        // Tombol pembuka form diperiksa dengan FUNGSI, bukan hanya modul rutenya. Rute `customers`
+        // memakai gerbang modul supaya role kustom tetap bisa MEMBACA daftar pelanggan; pintu yang
+        // MENULIS tetap harus memeriksa `customer.write`, kalau tidak role itu membuka formulir
+        // yang pasti ditolak saat disimpan.
+        if (!creating && editing == null && store.canAccess("customer", "customer.write")) {
+            item { PrimaryBtn("Pelanggan baru", icon = Icons.Outlined.Add) { creating = true; editing = null; fill(null) } }
+        }
         if (creating || editing != null) {
             item {
                 CardBlock(accent = Teal) {

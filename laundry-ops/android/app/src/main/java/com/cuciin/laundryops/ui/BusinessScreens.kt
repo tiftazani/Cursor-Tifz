@@ -65,7 +65,11 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
         item { Hero("Total biaya cabang", rp(rows.sumOf { it.amount }), listOf("${rows.size} transaksi biaya", businessStore.branch(branchId).name)) }
         if (!creating) item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PrimaryBtn("Catat biaya", Modifier.weight(1f), icon = Icons.Outlined.Add) { creating = true }
+                // Pintu MENULIS diperiksa fungsinya; rute `expenses` hanya memeriksa modul supaya
+                // role kustom tetap dapat MEMBACA daftar biaya.
+                if (businessStore.canAccess("expense", "expense.write")) {
+                    PrimaryBtn("Catat biaya", Modifier.weight(1f), icon = Icons.Outlined.Add) { creating = true }
+                }
                 GhostBtn("Ekspor", Modifier.weight(.65f), icon = Icons.Outlined.FileDownload) { FileExports.shareExpenses(ctx, rows) }
             }
         }

@@ -182,6 +182,20 @@ Test `penolakanServiceHanyaPunyaSatuSumber` mengunci bentuk itu: `saveNota` waji
 `notaReject` dan tidak boleh memuat `require`/`check` sendiri. Terbukti GAGAL saat daftarnya
 disalin ulang.
 
+**Kelas H6, pintu MENULIS di rute ber-gerbang modul tidak diperiksa.** Tiga tombol membuka formulir
+yang menyimpan data tanpa pemeriksaan fungsi, sementara rute induknya sengaja hanya memeriksa modul
+supaya role kustom tetap dapat MEMBACA daftar:
+
+| Tombol | Layar | Sekarang |
+| --- | --- | --- |
+| "Pelanggan baru" | Pelanggan | `customer.write` |
+| "Catat biaya" | Biaya operasional | `expense.write` |
+
+Role kustom pemegang modul `customer` atau `expense` tanpa fungsi tulisnya bisa membuka dan mengisi
+formulir, lalu ditolak saat menyimpan. Akses MEMBACAnya sengaja dipertahankan; yang dikunci hanya
+pintu menulisnya. Daftar pintu di `pintuMasukAlurTulisDiperiksaDenganFungsi` diperluas, dan test
+itu terbukti GAGAL saat pemeriksaannya dikembalikan.
+
 Test Android 216 lulus (debug+release), lint bersih.
 
 Sengaja TIDAK diubah: gerbang rute `attendance`, `expenses`, dan `customers` tetap hanya memeriksa

@@ -285,6 +285,10 @@ class RouteAccessTest {
             "AssetScreens.kt" to listOf(
                 "navigate(\"assetNew\")", "navigate(\"assetTypes\")", "navigate(\"assetEdit/",
             ),
+            // Tombol yang membuka form tulis di layar daftar. Layar ini gerbangnya memeriksa modul
+            // supaya role kustom tetap bisa MEMBACA, jadi pintu MENULISnya harus diperiksa sendiri.
+            "MasterScreens.kt" to listOf("PrimaryBtn(\"Pelanggan baru\""),
+            "BusinessScreens.kt" to listOf("PrimaryBtn(\"Catat biaya\""),
         )
         val pemeriksaFungsi = Regex("""can[A-Z]\w*\(|canAccess\(|boleh\(""")
         val belumDiperiksa = mutableListOf<String>()
