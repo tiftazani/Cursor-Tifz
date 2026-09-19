@@ -194,7 +194,7 @@ internal fun HomeScreen(nav: NavHostController) {
                     )
                     Text("${rows.size} pesanan · $periodLabel", color = Muted, fontSize = 12.sp)
                 }
-                if (s.role != Role.Supervisor) {
+                if (store.canCreateService()) {
                     PrimaryBtn("Service baru", Modifier.width(150.dp), icon = Icons.Outlined.Add) { nav.navigate("nota") }
                 }
             }
@@ -860,7 +860,7 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
                 Text("${n.payMethod.label} · diterima ${rp(n.paid)}", color = Muted, fontSize = 13.sp)
                 if (n.pay != PayStatus.Lunas) {
                     Text("Sisa tagihan ${rp((n.total - n.paid).coerceAtLeast(0))}", color = Amber, fontWeight = FontWeight.SemiBold)
-                    if (s?.role != Role.Supervisor) GhostBtn("Catat pelunasan", icon = Icons.Outlined.Payments) { paidConfirm = true }
+                    if (store.canTakePayment()) GhostBtn("Catat pelunasan", icon = Icons.Outlined.Payments) { paidConfirm = true }
                 }
             }
         }
@@ -887,10 +887,10 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
                 SectionLabel("Bukti cucian")
                 if (n.photos.isEmpty()) Text("Belum ada foto bukti untuk nota ini.", color = Muted, fontSize = 13.sp)
                 n.photos.forEach { InfoRow(Icons.Outlined.Image, "Bukti di perangkat", it.substringAfterLast('/')) }
-                if (s?.role != Role.Supervisor) GhostBtn("Tambah foto dari galeri", icon = Icons.Outlined.AddPhotoAlternate) { pick.launch("image/*") }
+                if (store.canTakePayment()) GhostBtn("Tambah foto dari galeri", icon = Icons.Outlined.AddPhotoAlternate) { pick.launch("image/*") }
             }
         }
-        if (s?.role != Role.Supervisor && store.canAccess("service", "service.correct")) {
+        if (store.canAccess("service", "service.correct")) {
             item {
                 CardBlock {
                     SectionLabel("Koreksi Service")
@@ -981,7 +981,7 @@ internal fun StockScreen(nav: NavHostController, toast: (String) -> Unit) {
         item {
             Hero("Pantau kebutuhan laundry", "${products.size} produk", listOf(if (low == 0) "Stok di atas batas minimum" else "$low produk perlu diisi"))
         }
-        if (s.role != Role.Supervisor) item { PrimaryBtn("Catat perubahan stok", icon = Icons.Outlined.Add) { nav.navigate("stokEdit") } }
+        if (store.canWriteStock()) item { PrimaryBtn("Catat perubahan stok", icon = Icons.Outlined.Add) { nav.navigate("stokEdit") } }
         item { GhostBtn("Riwayat perubahan stok", icon = Icons.Outlined.History) { nav.navigate("stokHistory") } }
         if (products.isEmpty()) item { EmptyHint("Belum ada produk", "Tambahkan produk untuk mulai memantau persediaan laundry.") }
         if (products.isNotEmpty()) item {

@@ -135,17 +135,23 @@ internal fun MoreScreen(nav: NavHostController) {
  * Modul yang diperiksa dibaca dari [RouteAccess] supaya setiap modul di katalog izin benar-benar
  * diperiksa di suatu tempat; rute yang tidak punya modul (akun, tema, versi) selalu boleh.
  *
- * Menu yang tabnya disembunyikan untuk SPV juga disembunyikan di sini. Aturannya dibaca dari
- * [NavTabs], sumber yang sama dengan bar navigasi, supaya menu Modul tidak pernah menampilkan
- * pintu yang tidak bisa dipakai. Sebelumnya SPV melihat "Service baru" di menu Modul padahal
- * layar Antrian dan tab bawah menyembunyikannya, dan server pun menolak pembuatan Service
- * oleh SPV, sehingga pesanannya gagal tersinkron tanpa penjelasan.
+ * Pengecualian nama peran (`hiddenForSupervisor`) tetap dipakai sebagai lapisan kedua: menu yang
+ * tabnya disembunyikan untuk SPV juga disembunyikan di sini. Aturannya dibaca dari [NavTabs],
+ * sumber yang sama dengan bar navigasi, supaya menu Modul tidak pernah menampilkan pintu yang
+ * tidak bisa dipakai. Sebelumnya SPV melihat "Service baru" di menu Modul padahal layar Antrian
+ * dan tab bawah menyembunyikannya, dan server pun menolak pembuatan Service oleh SPV, sehingga
+ * pesanannya gagal tersinkron tanpa penjelasan.
+ *
+ * Pengecualian itu TIDAK cukup sendiri: ia hanya mengenal peran bawaan. Role kustom yang memuat
+ * modul `service` tanpa fungsi `service.create` tidak tertangkap olehnya, jadi gerbang fungsi di
+ * [RouteAccess] yang menahan. Dua lapis, dan lapis fungsinya tidak boleh dilepas.
  */
 internal fun routeAllowed(route: String): Boolean {
+    val gate = RouteAccess.gateOf(route) ?: return true
+    if (!store.canAccess(gate.module, gate.function)) return false
     val tab = NavTabs.routeOf(MenuOrder.destinationOf(route))
     if (tab?.hiddenForSupervisor == true && store.session.value?.role == Role.Supervisor) return false
-    val gate = RouteAccess.gateOf(route) ?: return true
-    return store.canAccess(gate.module, gate.function)
+    return true
 }
 
 /** Nama ikon di katalog dipetakan ke ikon sungguhan di sini supaya katalognya tetap murni. */

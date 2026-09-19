@@ -62,7 +62,39 @@ Tiga test pengunci baru, sudah dibuktikan GAGAL saat gerbang dikembalikan menjad
   `service.create`, jadi gerbang hanya-modul pasti meloloskannya.
 - `ownerTetapLolosSeluruhGerbangRute` — perbaikan ini tidak boleh mengunci Owner dari menunya.
 
-Titik jaga `owner.manage` naik dari 15 ke 17. Test Android 208 lulus (dari 205), Worker 53 lulus.
+### Kelas D — pintu alur tulis dikunci NAMA PERAN, bukan fungsi
+
+Enam tombol yang membuka alur TULIS diperiksa dengan `role != Role.Supervisor`, bukan dengan fungsi
+izin. Pengecualian nama peran hanya mengenal peran BAWAAN, jadi role kustom dengan bentuk izin yang
+sama tetap lolos: role yang memuat modul `service` tanpa fungsi `service.create` (mis. Kasir yang
+dicabut `service.create`) melihat tombol "Service baru" di beranda, mengisi formulirnya, lalu
+aplikasi MATI saat menekan Simpan.
+
+Titik yang diperbaiki, semuanya kini membaca fungsi:
+
+- Beranda, tombol "Service baru" -> `canCreateService()`
+- Stok, tombol "Catat perubahan stok" -> `canWriteStock()`
+- Daftar Aset Cabang, tombol "Daftarkan aset" -> `canWriteInventory()`
+- Daftar Aset Cabang, "Kelola jenis aset" di sheet jenis -> `canManageAssetTypes()`
+- Detail Service, "Catat pelunasan" -> `canTakePayment()`
+- Detail Service, "Tambah foto dari galeri" -> `canTakePayment()`
+- Detail Service, blok "Koreksi Service" -> `service.correct` (sebelumnya digabung nama peran)
+
+Helper baru: `canWriteStock()`, `canTakePayment()`, `canWriteInventory()`, `canManageAssetTypes()`.
+
+Pengecualian nama peran TETAP dipakai untuk aturan TAMPIL (bar navigasi dan menu Modul), karena itu
+memang kebijakan peran. `routeAllowed` kini memeriksa gerbang FUNGSI lebih dulu, baru pengecualian
+nama peran, supaya dua lapis itu tidak saling menggantikan.
+
+Tiga test pengunci baru, terbukti GAGAL saat bug dikembalikan:
+
+- `tombolAlurTulisTidakDikunciNamaPeran` — membaca jendela beberapa baris sebelum setiap pintu
+  alur tulis, karena kondisi peran biasanya ada di baris `if` di atas tombolnya.
+- `helperIzinMemakaiFungsiYangAdaDiKatalog` — salah tulis nama fungsi membuat pemeriksaan selalu
+  false dan tombolnya hilang untuk semua orang.
+- `ownerTetapLolosSeluruhGerbangRute` — Owner tidak boleh terkunci dari menunya sendiri.
+
+Titik jaga `owner.manage` naik dari 15 ke 17. Test Android 210 lulus (dari 205), Worker 53 lulus.
 
 ## 1.10.27 — 18 Sep 2026 (versionCode 46)
 

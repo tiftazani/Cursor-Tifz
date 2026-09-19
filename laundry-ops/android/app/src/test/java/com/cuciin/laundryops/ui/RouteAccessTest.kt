@@ -213,4 +213,77 @@ class RouteAccessTest {
             terkunci.isEmpty(),
         )
     }
+
+    /**
+     * Tombol yang membuka alur TULIS tidak boleh dikunci dengan NAMA PERAN.
+     *
+     * Bug yang dikunci: tombol "Service baru" di beranda diperiksa dengan
+     * `s.role != Role.Supervisor`, bukan dengan fungsi. Pengecualian nama peran hanya mengenal
+     * peran bawaan: role kustom yang memuat modul `service` tanpa fungsi `service.create`
+     * (mis. "Kasir" yang dicabut `service.create`) tetap melihat tombolnya, mengisi formulirnya,
+     * lalu aplikasi MATI saat menekan Simpan. Aturan izin harus membaca fungsi, bukan nama peran.
+     *
+     * Pengecualian nama peran tetap sah untuk aturan TAMPIL (bar navigasi dan menu Modul),
+     * karena itu memang kebijakan peran, bukan penegakan izin. Yang dilarang adalah memakai nama
+     * peran sebagai pengganti pemeriksaan fungsi pada pintu yang MENULIS data.
+     */
+    @Test
+    fun tombolAlurTulisTidakDikunciNamaPeran() {
+        // Berkas layar yang memuat alur tulis dan tombolnya.
+        val berkas = listOf("OpsScreens.kt", "AssetScreens.kt", "MasterScreens.kt", "MoreScreens.kt")
+        // Pintu yang membuka alur TULIS.
+        val pintu = listOf(
+            "navigate(\"nota\")", "navigate(\"stokEdit\")", "navigate(\"assetNew\")",
+            "navigate(\"assetTypes\")", "navigate(\"bayar\")",
+        )
+        // Kondisi dikunci dengan NAMA PERAN. Pengecualian nama peran tetap sah untuk aturan
+        // TAMPIL (bar navigasi, menu Modul); yang dilarang adalah memakainya sebagai pengganti
+        // pemeriksaan fungsi pada pintu yang MENULIS data.
+        val kunciPeran = Regex("""\brole\s*(!=|==)\s*Role\.\w+""")
+        val pelanggaran = mutableListOf<String>()
+        for (nama in berkas) {
+            val f = File("src/main/java/com/cuciin/laundryops/ui/$nama")
+            if (!f.exists()) continue
+            val baris = f.readLines()
+            baris.forEachIndexed { i, isi ->
+                val b = isi.trim()
+                if (b.startsWith("//") || b.startsWith("*")) return@forEachIndexed
+                if (pintu.none { it in b }) return@forEachIndexed
+                // Kondisi peran biasanya ada di baris `if` tepat di atas tombolnya, jadi
+                // periksa jendela beberapa baris ke belakang, bukan hanya baris itu sendiri.
+                val jendela = baris.subList((i - 3).coerceAtLeast(0), i + 1)
+                if (jendela.any { kunciPeran.containsMatchIn(it) }) {
+                    pelanggaran.add("$nama:${i + 1}  ${b.take(90)}")
+                }
+            }
+        }
+        assertTrue(
+            "Pintu alur tulis ini dikunci dengan NAMA PERAN, bukan fungsi izin:\n" +
+                pelanggaran.joinToString("\n"),
+            pelanggaran.isEmpty(),
+        )
+    }
+
+    /**
+     * Setiap fungsi izin yang dipakai memfilter tombol harus benar-benar ada di katalog.
+     *
+     * Helper seperti `canWriteStock()` adalah pembungkus tipis; test ini memastikan pembungkus itu
+     * tidak menyebut fungsi yang tidak dikenal, karena salah tulis nama fungsi akan membuat
+     * pemeriksaannya selalu false dan tombolnya hilang untuk semua orang.
+     */
+    @Test
+    fun helperIzinMemakaiFungsiYangAdaDiKatalog() {
+        val sumber = File("src/main/java/com/cuciin/laundryops/data/CuciinStore.kt").readText()
+        val dipanggil = Regex("""canAccess\("([^"]+)",\s*"([^"]+)"\)""")
+            .findAll(sumber)
+            .map { it.groupValues[1] to it.groupValues[2] }
+            .toSet()
+        val katalog = AccessCatalog.allFunctionKeys()
+        val asing = dipanggil.filter { (_, fungsi) -> fungsi !in katalog }
+        assertTrue(
+            "Pemeriksaan izin memakai fungsi yang tidak ada di katalog, sehingga selalu false:\n" +
+                asing.joinToString("\n") { "  ${it.first} / ${it.second}" },
+            asing.isEmpty(),
+        )
+    }
 }

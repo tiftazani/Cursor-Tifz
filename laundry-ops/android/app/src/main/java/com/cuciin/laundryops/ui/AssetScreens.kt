@@ -85,7 +85,13 @@ internal fun AssetListScreen(nav: NavHostController, toast: (String) -> Unit) {
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrimaryBtn("Daftarkan aset", Modifier.weight(1f), icon = Icons.Outlined.Add) { nav.navigate("assetNew") }
+                // Tombol ini membuka formulir yang MENYIMPAN aset, jadi izinnya diperiksa di sini.
+                // Sebelumnya ia selalu tampil: role yang hanya memegang modul `inventory` tanpa
+                // fungsi `inventory.write` (mis. Supervisor bawaan) bisa membuka dan mengisi
+                // formulirnya, lalu ditolak saat menyimpan.
+                if (assetStore.canWriteInventory()) {
+                    PrimaryBtn("Daftarkan aset", Modifier.weight(1f), icon = Icons.Outlined.Add) { nav.navigate("assetNew") }
+                }
                 GhostBtn("Ekspor", Modifier.weight(.6f), icon = Icons.Outlined.FileDownload) { FileExports.shareInventory(nav.context, rows) }
             }
         }
@@ -118,7 +124,10 @@ internal fun AssetListScreen(nav: NavHostController, toast: (String) -> Unit) {
                 FilterSheetRow(type.id == typeFilter, type.name, "${type.code} · $count aset") { typeFilter = type.id; showTypeSheet = false }
             }
             ListDivider()
-            FilterSheetRow(false, "Kelola jenis aset", "Tambah atau nonaktifkan jenis") { showTypeSheet = false; nav.navigate("assetTypes") }
+            // "Kelola jenis aset" menulis data induk (owner.manage), bukan sekadar menyaring.
+            if (assetStore.canManageAssetTypes()) {
+                FilterSheetRow(false, "Kelola jenis aset", "Tambah atau nonaktifkan jenis") { showTypeSheet = false; nav.navigate("assetTypes") }
+            }
         }
     }
 }

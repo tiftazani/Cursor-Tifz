@@ -1256,6 +1256,18 @@ object CuciinStore {
     /** Apakah pengguna yang sedang masuk boleh mengirim WhatsApp. */
     fun canSendWa(): Boolean = canAccess("whatsapp", "whatsapp.send")
 
+    /** Apakah pengguna yang sedang masuk boleh mencatat perubahan stok. */
+    fun canWriteStock(): Boolean = canAccess("stock", "stock.write")
+
+    /** Apakah pengguna yang sedang masuk boleh mencatat pelunasan dan bukti cucian. */
+    fun canTakePayment(): Boolean = canAccess("service", "service.payment")
+
+    /** Apakah pengguna yang sedang masuk boleh menambah atau mengubah aset cabang. */
+    fun canWriteInventory(): Boolean = canAccess("inventory", "inventory.write")
+
+    /** Apakah pengguna yang sedang masuk boleh mengelola jenis aset (data induk). */
+    fun canManageAssetTypes(): Boolean = canAccess("owner", "owner.manage")
+
     fun setCartHandler(svcId: String, email: String) {
         if (session.value?.role != Role.Owner) return
         val staffMember = staff.firstOrNull { it.email.equals(email, true) } ?: return
