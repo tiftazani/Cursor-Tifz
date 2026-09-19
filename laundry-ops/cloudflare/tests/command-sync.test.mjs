@@ -365,6 +365,41 @@ test("stock.batch menjurnal riwayat stok dan saldo sebagai entity yang dikenal p
   assert.deepEqual(types,["branchStock","stockMove"],"riwayat stok harus dijurnal dengan tipe yang dipahami materializer");
 });
 
+test("harga Service yang menyimpang dari katalog ditolak untuk pengirim non-Owner", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  const body=await (await pushCommands(commandRequest([{
+    commandId:"nota-harga-0001",type:"order.create",entityId:"MLT-9",branchId:"melati",
+    payload:{id:"MLT-9",branchId:"melati",customerName:"Pelanggan Uji",phone:"0812",total:99999,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:99999}]},
+  }]),env,identities.kasir)).json();
+  assert.equal(body.results[0].accepted,false,"harga di luar katalog harus ditolak");
+  assert.equal(body.results[0].code,403);
+  assert.equal(rows(env,"SELECT count(*) AS n FROM orders WHERE id='MLT-9'")[0].n,0,"Nota tidak boleh tersimpan");
+});
+
+test("harga Service sesuai katalog tetap diterima untuk non-Owner", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  const body=await (await pushCommands(commandRequest([{
+    commandId:"nota-harga-0002",type:"order.create",entityId:"MLT-10",branchId:"melati",
+    payload:{id:"MLT-10",branchId:"melati",customerName:"Pelanggan Uji",phone:"0812",total:20000,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:2,unit:"kg",unitPrice:10000}]},
+  }]),env,identities.kasir)).json();
+  assert.equal(body.results[0].accepted,true,"harga katalog tidak boleh ikut ditolak");
+});
+
+test("Owner tetap boleh memakai harga Service di luar katalog", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  const body=await (await pushCommands(commandRequest([{
+    commandId:"nota-harga-0003",type:"order.create",entityId:"MLT-11",branchId:"melati",
+    payload:{id:"MLT-11",branchId:"melati",customerName:"Pelanggan Uji",phone:"0812",total:7500,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:7500}]},
+  }]),env,identities.owner)).json();
+  assert.equal(body.results[0].accepted,true,"Owner berhak menyesuaikan harga Service");
+});
+
 test("reproject memakai revisi jurnal terbaru supaya versi entity tidak mundur", async () => {
   const env=fakeD1(); seedBaseline(env);
   env.db.exec(`INSERT INTO sync_snapshots(organization_id,revision,payload_json,updated_at)

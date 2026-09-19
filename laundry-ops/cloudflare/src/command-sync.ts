@@ -198,6 +198,22 @@ function customAccessRequirement(command: SyncCommand): { module: string; functi
   return null;
 }
 
+/**
+ * Apakah email ini memegang fungsi izin tertentu menurut kebijakan akses kustomnya.
+ *
+ * Dipakai untuk memeriksa izin di sisi server pada hal yang tidak punya modul sendiri, misalnya
+ * `service.price`. Owner selalu dianggap boleh; akun tanpa baris kebijakan memakai aturan bawaan
+ * peran (dan karena itu diperiksa terpisah oleh pemanggilnya).
+ */
+async function hasFunction(db: D1Database, email: string, module: string, fn: string): Promise<boolean> {
+  const row = await db.prepare("SELECT payload_json FROM access_policies WHERE organization_id=? AND lower(email)=lower(?)").bind(ORG_ID, email).first<{payload_json:string}>();
+  if (!row) return false;
+  const policy = JSON.parse(row.payload_json) as JsonRecord;
+  const modules = Array.isArray(policy.modules) ? policy.modules.filter((value): value is string => typeof value === "string") : [];
+  const functions = Array.isArray(policy.functions) ? policy.functions.filter((value): value is string => typeof value === "string") : [];
+  return modules.includes(module) && functions.includes(fn);
+}
+
 async function assertCustomAccess(db: D1Database, identity: SyncIdentity, command: SyncCommand): Promise<void> {
   if (identity.bootstrap || identity.role === "Owner") return;
   const requirement = customAccessRequirement(command);
@@ -356,11 +372,29 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
     };
   });
   const serviceIds=[...new Set(parsedLines.map(line=>line.serviceId))];
-  const commissions=(await db.prepare(`SELECT id,commission_per_unit FROM services WHERE organization_id=? AND active=1 AND id IN (${serviceIds.map(()=>"?").join(",")})`).bind(ORG_ID,...serviceIds).all<{id:string;commission_per_unit:number}>()).results;
+  const commissions=(await db.prepare(`SELECT id,commission_per_unit,default_price FROM services WHERE organization_id=? AND active=1 AND id IN (${serviceIds.map(()=>"?").join(",")})`).bind(ORG_ID,...serviceIds).all<{id:string;commission_per_unit:number;default_price:number}>()).results;
   const commissionCatalogue=new Map(commissions.map(row=>[row.id,row.commission_per_unit]));
-  const storedCommissions=existing ? (await db.prepare(`SELECT service_id,commission_per_unit FROM order_lines WHERE order_id=? AND service_id IN (${serviceIds.map(()=>"?").join(",")})`).bind(id,...serviceIds).all<{service_id:string;commission_per_unit:number}>()).results : [];
+  const priceCatalogue=new Map(commissions.map(row=>[row.id,row.default_price]));
+  const storedCommissions=existing ? (await db.prepare(`SELECT service_id,commission_per_unit,unit_price FROM order_lines WHERE order_id=? AND service_id IN (${serviceIds.map(()=>"?").join(",")})`).bind(id,...serviceIds).all<{service_id:string;commission_per_unit:number;unit_price:number}>()).results : [];
   const historicalCommissions=new Map(storedCommissions.map(row=>[row.service_id,row.commission_per_unit]));
+  const historicalPrices=new Map(storedCommissions.map(row=>[row.service_id,row.unit_price]));
   const lines=parsedLines.map(line=>({...line,commissionPerUnit:trustedCommission(line.serviceId,commissionCatalogue,historicalCommissions)}));
+  // Harga per satuan hanya boleh berbeda dari harga katalog bila pengirimnya memang pemegang
+  // fungsi `service.price` (bawaannya Owner). Tanpa pemeriksaan ini, perangkat yang dimodifikasi
+  // bisa menulis harga apa pun ke server walau tombolnya disembunyikan di UI.
+  if (identity.role !== "Owner" && !identity.bootstrap) {
+    const bolehUbahHarga = await hasFunction(db, identity.email, "service", "service.price");
+    if (!bolehUbahHarga) {
+      const menyimpang = lines.find(line => {
+        const katalog = priceCatalogue.get(line.serviceId);
+        if (typeof katalog !== "number" || line.unitPrice === katalog) return false;
+        // Harga yang sudah tersimpan pada Service ini tetap boleh dipertahankan, supaya koreksi
+        // rincian lain tidak ikut ditolak hanya karena ada harga Service dari transaksi sebelumnya.
+        return line.unitPrice !== historicalPrices.get(line.serviceId);
+      });
+      if (menyimpang) throw new CommandError(403, "Harga Service hanya dapat diubah oleh Owner");
+    }
+  }
   const total = lines.reduce((sum, line) => sum + Math.round(line.quantity * line.unitPrice), 0);
   const stockAdjustments=await retailAdjustments(db,id,lines);
   const paid = integer(p,"paid");
