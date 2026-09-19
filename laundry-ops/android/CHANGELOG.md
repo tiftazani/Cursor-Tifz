@@ -2,6 +2,49 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.28 — 19 Sep 2026 (versionCode 47)
+
+### Penolakan izin tidak lagi mematikan aplikasi atau melapor palsu
+
+Versi 1.10.27 menutup seluruh 17 fungsi izin, tetapi cara MENOLAKnya masih salah di 12 titik.
+Dua kelas bug, keduanya ditemukan dengan memeriksa seluruh kelas bug yang sama setelah menemukan
+yang pertama, bukan hanya titik yang dilaporkan:
+
+**Kelas A, penolakan mematikan aplikasi.** `saveNota` dan `addInventory` memakai
+`require(boleh(...))` yang melempar `IllegalArgumentException`. Supervisor memiliki MODUL
+`service` sehingga menu "Service baru" tampil, tetapi tidak memiliki fungsi `service.create`:
+menekan Simpan langsung menutup aplikasi. Penolakan izin adalah kejadian NORMAL, bukan kesalahan
+program. Sekarang `saveNota` memakai `check` (dicegat lebih dulu oleh `canCreateService()` di UI)
+dan `addInventory` mengembalikan `null`.
+
+**Kelas B, penolakan dilaporkan sebagai sukses.** Sepuluh fungsi memakai
+`if (!boleh(...)) return` sehingga store tidak menulis apa pun, tetapi UI tetap menampilkan
+"Cabang tersimpan", "Layanan tersimpan", "Perubahan aset tersimpan". Itu laporan palsu: pengguna
+mengira datanya tersimpan, dan bug tersembunyi karena layar tampak bekerja. Semua titik itu kini
+mengembalikan pesan penolakan (`tolak(...)`), dan UI menampilkannya.
+
+Rincian yang ikut diperbaiki:
+
+- `updateBranch`, `updateBranchMap`, `updateCustomer`, `updateService`, `updateProduct`,
+  `updateAssetType`, `updateInventory`, `markWaSent`, `editStock` mengembalikan `String?`.
+- `editStocks` memakai penanda `CuciinStore.TOLAK_STOK` (-1) karena mengembalikan jumlah
+  perubahan; jumlah sah selalu >= 0, jadi UI dapat membedakan "ditolak" dari "tidak ada perubahan".
+- `addService` dan `addProduct` ternyata tidak punya penjaga izin sama sekali; keduanya kini
+  dijaga `owner.manage` dan mengembalikan `null` saat ditolak.
+- Pemeriksa izin di UI ditambahkan supaya jalur penolakan tidak pernah dipanggil:
+  `canCreateService()` dan `canSendWa()`.
+
+Tiga test pengunci baru, semuanya membaca kode sumber dan sudah dibuktikan GAGAL saat bug
+dikembalikan:
+
+- `penolakanIzinTidakMemakaiRequireYangMelempar` — menolak `require(boleh(...))` di store.
+- `penolakanIzinSelaluMembawaPesan` — menolak `if (!boleh(...)) return` telanjang.
+- `uiMemakaiPesanPenolakanDariStore` — setiap pemanggil di UI harus memakai pesan penolakan,
+  `?.let`, atau pemeriksa izin. Test ini menemukan satu call site nyata yang mengabaikan hasilnya
+  (`markWaSent` di layar nota) saat pertama dijalankan.
+
+Titik jaga `owner.manage` naik dari 15 ke 17. Test Android 205 lulus (dari 202), Worker 53 lulus.
+
 ## 1.10.27 — 18 Sep 2026 (versionCode 46)
 
 ### Seluruh 17 fungsi Kontrol Akses Role kini benar-benar diperiksa

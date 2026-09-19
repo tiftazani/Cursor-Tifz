@@ -447,6 +447,15 @@ object CuciinStore {
      */
     private fun boleh(modul: String, fungsi: String): Boolean = canAccess(modul, fungsi)
 
+    /**
+     * Penanda penolakan izin untuk fungsi yang mengembalikan Int.
+     *
+     * Nilai negatif tidak mungkin muncul dari perhitungan sah (jumlah perubahan selalu >= 0), jadi
+     * UI dapat membedakan "izin dicabut" dari "tidak ada yang berubah" tanpa mengubah tipe
+     * kembalian dan tanpa melempar pengecualian.
+     */
+    const val TOLAK_STOK: Int = -1
+
     /** Pesan penolakan yang menyebut fungsi mana yang dicabut, supaya tidak membingungkan. */
     private fun tolak(fungsi: String): String =
         "Akses ${AccessCatalog.functionLabel(fungsi)} dicabut untuk role akun ini"
@@ -767,10 +776,10 @@ object CuciinStore {
         return b
     }
 
-    fun updateBranch(id: String, name: String, code: String, location: String, maps: String) {
-        if (!boleh("owner", "owner.manage")) return
+    fun updateBranch(id: String, name: String, code: String, location: String, maps: String): String? {
+        if (!boleh("owner", "owner.manage")) return tolak("owner.manage", "Akun ini tidak dapat mengubah cabang")
         val i = branches.indexOfFirst { it.id == id }
-        if (i < 0) return
+        if (i < 0) return null
         branches[i] = branches[i].copy(
             name = name.trim(),
             code = code.uppercase().take(4).ifBlank { branches[i].code },
@@ -779,15 +788,17 @@ object CuciinStore {
         )
         log("Cabang ${name.trim()} diubah", id)
         bump()
+        return null
     }
 
-    fun updateBranchMap(id: String, maps: String) {
-        if (!boleh("owner", "owner.manage")) return
+    fun updateBranchMap(id: String, maps: String): String? {
+        if (!boleh("owner", "owner.manage")) return tolak("owner.manage", "Akun ini tidak dapat mengubah lokasi cabang")
         val i = branches.indexOfFirst { it.id == id }
-        if (i < 0 || maps.isBlank()) return
+        if (i < 0 || maps.isBlank()) return null
         branches[i] = branches[i].copy(mapsQuery = maps.trim())
         log("Lokasi peta ${branches[i].name} diperbarui", id)
         bump()
+        return null
     }
 
     fun deleteBranch(id: String): String? {
@@ -822,14 +833,15 @@ object CuciinStore {
         return c
     }
 
-    fun updateCustomer(id: String, name: String, phone: String, address: String) {
-        if (!boleh("customer", "customer.write")) return
+    fun updateCustomer(id: String, name: String, phone: String, address: String): String? {
+        if (!boleh("customer", "customer.write")) return tolak("customer.write", "Akun ini tidak dapat mengubah pelanggan")
         val i = customers.indexOfFirst { it.id == id }
-        if (i < 0) return
+        if (i < 0) return null
         customers[i] = customers[i].copy(name = name.trim(), phone = phone.trim(), address = address.trim())
         if (selectedCustomer.value?.id == id) selectedCustomer.value = customers[i]
         log("Pelanggan ${name.trim()} diubah", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
+        return null
     }
 
     fun deleteCustomer(id: String): String? {
@@ -895,7 +907,8 @@ object CuciinStore {
         return null
     }
 
-    fun addService(name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean, selfService: Boolean = false, commissionPerUnit: Int = 0, productKey: String = ""): ServiceItem {
+    fun addService(name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean, selfService: Boolean = false, commissionPerUnit: Int = 0, productKey: String = ""): ServiceItem? {
+        if (!boleh("owner", "owner.manage")) return null
         val id = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "svc-${newId()}" }
         val unique = if (services.any { it.id == id }) "$id-${newId()}" else id
         val finalUnit = if (selfService) "Load" else unit.trim().ifBlank { "pcs" }
@@ -907,10 +920,10 @@ object CuciinStore {
         return s
     }
 
-    fun updateService(id: String, name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean, selfService: Boolean = false, commissionPerUnit: Int = 0, productKey: String = "") {
-        if (!boleh("owner", "owner.manage")) return
+    fun updateService(id: String, name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean, selfService: Boolean = false, commissionPerUnit: Int = 0, productKey: String = ""): String? {
+        if (!boleh("owner", "owner.manage")) return tolak("owner.manage", "Akun ini tidak dapat mengubah layanan")
         val i = services.indexOfFirst { it.id == id }
-        if (i < 0) return
+        if (i < 0) return null
         services[i] = services[i].copy(
             name = name.trim(),
             unit = if (selfService) "Load" else unit.trim().ifBlank { services[i].unit },
@@ -923,6 +936,7 @@ object CuciinStore {
         )
         log("Layanan ${name.trim()} diubah", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
+        return null
     }
 
     fun deleteService(id: String): String? {
@@ -935,7 +949,8 @@ object CuciinStore {
         return null
     }
 
-    fun addProduct(name: String, stock: Int, min: Int, initialBranchIds: Set<String>, kind: ProductKind = ProductKind.BahanHabisPakai, unit: String = "pcs"): Product {
+    fun addProduct(name: String, stock: Int, min: Int, initialBranchIds: Set<String>, kind: ProductKind = ProductKind.BahanHabisPakai, unit: String = "pcs"): Product? {
+        if (!boleh("owner", "owner.manage")) return null
         val p = Product(name.trim(), 0, min.coerceAtLeast(0), "p-${newId()}", kind, unit.trim().ifBlank { "pcs" })
         products.add(p)
         branches.forEach { branch ->
@@ -946,10 +961,10 @@ object CuciinStore {
         return p
     }
 
-    fun updateProduct(key: String, name: String, min: Int, kind: ProductKind, unit: String) {
-        if (!boleh("owner", "owner.manage")) return
+    fun updateProduct(key: String, name: String, min: Int, kind: ProductKind, unit: String): String? {
+        if (!boleh("owner", "owner.manage")) return tolak("owner.manage", "Akun ini tidak dapat mengubah produk")
         val i = products.indexOfFirst { it.key == key || it.name == key }
-        if (i < 0) return
+        if (i < 0) return null
         val old = products[i]
         val updated = old.copy(name = name.trim(), min = min.coerceAtLeast(0), id = old.id.ifBlank { "p-${newId()}" }, kind = kind, unit = unit.trim().ifBlank { old.unit })
         products[i] = updated
@@ -958,6 +973,7 @@ object CuciinStore {
         }
         log("Produk ${name.trim()} diubah", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
+        return null
     }
 
     fun deleteProduct(key: String): String? {
@@ -984,8 +1000,8 @@ object CuciinStore {
         sellable: Boolean,
         assetTypeId: String = "",
         photoPath: String = "",
-    ): InventoryItem {
-        require(boleh("inventory", "inventory.write")) { tolak("inventory.write", "Akun ini tidak dapat menambah aset") }
+    ): InventoryItem? {
+        if (!boleh("inventory", "inventory.write")) return null
         val row = InventoryItem(
             id = "inv-${newId()}", branchId = branchId, name = name.trim(), category = category,
             brand = brand.trim(), serialNumber = serialNumber.trim(), quantity = quantity.coerceAtLeast(0),
@@ -1040,12 +1056,13 @@ object CuciinStore {
         return null
     }
 
-    fun updateAssetType(row: AssetType) {
-        if (!boleh("owner", "owner.manage")) return
+    fun updateAssetType(row: AssetType): String? {
+        if (!boleh("owner", "owner.manage")) return tolak("owner.manage", "Akun ini tidak dapat mengubah jenis aset")
         val index = assetTypes.indexOfFirst { it.id == row.id }
-        if (index < 0) return
+        if (index < 0) return null
         assetTypes[index] = row.copy(code = row.code.trim().uppercase().take(4), name = row.name.trim())
         bump()
+        return null
     }
 
     /** Jenis yang sudah dipakai aset tidak dihapus supaya kode aset lama tetap terbaca. */
@@ -1060,13 +1077,14 @@ object CuciinStore {
     fun assetTypeName(id: String): String =
         (assetTypes + defaultAssetTypes()).firstOrNull { it.id == id }?.name.orEmpty()
 
-    fun updateInventory(row: InventoryItem) {
-        if (!boleh("inventory", "inventory.write")) return
+    fun updateInventory(row: InventoryItem): String? {
+        if (!boleh("inventory", "inventory.write")) return tolak("inventory.write", "Akun ini tidak dapat mengubah aset")
         val index = inventory.indexOfFirst { it.id == row.id }
-        if (index < 0) return
+        if (index < 0) return null
         inventory[index] = row.copy(name = row.name.trim(), quantity = row.quantity.coerceAtLeast(0), unit = row.unit.trim().ifBlank { "unit" })
         log("Aset ${row.assetCode.ifBlank { row.name }} diubah · ${row.status.label}", row.branchId)
         bump()
+        return null
     }
 
     fun deleteInventory(id: String): String? {
@@ -1225,6 +1243,19 @@ object CuciinStore {
     /** Apakah pengguna yang sedang masuk boleh mengubah harga Service. */
     fun canChangePrice(): Boolean = canAccess("service", "service.price")
 
+    /**
+     * Apakah pengguna yang sedang masuk boleh membuat Service baru.
+     *
+     * Dipakai layar Service baru untuk menampilkan pesan penolakan SEBELUM memanggil [saveNota].
+     * Sebelumnya layar hanya memeriksa modul `service`, sedangkan fungsi `service.create` tidak
+     * pernah diperiksa di UI: Supervisor boleh membuka layarnya lalu aplikasi mati saat menekan
+     * Simpan karena `saveNota` memakai `require`. Menyembunyikan menu saja bukan penjagaan.
+     */
+    fun canCreateService(): Boolean = canAccess("service", "service.create")
+
+    /** Apakah pengguna yang sedang masuk boleh mengirim WhatsApp. */
+    fun canSendWa(): Boolean = canAccess("whatsapp", "whatsapp.send")
+
     fun setCartHandler(svcId: String, email: String) {
         if (session.value?.role != Role.Owner) return
         val staffMember = staff.firstOrNull { it.email.equals(email, true) } ?: return
@@ -1253,7 +1284,8 @@ object CuciinStore {
         sendWa: Boolean,
     ): Nota {
         val s = session.value!!
-        require(boleh("service", "service.create")) { tolak("service.create", "Akun ini tidak dapat membuat Service baru") }
+        // UI memeriksa izin ini lebih dulu dan menampilkan pesan; ini penjaga lapis kedua.
+        check(boleh("service", "service.create")) { tolak("service.create", "Akun ini tidak dapat membuat Service baru") }
         val permittedBranch = when (s.role) {
             Role.Owner -> branches.any { it.id == branchId }
             else -> branchId == s.branchId
@@ -1450,14 +1482,15 @@ object CuciinStore {
         return null
     }
 
-    fun markWaSent(id: String) {
-        if (!boleh("whatsapp", "whatsapp.send")) return
-        val n = notas.find { it.id == id } ?: return
+    fun markWaSent(id: String): String? {
+        if (!boleh("whatsapp", "whatsapp.send")) return tolak("whatsapp.send", "Akun ini tidak dapat mengirim WhatsApp")
+        val n = notas.find { it.id == id } ?: return null
         val t = Clock.nowMs()
         n.waSent = true
         n.waAt = Clock.nowLabel(t)
         log("WA nota ${n.id} terkirim → archive", n.branchId, n.id)
         bump()
+        return null
     }
 
     fun advanceLaundry(id: String): String? {
@@ -1514,13 +1547,14 @@ object CuciinStore {
         return path
     }
 
-    fun editStock(product: String, branchId: String, kind: StockKind, qty: Int, occurredAtMs: Long = Clock.nowMs()) {
-        if (!boleh("stock", "stock.write")) return
+    fun editStock(product: String, branchId: String, kind: StockKind, qty: Int, occurredAtMs: Long = Clock.nowMs()): String? {
+        if (!boleh("stock", "stock.write")) return tolak("stock.write", "Akun ini tidak dapat mencatat stok")
         editStocks(mapOf(product to qty), branchId, kind, occurredAtMs)
+        return null
     }
 
     fun editStocks(changes: Map<String, Int>, branchId: String, kind: StockKind, occurredAtMs: Long = Clock.nowMs()): Int {
-        if (!boleh("stock", "stock.write")) return 0
+        if (!boleh("stock", "stock.write")) return TOLAK_STOK
         val s = session.value ?: return 0
         if (s.role != Role.Owner && branchId != s.branchId) return 0
         val t = occurredAtMs

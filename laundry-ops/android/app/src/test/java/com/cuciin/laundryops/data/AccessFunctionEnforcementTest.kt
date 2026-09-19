@@ -84,7 +84,7 @@ class AccessFunctionEnforcementTest {
         "expense.write" to ("boleh" to 2),     // addExpense + deleteExpense
         "cash.close" to ("boleh" to 1),        // closeCash
         // master data & kontrol akses
-        "owner.manage" to ("boleh" to 15),     // cabang, user, layanan, produk, jenis aset, template WA
+        "owner.manage" to ("boleh" to 17),     // cabang, user, layanan, produk, jenis aset, template WA
         "owner.access" to ("tolak" to 1),      // assignAccessRole
     )
 
@@ -252,5 +252,83 @@ class AccessFunctionEnforcementTest {
             AccessPolicy.can(owner, emptyList(), null, AccessCatalog.moduleOf(fungsi)!!, fungsi)
         }
         assertTrue("Owner harus lolos seluruh fungsi: $gagal", gagal.isEmpty())
+    }
+
+    /**
+     * Penolakan izin tidak boleh mematikan aplikasi.
+     *
+     * `require(boleh(...))` melempar IllegalArgumentException. Supervisor punya MODUL `service`
+     * (jadi menu "Service baru" tampil) tetapi tidak punya fungsi `service.create`, sehingga
+     * menekan Simpan mematikan aplikasi. Bentuk penolakan yang benar: kembalikan pesan atau null,
+     * atau pakai `check` yang hanya melempar bila ada bug program (bukan karena role pengguna).
+     *
+     * Pelajaran umum: penolakan izin adalah kejadian NORMAL, bukan kesalahan program. Jangan
+     * pakai `require`/`error` untuk keadaan yang bisa dicapai pengguna sah.
+     */
+    @Test
+    fun penolakanIzinTidakMemakaiRequireYangMelempar() {
+        val sumber = java.io.File("src/main/java/com/cuciin/laundryops/data/CuciinStore.kt").readText()
+        val pelanggar = Regex("""require\(\s*(boleh|canAccess)\(""")
+            .findAll(sumber)
+            .map { it.value }
+            .toList()
+        assertTrue(
+            "Penolakan izin memakai require() yang melempar sehingga aplikasi mati saat izin dicabut: $pelanggar",
+            pelanggar.isEmpty(),
+        )
+    }
+
+    /**
+     * Penolakan izin harus terlihat oleh pengguna, bukan diam-diam.
+     *
+     * `if (!boleh(...)) return` pada fungsi yang mengembalikan Unit membuat UI tetap menampilkan
+     * "tersimpan" padahal store tidak menulis apa pun. Itu laporan palsu: pengguna mengira datanya
+     * tersimpan, dan bug tersembunyi karena layar tampak bekerja. Setiap titik jaga harus
+     * mengembalikan pesan penolakan (`tolak(...)`) atau `null`, bukan `return` telanjang.
+     */
+    @Test
+    fun penolakanIzinSelaluMembawaPesan() {
+        val sumber = java.io.File("src/main/java/com/cuciin/laundryops/data/CuciinStore.kt").readText()
+        val diam = Regex("""if \(!\s*(?:boleh|canAccess)\([^)]*\)\)\s*return\s*$""", RegexOption.MULTILINE)
+            .findAll(sumber)
+            .map { it.value.trim() }
+            .toList()
+        assertTrue(
+            "Penolakan izin ini tidak membawa pesan, sehingga UI bisa melaporkan 'tersimpan' padahal tidak: $diam",
+            diam.isEmpty(),
+        )
+    }
+
+    /**
+     * Setiap call site di UI harus memakai pesan penolakan yang dikembalikan store.
+     *
+     * Menambah pesan di store tidak berguna bila UI mengabaikan hasilnya. Tiga bentuk yang sah:
+     * menangkap `String?`-nya (`val tolak = ...`), memakai `?.let`, atau menjaga dengan pemeriksa
+     * izin di UI (`canSendWa()`/`canCreateService()`/`canChangePrice()`) supaya jalur penolakan
+     * tidak pernah dipanggil.
+     */
+    @Test
+    fun uiMemakaiPesanPenolakanDariStore() {
+        val ui = java.io.File("src/main/java/com/cuciin/laundryops/ui")
+        val berkas = ui.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+        val lalai = mutableListOf<String>()
+        val wajibDicek = listOf(
+            "updateBranch(", "updateBranchMap(", "updateCustomer(", "updateService(",
+            "updateProduct(", "updateInventory(", "markWaSent(",
+        )
+        val bentukSah = listOf("val tolak", "?.let", "canSendWa()", "canCreateService()", "canChangePrice()")
+        berkas.forEach { f ->
+            f.readText().lines().forEachIndexed { i, baris ->
+                wajibDicek.forEach { panggil ->
+                    if (baris.contains(panggil) && bentukSah.none { baris.contains(it) }) {
+                        lalai += "${f.name}:${i + 1} $panggil"
+                    }
+                }
+            }
+        }
+        assertTrue(
+            "Pemanggil ini mengabaikan pesan penolakan izin sehingga UI bisa melaporkan sukses palsu: $lalai",
+            lalai.isEmpty(),
+        )
     }
 }

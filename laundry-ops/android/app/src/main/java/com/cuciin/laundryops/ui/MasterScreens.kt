@@ -126,7 +126,8 @@ internal fun CustomersScreen(nav: NavHostController, toast: (String) -> Unit) {
                             toast("Pelanggan disimpan")
                             if (pickMode) nav.popBackStack()
                         } else {
-                            store.updateCustomer(e.id, name, phone, address)
+                            val tolak = store.updateCustomer(e.id, name, phone, address)
+                            if (tolak != null) { toast(tolak); return@PrimaryBtn }
                             toast("Perubahan disimpan")
                         }
                         creating = false
@@ -201,7 +202,8 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 creating = true
                 toast("Lokasi dari peta berhasil dipilih")
             } else {
-                store.updateBranchMap(editing.id, incomingMap)
+                val tolak = store.updateBranchMap(editing.id, incomingMap)
+                if (tolak != null) { toast(tolak); MapSelection.pendingLink.value = null; return@LaunchedEffect }
                 toast("Lokasi peta ${editing.name} berhasil disimpan")
             }
             MapSelection.pendingLink.value = null
@@ -266,7 +268,10 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
                                 toast("Akses Kelola master data dicabut untuk role akun ini")
                                 return@PrimaryBtn
                             }
-                        } else store.updateBranch(e.id, name, code, location, maps)
+                        } else {
+                            val tolak = store.updateBranch(e.id, name, code, location, maps)
+                            if (tolak != null) { toast(tolak); return@PrimaryBtn }
+                        }
                         toast("Cabang tersimpan")
                         creating = false
                         editingId = null
@@ -579,8 +584,14 @@ internal fun ServicesScreen(nav: NavHostController, toast: (String) -> Unit) {
                         }
                         val e = editing
                         if (retail && productKey.isBlank()) { toast("Pilih produk stok untuk layanan retail"); return@PrimaryBtn }
-                        if (e == null) store.addService(name, unit, price, retail, dropOut, selfService, commission, productKey)
-                        else store.updateService(e.id, name, unit, price, retail, dropOut, selfService, commission, productKey)
+                        if (e == null) {
+                            if (store.addService(name, unit, price, retail, dropOut, selfService, commission, productKey) == null) {
+                                toast("Akses Kelola master data dicabut untuk role akun ini"); return@PrimaryBtn
+                            }
+                        } else {
+                            val tolak = store.updateService(e.id, name, unit, price, retail, dropOut, selfService, commission, productKey)
+                            if (tolak != null) { toast(tolak); return@PrimaryBtn }
+                        }
                         toast("Layanan tersimpan")
                         creating = false
                         editing = null
@@ -676,8 +687,14 @@ internal fun ProductsScreen(nav: NavHostController, toast: (String) -> Unit) {
                             return@PrimaryBtn
                         }
                         val e = editing
-                        if (e == null) store.addProduct(name, stock, min, initialBranchIds, kind, unit)
-                        else store.updateProduct(e.key, name, min, kind, unit)
+                        if (e == null) {
+                            if (store.addProduct(name, stock, min, initialBranchIds, kind, unit) == null) {
+                                toast("Akses Kelola master data dicabut untuk role akun ini"); return@PrimaryBtn
+                            }
+                        } else {
+                            val tolak = store.updateProduct(e.key, name, min, kind, unit)
+                            if (tolak != null) { toast(tolak); return@PrimaryBtn }
+                        }
                         toast("Produk tersimpan")
                         creating = false
                         editing = null

@@ -12,8 +12,8 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.27"
-    val currentCode: Int = 46
+    val currentName: String = "1.10.28"
+    val currentCode: Int = 47
 
     val releases: List<AppRelease> = listOf(
         AppRelease(

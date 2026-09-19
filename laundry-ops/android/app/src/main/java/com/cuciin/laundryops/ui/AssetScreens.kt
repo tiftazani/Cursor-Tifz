@@ -313,11 +313,13 @@ internal fun AssetFormScreen(nav: NavHostController, assetId: String?, toast: (S
                 val type = assetTypes.firstOrNull { it.id == effectiveTypeId }
                 val category = legacyCategoryFor(type?.name.orEmpty())
                 if (editing == null) {
-                    assetStore.addInventory(branchId, name, category, brand, serial, qty, unit, status, purchaseAt, notes, sellable = false, assetTypeId = effectiveTypeId, photoPath = photoPath)
-                    toast("Aset ${previewCode} tersimpan")
+                    val row = assetStore.addInventory(branchId, name, category, brand, serial, qty, unit, status, purchaseAt, notes, sellable = false, assetTypeId = effectiveTypeId, photoPath = photoPath)
+                    if (row == null) { toast("Akses Ubah aset dicabut untuk role akun ini"); return@PrimaryBtn }
+                    toast("Aset ${row.assetCode.ifBlank { previewCode }} tersimpan")
                     nav.popBackStack()
                 } else {
-                    assetStore.updateInventory(editing.copy(name = name, category = category, brand = brand, serialNumber = serial, quantity = qty, unit = unit, status = status, purchaseAt = purchaseAt, notes = notes, assetTypeId = effectiveTypeId, photoPath = photoPath))
+                    val tolak = assetStore.updateInventory(editing.copy(name = name, category = category, brand = brand, serialNumber = serial, quantity = qty, unit = unit, status = status, purchaseAt = purchaseAt, notes = notes, assetTypeId = effectiveTypeId, photoPath = photoPath))
+                    if (tolak != null) { toast(tolak); return@PrimaryBtn }
                     toast("Perubahan aset tersimpan")
                     nav.popBackStack()
                 }

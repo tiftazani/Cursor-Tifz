@@ -688,10 +688,13 @@ internal fun BayarScreen(nav: NavHostController, toast: (String) -> Unit) {
         if (pickup.isBefore(LocalDateTime.now(Clock.ZONE))) { toast("Pilih janji selesai setelah waktu sekarang"); return }
         if (paid > total) { toast("Pembayaran melebihi total pesanan"); return }
         if (stockShortages.isNotEmpty()) { toast("Stok cabang tidak cukup: ${stockShortages.first()}"); return }
+        // Izin diperiksa lebih dulu supaya Supervisor yang tidak punya `service.create` melihat
+        // pesan, bukan aplikasi yang mati saat menekan Simpan.
+        if (!store.canCreateService()) { toast("Akses Buat Service baru dicabut untuk role akun ini"); return }
         saving = true
         val n = store.saveNota(cust, cart, paid, pickupValue, method, branchId, sendWa = false)
         if (openWa) {
-            try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${store.waMe(n.phone)}?text=${Uri.encode(store.notaText(n))}"))); store.markWaSent(n.id) }
+            try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${store.waMe(n.phone)}?text=${Uri.encode(store.notaText(n))}"))); if (store.canSendWa()) store.markWaSent(n.id) }
             catch (_: android.content.ActivityNotFoundException) { toast("Service tersimpan. WhatsApp belum tersedia.") }
         } else toast("Service ${n.id} berhasil disimpan")
         nav.navigate("queue/${n.id}") { popUpTo("home") }
@@ -911,7 +914,8 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
                     PrimaryBtn(if (n.waSent) "Buka kembali WhatsApp" else "Kirim melalui WhatsApp", icon = Icons.Outlined.Send) {
                         try {
                             ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${store.waMe(n.phone)}?text=${Uri.encode(store.notaText(n))}")))
-                            store.markWaSent(id); toast("WhatsApp dibuka untuk nota ini")
+                            if (store.canSendWa()) { store.markWaSent(id); toast("WhatsApp dibuka untuk nota ini") }
+                            else toast("Akses Kirim WhatsApp dicabut untuk role akun ini")
                         } catch (_: android.content.ActivityNotFoundException) { toast("WhatsApp belum tersedia di perangkat ini") }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1082,6 +1086,7 @@ internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
                 val targets = if (session.role == Role.Owner) targetBranches else setOf(branchId)
                 if (targets.isEmpty()) { toast("Pilih minimal satu cabang"); return@PrimaryBtn }
                 val saved = store.editStocks(validChanges, targets, kind, date.atZone(Clock.ZONE).toInstant().toEpochMilli())
+                if (saved == CuciinStore.TOLAK_STOK) { toast("Akses Catat stok dicabut untuk role akun ini"); return@PrimaryBtn }
                 toast("$saved perubahan stok berhasil dicatat")
                 nav.navigate("stokHistory") { popUpTo("stok") }
             }
