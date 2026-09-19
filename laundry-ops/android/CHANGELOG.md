@@ -112,7 +112,22 @@ Dua test pengunci baru: `pintuMasukAlurTulisDiperiksaDenganFungsi` dan perluasan
 daftar pintu di `tombolAlurTulisTidakDikunciNamaPeran`. Keduanya terbukti GAGAL
 saat bug dikembalikan.
 
-Test Android 211 lulus (debug+release), lint bersih. Test Android 210 lulus (dari 205), Worker 53 lulus.
+Test Android 211 lulus (debug+release), lint bersih.
+
+### Kelas F: penolakan `saveNota` yang belum punya padanan di UI
+
+`saveNota` memeriksa izin, cabang, jumlah layanan, stok retail, dan batas bayar
+dengan `check`/`require` yang MELEMPAR. UI hanya memeriksa izinnya, jadi penolakan
+lain (mis. cabang transaksi tidak lagi tersedia) masih mematikan aplikasi.
+
+Pemeriksa baru `CuciinStore.notaReject(cartLines, paid, branchId): String?` memuat
+seluruh penolakan yang sama dan mengembalikannya sebagai pesan. Layar Pembayaran
+memanggilnya sebelum `saveNota`. Dua test pengunci baru:
+
+  layarPembayaranMemakaiPemeriksaPenolakanLebihDulu
+  pemeriksaPenolakanServiceTidakBerbedaIsi
+
+Keduanya terbukti GAGAL saat bug dikembalikan. Test Android 213 lulus (debug+release). Test Android 210 lulus (dari 205), Worker 53 lulus.
 
 ## 1.10.27 — 18 Sep 2026 (versionCode 46)
 

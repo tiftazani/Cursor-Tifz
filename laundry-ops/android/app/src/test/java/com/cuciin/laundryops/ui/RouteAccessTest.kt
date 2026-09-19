@@ -311,6 +311,55 @@ class RouteAccessTest {
     }
 
     /**
+     * Layar Pembayaran harus memakai [CuciinStore.notaReject] sebelum memanggil `saveNota`.
+     *
+     * `saveNota` memeriksa izin dan keabsahan data dengan `check`/`require`, yang MELEMPAR dan
+     * mematikan aplikasi. Selama UI tidak memeriksa hal yang sama lebih dulu, setiap penolakan
+     * baru di store menjadi crash baru di perangkat. Test ini mengunci urutannya.
+     */
+    @Test
+    fun layarPembayaranMemakaiPemeriksaPenolakanLebihDulu() {
+        val sumber = File("src/main/java/com/cuciin/laundryops/ui/OpsScreens.kt").readText()
+        val mulai = sumber.indexOf("fun save(openWa: Boolean)")
+        assertTrue("Fungsi save() tidak ditemukan di OpsScreens.kt", mulai >= 0)
+        val badan = sumber.substring(mulai, (mulai + 1200).coerceAtMost(sumber.length))
+        val posReject = badan.indexOf("notaReject(")
+        val posSave = badan.indexOf("store.saveNota(")
+        assertTrue("save() tidak memakai store.notaReject()", posReject >= 0)
+        assertTrue("save() tidak memanggil store.saveNota()", posSave >= 0)
+        assertTrue(
+            "save() memanggil saveNota sebelum memeriksa notaReject, jadi penolakan menjadi crash",
+            posReject < posSave,
+        )
+    }
+
+    /**
+     * Dua pemeriksa Service tidak boleh berbeda isi.
+     *
+     * `notaReject` (dipakai UI, mengembalikan pesan) dan `saveNota` (penjaga lapis kedua, melempar)
+     * harus menolak hal yang sama. Kalau tidak, ada penolakan yang hanya dikenal salah satunya:
+     * entah crash di perangkat, atau pemeriksaan yang tidak pernah berjalan.
+     */
+    @Test
+    fun pemeriksaPenolakanServiceTidakBerbedaIsi() {
+        val sumber = File("src/main/java/com/cuciin/laundryops/data/CuciinStore.kt").readText()
+        val awal = sumber.indexOf("fun notaReject(")
+        val akhir = sumber.indexOf("fun saveNota(")
+        assertTrue("notaReject tidak ditemukan", awal >= 0)
+        assertTrue("saveNota tidak ditemukan setelah notaReject", akhir > awal)
+        val pesan = Regex("""return\s+"([^"]+)"""").findAll(sumber.substring(awal, akhir)).map { it.groupValues[1] }.toSet()
+        val diSave = Regex("""require\([^\n]*\)\s*\{\s*"([^"]+)"\s*\}""")
+            .findAll(sumber.substring(akhir, (akhir + 2500).coerceAtMost(sumber.length)))
+            .map { it.groupValues[1] }.toSet()
+        val hilang = diSave - pesan
+        assertTrue(
+            "Penolakan di saveNota tidak ada padanannya di notaReject, sehingga menjadi crash:\n" +
+                hilang.joinToString("\n") { "  $it" },
+            hilang.isEmpty(),
+        )
+    }
+
+    /**
      * Setiap fungsi izin yang dipakai memfilter tombol harus benar-benar ada di katalog.
      *
      * Helper seperti `canWriteStock()` adalah pembungkus tipis; test ini memastikan pembungkus itu

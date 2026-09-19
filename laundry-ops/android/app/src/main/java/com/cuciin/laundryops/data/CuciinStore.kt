@@ -1286,6 +1286,31 @@ object CuciinStore {
             if (needed > available) "${product.name}: perlu $needed, tersedia $available" else null
         }
 
+    /**
+     * Pesan penolakan pertama yang menghalangi penyimpanan Service, atau null bila lolos.
+     *
+     * Dipakai layar Pembayaran supaya semua penolakan muncul sebagai pesan, bukan aplikasi mati.
+     * [saveNota] tetap memeriksa hal yang sama sebagai lapis kedua; pemeriksa ini hanya
+     * memindahkan penolakan ke tempat yang bisa menampilkannya.
+     */
+    fun notaReject(cartLines: List<CartLine>, paid: Int, branchId: String): String? {
+        val s = session.value ?: return "Silakan masuk kembali"
+        if (!canCreateService()) return tolak("service.create", "Akun ini tidak dapat membuat Service baru")
+        val permittedBranch = when (s.role) {
+            Role.Owner -> branches.any { it.id == branchId }
+            else -> branchId == s.branchId
+        }
+        if (!permittedBranch) return "Cabang transaksi tidak tersedia untuk akun ini"
+        if (cartLines.isEmpty()) return "Service harus memiliki minimal satu layanan"
+        if (!cartLines.all { it.qty.isFinite() && it.qty > 0.0 && it.qty <= 9999.0 && (it.service.unit == "kg" || it.qty % 1.0 == 0.0) }) {
+            return "Jumlah layanan belum valid"
+        }
+        if (retailStockShortages(cartLines, branchId).isNotEmpty()) return "Stok retail cabang tidak mencukupi"
+        val total = cartLines.sumOf { (it.qty * it.unitPrice.coerceAtLeast(0)).toInt() }
+        if (paid !in 0..total) return "Pembayaran harus berada antara Rp 0 dan total Service"
+        return null
+    }
+
     fun saveNota(
         customer: Customer,
         cartLines: List<CartLine>,

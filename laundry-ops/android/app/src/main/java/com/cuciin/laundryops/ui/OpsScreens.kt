@@ -688,9 +688,10 @@ internal fun BayarScreen(nav: NavHostController, toast: (String) -> Unit) {
         if (pickup.isBefore(LocalDateTime.now(Clock.ZONE))) { toast("Pilih janji selesai setelah waktu sekarang"); return }
         if (paid > total) { toast("Pembayaran melebihi total pesanan"); return }
         if (stockShortages.isNotEmpty()) { toast("Stok cabang tidak cukup: ${stockShortages.first()}"); return }
-        // Izin diperiksa lebih dulu supaya Supervisor yang tidak punya `service.create` melihat
-        // pesan, bukan aplikasi yang mati saat menekan Simpan.
-        if (!store.canCreateService()) { toast("Akses Buat Service baru dicabut untuk role akun ini"); return }
+        // Semua penolakan lain (izin, cabang, jumlah, stok, batas bayar) diperiksa lewat satu
+        // pintu yang sama dengan yang dipakai saveNota, supaya tidak ada lagi jalur yang
+        // mematikan aplikasi alih-alih menampilkan pesan.
+        store.notaReject(cart, paid, branchId)?.let { toast(it); return }
         saving = true
         val n = store.saveNota(cust, cart, paid, pickupValue, method, branchId, sendWa = false)
         if (openWa) {
