@@ -1008,7 +1008,12 @@ internal fun StockScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
         }
-        if (s.role == Role.Owner) item { GhostBtn("Kelola produk", icon = Icons.Outlined.Edit) { nav.navigate("products") } }
+        // Pintu ke master data produk diperiksa dengan FUNGSI, bukan nama peran: gerbang rute
+        // `products` memakai `owner.manage`, jadi role kustom pemegang fungsi itu juga boleh
+        // masuk. Dikunci nama peran, tombolnya hilang untuk mereka.
+        if (store.canAccess("owner", "owner.manage")) item {
+            GhostBtn("Kelola produk", icon = Icons.Outlined.Edit) { nav.navigate("products") }
+        }
     }
     if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

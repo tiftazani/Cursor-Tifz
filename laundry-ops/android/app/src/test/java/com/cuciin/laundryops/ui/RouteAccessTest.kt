@@ -236,7 +236,7 @@ class RouteAccessTest {
         val pintu = listOf(
             "navigate(\"nota\")", "navigate(\"stokEdit\")", "navigate(\"assetNew\")",
             "navigate(\"assetTypes\")", "navigate(\"bayar\")", "navigate(\"assetEdit/",
-            "navigate(\"accessRole/", "navigate(\"queueEdit/",
+            "navigate(\"accessRole/", "navigate(\"queueEdit/", "navigate(\"products\")",
         )
         // Kondisi dikunci dengan NAMA PERAN. Pengecualian nama peran tetap sah untuk aturan
         // TAMPIL (bar navigasi, menu Modul); yang dilarang adalah memakainya sebagai pengganti
