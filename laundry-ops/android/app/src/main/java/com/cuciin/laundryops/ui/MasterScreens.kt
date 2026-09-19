@@ -339,7 +339,9 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
 internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val session = store.session.value ?: return
-    if (session.role != Role.Owner) { nav.popBackStack(); return }
+    // Gerbang rute memakai fungsi `owner.manage`, jadi layar ini memakai fungsi yang sama.
+    // Mengunci dengan NAMA peran membuat role kustom pemegang izin itu ditolak di sini.
+    if (!store.canAccess("owner", "owner.manage")) { nav.popBackStack(); return }
     var editing by remember { mutableStateOf<Staff?>(null) }
     var creating by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()

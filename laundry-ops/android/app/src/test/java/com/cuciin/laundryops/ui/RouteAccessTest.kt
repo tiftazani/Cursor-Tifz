@@ -360,6 +360,27 @@ class RouteAccessTest {
     }
 
     /**
+     * Layar yang gerbang rutenya memakai FUNGSI tidak boleh mengunci diri dengan NAMA peran.
+     *
+     * `RouteAccess` mengizinkan rute `users`/`ownerSettings` lewat fungsi `owner.manage`. Bila
+     * layarnya lalu menolak semua yang bukan Owner, role kustom pemegang `owner.manage` masuk
+     * lalu langsung terlempar keluar. Dua lapis harus memakai ukuran yang sama.
+     */
+    @Test
+    fun layarBergerbangFungsiTidakMengunciNamaPeran() {
+        val berkas = listOf("MasterScreens.kt", "OwnerSettingsScreen.kt")
+        val pelanggaran = berkas.mapNotNull { nama ->
+            val teks = File("src/main/java/com/cuciin/laundryops/ui/$nama").readText()
+            val bukti = Regex("""role != Role\.Owner\)\s*\{\s*nav\.popBackStack\(\)""").find(teks)
+            if (bukti == null) null else "$nama:${teks.take(bukti.range.first).count { c -> c == '\n' } + 1}"
+        }
+        assertTrue(
+            "Layar ber-gerbang fungsi masih dikunci nama peran: $pelanggaran",
+            pelanggaran.isEmpty(),
+        )
+    }
+
+    /**
      * Setiap fungsi izin yang dipakai memfilter tombol harus benar-benar ada di katalog.
      *
      * Helper seperti `canWriteStock()` adalah pembungkus tipis; test ini memastikan pembungkus itu

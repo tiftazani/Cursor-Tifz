@@ -129,6 +129,16 @@ memanggilnya sebelum `saveNota`. Dua test pengunci baru:
 
 Keduanya terbukti GAGAL saat bug dikembalikan. Test Android 213 lulus (debug+release). Test Android 210 lulus (dari 205), Worker 53 lulus.
 
+### Kelas G: layar ber-gerbang fungsi masih dikunci nama peran
+
+`UsersScreen` dan `OwnerSettingsScreen` dijaga gerbang rute lewat fungsi `owner.manage`, tetapi
+kedua layar itu lalu menolak semua yang bukan Owner (`session.role != Role.Owner`). Role kustom
+yang diberi `owner.manage` masuk lewat gerbang rute lalu langsung terlempar keluar. Kedua layar
+kini memakai fungsi yang sama dengan gerbangnya.
+
+Test `layarBergerbangFungsiTidakMengunciNamaPeran` membaca kode layar dan terbukti GAGAL saat
+kunci nama peran dikembalikan. Test Android 214 lulus (debug+release), lint bersih.
+
 ## 1.10.27 — 18 Sep 2026 (versionCode 46)
 
 ### Seluruh 17 fungsi Kontrol Akses Role kini benar-benar diperiksa

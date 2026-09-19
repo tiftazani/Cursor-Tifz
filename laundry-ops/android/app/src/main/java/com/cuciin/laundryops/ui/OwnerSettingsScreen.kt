@@ -36,7 +36,9 @@ import com.cuciin.laundryops.ui.theme.Muted
 internal fun OwnerSettingsScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val session = CuciinStore.session.value ?: return
-    if (session.role != Role.Owner) { nav.popBackStack(); return }
+    // Gerbang rute memakai fungsi `owner.manage`; layar ini harus memakai fungsi yang sama,
+    // bukan nama peran, supaya role kustom pemegang izin itu tidak ditolak di sini.
+    if (!CuciinStore.canAccess("owner", "owner.manage")) { nav.popBackStack(); return }
     val template = CuciinStore.whatsappTemplate()
     var opening by remember { mutableStateOf(template.opening) }
     var content by remember { mutableStateOf(template.content) }
