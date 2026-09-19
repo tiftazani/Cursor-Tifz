@@ -218,19 +218,23 @@ Sebabnya dua cacat yang saling menutupi:
    `asset_types` tidak punya kolom cabang dan `deleteAssetType` di aplikasi dijaga `owner.manage`.
    Gerbang lebih longgar dari penjaganya, jadi perintah itu diterima.
 
-Perbaikan:
+Perbaikan tiga lapis:
 
 - `SyncOutbox.enqueue` tidak lagi menyimpulkan delete untuk entitas tanpa cabang bila aktornya bukan
   Owner. Sejalan dengan izin Worker: seluruh delete tanpa cabang memang Owner-only.
+- `SyncOutbox.buangYangTidakBerhak` membuang perintah tertahan yang aktornya tidak berhak SEBELUM
+  terkirim, dipanggil di awal `flushCommands`. Perintah yang tertinggal dari sesi lain masuk
+  `rejected` dengan alasannya, jadi tetap ada jejak dan tidak pernah meninggalkan perangkat.
 - `OWNER_ONLY` di Worker menerima `assetType.upsert` dan `assetType.delete`.
 
-Test pengunci, keduanya terbukti GAGAL saat perbaikan dikembalikan:
+Test pengunci, ketiganya terbukti GAGAL saat perbaikan dikembalikan:
 
-- Android: `nonOwnerTidakMenyimpulkanDeleteUntukEntitasTanpaCabang` (GAGAL saat penjaga dilepas) dan
-  `ownerTetapMenyimpulkanDeleteUntukEntitasTanpaCabang` (memastikan Owner tidak ikut dikunci).
+- Android: `nonOwnerTidakMenyimpulkanDeleteUntukEntitasTanpaCabang` (GAGAL saat penjaga dilepas),
+  `perintahDeleteTanpaCabangDibuangSaatAktorBukanOwner` (GAGAL saat penjaga pembuang dilumpuhkan),
+  dan dua test yang memastikan Owner tidak ikut dikunci.
 - Worker: jenis aset ditolak untuk Kasir dan Supervisor, diterima untuk Owner.
 
-Test Android 218 lulus (debug+release), lint bersih, test Worker 56 lulus.
+Test Android 220 lulus (debug+release), lint bersih, test Worker 56 lulus.
 
 ## 1.10.28 — 19 Sep 2026
 

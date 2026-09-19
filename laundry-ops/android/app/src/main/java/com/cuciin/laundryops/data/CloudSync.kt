@@ -248,6 +248,21 @@ object CloudSync {
 
     private fun flushCommands(): EndpointResult {
         while (true) {
+            // Perintah yang tertahan dari sesi lain dibuang lebih dulu.
+            //
+            // Antrean bisa berisi perintah yang dibuat saat aktornya masih berhak, lalu izinnya
+            // berubah atau akunnya berganti sebelum perintah itu sempat terkirim. Contoh nyata:
+            // enam `assetType.delete` tertinggal dari perpindahan Owner ke Supervisor. Membiarkan
+            // perintah itu menunggu berarti mereka terkirim pada sync berikutnya.
+            //
+            // Server juga menolaknya setelah `assetType` masuk OWNER_ONLY, tetapi menahan di HP
+            // lebih baik: perintah itu tidak pernah meninggalkan perangkat sama sekali.
+            val dibuang = synchronized(this) { outbox.buangYangTidakBerhak(CuciinStore.session.value?.role) }
+            if (dibuang > 0) {
+                rejectedNeedsRecovery = true
+                saveState()
+                CuciinStore.touchStatus()
+            }
             val batch = synchronized(this) { outbox.nextBatch(BATCH_LIMIT) }
             if (batch.isEmpty()) return EndpointResult.OK
             val conn = open("POST", apiUrl("/v1/sync/commands"))

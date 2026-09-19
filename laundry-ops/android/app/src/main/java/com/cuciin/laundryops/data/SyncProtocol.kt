@@ -301,6 +301,20 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
             .toList()
     }
 
+    /**
+     * Buang perintah tertahan yang aktornya sudah tidak berhak lagi, sebelum terkirim.
+     *
+     * Aturannya sama dengan penjaga di `enqueue`: delete untuk entitas tanpa cabang hanya boleh
+     * dilakukan Owner. Perintah yang tertinggal dari sesi lain dibuang ke `rejected` supaya tetap
+     * ada jejaknya, bukan hilang tanpa bekas.
+     */
+    fun buangYangTidakBerhak(actorRole: Role?): Int {
+        if (actorRole == null || actorRole == Role.Owner) return 0
+        val doomed = state.pending.filter { it.operation == "delete" && it.branchId == null }
+        if (doomed.isEmpty()) return 0
+        return reject(doomed.associate { it.commandId to "Dibatalkan: delete tanpa cabang hanya untuk Owner" }, Clock.nowMs())
+    }
+
     fun reject(reasons: Map<String, String>, rejectedAt: Long, limit: Int = 200): Int {
         if (reasons.isEmpty()) return 0
         val doomed = state.pending.filter { it.commandId in reasons }
