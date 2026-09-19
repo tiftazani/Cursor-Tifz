@@ -1320,19 +1320,13 @@ object CuciinStore {
         branchId: String,
         sendWa: Boolean,
     ): Nota {
-        val s = session.value!!
-        // UI memeriksa izin ini lebih dulu dan menampilkan pesan; ini penjaga lapis kedua.
-        check(boleh("service", "service.create")) { tolak("service.create", "Akun ini tidak dapat membuat Service baru") }
-        val permittedBranch = when (s.role) {
-            Role.Owner -> branches.any { it.id == branchId }
-            else -> branchId == s.branchId
-        }
-        require(permittedBranch) { "Cabang transaksi tidak tersedia untuk akun ini" }
-        require(cartLines.isNotEmpty()) { "Service harus memiliki minimal satu layanan" }
-        require(cartLines.all { it.qty.isFinite() && it.qty > 0.0 && it.qty <= 9999.0 && (it.service.unit == "kg" || it.qty % 1.0 == 0.0) }) { "Jumlah layanan belum valid" }
-        require(retailStockShortages(cartLines, branchId).isEmpty()) { "Stok retail cabang tidak mencukupi" }
+        val s = session.value ?: throw IllegalStateException("Silakan masuk kembali")
+        // Penjaga lapis kedua memakai pemeriksa yang SAMA dengan yang dipakai UI, bukan salinannya.
+        // Sebelumnya dua daftar penolakan hidup berdampingan dan harus dijaga tetap sinkron dengan
+        // tangan; begitu satu penolakan ditambahkan di sini tanpa padanannya di [notaReject], UI
+        // tidak dapat menampilkannya lebih dulu dan penolakan itu menjadi crash di perangkat.
+        notaReject(cartLines, paid, branchId)?.let { throw IllegalArgumentException(it) }
         val total = cartLines.sumOf { (it.qty * it.unitPrice.coerceAtLeast(0)).toInt() }
-        require(paid in 0..total) { "Pembayaran harus berada antara Rp 0 dan total Service" }
         val t = Clock.nowMs()
         val nota = Nota(
             id = nextNotaId(branchId),

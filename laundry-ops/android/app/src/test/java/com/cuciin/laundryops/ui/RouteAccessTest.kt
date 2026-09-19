@@ -374,28 +374,28 @@ class RouteAccessTest {
     }
 
     /**
-     * Dua pemeriksa Service tidak boleh berbeda isi.
+     * Penolakan Service harus punya SATU sumber, bukan dua daftar yang harus dijaga sinkron.
      *
-     * `notaReject` (dipakai UI, mengembalikan pesan) dan `saveNota` (penjaga lapis kedua, melempar)
-     * harus menolak hal yang sama. Kalau tidak, ada penolakan yang hanya dikenal salah satunya:
-     * entah crash di perangkat, atau pemeriksaan yang tidak pernah berjalan.
+     * Sebelumnya `notaReject` (dipakai UI) dan `saveNota` (penjaga lapis kedua) masing-masing
+     * menyalin daftar penolakan yang sama. Selama dua daftar hidup berdampingan, setiap penolakan
+     * baru di `saveNota` yang lupa ditambahkan ke `notaReject` menjadi crash di perangkat: UI tidak
+     * dapat menampilkannya lebih dulu. Sekarang `saveNota` memanggil `notaReject`, dan test ini
+     * mengunci bentuk itu supaya daftarnya tidak pernah disalin ulang.
      */
     @Test
-    fun pemeriksaPenolakanServiceTidakBerbedaIsi() {
+    fun penolakanServiceHanyaPunyaSatuSumber() {
         val sumber = File("src/main/java/com/cuciin/laundryops/data/CuciinStore.kt").readText()
-        val awal = sumber.indexOf("fun notaReject(")
-        val akhir = sumber.indexOf("fun saveNota(")
-        assertTrue("notaReject tidak ditemukan", awal >= 0)
-        assertTrue("saveNota tidak ditemukan setelah notaReject", akhir > awal)
-        val pesan = Regex("""return\s+"([^"]+)"""").findAll(sumber.substring(awal, akhir)).map { it.groupValues[1] }.toSet()
-        val diSave = Regex("""require\([^\n]*\)\s*\{\s*"([^"]+)"\s*\}""")
-            .findAll(sumber.substring(akhir, (akhir + 2500).coerceAtMost(sumber.length)))
-            .map { it.groupValues[1] }.toSet()
-        val hilang = diSave - pesan
+        val awal = sumber.indexOf("fun saveNota(")
+        assertTrue("saveNota tidak ditemukan", awal >= 0)
+        val badan = sumber.substring(awal, (awal + 1500).coerceAtMost(sumber.length))
         assertTrue(
-            "Penolakan di saveNota tidak ada padanannya di notaReject, sehingga menjadi crash:\n" +
-                hilang.joinToString("\n") { "  $it" },
-            hilang.isEmpty(),
+            "saveNota tidak memakai notaReject, jadi daftar penolakannya bisa berbeda dari yang " +
+                "dapat ditampilkan UI dan penolakan baru menjadi crash",
+            badan.contains("notaReject("),
+        )
+        assertFalse(
+            "saveNota menyalin ulang daftar penolakan dengan require/check sendiri; pakai notaReject",
+            Regex("""\brequire\(|\bcheck\(""").containsMatchIn(badan),
         )
     }
 

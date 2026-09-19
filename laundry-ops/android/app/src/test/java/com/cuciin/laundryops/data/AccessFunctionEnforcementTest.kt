@@ -69,7 +69,10 @@ class AccessFunctionEnforcementTest {
         "queue.status" to ("boleh" to 1),      // advanceLaundry
         "queue.handover" to ("boleh" to 1),    // markPickedUp
         // service
-        "service.create" to ("boleh" to 1),    // saveNota
+        // `service.create` diperiksa lewat canCreateService(), yang dipanggil `notaReject` dan UI.
+        // `saveNota` sendiri tidak lagi menyalin penolakannya; ia memanggil `notaReject` supaya
+        // daftar penolakan hanya punya satu sumber.
+        "service.create" to ("canAccess" to 1),
         "service.correct" to ("boleh" to 2),   // updateNotaLines + deleteNota
         "service.payment" to ("boleh" to 1),   // markLunas
         "service.price" to ("canAccess" to 2), // setCartPrice + canChangePrice

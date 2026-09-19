@@ -139,6 +139,56 @@ kini memakai fungsi yang sama dengan gerbangnya.
 Test `layarBergerbangFungsiTidakMengunciNamaPeran` membaca kode layar dan terbukti GAGAL saat
 kunci nama peran dikembalikan. Test Android 214 lulus (debug+release), lint bersih.
 
+### Kelas H: penolakan store yang hasilnya dibuang, dan sebab yang ditebak layar
+
+Ditemukan saat menyisir ulang seluruh pemanggilan fungsi store yang bisa MENOLAK, bukan hanya
+titik yang dilaporkan.
+
+**Kelas H1, hasil penolakan dibuang.** `markWaSent()` dipanggil sebagai pernyataan berdiri sendiri
+di dua tempat, lalu layar menampilkan "WhatsApp dibuka untuk nota ini". Padahal store menolak bila
+izin `whatsapp.send` dicabut atau cabangnya tidak sesuai: nota TIDAK ditandai terkirim, tetapi
+pengguna melihat pesan sukses. Penolakan yang tidak pernah dibaca sama saja tidak ada.
+
+**Kelas H2, sebab penolakan ditebak layar.** `closeCash()` mengembalikan `null` untuk dua sebab
+yang berbeda (izin dicabut, dan kas memang sudah ditutup), dan layar selalu melaporkan "Kas cabang
+ini sudah ditutup hari ini". Akun yang izinnya dicabut diberi keterangan yang tidak benar.
+`cashCloseReject()` baru memisahkan sebabnya.
+
+**Kelas H3, gerbang rute `cash` lebih longgar dari penjaganya.** Gerbangnya hanya memeriksa modul
+`cash`, sedangkan `closeCash` memeriksa fungsi `cash.close`. Role kustom pemegang modul tanpa fungsi
+itu membuka layar Tutup kas yang tidak dapat dipakainya.
+
+**Kelas H4, pintu master data dikunci nama peran.** Tombol "Kelola produk" di layar Persediaan
+memakai `role == Role.Owner`, sedangkan gerbang rute `products` memakai `owner.manage`. Role kustom
+pemegang `owner.manage` lolos gerbangnya tetapi tidak menemukan pintunya.
+
+Empat test pengunci baru, semuanya terbukti GAGAL saat bug dikembalikan:
+
+- `hasilFungsiYangBisaMenolakTidakDibuang` — memindai setiap panggilan ke fungsi `String?` milik
+  store dengan tanda kurung berimbang, lalu menolak panggilan yang hasilnya tidak dipakai.
+- `layarMembacaPesanPenolakanSebelumMemanggilFungsi` — pemeriksa penolakan wajib dipanggil sebelum
+  fungsinya, untuk Pembayaran dan Tutup kas.
+- perluasan `gerbangRuteTidakLebihLonggarDariPenjagaStore` dengan rute `cash`.
+- perluasan daftar pintu di `tombolAlurTulisTidakDikunciNamaPeran` dengan `navigate("products")`.
+
+**Kelas H5, dua daftar penolakan yang harus dijaga sinkron dengan tangan.** `notaReject` (dipakai
+UI, mengembalikan pesan) dan `saveNota` (penjaga lapis kedua, memakai `check`/`require` yang
+melempar) masing-masing menyalin daftar penolakan yang sama. Selama dua daftar itu hidup
+berdampingan, setiap penolakan baru di `saveNota` yang lupa ditambahkan ke `notaReject` langsung
+menjadi crash di perangkat, karena UI tidak dapat menampilkannya lebih dulu. Sekarang `saveNota`
+memanggil `notaReject` dan melempar pesannya, jadi daftarnya hanya punya satu sumber.
+
+Test `penolakanServiceHanyaPunyaSatuSumber` mengunci bentuk itu: `saveNota` wajib memakai
+`notaReject` dan tidak boleh memuat `require`/`check` sendiri. Terbukti GAGAL saat daftarnya
+disalin ulang.
+
+Test Android 216 lulus (debug+release), lint bersih.
+
+Sengaja TIDAK diubah: gerbang rute `attendance`, `expenses`, dan `customers` tetap hanya memeriksa
+modul. Ketiganya memang menyimpan data, tetapi penolakan fungsinya sudah tampil sebagai pesan yang
+benar di layar, dan memperketat gerbangnya akan mencabut akses MEMBACA laporan dari role kustom
+yang sah. Tidak ada kerugian nyata yang terbukti dari bentuk itu.
+
 ## 1.10.27 — 18 Sep 2026 (versionCode 46)
 
 ### Seluruh 17 fungsi Kontrol Akses Role kini benar-benar diperiksa
