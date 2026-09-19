@@ -109,6 +109,25 @@ Semuanya membaca kode sumber dan sudah dibuktikan GAGAL saat bug dikembalikan:
 - `pintuAlurTulisDiperiksaFungsi` — pintu masuk alur tulis wajib memakai pemeriksa fungsi.
 - `layarPembayaranMemakaiPemeriksaPenolakanLebihDulu` — layar bayar memakai `notaReject()`.
 - `layarBergerbangFungsiTidakMengunciNamaPeran` — layar tidak mengulang kunci nama peran.
+- `hasilFungsiYangBisaMenolakTidakDibuang` — hasil fungsi `String?` tidak boleh dibuang.
+- `pemeriksaPenolakanSamaDenganPenjaganya` — pesan tolak tidak boleh ditebak layar.
+- `penolakanServiceHanyaPunyaSatuSumber` — `saveNota` wajib memakai `notaReject`.
+- `pintuMasukAlurTulisDiperiksaDenganFungsi` — termasuk tombol pembuka form di rute ber-gerbang modul.
+
+### Kelas H — sisa cara MENOLAK yang masih salah
+
+Ditemukan saat menelusuri seluruh pemanggilan fungsi `String?` dari UI:
+
+| Kelas | Bug | Perbaikan |
+| --- | --- | --- |
+| H1 | `markWaSent()` hasilnya dibuang di 2 titik: UI melaporkan WhatsApp terkirim padahal store menolak (nota cabang lain) | pesan tolak dari store ditampilkan |
+| H2 | Gerbang rute `cash` hanya memeriksa modul, sedangkan `closeCash` memeriksa `cash.close` | gerbang memeriksa `cash.close` |
+| H3 | Tutup kas menampilkan "sudah ditutup hari ini" padahal izinnya dicabut | `closeCashReject()` baru; layar memakainya |
+| H4 | Tombol "Kelola produk" dikunci `role == Role.Owner` | dikunci `owner.manage` |
+| H5 | `notaReject` dan `saveNota` menyalin daftar penolakan yang sama | satu sumber: `saveNota` memanggil `notaReject` |
+| H6 | Tombol "Pelanggan baru" dan "Catat biaya" membuka form tulis tanpa cek fungsi | `customer.write` dan `expense.write` |
+
+Semua test pengunci H terbukti GAGAL saat bug dikembalikan.
 
 Test ketiga menemukan satu call site nyata yang mengabaikan hasilnya (`markWaSent` di layar nota)
 saat pertama dijalankan.
@@ -117,10 +136,10 @@ saat pertama dijalankan.
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| Test Android debug | 214 lulus, 0 gagal |
-| Test Android release | 214 lulus, 0 gagal |
+| Test Android debug | 216 lulus, 0 gagal |
+| Test Android release | 216 lulus, 0 gagal |
 | Lint | lulus |
-| Test Worker | 53 lulus, 0 gagal |
+| Test Worker | 56 lulus, 0 gagal |
 | `owner.manage` titik jaga | 15 -> 17 |
 
 ## Verifikasi APK
@@ -150,11 +169,12 @@ APK kandidat (bukan build sementara) dipasang di emulator `MindChampions_API35`,
 
 | Uji | Hasil |
 | --- | --- |
-| Owner, 11 kasus (login, 3 menu laporan, alur tulis Service, crash, tally) | 11/11 lulus |
+| Owner, 11 kasus (login, 3 menu laporan, alur tulis Service, crash, tally) | 11/11 lulus, 3 kali ulang |
 | Sapu seluruh menu sebagai Kasir | 11/21 terbuka (10 tertutup sesuai izin), CRASH 0 |
 | Sapu seluruh menu sebagai Supervisor | 8/21 terbuka, CRASH 0 |
 | Role modul `service` tanpa fungsi `service.create` | menu tertutup, 0 crash |
 | Tally perangkat | omzet 277.000 = paid 221.000 + piutang 56.000 |
+| Nota uji dibersihkan lewat aplikasi | notas 9 -> 7, kembali ke keadaan sebelum uji |
 
 ## Yang belum terbukti
 
