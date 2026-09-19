@@ -1,7 +1,8 @@
 # Cuciin 1.10.28 (versionCode 47) — kandidat
 
-Perbaikan dua kelas bug cara MENOLAK izin, ditemukan setelah 1.10.27 menutup seluruh 17 fungsi
-Kontrol Akses Role. Menutup pemeriksaannya belum cukup: cara menolaknya masih salah di 12 titik.
+Menutup seluruh kelas bug cara MENOLAK izin, ditemukan setelah 1.10.27 menegakkan 17 fungsi
+Kontrol Akses Role. Menambah penjaga izin belum cukup: cara menolaknya punya pola kegagalan
+sendiri, dan seluruhnya sudah diperbaiki serta dibuktikan di perangkat.
 
 ## Yang diperbaiki
 
@@ -14,6 +15,18 @@ tampil, tetapi tidak memiliki fungsi `service.create`: menekan Simpan langsung m
 Penolakan izin adalah kejadian NORMAL, bukan kesalahan program. Sekarang `saveNota` memakai
 `check` dan dicegat lebih dulu oleh `canCreateService()` di UI; `addInventory` mengembalikan `null`
 dan UI menampilkan pesan.
+
+**Terbukti di perangkat.** Dengan role yang memiliki modul `service` tanpa fungsi `service.create`,
+1.10.27 menghasilkan:
+
+```
+FATAL EXCEPTION: main
+java.lang.IllegalArgumentException: Akses Buat Service dicabut untuk role akun ini
+    at com.cuciin.laundryops.data.CuciinStore.saveNota(CuciinStore.kt:1288)
+    at com.cuciin.laundryops.ui.OpsScreensKt.BayarScreen$save(OpsScreens.kt:694)
+```
+
+Pada 1.10.28 alur yang sama menampilkan pesan tolak dan aplikasi tetap hidup.
 
 ### Kelas B — penolakan dilaporkan sebagai sukses
 
@@ -48,14 +61,54 @@ pengecualian.
 Pemeriksa izin baru di UI supaya jalur penolakan tidak pernah dipanggil: `canCreateService()`,
 `canSendWa()`.
 
+### Kelas C — gerbang rute lebih longgar daripada penjaganya
+
+Rute `service` ("Service baru") hanya memeriksa MODUL, sedangkan `saveNota` memeriksa FUNGSI
+`service.create`. Role yang punya modul itu tanpa fungsinya melihat menunya, lalu aplikasi mati
+saat menyimpan. Gerbang rute kini memakai ukuran yang sama dengan penjaganya. Terbukti di
+perangkat: menu tampil di 1.10.27, tertutup di 1.10.28, dan pada build yang hanya menutup rutenya
+(penjaga lama dikembalikan) aplikasi tetap mati.
+
+### Kelas D — pintu alur tulis dikunci NAMA peran, bukan fungsi
+
+Enam tombol yang membuka alur TULIS memakai `s.role != Role.Supervisor` sehingga role kustom
+selalu tertutup walau izinnya lengkap: "Service baru" di beranda, "Catat perubahan stok",
+"Catat pelunasan", "Tambah foto dari galeri", "Daftar aset", "Kelola jenis aset". Semuanya kini
+memakai fungsi (`canCreateService`, `canWriteStock`, `canTakePayment`, `canManageAssetTypes`).
+
+### Kelas E — pintu masuk alur tulis belum diperiksa sama sekali
+
+Setelah Kelas D, tersisa pintu yang memang belum punya pemeriksaan: baris daftar aset menuju
+formulir ubah, "Tambah jenis aset baru", dan "Kelola jenis aset" di sheet filter. Ketiganya
+sekarang diperiksa.
+
+### Kelas F — `saveNota` masih bisa mematikan aplikasi lewat penolakan lain
+
+Selain izin, `saveNota` memakai `require`/`check` untuk cabang, jumlah, stok, dan batas bayar.
+Semua itu juga melempar. Ditambah `notaReject()` sebagai satu pemeriksa yang mengembalikan pesan
+penolakan pertama, dipakai layar Pembayaran sebelum menyimpan. Penolakan izin diperiksa lebih dulu
+supaya pesannya yang muncul, bukan pesan stok.
+
+### Kelas G — layar ber-gerbang fungsi masih dikunci nama peran
+
+`UsersScreen` dan `OwnerSettingsScreen` dijaga gerbang rute lewat fungsi `owner.manage`, tetapi
+layarnya lalu menolak semua yang bukan Owner (`session.role != Role.Owner`). Role kustom pemegang
+`owner.manage` masuk lewat gerbang rute lalu langsung terlempar keluar. Kedua layar kini memakai
+fungsi yang sama dengan gerbangnya.
+
 ## Test pengunci baru
 
-Ketiganya membaca kode sumber dan sudah dibuktikan GAGAL saat bug dikembalikan:
+Semuanya membaca kode sumber dan sudah dibuktikan GAGAL saat bug dikembalikan:
 
 - `penolakanIzinTidakMemakaiRequireYangMelempar` — menolak `require(boleh(...))` di store.
 - `penolakanIzinSelaluMembawaPesan` — menolak `if (!boleh(...)) return` telanjang.
 - `uiMemakaiPesanPenolakanDariStore` — setiap pemanggil di UI harus memakai pesan penolakan,
   `?.let`, atau pemeriksa izin.
+- `rutePunyaFungsiHarusDiperiksa` — rute yang punya fungsi wajib memeriksanya, bukan hanya modul.
+- `tombolAlurTulisTidakDikunciNamaPeran` — pintu alur tulis tidak boleh dikunci nama peran.
+- `pintuAlurTulisDiperiksaFungsi` — pintu masuk alur tulis wajib memakai pemeriksa fungsi.
+- `layarPembayaranMemakaiPemeriksaPenolakanLebihDulu` — layar bayar memakai `notaReject()`.
+- `layarBergerbangFungsiTidakMengunciNamaPeran` — layar tidak mengulang kunci nama peran.
 
 Test ketiga menemukan satu call site nyata yang mengabaikan hasilnya (`markWaSent` di layar nota)
 saat pertama dijalankan.
@@ -64,8 +117,8 @@ saat pertama dijalankan.
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| Test Android debug | 205 lulus, 0 gagal |
-| Test Android release | 205 lulus, 0 gagal |
+| Test Android debug | 214 lulus, 0 gagal |
+| Test Android release | 214 lulus, 0 gagal |
 | Lint | lulus |
 | Test Worker | 53 lulus, 0 gagal |
 | `owner.manage` titik jaga | 15 -> 17 |
@@ -86,15 +139,27 @@ data lokal tidak ikut pindah. Nama itu tidak muncul di antarmuka aplikasi.
 
 ## Berkas
 
-| Berkas | Ukuran | SHA-256 |
-| --- | --- | --- |
-| `cuciin-1.10.28-release.apk` | 6.045.279 B | `d22cca52317a6424b76bb21912d04ed927489ee36691b48de205b8cec9e7ab17` |
-| `cuciin-1.10.28-debug-test.apk` | 22.961.694 B | `6fe659e899a72e18155d0bd2d3527b0576bb05e6f9a899d8c249d3166b80b935` |
+| Berkas | SHA-256 |
+| --- | --- |
+| `cuciin-1.10.28-release.apk` | lihat `SHA256SUMS.txt` |
+| `cuciin-1.10.28-debug-test.apk` | lihat `SHA256SUMS.txt` |
+
+## Hasil uji perangkat
+
+APK kandidat (bukan build sementara) dipasang di emulator `MindChampions_API35`, 1080x2400.
+
+| Uji | Hasil |
+| --- | --- |
+| Owner, 11 kasus (login, 3 menu laporan, alur tulis Service, crash, tally) | 11/11 lulus |
+| Sapu seluruh menu sebagai Kasir | 11/21 terbuka (10 tertutup sesuai izin), CRASH 0 |
+| Sapu seluruh menu sebagai Supervisor | 8/21 terbuka, CRASH 0 |
+| Role modul `service` tanpa fungsi `service.create` | menu tertutup, 0 crash |
+| Tally perangkat | omzet 277.000 = paid 221.000 + piutang 56.000 |
 
 ## Yang belum terbukti
 
-- Uji perangkat untuk skenario Supervisor membuka "Service baru" lalu menekan Simpan: perangkat
-  uji memakai akun Owner. Yang terbukti baru sampai test unit dan pemeriksaan kode.
-- Uji perangkat untuk jalur penolakan `update*` (pesan muncul, bukan "tersimpan").
-- Perilaku perbaikan A/B/C/D Worker produksi masih belum terbukti lewat perangkat.
+- Perilaku perbaikan A/B/C/D Worker produksi masih belum terbukti lewat perangkat: rute tanpa auth
+  hanya `/health` dan `/v1/registration`, sisanya butuh login Firebase.
 - CRUD user/registrasi dari UI belum diuji; `androidTest` masih nol.
+- Preset tema "Biru Cuciin" belum diverifikasi di emulator.
+- Perubahan versi ini belum di-push ke remote.
