@@ -151,6 +151,8 @@ saat pertama dijalankan.
 | Label debug | `Cuciin Debug` (`1.10.28-debug`) |
 | Tanda tangan | V3.0 valid, `CN=Tiftazani Khara, OU=Cuciin` |
 | SHA-256 sertifikat | `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee` |
+| Debug: tanda tangan | V2, `CN=Android Debug` |
+| Checksum tercatat vs APK di disk | cocok untuk kedua berkas |
 
 Sertifikat sengaja tetap memuat nama pribadi demi menjaga jalur pembaruan: menggantinya membuat
 Android menganggap APK baru sebagai aplikasi berbeda sehingga 20 cabang harus memasang ulang dan
@@ -160,8 +162,11 @@ data lokal tidak ikut pindah. Nama itu tidak muncul di antarmuka aplikasi.
 
 | Berkas | SHA-256 |
 | --- | --- |
-| `cuciin-1.10.28-release.apk` | lihat `SHA256SUMS.txt` |
-| `cuciin-1.10.28-debug-test.apk` | lihat `SHA256SUMS.txt` |
+| `cuciin-1.10.28-release.apk` | `1363613d24119f14f69b0e2ba7ff8197b9ff4a2bcf7f1bc49d7e01976a32a054` |
+| `cuciin-1.10.28-debug-test.apk` | `a84283900afb2f48f0d80732d6abefabee9489316af15bc43c359bc14e689357` |
+
+Kedua berkas dibangun ulang setelah perbaikan kelas H, dan checksum di atas dihitung ulang dari
+APK di disk (bukan disalin dari keluaran build).
 
 ## Hasil uji perangkat
 
