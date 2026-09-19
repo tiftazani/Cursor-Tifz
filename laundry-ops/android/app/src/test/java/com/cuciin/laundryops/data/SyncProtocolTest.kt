@@ -556,4 +556,14 @@ class SyncProtocolTest {
         assertEquals(0, outbox.buangYangTidakBerhak(Role.Owner))
         assertEquals(1, outbox.state.pending.size)
     }
+
+    /** Bila shadow benar-benar diganti, kursor memang harus maju. */
+    @Test fun kursorMajuBilaShadowDiganti() {
+        val outbox = SyncOutbox(SyncClientState(revision = 4, shadow = listOf(entity("customer", "c-1")), bootstrapped = true, scopeKey = "kasir:melati"))
+        val remote = listOf(entity("customer", "c-1", value = 2))
+        assertTrue(outbox.prepareRemote(Snapshot(updatedAt = 20), remote, 9, outbox.state.generation, "kasir:melati"))
+        assertTrue(outbox.completePreparedRemote())
+        assertEquals(9, outbox.state.revision)
+        assertEquals(remote, outbox.state.shadow)
+    }
 }
