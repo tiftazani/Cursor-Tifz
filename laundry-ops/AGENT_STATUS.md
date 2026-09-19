@@ -5,6 +5,72 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
+## 0d. Pekerjaan terbaru (19 Sep, Hermes) — tujuh kelas bug izin ditutup, 1.10.28
+
+**Status: selesai, gate hijau, teruji di perangkat, versi 1.10.28 (versionCode 47), branch
+`codex/cuciin-1-8-1`. BELUM di-push dan BELUM di-deploy (menunggu perintah Owner).**
+
+Sesudah 1.10.27 menegakkan seluruh 17 fungsi `AccessCatalog`, regresi menemukan bahwa **menambah
+penjaga belum cukup: cara MENOLAK izin punya pola kegagalannya sendiri.** Tujuh kelas ditemukan dan
+ditutup:
+
+| Kelas | Gejala | Perbaikan |
+|---|---|---|
+| A | `require(boleh(...))` melempar → **aplikasi mati** saat simpan | ganti jadi pesan tolak |
+| B | `if (!boleh(...)) return` tanpa pesan → UI tetap bilang "tersimpan" | kembalikan `String?`, UI pakai pesannya |
+| C | gerbang rute hanya memeriksa MODUL, penjaganya memeriksa FUNGSI → menu tampil lalu mati saat simpan | `RouteAccess` memeriksa modul **dan** fungsi |
+| D | enam tombol alur tulis dikunci NAMA PERAN, bukan fungsi | dikunci fungsi |
+| E | `require()` lain di `saveNota` masih bisa melempar (cabang tak valid) | `notaReject()` diperiksa UI lebih dulu |
+| F | rute tulis tanpa gerbang (`assetNew`, `assetEdit`, `assetTypes`, `stokEdit`, `queueEdit`, `accessRole`) | tombolnya dikunci fungsi |
+| G | layar ber-gerbang fungsi masih menendang pengguna lewat nama peran (`UsersScreen`, `OwnerSettingsScreen`) | memakai fungsi yang sama dengan gerbangnya |
+
+**Bukti Kelas C di perangkat, bukan hanya test:** role kustom "modul `service` tanpa fungsi
+`service.create`" dibuat, lalu dijalankan. 1.10.27 → menu tampil dan **`FATAL EXCEPTION:
+java.lang.IllegalArgumentException: Akses Buat Service dicabut untuk role akun ini` di
+`CuciinStore.saveNota`**. 1.10.28 → menu tertutup. Lapis tengah (gerbang tetap longgar, penjaga
+baru aktif) juga diuji: aplikasi bertahan dan menampilkan pesan tolak.
+
+**Celah sisi server ikut ditutup:** `order.create`/`order.put` menerima `unitPrice` dari payload apa
+adanya; hanya komisi yang dihitung ulang dari katalog. Perangkat yang dimodifikasi bisa menulis harga
+apa pun walau tombolnya disembunyikan di UI. Worker sekarang memeriksa fungsi `service.price` dan
+menolak harga yang menyimpang, tetapi tetap menerima harga katalog dan harga yang sudah tersimpan
+pada Service itu (supaya koreksi rincian lain tidak ikut ditolak).
+
+**PENTING — gerbang deploy Worker ini:** perintah sinkronisasi **tidak membawa versi aplikasi**.
+Penjaga harga baru akan ikut menolak APK lama yang masih menjalankan alur "Kasir ubah harga", dan
+penjaga harga di sisi klien baru ada sejak **1.10.21 (versionCode 40)**. **Jangan deploy Worker ini ke
+produksi sebelum seluruh perangkat 20 cabang memakai versionCode ≥ 40**, atau cabang lama akan
+kehilangan kemampuan menyimpan Service.
+
+**Gate:** Android **214 test debug + 214 release lulus**, lint lulus, **Worker 56 test lulus**
+(naik dari 53). Setiap test pengunci baru dibuktikan GAGAL saat bug-nya dikembalikan.
+
+**Uji perangkat pada APK 1.10.28 (emulator 1080x2400):** Owner `uji_owner1027b.py` **11/11 OK**
+(termasuk Simpan Service sampai tersimpan), sapu menu Kasir **11/21 terbuka, 0 crash**, sapu menu SPV
+**8/21 terbuka, 0 crash**, dan aturan harga dibuktikan dua arah: Owner melihat "Ubah harga · Rp 5.000",
+Kasir pada baris yang sama hanya melihat "Hapus".
+
+**Dua insiden saat menguji, keduanya dipulihkan dan diverifikasi:**
+
+1. **Fixture perangkat memicu delete massal ke D1 debug.** Menulis berkas data perangkat langsung
+   (di luar jurnal) membuat diff sinkronisasi membaca "hilang dari shadow" sebagai "dihapus", lalu
+   mengirim DELETE. `access_roles` D1 debug sempat kosong dan 120 entri audit terhapus. Dipulihkan
+   lewat **D1 Time Travel restore**. Pelajaran: fixture perangkat hanya boleh lewat mutasi aplikasi
+   atau jurnal `sync_changes`, dan matikan jaringan SEBELUM menyentuh berkas.
+2. **Uji tulis lewat adb merusak harga layanan.** Tombol DEL tidak membersihkan kolom, jadi angka
+   tersambung (`10000` → `100000`) dan ikut tersimpan ke server. Dipulihkan lewat jurnal
+   `sync_changes` di server. Pelajaran: sebelum menekan Simpan pada uji tulis, BACA ULANG isi kolom
+   dan batalkan bila tidak sesuai.
+
+Keduanya tercatat di `references/incident-device-fixture.md` pada skill `cuciin`.
+
+**Berkas yang Hermes pegang:** `data/CuciinStore.kt`, `data/SyncProtocol.kt`, `ui/RouteAccess.kt`,
+`ui/OpsScreens.kt`, `ui/MasterScreens.kt`, `ui/AssetScreens.kt`, `ui/MoreScreens.kt`,
+`ui/OwnerSettingsScreen.kt`, `data/VersionHistory.kt`, `app/build.gradle.kts`, `CHANGELOG.md`,
+`app/src/test/.../RouteAccessTest.kt`, `app/src/test/.../AccessFunctionEnforcementTest.kt`,
+`cloudflare/src/command-sync.ts`, `cloudflare/tests/command-sync.test.mjs`,
+`releases/1.10.28-candidate/`. **Agen lain: jangan sentuh berkas itu sampai baris ini diperbarui.**
+
 ## 0b. Worker PRODUKSI sudah di-deploy (18 Sep, Hermes)
 
 **Status: selesai. Version ID `0a3735c3-ef1b-4549-a437-dfe4b458177c`, deployed
