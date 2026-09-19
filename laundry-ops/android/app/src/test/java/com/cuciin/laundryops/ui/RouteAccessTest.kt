@@ -234,7 +234,8 @@ class RouteAccessTest {
         // Pintu yang membuka alur TULIS.
         val pintu = listOf(
             "navigate(\"nota\")", "navigate(\"stokEdit\")", "navigate(\"assetNew\")",
-            "navigate(\"assetTypes\")", "navigate(\"bayar\")",
+            "navigate(\"assetTypes\")", "navigate(\"bayar\")", "navigate(\"assetEdit/",
+            "navigate(\"accessRole/", "navigate(\"queueEdit/",
         )
         // Kondisi dikunci dengan NAMA PERAN. Pengecualian nama peran tetap sah untuk aturan
         // TAMPIL (bar navigasi, menu Modul); yang dilarang adalah memakainya sebagai pengganti
@@ -261,6 +262,51 @@ class RouteAccessTest {
             "Pintu alur tulis ini dikunci dengan NAMA PERAN, bukan fungsi izin:\n" +
                 pelanggaran.joinToString("\n"),
             pelanggaran.isEmpty(),
+        )
+    }
+
+    /**
+     * Pintu MASUK alur tulis harus benar-benar diperiksa dengan fungsi izin.
+     *
+     * Test sebelumnya hanya melarang nama peran; itu belum cukup. Pintu bisa saja tidak diperiksa
+     * sama sekali, dan itulah bentuk aslinya: "Daftarkan aset" selalu tampil, sehingga role yang
+     * hanya memegang modul `inventory` tanpa `inventory.write` bisa membuka dan mengisi
+     * formulirnya lalu ditolak saat menyimpan.
+     *
+     * Yang diperiksa hanya pintu dari layar DAFTAR/BERANDA. Pintu di dalam alur (mis. "bayar"
+     * di layar Service baru, "queueEdit" di layar rincian) tidak perlu memeriksa ulang karena
+     * layar induknya sudah dijaga gerbang rute.
+     */
+    @Test
+    fun pintuMasukAlurTulisDiperiksaDenganFungsi() {
+        val pintuMasuk = mapOf(
+            "OpsScreens.kt" to listOf("navigate(\"nota\")", "navigate(\"stokEdit\")"),
+            "AssetScreens.kt" to listOf(
+                "navigate(\"assetNew\")", "navigate(\"assetTypes\")", "navigate(\"assetEdit/",
+            ),
+        )
+        val pemeriksaFungsi = Regex("""can[A-Z]\w*\(|canAccess\(|boleh\(""")
+        val belumDiperiksa = mutableListOf<String>()
+        for ((nama, pintu) in pintuMasuk) {
+            val f = File("src/main/java/com/cuciin/laundryops/ui/$nama")
+            if (!f.exists()) continue
+            val baris = f.readLines()
+            for (i in baris.indices) {
+                val b = baris[i].trim()
+                if (b.startsWith("//") || b.startsWith("*")) continue
+                if (pintu.none { it in b }) continue
+                // Pemeriksa boleh berada di baris yang sama atau beberapa baris di atasnya,
+                // karena Compose sering menaruh `if (...)` di baris terpisah dari tombolnya.
+                val jendela = baris.subList((i - 4).coerceAtLeast(0), i + 1)
+                if (jendela.none { pemeriksaFungsi.containsMatchIn(it) }) {
+                    belumDiperiksa.add("$nama:${i + 1}  ${b.take(90)}")
+                }
+            }
+        }
+        assertTrue(
+            "Pintu masuk alur tulis ini tidak diperiksa dengan fungsi izin:\n" +
+                belumDiperiksa.joinToString("\n"),
+            belumDiperiksa.isEmpty(),
         )
     }
 

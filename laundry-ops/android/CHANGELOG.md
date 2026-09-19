@@ -94,7 +94,25 @@ Tiga test pengunci baru, terbukti GAGAL saat bug dikembalikan:
   false dan tombolnya hilang untuk semua orang.
 - `ownerTetapLolosSeluruhGerbangRute` — Owner tidak boleh terkunci dari menunya sendiri.
 
-Titik jaga `owner.manage` naik dari 15 ke 17. Test Android 210 lulus (dari 205), Worker 53 lulus.
+Titik jaga `owner.manage` naik dari 15 ke 17.
+
+### Kelas E: pintu masuk alur tulis yang tidak diperiksa sama sekali
+
+Tiga tombol membuka formulir yang MENYIMPAN tetapi tidak diperiksa izin apa pun:
+
+  aset "Daftarkan aset"    -> sekarang canWriteInventory()
+  aset baris "Ubah aset"   -> sekarang canWriteInventory() + pesan tolak
+  aset "Tambah jenis aset baru" (sheet) -> sekarang canManageAssetTypes()
+
+Sebelumnya role yang hanya memegang modul `inventory` tanpa `inventory.write`
+(mis. Supervisor bawaan) bisa membuka dan mengisi formulirnya, lalu ditolak saat
+menyimpan. Sama seperti kelas C: gerbang yang lebih longgar dari penjaganya.
+
+Dua test pengunci baru: `pintuMasukAlurTulisDiperiksaDenganFungsi` dan perluasan
+daftar pintu di `tombolAlurTulisTidakDikunciNamaPeran`. Keduanya terbukti GAGAL
+saat bug dikembalikan.
+
+Test Android 211 lulus (debug+release), lint bersih. Test Android 210 lulus (dari 205), Worker 53 lulus.
 
 ## 1.10.27 — 18 Sep 2026 (versionCode 46)
 

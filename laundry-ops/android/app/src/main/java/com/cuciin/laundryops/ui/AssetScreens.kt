@@ -99,7 +99,12 @@ internal fun AssetListScreen(nav: NavHostController, toast: (String) -> Unit) {
         if (rows.isNotEmpty()) item {
             ListCard {
                 rows.forEachIndexed { index, row ->
-                    AssetRow(row, assetStore.assetTypeName(row.assetTypeId).ifBlank { row.category.label }) { nav.navigate("assetEdit/${row.id}") }
+                    // Membuka baris berarti membuka formulir yang MENYIMPAN, jadi pintunya
+                    // diperiksa; tanpa itu role yang hanya boleh membaca tetap bisa mengubah.
+                    AssetRow(row, assetStore.assetTypeName(row.assetTypeId).ifBlank { row.category.label }) {
+                        if (assetStore.canWriteInventory()) nav.navigate("assetEdit/${row.id}")
+                        else toast("Akses ubah aset dicabut untuk role akun ini")
+                    }
                     if (index < rows.lastIndex) RowDivider()
                 }
             }
@@ -355,7 +360,10 @@ internal fun AssetFormScreen(nav: NavHostController, assetId: String?, toast: (S
                 FilterSheetRow(type.id == effectiveTypeId, type.name, "Kode ${type.code}") { assetTypeId = type.id; showTypeSheet = false }
             }
             ListDivider()
-            FilterSheetRow(false, "Tambah jenis aset baru", "Buka katalog jenis aset") { showTypeSheet = false; nav.navigate("assetTypes") }
+            // Menambah jenis aset menulis data induk (owner.manage), jadi pintunya diperiksa.
+            if (assetStore.canManageAssetTypes()) {
+                FilterSheetRow(false, "Tambah jenis aset baru", "Buka katalog jenis aset") { showTypeSheet = false; nav.navigate("assetTypes") }
+            }
         }
     }
 }
