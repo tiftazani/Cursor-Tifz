@@ -3,6 +3,11 @@
 Dokumen ini mencatat hasil pemeriksaan atas pertanyaan "kenapa Play Protect muncul saat memasang
 APK Cuciin". Ditulis supaya tidak ada klaim tanpa bukti.
 
+> **Catatan versi:** pemeriksaan di bawah dijalankan pada APK **1.10.24 (versionCode 43)**. Sifat APK
+> yang diperiksa (label, target SDK, izin minimum, tanda tangan) tidak berubah pada versi-versi
+> sesudahnya, termasuk 1.10.30, karena tidak ada perubahan `applicationId`, izin, atau kunci
+> penandatanganan sejak itu. Kalau salah satu dari ketiganya berubah, ulangi pemeriksaan ini.
+
 ## Yang diperiksa dan hasilnya
 
 ### APK-nya sendiri bersih
@@ -13,6 +18,9 @@ application-label  Cuciin
 targetSdkVersion   36
 debuggable     TIDAK ADA atribut debuggable (benar untuk rilis)
 izin           INTERNET, ACCESS_NETWORK_STATE, READ_GSERVICES  (minimum)
+               + com.cuciin.laundryops.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+                 (izin internal AndroidX untuk receiver not-exported; ditambahkan otomatis oleh
+                  pustaka, bukan permintaan aplikasi, dan tidak dapat dicabut pengguna)
 tanda tangan   v2 dan v3 valid, v1 tidak dipakai (normal untuk minSdk 26+)
 ```
 
