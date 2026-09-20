@@ -2,6 +2,58 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.30 — 20 Sep 2026 (versionCode 49)
+
+### Modul dan fungsi izin diperinci, plus preset peran
+
+Katalog izin naik dari **12 modul / 17 fungsi** menjadi **15 modul / 41 fungsi**, dan kini bisa
+diisi sekali tekan lewat preset peran (Owner, Supervisor, Kasir, Hanya lihat, Kosongkan). Preset
+adalah titik awal, bukan larangan: sesudah diterapkan, centangnya tetap bisa diubah satu per satu.
+
+**Tiga pemisahan yang paling berpengaruh.**
+
+1. BACA dipisah dari TULIS. Sebelumnya satu-satunya cara memberi "lihat stok" adalah memberi
+   "ubah stok". Sekarang ada `stock.view` di samping `stock.write`.
+2. UBAH dipisah dari HAPUS. Menghapus lebih berisiko daripada mengubah, tetapi keduanya dulu
+   menumpang satu centang: `service.correct` menaungi koreksi DAN hapus, `expense.write` menaungi
+   catat DAN hapus.
+3. Modul `owner` dipecah menjadi `branch`, `staff`, `serviceCatalog`, dan `access`, supaya "boleh
+   menambah user" tidak lagi menuntut "boleh mengubah cabang". Sebelumnya satu fungsi
+   `owner.manage` dipakai di **17 titik jaga di store dan 7 gerbang rute**.
+
+**Kunci keras yang sekarang jadi centangan.** Empat aturan yang dulu dikunci dengan NAMA peran di
+kode sekarang mengikuti centang fungsi, dengan nilai bawaan yang sama supaya perilakunya tidak
+berubah: koreksi/hapus Service yang sudah dikirim (`service.correctSent`), ekspor seluruh data
+(`analytics.export`), hapus pelanggan (`customer.delete`), dan tab Service/WA di bar bawah
+(sekarang mengikuti `service.create` dan `whatsapp.send`, bukan nama "Supervisor").
+
+**Fungsi yang tetap dikunci keras.** Bukan izin, melainkan invarian keamanan: "Owner terakhir tidak
+bisa dihapus atau diturunkan", Owner selalu penuh, dan kebijakan per pengguna hanya mempersempit.
+Lima belas fungsi yang SERVER tolak untuk non-Owner ditandai "Khusus Owner" di layar dan centangnya
+tidak dapat dinyalakan, supaya Owner tidak menyimpan centang yang tidak akan pernah tersinkron.
+Daftarnya mengikuti `OWNER_ONLY` dan perintah khusus Owner di Worker, dan kecocokannya dikunci
+`AccessPresetTest`.
+
+**Kompatibilitas kunci lama.** Role yang sudah tersimpan di server masih memakai kunci lama
+(`owner.manage`, `attendance.write`), dan APK 1.10.29 yang masih dipakai cabang juga menulis kunci
+lama. Kunci lama diterjemahkan ke kunci baru saat role dibaca, bukan hanya saat izin diperiksa:
+tanpa itu, layar Kontrol Akses Role menampilkan centang KOSONG untuk role yang sudah ada, dan Owner
+yang menyimpannya akan menghapus seluruh hak role itu.
+
+**Bug yang ikut diperbaiki.**
+
+- Worker menyamakan pembayaran dengan koreksi Service. Akun ber-kebijakan yang diberi
+  `service.payment` tanpa `service.correct` DITOLAK saat mencatat pembayaran. Sekarang
+  `order.payment` memetakan ke `service.payment`.
+- Worker memetakan absensi ke `attendance.write` dan jenis aset ke modul `inventory` saja, tidak
+  sesuai katalog. Sekarang `attendance.self` dan `inventory.type`.
+- Worker hanya memeriksa MODUL untuk command pelanggan, sehingga kebijakan tanpa `customer.write`
+  tetap bisa menulis pelanggan. Sekarang memeriksa fungsinya.
+- Tombol "Hapus" pada koreksi Service dibuang; penolakan `service.delete` sekarang dilaporkan
+  lewat pesan, bukan gagal diam-diam.
+- Dua fungsi katalog dibuang karena tidak punya pemeriksa: `settings.manage` dan `cash.view`.
+  Fungsi tanpa pemeriksa membuat janji Kontrol Akses Role bohong.
+
 ## 1.10.28 — 19 Sep 2026 (versionCode 47)
 
 ### Penolakan izin tidak lagi mematikan aplikasi atau melapor palsu
@@ -202,6 +254,18 @@ Sengaja TIDAK diubah: gerbang rute `attendance`, `expenses`, dan `customers` tet
 modul. Ketiganya memang menyimpan data, tetapi penolakan fungsinya sudah tampil sebagai pesan yang
 benar di layar, dan memperketat gerbangnya akan mencabut akses MEMBACA laporan dari role kustom
 yang sah. Tidak ada kerugian nyata yang terbukti dari bentuk itu.
+
+**Gerbang rute yang baru dipasang.** Enam layar yang tadinya TIDAK diperiksa sama sekali sekarang
+punya gerbang: Daftar Aset Cabang, Biaya operasional, Pelanggan, WA menunggu, Arsip WA, dan
+Absensi. Dulu layar-layar itu terbuka untuk peran mana pun. Dua akibat yang perlu diketahui:
+
+- Peran yang tidak memegang modul terkait kini kehilangan akses ke layar itu: Kasir pada Daftar
+  Aset Cabang, Supervisor pada Pelanggan, Biaya operasional, WA menunggu, dan Arsip WA. Itu
+  perbaikan, bukan regresi, dan daftarnya dikunci di
+  `AccessUpgradeRegressionTest.penutupanYangDisengaja`.
+- `queue` dan `service` kini memeriksa FUNGSI (`queue.view`, `service.create`), bukan hanya
+  modulnya. Role tersimpan yang hanya memegang modulnya mendapat kembali fungsi bacanya lewat
+  penerjemahan kunci, jadi menunya tidak tertutup.
 
 ## 1.10.29 — 19 Sep 2026
 

@@ -3,7 +3,7 @@ package com.cuciin.laundryops.ui
 import com.cuciin.laundryops.data.AccessCatalog
 
 /**
- * Pemetaan rute menu ke modul izin yang diperiksa.
+ * Pemetaan rute menu ke modul dan fungsi izin yang diperiksa.
  *
  * Dipisah dari layar supaya dapat diuji tanpa Android, dan supaya setiap modul di
  * [AccessCatalog] benar-benar diperiksa di suatu tempat.
@@ -15,7 +15,15 @@ import com.cuciin.laundryops.data.AccessCatalog
  * sebagai satu sumber untuk layar dan pemeriksaan izin, jadi keadaan itu melanggar aturannya
  * sendiri: modul tampil di layar tetapi tidak pernah diperiksa.
  *
- * Modul `stock` tidak ada di sini karena diperiksa lewat katalog tab di [NavTabs].
+ * Versi 1.10.30 memecah modul `owner` menjadi `branch`, `staff`, `serviceCatalog`, `access`,
+ * dan `settings`, dan memberi modul `stock` rutenya sendiri. Sebelumnya seluruh menu master
+ * data berbagi satu modul, sehingga "boleh mengubah produk" tidak dapat dibedakan dari
+ * "boleh menghapus cabang".
+ *
+ * Rute yang punya fungsi WAJIB memeriksanya, bukan hanya modulnya. Modul dan fungsi adalah dua
+ * lapis: memegang modul `service` tidak berarti boleh MEMBUAT Service. Gerbang yang lebih
+ * longgar dari penjaganya bukan sekadar tidak rapi: ia membuka jalan menuju kegagalan yang
+ * tidak dapat dipahami pengguna.
  */
 internal object RouteAccess {
 
@@ -25,45 +33,36 @@ internal object RouteAccess {
     /**
      * Rute yang tidak punya modul sendiri selalu boleh: akun, tema, dan riwayat versi.
      *
-     * Rute yang punya fungsi WAJIB memeriksanya, bukan hanya modulnya. Modul dan fungsi adalah
-     * dua lapis: memegang modul `service` tidak berarti boleh MEMBUAT Service. Sebelumnya rute
-     * "Service baru" hanya memeriksa modul `service`, sedangkan `saveNota` memeriksa fungsi
-     * `service.create`. Role kustom yang dicentang modul `service` tanpa fungsi `service.create`
-     * melihat menunya, mengisi formulirnya, lalu aplikasi MATI saat menekan Simpan karena
-     * `saveNota` memakai `require`. Gerbang yang lebih longgar dari penjaganya bukan sekadar
-     * tidak rapi: ia membuka jalan menuju kegagalan yang tidak dapat dipahami pengguna.
-     *
      * Fungsi yang dipakai di sini harus fungsi yang benar-benar diperiksa saat MENYIMPAN pada
      * alur utama rute itu, bukan fungsi sekunder.
      */
     private val gateByRoute: Map<String, Gate> = mapOf(
         // Pekerjaan harian
-        "queue" to Gate("queue"),
+        "queue" to Gate("queue", "queue.view"),
         "service" to Gate("service", "service.create"),
         "attendance" to Gate("attendance"),
-        "inventory" to Gate("inventory"),
+        "inventory" to Gate("inventory", "inventory.view"),
+        "stok" to Gate("stock", "stock.view"),
         // Keuangan
         "expenses" to Gate("expense"),
         // Tutup kas memeriksa fungsi `cash.close`, bukan hanya modulnya: role kustom bisa
         // memegang modul `cash` tanpa fungsi itu, dan `closeCash` menolak lewat `boleh`.
         "cash" to Gate("cash", "cash.close"),
         // Pelanggan
-        "customers" to Gate("customer"),
-        "wa" to Gate("whatsapp"),
-        "waArchive" to Gate("whatsapp"),
+        "customers" to Gate("customer", "customer.view"),
+        "wa" to Gate("whatsapp", "whatsapp.send"),
+        "waArchive" to Gate("whatsapp", "whatsapp.archive"),
         // Laporan: dua menu laporan berbagi modul, riwayat aktivitas modulnya sendiri.
         "analytics" to Gate("analytics", "analytics.view"),
         "analyticsReport" to Gate("analytics", "analytics.view"),
         "audit" to Gate("audit", "audit.view"),
-        // Master data: seluruh menu di sini menulis data induk, dan store memeriksa owner.manage
-        // untuk menambah, mengubah, maupun menghapus. Memeriksa modul saja tidak cukup: role
-        // kustom bisa saja diberi modul `owner` tanpa fungsi `owner.manage`.
-        "branches" to Gate("owner", "owner.manage"),
-        "users" to Gate("owner", "owner.manage"),
-        "services" to Gate("owner", "owner.manage"),
-        "products" to Gate("owner", "owner.manage"),
-        "accessRoles" to Gate("owner", "owner.access"),
-        "ownerSettings" to Gate("owner", "owner.manage"),
+        // Master data: satu modul per jenis data, supaya haknya dapat diberikan terpisah.
+        "branches" to Gate("branch", "branch.manage"),
+        "users" to Gate("staff", "staff.manage"),
+        "services" to Gate("serviceCatalog", "serviceCatalog.manage"),
+        "products" to Gate("stock", "stock.product"),
+        "accessRoles" to Gate("access", "access.role"),
+        "ownerSettings" to Gate("whatsapp", "whatsapp.template"),
     )
 
     /** Gerbang izin sebuah rute, atau null bila rute itu selalu boleh. */

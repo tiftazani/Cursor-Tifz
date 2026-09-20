@@ -103,6 +103,17 @@ import com.cuciin.laundryops.ui.theme.OnPrim
 
 private val store get() = CuciinStore
 
+/**
+ * Apakah akun ini boleh melihat data SELURUH cabang, bukan hanya cabangnya sendiri.
+ *
+ * Dipakai pemilih cabang di layar operasional. Sebelumnya dikunci NAMA PERAN Owner, sehingga
+ * role kustom yang diberi seluruh cabang tetap terkurung di satu cabang. Ukurannya sekarang hak
+ * melihat laporan (`analytics.view`): itulah hak yang memang berarti "boleh melihat angka semua
+ * cabang", dan Role Owner selalu memilikinya.
+ */
+internal fun canViewAllBranches(s: com.cuciin.laundryops.data.Session?): Boolean =
+    s != null && store.canAccess("analytics", "analytics.view")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun HomeScreen(nav: NavHostController) {
@@ -126,7 +137,7 @@ internal fun HomeScreen(nav: NavHostController) {
     // Periode menyaring berdasarkan tanggal masuk Service. Rentang sendiri memakai tanggal
     // yang dipilih pengguna, jadi tanggal mana pun bisa dibandingkan tanpa mengubah nota.
     val periodStart = Clock.periodStartMs(period)
-    val bid = if (s.role == Role.Owner) store.viewBranch.value else s.branchId
+    val bid = if (canViewAllBranches(s)) store.viewBranch.value else s.branchId
     val scoped = all.filter { nota ->
         val inRange = if (customRange) {
             rangeValid && DisplayDates.isInSelectedMinute(nota.createdAtMs, from, until)
@@ -256,7 +267,7 @@ internal fun HomeScreen(nav: NavHostController) {
     if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-            if (s.role == Role.Owner) {
+            if (canViewAllBranches(s)) {
                 FilterSheetRow(bid == "all", "Semua cabang", "${store.branches.size} cabang") { store.viewBranch.value = "all"; store.touchStatus(); showBranchSheet = false }
                 store.branches.forEach { branch ->
                     FilterSheetRow(bid == branch.id, branch.name, "${all.count { it.branchId == branch.id }} pesanan") { store.viewBranch.value = branch.id; store.touchStatus(); showBranchSheet = false }
@@ -341,8 +352,8 @@ internal fun NotaScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val s = store.session.value ?: return
     val tap = rememberTapFeedback()
-    val allowedBranches = if (s.role == Role.Owner) store.branches.toList() else store.branches.filter { it.id == s.branchId }
-    val defaultBranchId = if (s.role == Role.Owner && store.viewBranch.value != "all") store.viewBranch.value else s.branchId
+    val allowedBranches = if (canViewAllBranches(s)) store.branches.toList() else store.branches.filter { it.id == s.branchId }
+    val defaultBranchId = if (canViewAllBranches(s) && store.viewBranch.value != "all") store.viewBranch.value else s.branchId
     val selectedBranchId = store.notaBranchId.value?.takeIf { id -> allowedBranches.any { it.id == id } } ?: defaultBranchId
     LaunchedEffect(selectedBranchId) { if (store.notaBranchId.value != selectedBranchId) store.notaBranchId.value = selectedBranchId }
     store.revision.intValue
@@ -358,7 +369,7 @@ internal fun NotaScreen(nav: NavHostController, toast: (String) -> Unit) {
         LazyColumn(Modifier.weight(1f).padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
             item { ScreenHeader("Service baru", store.branch(selectedBranchId).name, onBack = { nav.popBackStack() }) }
             item { StepProgress(if (cust == null) 0 else 1) }
-            if (s.role == Role.Owner) item {
+            if (canViewAllBranches(s)) item {
                 FilterBar(
                     label = "Cabang transaksi",
                     value = store.branch(selectedBranchId).name,
@@ -599,7 +610,7 @@ internal fun PreviewScreen(nav: NavHostController, toast: (String) -> Unit) {
     val customer = store.selectedCustomer.value
     val session = store.session.value ?: return
     val branchId = store.notaBranchId.value
-        ?.takeIf { session.role == Role.Owner || it == session.branchId }
+        ?.takeIf { canViewAllBranches(session) || it == session.branchId }
         ?: session.branchId
     val total = cart.sumOf { (it.qty * it.unitPrice).toInt() }
     var feedback by rememberSaveable { mutableStateOf("") }
@@ -635,7 +646,7 @@ internal fun PreviewScreen(nav: NavHostController, toast: (String) -> Unit) {
             }, onRemove = {
                 tap(); store.cartDelta(line.service.id, -line.qty); feedback = "${line.service.name} dihapus dari Service"
             })
-            if (session.role == Role.Owner) {
+            if (store.canAssignHandler()) {
                 HandlerPicker(
                     branchId = branchId,
                     selectedEmail = line.handledByEmail,
@@ -676,7 +687,7 @@ internal fun BayarScreen(nav: NavHostController, toast: (String) -> Unit) {
     val cust = store.selectedCustomer.value
     val s = store.session.value ?: return
     val branchId = store.notaBranchId.value
-        ?.takeIf { id -> s.role == Role.Owner || id == s.branchId }
+        ?.takeIf { id -> canViewAllBranches(s) || id == s.branchId }
         ?: s.branchId
     val cart = store.cart.map { it.copy() }
     val total = cart.sumOf { (it.qty * it.unitPrice).toInt() }.coerceAtLeast(0)
@@ -778,7 +789,7 @@ internal fun QueueEditScreen(nav: NavHostController, id: String, toast: (String)
             }, onRemove = {
                 draft = draft.filterNot { it.serviceId == line.serviceId }
             })
-            if (session.role == Role.Owner) {
+            if (store.canAssignHandler()) {
                 HandlerPicker(
                     branchId = nota.branchId,
                     selectedEmail = line.handledByEmail.ifBlank { nota.kasirEmail },
@@ -895,7 +906,7 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
             item {
                 CardBlock {
                     SectionLabel("Koreksi Service")
-                    if (n.waSent && s?.role != Role.Owner) {
+                    if (n.waSent && !store.canCorrectSentNota()) {
                         Text("Service sudah dikirim ke pelanggan. Hanya Owner yang dapat mengoreksi atau menghapusnya.", color = Muted, fontSize = 12.sp)
                     } else {
                         Text("Ubah layanan, jumlah, atau harga. Semua perubahan tercatat di audit trail.", color = Muted, fontSize = 12.sp)
@@ -969,7 +980,7 @@ internal fun StockScreen(nav: NavHostController, toast: (String) -> Unit) {
     val low = products.count { store.stockOf(it.key, branchId) <= it.min }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Persediaan", "${store.branch(branchId).name} · ${DisplayDates.date(LocalDateTime.now(Clock.ZONE))}") }
-        if (s.role == Role.Owner) item {
+        if (canViewAllBranches(s)) item {
             FilterBar(
                 label = "Cabang",
                 value = store.branch(branchId).name.removePrefix("Cuciin "),
@@ -1048,7 +1059,7 @@ internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
     }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Perubahan stok massal", store.branch(branchId).name, onBack = { nav.popBackStack() }) }
-        if (session.role == Role.Owner) item {
+        if (canViewAllBranches(session)) item {
             FilterBar(
                 label = "Cabang yang diperbarui",
                 value = if (targetBranches.size == 1) store.branch(targetBranches.first()).name.removePrefix("Cuciin ") else "${targetBranches.size} cabang dipilih",
@@ -1088,7 +1099,7 @@ internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
         item {
             PrimaryBtn("Simpan ${validChanges.size} perubahan", enabled = validChanges.isNotEmpty() && validChanges.size == changes.size, icon = Icons.Outlined.Check) {
                 if (date.isAfter(LocalDateTime.now(Clock.ZONE))) { toast("Waktu perubahan tidak boleh di masa depan"); return@PrimaryBtn }
-                val targets = if (session.role == Role.Owner) targetBranches else setOf(branchId)
+                val targets = if (canViewAllBranches(session)) targetBranches else setOf(branchId)
                 if (targets.isEmpty()) { toast("Pilih minimal satu cabang"); return@PrimaryBtn }
                 val saved = store.editStocks(validChanges, targets, kind, date.atZone(Clock.ZONE).toInstant().toEpochMilli())
                 if (saved == CuciinStore.TOLAK_STOK) { toast("Akses Catat stok dicabut untuk role akun ini"); return@PrimaryBtn }
@@ -1121,7 +1132,7 @@ internal fun StockHistoryScreen(nav: NavHostController) {
     var showActorSheet by rememberSaveable { mutableStateOf(false) }
     var fromValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).minusDays(30).withHour(0).withMinute(0))) }
     var untilValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59))) }
-    var branchIds by remember { mutableStateOf(if (session.role == Role.Owner) emptySet<String>() else setOf(session.branchId)) }
+    var branchIds by remember { mutableStateOf(if (canViewAllBranches(session)) emptySet<String>() else setOf(session.branchId)) }
     var actor by rememberSaveable { mutableStateOf("all") }
     var allDates by rememberSaveable { mutableStateOf(false) }
     store.revision.intValue
@@ -1147,7 +1158,7 @@ internal fun StockHistoryScreen(nav: NavHostController) {
                 }
             }
         }
-        if (session.role == Role.Owner) item {
+        if (canViewAllBranches(session)) item {
             FilterBar(
                 label = "Cabang",
                 value = if (branchIds.isEmpty()) "Semua cabang" else "${branchIds.size} cabang dipilih",

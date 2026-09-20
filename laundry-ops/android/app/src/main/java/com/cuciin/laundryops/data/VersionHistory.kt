@@ -12,10 +12,22 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.28"
-    val currentCode: Int = 47
+    val currentName: String = "1.10.30"
+    val currentCode: Int = 49
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.30", code = 49, date = "20 Sep 2026",
+            notes = listOf(
+                "Kontrol Akses Role kini lebih rinci: 15 modul dan 41 fungsi, dari sebelumnya 12 modul dan 17 fungsi.",
+                "Ada preset peran sekali tekan untuk Owner, Supervisor, Kasir, Hanya lihat, dan Kosongkan. Sesudah diterapkan, centangnya tetap bisa diubah satu per satu.",
+                "Hak baca dipisah dari hak ubah, dan hak hapus dipisah dari hak koreksi. Memberi izin lihat stok tidak lagi sekalian memberi izin mengubah stok.",
+                "Modul master data dipecah menjadi Cabang, Daftar User, Layanan dan harga, serta Kontrol Akses, supaya izinnya dapat diberikan terpisah.",
+                "Koreksi Service yang sudah dikirim, ekspor seluruh data, dan hapus pelanggan kini menjadi centang fungsi, bukan lagi terkunci pada nama peran.",
+                "Fungsi yang hanya boleh dilakukan Owner ditandai di layar supaya tidak ada centang yang tidak akan pernah tersinkron.",
+                "Perbaikan: pembayaran Service ditolak server bila role hanya diberi izin koreksi, bukan izin pembayaran.",
+            ),
+        ),
         AppRelease(
             name = "1.10.27", code = 46, date = "18 Sep 2026",
             notes = listOf(

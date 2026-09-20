@@ -139,7 +139,7 @@ internal fun CustomersScreen(nav: NavHostController, toast: (String) -> Unit) {
                         creating = false
                         editing = null
                     }
-                    if (editing != null && store.session.value?.role == Role.Owner) {
+                    if (editing != null && store.canDeleteCustomer()) {
                         DangerBtn("Hapus pelanggan") {
                             store.deleteCustomer(editing!!.id)?.let { toast(it) } ?: toast("Dihapus")
                             creating = false
@@ -435,9 +435,9 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
                     if (editing != null && !editing!!.approved) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             PrimaryBtn("Setujui", modifier = Modifier.weight(1f)) {
-                                store.approve(editing!!.name, true)
-                                toast("User disetujui")
-                                editing = null
+                                val err = store.approve(editing!!.name, true)
+                                toast(err ?: "User disetujui")
+                                if (err == null) editing = null
                             }
                             GhostBtn("Tolak", modifier = Modifier.weight(1f)) {
                                 store.deleteStaff(editing!!.email)?.let { toast(it) } ?: toast("Permohonan ditolak")

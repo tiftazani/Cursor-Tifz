@@ -124,7 +124,7 @@ internal fun MoreScreen(nav: NavHostController) {
                 }
             }
         }
-        if (role == Role.Owner) item { GhostBtn("Ekspor semua data (JSON)", icon = Icons.Outlined.FileDownload) { FileExports.shareAllData(ctx, store.exportSnapshot()) } }
+        if (store.canExportData()) item { GhostBtn("Ekspor semua data (JSON)", icon = Icons.Outlined.FileDownload) { FileExports.shareAllData(ctx, store.exportSnapshot()) } }
         item { GhostBtn("Keluar dari akun", icon = Icons.Outlined.Logout) { store.logout(); nav.navigate("login") { popUpTo(0) } } }
     }
 }
@@ -135,23 +135,17 @@ internal fun MoreScreen(nav: NavHostController) {
  * Modul yang diperiksa dibaca dari [RouteAccess] supaya setiap modul di katalog izin benar-benar
  * diperiksa di suatu tempat; rute yang tidak punya modul (akun, tema, versi) selalu boleh.
  *
- * Pengecualian nama peran (`hiddenForSupervisor`) tetap dipakai sebagai lapisan kedua: menu yang
- * tabnya disembunyikan untuk SPV juga disembunyikan di sini. Aturannya dibaca dari [NavTabs],
- * sumber yang sama dengan bar navigasi, supaya menu Modul tidak pernah menampilkan pintu yang
- * tidak bisa dipakai. Sebelumnya SPV melihat "Service baru" di menu Modul padahal layar Antrian
- * dan tab bawah menyembunyikannya, dan server pun menolak pembuatan Service oleh SPV, sehingga
- * pesanannya gagal tersinkron tanpa penjelasan.
- *
- * Pengecualian itu TIDAK cukup sendiri: ia hanya mengenal peran bawaan. Role kustom yang memuat
- * modul `service` tanpa fungsi `service.create` tidak tertangkap olehnya, jadi gerbang fungsi di
- * [RouteAccess] yang menahan. Dua lapis, dan lapis fungsinya tidak boleh dilepas.
+ * Pengecualian nama peran dihapus di 1.10.30. Sebelumnya menu yang tabnya disembunyikan untuk SPV
+ * (`hiddenForSupervisor`) ikut disembunyikan di sini dengan NAMA PERAN. Aturan itu hanya mengenal
+ * peran bawaan: role kustom dengan bentuk izin yang sama tetap melihat pintu yang tidak bisa
+ * dipakainya, dan Owner tidak bisa membukanya untuk SPV walaupun fungsinya dicentang. Sekarang
+ * satu ukuran untuk semua: menu tampil bila fungsi yang diperiksa [RouteAccess] diizinkan, dan
+ * role bawaan Supervisor tetap tidak melihat "Service baru" maupun "WA menunggu" karena memang
+ * tidak memegang `service.create` dan `whatsapp.send`.
  */
 internal fun routeAllowed(route: String): Boolean {
     val gate = RouteAccess.gateOf(route) ?: return true
-    if (!store.canAccess(gate.module, gate.function)) return false
-    val tab = NavTabs.routeOf(MenuOrder.destinationOf(route))
-    if (tab?.hiddenForSupervisor == true && store.session.value?.role == Role.Supervisor) return false
-    return true
+    return store.canAccess(gate.module, gate.function)
 }
 
 /** Nama ikon di katalog dipetakan ke ikon sungguhan di sini supaya katalognya tetap murni. */
@@ -634,12 +628,12 @@ internal fun AuditScreen(nav: NavHostController) {
 internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val s = store.session.value ?: return
-    val bid = if (s.role == Role.Owner) store.viewBranch.value else s.branchId
+    val bid = if (canViewAllBranches(s)) store.viewBranch.value else s.branchId
     var showBranchSheet by remember { mutableStateOf(false) }
     if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-            if (s.role == Role.Owner) {
+            if (canViewAllBranches(s)) {
                 store.branches.forEach { branch ->
                     FilterSheetRow(bid == branch.id, branch.name, "Tutup kas per cabang") {
                         store.viewBranch.value = branch.id
@@ -660,7 +654,7 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
                 onBack = { nav.popBackStack() },
             )
         }
-        if (s.role == Role.Owner) {
+        if (canViewAllBranches(s)) {
             // Pemilih cabang harus ada di layar ini. Sebelumnya layar hanya meminta "Pilih satu
             // cabang" tanpa menyediakan pemilihnya, sehingga Owner yang melihat semua cabang
             // menemui jalan buntu dan harus memilih cabang di tab Antrian lebih dulu.
@@ -736,7 +730,7 @@ internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
                 Text(s.email, color = Muted)
                 Chip(if (s.role == Role.Supervisor) "SPV" else s.role.name, Teal)
                 InfoRow(Icons.Outlined.Storefront, "Cabang penugasan", assignedBranches.joinToString().ifBlank { "Belum ada cabang" })
-                if (s.role == Role.Owner) InfoRow(Icons.Outlined.Visibility, "Tampilan data", if (store.viewBranch.value == "all") "Semua cabang" else store.branch(store.viewBranch.value).name)
+                if (canViewAllBranches(s)) InfoRow(Icons.Outlined.Visibility, "Tampilan data", if (store.viewBranch.value == "all") "Semua cabang" else store.branch(store.viewBranch.value).name)
             }
         }
         if (account != null) {

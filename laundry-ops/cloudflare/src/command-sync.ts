@@ -187,21 +187,38 @@ function assertRole(identity: SyncIdentity, command: SyncCommand): void {
   if (!permission.allowed) throw new CommandError(403, permission.reason === "owner" ? "Command khusus Owner" : "Role tidak diizinkan");
 }
 
+/**
+ * Modul dan fungsi katalog yang setara dengan sebuah command.
+ *
+ * Dipakai untuk memeriksa izin sisi server pada akun yang punya kebijakan akses per pengguna.
+ * Kuncinya HARUS sama dengan `AccessCatalog` di aplikasi; test `AccessPresetTest` di sisi Android
+ * membaca berkas ini dan memastikan pemetaannya tidak menyimpang.
+ *
+ * Riwayat: sebelum 1.10.30 pemetaan ini memakai modul lama (`owner`, `inventory` untuk jenis aset)
+ * dan menyamakan pembayaran dengan koreksi Service. Akibatnya akun ber-kebijakan yang diberi
+ * `service.payment` tanpa `service.correct` DITOLAK saat mencatat pembayaran.
+ */
 function customAccessRequirement(command: SyncCommand): { module: string; function?: string } | null {
   if (command.type.startsWith("order.")) {
     if (command.payload.syncIntent === "status" || command.type === "order.status") return {module:"queue",function:"queue.status"};
+    if (command.type === "order.handover") return {module:"queue",function:"queue.handover"};
     if (command.payload.waSent === true) return {module:"whatsapp",function:"whatsapp.send"};
+    if (command.type === "order.payment") return {module:"service",function:"service.payment"};
+    if (command.type === "order.delete") return {module:"service",function:"service.delete"};
     return {module:"service",function:command.type === "order.create" ? "service.create" : "service.correct"};
   }
   if (command.type.startsWith("stock") || command.type.startsWith("branchStock")) return {module:"stock",function:"stock.write"};
-  if (command.type.startsWith("attendance")) return {module:"attendance",function:"attendance.write"};
-  if (command.type.startsWith("customer")) return {module:"customer"};
-  if (command.type.startsWith("payment")) return {module:"service",function:"service.correct"};
-  if (command.type.startsWith("inventory")) return {module:"inventory"};
-  if (command.type.startsWith("assetType")) return {module:"inventory"};
-  if (command.type.startsWith("expense")) return {module:"expense"};
-  if (command.type.startsWith("cashClose")) return {module:"cash"};
-  if (command.type.startsWith("accessRole")) return {module:"owner",function:"owner.access"};
+  if (command.type.startsWith("attendance")) return {module:"attendance",function:"attendance.self"};
+  if (command.type.startsWith("customer")) return {module:"customer",function:command.type === "customer.delete" ? "customer.delete" : "customer.write"};
+  if (command.type.startsWith("payment")) return {module:"service",function:"service.payment"};
+  if (command.type.startsWith("inventory")) return {module:"inventory",function:command.type === "inventory.delete" ? "inventory.delete" : "inventory.write"};
+  // Jenis aset adalah data induk aset, bukan aset cabang: kuncinya `inventory.type`.
+  if (command.type.startsWith("assetType")) return {module:"inventory",function:"inventory.type"};
+  if (command.type.startsWith("expense")) return {module:"expense",function:command.type === "expense.delete" ? "expense.delete" : "expense.write"};
+  if (command.type.startsWith("cashClose")) return {module:"cash",function:"cash.close"};
+  if (command.type.startsWith("accessRole")) return {module:"access",function:"access.role"};
+  if (command.type.startsWith("accessPolicy")) return {module:"access",function:"access.assign"};
+  if (command.type.startsWith("whatsappTemplate")) return {module:"whatsapp",function:"whatsapp.template"};
   return null;
 }
 

@@ -1,5 +1,6 @@
 package com.cuciin.laundryops.ui
 
+import com.cuciin.laundryops.data.AccessCatalog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -48,24 +49,52 @@ class NavBarContractTest {
 
     @Test
     fun supervisorTidakMelihatTabServiceDanWa() {
-        val supervisor = NavTabs.visibleFor(
-            role = "Supervisor",
-            canAccess = { true },
-        ).map { it.label }
-        assertFalse("SPV tidak melihat Service", "Service" in supervisor)
-        assertFalse("SPV tidak melihat WA", "WA" in supervisor)
-        assertTrue("SPV tetap melihat Antrian", "Antrian" in supervisor)
+        // Ukurannya FUNGSI, bukan nama peran: tab Service butuh `service.create` dan tab WA
+        // butuh `whatsapp.send`, dan role bawaan Supervisor tidak memegang keduanya.
+        val supervisor = AccessCatalog.builtInRoles().first { it.id == "role-supervisor" }
+        val supervisorTabs = NavTabs.visibleFor { module, function ->
+            module in supervisor.modules && (function == null || function in supervisor.functions)
+        }.map { it.label }
+        assertFalse("SPV tidak melihat Service", "Service" in supervisorTabs)
+        assertFalse("SPV tidak melihat WA", "WA" in supervisorTabs)
+        assertTrue("SPV tetap melihat Antrian", "Antrian" in supervisorTabs)
     }
 
     @Test
     fun tabMengikutiIzinAkses() {
         // Izin yang dicabut menyembunyikan tab, dan rute berbar tetap tidak berubah.
-        val kasir = NavTabs.visibleFor(
-            role = "Kasir",
-            canAccess = { module -> module != "service" },
-        ).map { it.label }
+        val kasir = NavTabs.visibleFor { module, function ->
+            module != "service" && (function == null || function != "service.create")
+        }.map { it.label }
         assertFalse("Service tersembunyi saat izinnya dicabut", "Service" in kasir)
         assertTrue("WA tetap tampil", "WA" in kasir)
         assertTrue("Daftar rute berbar tidak terpengaruh", "nota" in NavTabs.routes)
+    }
+
+    /**
+     * Tab dengan fungsi wajib memeriksa fungsinya, bukan hanya modulnya.
+     *
+     * Bug yang dikunci: memegang modul `service` tidak berarti boleh MEMBUAT Service. Tab yang
+     * hanya memeriksa modul akan tampil untuk role yang tidak bisa memakainya.
+     */
+    @Test
+    fun tabMemeriksaFungsiBukanHanyaModul() {
+        // Tab yang punya fungsi WAJIB menyebut fungsinya di katalog, supaya pemanggilnya bisa
+        // memeriksanya. Sebelumnya tab Service dan WA hanya membawa modul, sehingga role yang
+        // memegang modul `service` tanpa `service.create` melihat tab yang tidak bisa dipakainya.
+        assertEquals("service.create", NavTabs.routeOf("nota")?.function)
+        assertEquals("whatsapp.send", NavTabs.routeOf("wa")?.function)
+        assertEquals("queue.view", NavTabs.routeOf("home")?.function)
+        assertEquals("stock.view", NavTabs.routeOf("stok")?.function)
+        assertEquals("Tab Modul tidak punya fungsi", null, NavTabs.routeOf("more")?.function)
+
+        // Bukti bahwa fungsinya benar-benar dipakai: modul service dimiliki, fungsinya tidak.
+        val tanpaFungsiCreate = NavTabs.visibleFor { module, function ->
+            module == "service" && function != "service.create"
+        }.map { it.label }
+        assertFalse(
+            "Tab Service tidak boleh tampil bila fungsi create ditolak",
+            "Service" in tanpaFungsiCreate,
+        )
     }
 }

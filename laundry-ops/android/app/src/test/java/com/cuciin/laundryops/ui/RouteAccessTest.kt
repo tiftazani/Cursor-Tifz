@@ -38,10 +38,9 @@ class RouteAccessTest {
 
     @Test
     fun setiapModulKatalogDiperiksaDiSuatuTempat() {
-        // `stock` diperiksa lewat katalog tab (NavTabs), bukan lewat rute menu, karena tab Stok
-        // bukan salah satu menu di layar Modul.
-        val lewatTab = setOf("stock")
-        val diperiksa = RouteAccess.modulesInUse + lewatTab
+        // Semua modul katalog harus diperiksa lewat gerbang rute; `stock` diperiksa di dua
+        // tempat sekaligus (tab Stok dan menu Produk stok), jadi himpunannya tetap satu.
+        val diperiksa = RouteAccess.modulesInUse
 
         val mati = katalog - diperiksa
         assertTrue(
@@ -76,11 +75,15 @@ class RouteAccessTest {
     }
 
     @Test
-    fun ruteMasterDataTetapModulOwner() {
-        // Yang tidak boleh berubah: master data memang khusus Owner.
-        listOf("branches", "users", "services", "products", "accessRoles", "ownerSettings").forEach { route ->
-            assertEquals("Rute $route harus memakai modul owner", "owner", RouteAccess.moduleOf(route))
-        }
+    fun ruteMasterDataMemakaiModulSendiri() {
+        // Sejak 1.10.30 modul `owner` dipecah, supaya "boleh mengubah produk" tidak lagi menuntut
+        // "boleh menghapus cabang". Setiap menu master data punya modulnya sendiri.
+        assertEquals("branch", RouteAccess.moduleOf("branches"))
+        assertEquals("staff", RouteAccess.moduleOf("users"))
+        assertEquals("serviceCatalog", RouteAccess.moduleOf("services"))
+        assertEquals("stock", RouteAccess.moduleOf("products"))
+        assertEquals("access", RouteAccess.moduleOf("accessRoles"))
+        assertEquals("whatsapp", RouteAccess.moduleOf("ownerSettings"))
     }
 
     @Test
@@ -154,12 +157,12 @@ class RouteAccessTest {
         // Fungsi yang diperiksa saat menyimpan pada alur utama rute.
         val penjagaAlurUtama = mapOf(
             "service" to "service.create",      // saveNota
-            "branches" to "owner.manage",        // addBranch + updateBranch
-            "users" to "owner.manage",           // addStaff + updateStaff
-            "services" to "owner.manage",        // addService + updateService
-            "products" to "owner.manage",        // addProduct + updateProduct
-            "ownerSettings" to "owner.manage",   // saveWhatsAppTemplate
-            "accessRoles" to "owner.access",     // assignAccessRole
+            "branches" to "branch.manage",       // addBranch + updateBranch
+            "users" to "staff.manage",           // addStaff + updateStaff
+            "services" to "serviceCatalog.manage", // addService + updateService
+            "products" to "stock.product",       // addProduct + updateProduct
+            "ownerSettings" to "whatsapp.template", // saveWhatsAppTemplate
+            "accessRoles" to "access.role",      // saveAccessRole
             "cash" to "cash.close",              // closeCash
         )
         val longgar = penjagaAlurUtama.filter { (rute, fungsi) ->

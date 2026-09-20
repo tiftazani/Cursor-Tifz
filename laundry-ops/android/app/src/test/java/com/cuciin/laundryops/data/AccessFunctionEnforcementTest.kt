@@ -31,28 +31,43 @@ class AccessFunctionEnforcementTest {
      * terlihat sebagai kegagalan test, bukan lolos diam-diam.
      */
     private val diperiksa: Set<String> = setOf(
-        "queue.status",
-        "queue.handover",
-        "service.create",
-        "service.correct",
-        "service.payment",
-        "service.price",
-        "customer.write",
-        "stock.write",
-        "inventory.write",
-        "attendance.write",
-        "whatsapp.send",
-        "expense.write",
-        "cash.close",
-        "owner.manage",
-        "owner.access",
-        // Dua fungsi ini diperiksa lewat gerbang rute di RouteAccess.kt, bukan di store.
-        "analytics.view",
-        "audit.view",
+        // antrian
+        "queue.view", "queue.status", "queue.handover",
+        // service
+        "service.create", "service.payment", "service.price",
+        "service.correct", "service.delete", "service.correctSent",
+        // pelanggan
+        "customer.view", "customer.write", "customer.delete",
+        // produk & stok
+        "stock.view", "stock.write", "stock.product", "stock.productDelete",
+        // aset cabang
+        "inventory.view", "inventory.write", "inventory.delete", "inventory.type",
+        // absensi
+        "attendance.self", "attendance.view", "attendance.correct",
+        // WhatsApp
+        "whatsapp.send", "whatsapp.archive", "whatsapp.template",
+        // keuangan
+        "expense.write", "expense.delete", "cash.close",
+        // laporan
+        "analytics.view", "analytics.export", "audit.view",
+        // master data
+        "branch.manage", "branch.delete",
+        "staff.manage", "staff.approve", "staff.delete",
+        "serviceCatalog.manage", "serviceCatalog.delete",
+        "access.role", "access.assign",
     )
 
-    /** Fungsi yang diperiksa lewat gerbang rute, bukan lewat titik jaga di store. */
-    private val diperiksaLewatRute: Set<String> = setOf("analytics.view", "audit.view")
+    /**
+     * Fungsi yang diperiksa lewat gerbang rute, bukan lewat titik jaga di store.
+     *
+     * Tiga pertama adalah hak BACA yang pintunya memang rutenya: membuka daftar antrian,
+     * daftar pelanggan, dan layar Kontrol Akses Role. Menambahkannya sebagai titik jaga store
+     * akan memaksakan pemeriksaan yang tidak punya arti di sana.
+     */
+    private val diperiksaLewatRute: Set<String> = setOf(
+        "analytics.view", "audit.view",
+        "queue.view", "customer.view", "access.role",
+    )
 
     /**
      * Titik penjagaan yang harus ada di store, beserta pola dan jumlah minimalnya.
@@ -65,7 +80,7 @@ class AccessFunctionEnforcementTest {
      * `tolak("fungsi", ...)` untuk pemeriksaan yang menggabungkan [Role] lama dengan fungsi.
      */
     private val titikJaga: Map<String, Pair<String, Int>> = mapOf(
-        // queue
+        // antrian
         "queue.status" to ("boleh" to 1),      // advanceLaundry
         "queue.handover" to ("boleh" to 1),    // markPickedUp
         // service
@@ -73,22 +88,44 @@ class AccessFunctionEnforcementTest {
         // `saveNota` sendiri tidak lagi menyalin penolakannya; ia memanggil `notaReject` supaya
         // daftar penolakan hanya punya satu sumber.
         "service.create" to ("canAccess" to 1),
-        "service.correct" to ("boleh" to 2),   // updateNotaLines + deleteNota
         "service.payment" to ("boleh" to 1),   // markLunas
         "service.price" to ("canAccess" to 2), // setCartPrice + canChangePrice
+        "service.correct" to ("boleh" to 1),   // updateNotaLines
+        "service.delete" to ("boleh" to 1),    // deleteNota
+        "service.correctSent" to ("canAccess" to 1), // canCorrectSentNota
         // pelanggan
         "customer.write" to ("boleh" to 2),    // addCustomer + updateCustomer
-        // produk & aset
+        "customer.delete" to ("boleh" to 1),   // deleteCustomer
+        // produk & stok
         "stock.write" to ("boleh" to 2),       // editStock + editStocks
-        "inventory.write" to ("boleh" to 3),   // addInventory + updateInventory + deleteInventory
-        // absensi, WhatsApp, biaya, kas
-        "attendance.write" to ("boleh" to 2),  // checkIn + checkOut
+        "stock.product" to ("boleh" to 2),     // addProduct + updateProduct
+        "stock.productDelete" to ("boleh" to 1), // deleteProduct
+        // aset cabang
+        "inventory.write" to ("boleh" to 2),   // addInventory + updateInventory
+        "inventory.delete" to ("boleh" to 1),  // deleteInventory
+        "inventory.type" to ("boleh" to 3),    // addAssetType + updateAssetType + deleteAssetType
+        // absensi
+        "attendance.self" to ("boleh" to 2),   // checkIn + checkOut
+        "attendance.view" to ("canAccess" to 1), // visibleAttendance
+        "attendance.correct" to ("boleh" to 1), // correctAttendance
+        // WhatsApp
         "whatsapp.send" to ("boleh" to 1),     // markWaSent
-        "expense.write" to ("boleh" to 2),     // addExpense + deleteExpense
+        "whatsapp.template" to ("boleh" to 1), // saveWhatsAppTemplate
+        // keuangan
+        "expense.write" to ("boleh" to 1),     // addExpense
+        "expense.delete" to ("boleh" to 1),    // deleteExpense
         "cash.close" to ("boleh" to 1),        // closeCash
-        // master data & kontrol akses
-        "owner.manage" to ("boleh" to 17),     // cabang, user, layanan, produk, jenis aset, template WA
-        "owner.access" to ("tolak" to 1),      // assignAccessRole
+        // laporan & ekspor
+        "analytics.export" to ("canAccess" to 1), // canExportData
+        // master data: satu modul per jenis data sejak 1.10.30
+        "branch.manage" to ("boleh" to 3),     // addBranch + updateBranch + updateBranchMap
+        "branch.delete" to ("boleh" to 1),     // deleteBranch
+        "staff.manage" to ("boleh" to 2),      // addStaff + updateStaff
+        "staff.approve" to ("boleh" to 1),     // approve
+        "staff.delete" to ("boleh" to 1),      // deleteStaff
+        "serviceCatalog.manage" to ("boleh" to 2), // addService + updateService
+        "serviceCatalog.delete" to ("boleh" to 1), // deleteService
+        "access.assign" to ("boleh" to 1),     // assignAccessRole
     )
 
     @Test
@@ -144,9 +181,9 @@ class AccessFunctionEnforcementTest {
         )
     }
 
-    /** Dua fungsi laporan harus benar-benar dijaga lewat gerbang rute, bukan hanya modulnya. */
+    /** Fungsi baca yang tidak punya titik jaga store harus benar-benar dijaga gerbang rute. */
     @Test
-    fun fungsiLaporanDiperiksaLewatGerbangRute() {
+    fun fungsiBacaDiperiksaLewatGerbangRute() {
         val gerbang = com.cuciin.laundryops.ui.RouteAccess
         val hilang = diperiksaLewatRute.filterNot { it in gerbang.functionsInUse }
         assertTrue("Fungsi ini tidak diperiksa gerbang rute mana pun: $hilang", hilang.isEmpty())

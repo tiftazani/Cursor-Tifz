@@ -83,11 +83,11 @@ fun CuciinRoot() {
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
     val showBar = session != null && route in NavTabs.routes
     val mapLink = MapSelection.pendingLink.value
-    LaunchedEffect(mapLink, session?.role) {
-        if (mapLink != null && session?.role == Role.Owner && route != "branches") nav.navigate("branches") { launchSingleTop = true }
+    LaunchedEffect(mapLink, session?.email) {
+        if (mapLink != null && store.canAccess("branch", "branch.manage") && route != "branches") nav.navigate("branches") { launchSingleTop = true }
     }
     val visibleTabs = if (session == null) emptyList()
-    else NavTabs.visibleFor(session.role.name) { module -> store.canAccess(module) }
+    else NavTabs.visibleFor { module, function -> store.canAccess(module, function) }
     fun toast(msg: String) { scope.launch { snack.showSnackbar(msg) } }
 
     val palette = LocalCuciinPalette.current

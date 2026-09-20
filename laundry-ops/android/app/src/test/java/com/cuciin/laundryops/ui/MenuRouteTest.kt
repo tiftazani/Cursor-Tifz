@@ -1,5 +1,6 @@
 package com.cuciin.laundryops.ui
 
+import com.cuciin.laundryops.data.AccessCatalog
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -87,12 +88,23 @@ class MenuRouteTest {
     }
 
     @Test
-    fun menuYangTabnyaDisembunyikanUntukSpvIkutDisembunyikan() {
+    fun menuYangTabnyaTidakTerpakaiSpvIkutDisembunyikan() {
         // Aturan tampil menu harus sama dengan aturan tampil tab. Dulu SPV melihat "Service baru"
         // di menu Modul padahal tab dan layar Antrian menyembunyikannya, dan server menolak
         // pembuatan Service oleh SPV.
+        //
+        // Ukurannya sekarang FUNGSI, bukan nama peran: menu disembunyikan bila fungsi utama tab
+        // itu tidak dimiliki akun. Untuk SPV hasilnya sama seperti sebelumnya, karena role
+        // bawaan Supervisor memang tidak memegang `service.create` dan `whatsapp.send`.
+        val supervisor = AccessCatalog.builtInRoles().first { it.id == "role-supervisor" }
+        val boleh = { module: String, function: String? ->
+            module in supervisor.modules && (function == null || function in supervisor.functions)
+        }
         val disembunyikan = MenuOrder.catalog
-            .filter { NavTabs.routeOf(MenuOrder.destinationOf(it.route))?.hiddenForSupervisor == true }
+            .filter { spec ->
+                val tab = NavTabs.routeOf(MenuOrder.destinationOf(spec.route)) ?: return@filter false
+                tab.module.isNotEmpty() && !boleh(tab.module, tab.function)
+            }
             .map { it.label }
 
         assertTrue("Service baru harus disembunyikan untuk SPV", "Service baru" in disembunyikan)

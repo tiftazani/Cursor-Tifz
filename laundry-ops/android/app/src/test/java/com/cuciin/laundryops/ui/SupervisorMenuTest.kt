@@ -58,9 +58,27 @@ class SupervisorMenuTest {
 
     @Test
     fun spvTidakMelihatMenuKhususOwner() {
-        listOf("branches", "users", "services", "products", "accessRoles", "ownerSettings").forEach { route ->
+        // Menu master data yang tidak diberikan ke role bawaan Supervisor.
+        listOf("branches", "users", "services", "accessRoles", "ownerSettings").forEach { route ->
             assertFalse("SPV tidak boleh melihat menu $route", boleh(route))
         }
+    }
+
+    @Test
+    fun spvTidakDapatMengubahProdukStokWalauBisaMelihatStok() {
+        // Menu Produk stok memakai modul `stock` yang memang dimiliki SPV, jadi menunya tampil.
+        // Yang menahan adalah FUNGSI-nya: role bawaan Supervisor hanya memegang `stock.view` dan
+        // `stock.write`, bukan `stock.product`. Ini bentuk pemisahan baca dari tulis yang
+        // ditambahkan 1.10.30: SPV melihat stok, tetapi tidak boleh mengubah katalog produknya.
+        assertTrue("SPV melihat menu Produk stok", boleh("products"))
+        assertFalse(
+            "SPV tidak boleh mengubah katalog produk",
+            AccessPolicy.can(supervisor, roles, null, "stock", "stock.product"),
+        )
+        assertTrue(
+            "SPV tetap boleh mencatat perubahan stok",
+            AccessPolicy.can(supervisor, roles, null, "stock", "stock.write"),
+        )
     }
 
     @Test

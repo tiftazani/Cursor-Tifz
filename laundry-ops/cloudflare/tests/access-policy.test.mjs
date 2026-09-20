@@ -154,7 +154,12 @@ test("kebijakan akses yang tersimpan langsung mengikat command berikutnya", asyn
 test("kebijakan yang mengizinkan modul tidak menghalangi command yang sah", async () => {
   const env = envWithDb();
   await pushCommands(
-    commandRequest([accessPolicyCommand("policy-0008", "kasir@cuciin.id", ["service", "customer"], ["service.create"])]),
+    // Daftar fungsi adalah daftar putih: begitu tidak kosong, setiap modul yang diberikan tetap
+    // perlu fungsi yang cocok. Sebelumnya command pelanggan hanya memeriksa modul, sehingga
+    // kebijakan yang tidak memberi `customer.write` tetap bisa menulis pelanggan.
+    commandRequest([
+      accessPolicyCommand("policy-0008", "kasir@cuciin.id", ["service", "customer"], ["service.create", "customer.write"]),
+    ]),
     env,
     identities.owner,
   );
@@ -211,4 +216,148 @@ test("template WhatsApp tersimpan dengan id yang tetap dan perubahan tercatat di
   const journal = rows(env, "SELECT entity_type, operation FROM sync_changes WHERE entity_type='whatsappTemplate'");
   assert.equal(journal.length, 1);
   assert.equal(journal[0].operation, "upsert");
+});
+
+// ---------------------------------------------------------------------------------------------
+// Pemetaan command ke fungsi katalog (1.10.30)
+//
+// Pemeriksaan ini hanya berjalan untuk akun yang punya kebijakan akses per pengguna. Sebelumnya
+// pemetaannya memakai modul lama dan menyamakan pembayaran dengan koreksi Service, sehingga akun
+// yang diberi `service.payment` tanpa `service.correct` ditolak saat mencatat pembayaran.
+// ---------------------------------------------------------------------------------------------
+
+test("kebijakan dengan service.payment saja cukup untuk mencatat pembayaran", async () => {
+  const env = envWithDb();
+  await pushCommands(
+    commandRequest([accessPolicyCommand("policy-0010", "kasir@cuciin.id", ["service"], ["service.create", "service.payment"])]),
+    env,
+    identities.owner,
+  );
+  const envNota = env.db;
+  envNota.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  await pushCommands(
+    commandRequest([
+      {
+        commandId: "nota-0010",
+        type: "order.create",
+        entityId: "MLT-BAYAR-1",
+        branchId: "melati",
+        payload: { id: "MLT-BAYAR-1", branchId: "melati", customerName: "Pelanggan Uji", phone: "0812", total: 50000, paid: 0, paymentStatus: "Belum lunas", paymentMethod: "Tunai", workStatus: "Masuk antrian", createdAt: 1, lines: [{ serviceId: "cuci-kiloan", serviceName: "Cuci kiloan", quantity: 5, unit: "kg", unitPrice: 10000 }] },
+      },
+    ]),
+    env,
+    identities.kasir,
+  );
+  const response = await pushCommands(
+    commandRequest([
+      {
+        commandId: "order-payment-0010",
+        type: "order.payment",
+        entityId: "MLT-BAYAR-1",
+        branchId: "melati",
+        payload: { paid: 50000, paymentStatus: "Lunas", paymentMethod: "Tunai" },
+      },
+    ]),
+    env,
+    identities.kasir,
+  );
+  const body = await response.json();
+  assert.equal(
+    body.results[0].accepted,
+    true,
+    `Pembayaran tidak boleh menuntut service.correct: ${JSON.stringify(body.results[0])}`,
+  );
+});
+
+test("kebijakan tanpa service.payment tetap menolak pembayaran", async () => {
+  const env = envWithDb();
+  await pushCommands(
+    commandRequest([accessPolicyCommand("policy-0011", "kasir@cuciin.id", ["service"], ["service.create", "service.correct"])]),
+    env,
+    identities.owner,
+  );
+  await pushCommands(
+    commandRequest([
+      {
+        commandId: "nota-0011",
+        type: "order.create",
+        entityId: "MLT-BAYAR-2",
+        branchId: "melati",
+        payload: { id: "MLT-BAYAR-2", branchId: "melati", customerName: "Pelanggan Uji", phone: "0812", total: 50000, paid: 0, paymentStatus: "Belum lunas", paymentMethod: "Tunai", workStatus: "Masuk antrian", createdAt: 1, lines: [{ serviceId: "cuci-kiloan", serviceName: "Cuci kiloan", quantity: 5, unit: "kg", unitPrice: 10000 }] },
+      },
+    ]),
+    env,
+    identities.kasir,
+  );
+  const response = await pushCommands(
+    commandRequest([
+      {
+        commandId: "order-payment-0011",
+        type: "order.payment",
+        entityId: "MLT-BAYAR-2",
+        branchId: "melati",
+        payload: { paid: 50000, paymentStatus: "Lunas", paymentMethod: "Tunai" },
+      },
+    ]),
+    env,
+    identities.kasir,
+  );
+  const body = await response.json();
+  assert.equal(body.results[0].accepted, false);
+  assert.equal(body.results[0].code, 403);
+});
+
+test("absensi sendiri cukup dengan attendance.self tanpa attendance.view", async () => {
+  const env = envWithDb();
+  await pushCommands(
+    commandRequest([accessPolicyCommand("policy-0012", "kasir@cuciin.id", ["attendance"], ["attendance.self"])]),
+    env,
+    identities.owner,
+  );
+  const response = await pushCommands(
+    commandRequest([
+      {
+        commandId: "attendance-0012",
+        type: "attendance.upsert",
+        entityId: "absen-1",
+        branchId: "melati",
+        payload: { id: "absen-1", staffEmail: "kasir@cuciin.id", staffName: "Kasir Uji", workDate: "2026-09-20", checkInAtMs: 1, branchId: "melati" },
+      },
+    ]),
+    env,
+    identities.kasir,
+  );
+  const body = await response.json();
+  assert.equal(
+    body.results[0].accepted,
+    true,
+    `Absen sendiri tidak boleh menuntut attendance.view: ${JSON.stringify(body.results[0])}`,
+  );
+});
+
+test("jenis aset memakai inventory.type, bukan inventory.write", async () => {
+  const env = envWithDb();
+  await pushCommands(
+    commandRequest([accessPolicyCommand("policy-0013", "kasir@cuciin.id", ["inventory"], ["inventory.write"])]),
+    env,
+    identities.owner,
+  );
+  const response = await pushCommands(
+    commandRequest([
+      {
+        commandId: "assettype-0013",
+        type: "assetType.upsert",
+        entityId: "at-1",
+        payload: { id: "at-1", name: "Mesin Cuci" },
+      },
+    ]),
+    env,
+    identities.kasir,
+  );
+  const body = await response.json();
+  // Ditolak karena assetType.upsert ada di OWNER_ONLY, jadi yang diuji di sini adalah bahwa
+  // penolakannya beralasan owner, bukan karena fungsi katalog yang salah dipetakan.
+  assert.equal(body.results[0].accepted, false);
+  assert.match(String(body.results[0].error ?? ""), /Owner/);
 });
