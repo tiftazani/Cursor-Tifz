@@ -36,3 +36,8 @@ laundry-ops/LAUNDRY_APP_UI_UX_GUIDELINE.md
 # tertentu ikut Git, tambahkan dengan git add -f.
 laundry-ops/releases/*-candidate/*.apk
 laundry-ops/releases/*-candidate/*.aab
+
+# Hasil bangunan dokumen (HTML+PDF). Sumbernya Markdown di docs/, hasilnya dibuat
+# ulang dengan: python3 tools/bangun_dokumen.py && python3 tools/gabung_dokumen.py
+laundry-ops/docs/_terbangun/
+laundry-ops/tools/__pycache__/

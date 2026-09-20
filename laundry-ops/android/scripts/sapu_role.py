@@ -321,12 +321,18 @@ def buka_menu(label):
             titik = pembungkus_klik(simp, t[0])
             tap((titik["cx"], titik["cy"]), 3.5)
             time.sleep(1.5)
-            judul = [s for s in teks(dump("jl")) if len(s) < 40][:4]
+            x2 = dump("jl")
+            judul = [s for s in teks(x2) if len(s) < 40][:4]
+            # Menu yang tidak membuka apa pun meninggalkan pengguna di daftar Modul, dan label
+            # menu itu sendiri masih terbaca di layar. Mencocokkan judul dengan nama menu karena itu
+            # selalu berhasil dan menu mati dilaporkan OK. Bukti harus datang dari layar TUJUAN:
+            # daftar Modul tidak boleh lagi terlihat, baru judulnya dicocokkan.
+            masih_modul = di_modul(x2)
             wajib = JUDUL.get(label)
             if wajib is None:
-                terbuka = True
+                terbuka = not masih_modul
             else:
-                terbuka = any(wajib.lower() in j.lower() for j in judul)
+                terbuka = (not masih_modul) and any(wajib.lower() in j.lower() for j in judul)
             return True, terbuka, judul
         sh("input", "swipe", "540", "1900", "540", "1400", "250")
         time.sleep(0.8)
