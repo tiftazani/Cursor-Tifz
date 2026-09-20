@@ -26,9 +26,20 @@ preset peran, pemisahan baca/tulis dan ubah/hapus, dan penerjemahan kunci katalo
 | Hitungan role | kartu role menghitung cermin kunci lama sebagai fungsi, preset "Hanya lihat" tampil 10 fungsi padahal 9 | `AccessCatalog.berlaku` menerjemahkan kunci lama lebih dulu; tiga tempat tampilan dan satu baris log memakainya |
 
 Hasil terukur: Android **262 kasus, 0 gagal** (debug dan rilis); Worker **60 kasus, 0 gagal**; lint
-bersih (12 warning `UseKtx` lama, tanpa error). Bukti pengunci: mengembalikan bug pada
+bersih (0 error, 18 warning lama tanpa error: 12 `UseKtx`, 4 versi dependency, 1 `ObsoleteSdkInt`, 1
+versi plugin Gradle). Bukti pengunci: mengembalikan bug pada
 `customAccessRequirement` membuat 3 test GAGAL; melepas migrasi dari `AccessPolicy` membuat 1 test
 GAGAL.
+
+**Uji negatif tambahan (20 Sep): bukti test penegakan masih bisa gagal.** Satu entri dihapus dari
+daftar tangan `diperiksa` di `AccessFunctionEnforcementTest.kt`; `daftarPemeriksaSesuaiKenyataanKode`
+langsung GAGAL (exit 1). Berkas dipulihkan dan `git diff` terbukti kosong, lalu test dijalankan ulang
+dan hijau. Ini membuktikan test itu benar-benar membandingkan dengan kenyataan kode, bukan sekadar
+lulus apa pun isinya.
+
+Angka katalog diukur langsung ke kode, bukan dikutip: 15 `ModuleDef(`, 41 `fn(`, 15 entri
+`ownerLocked`, 5 `Preset(`. Komentar KDoc di `AccessCatalog.kt` dan `AccessFunctionEnforcementTest.kt`
+yang sebelumnya menulis 16 modul/43 fungsi dan modul `settings` (tidak ada di kode) sudah dibetulkan.
 
 **Gate dijalankan ulang dari `clean` pada 20 Sep** (bukan hasil cache `UP-TO-DATE`): 262 debug + 262
 release Android dan 60 Worker, seluruhnya lulus, 0 gagal. Angka itu dibaca dari berkas XML hasil run
