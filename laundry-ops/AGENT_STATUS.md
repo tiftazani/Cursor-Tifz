@@ -5,6 +5,43 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
+## 0g. Pekerjaan terbaru (20 Sep malam, Hermes) — rilis 1.10.31 & 1.10.32, peringatan sinkronisasi di layar data
+
+**Status: SELESAI, di-commit `f1d2695` + `5716ebb`, SUDAH di-push. CI PR #22 hijau seluruhnya.**
+
+Sebab `1.10.30` tidak memuat perbaikan: nomor versi tidak dinaikkan padahal isinya berubah, jadi
+`releases/1.10.30-candidate/` berisi APK build pagi (08:02) sementara APK baru hanya ada di
+`releases/cuciin-release.apk`. Sekarang versi dinaikkan agar tidak tertukar.
+
+| Versi | Isi | Berkas |
+|---|---|---|
+| **1.10.31** (`versionCode` 50) | Perbaikan sinkronisasi hak akses | `releases/1.10.31-candidate/` |
+| **1.10.32** (`versionCode` 51) | + peringatan sinkronisasi di 11 layar data | `releases/1.10.32-candidate/` |
+
+`SyncNotice` sebelumnya hanya di Beranda dan Profil. Sekarang juga di Pelanggan, Cabang, Daftar User,
+Layanan & harga, Produk stok, Biaya operasional, Absensi, Daftar Aset Cabang, Tipe Aset, Riwayat
+aktivitas, dan Tutup kas. Daftar User paling berbahaya: peran yang tampak di perangkat bisa berbeda
+dari yang berlaku di server.
+
+**Bukti nyata (APK rilis, menunjuk Worker produksi):**
+
+- Versi terpasang terbaca `1.10.31` lalu `1.10.32`, `versionCode` 50 lalu 51 — menimpa tanpa uninstall.
+- Dengan WiFi dan data dimatikan, **Daftar User menampilkan "6 perubahan belum terkirim"** beserta
+  penjelasannya. Sebelum perbaikan, layar ini diam saja.
+- Setelah koneksi pulih, peringatan hilang sendiri dan daftar tetap **8 user**.
+- `1.10.31`: `276 + 276` test lulus, `1.10.32`: `276 + 276` test lulus, lint **0 error**,
+  `verify_release.py` PASS, sertifikat `3a988c53…`.
+
+**CI:** workflow `Cuciin Android APK` dan `Cuciin Cloudflare validation` untuk PR #22 semuanya
+**pass, 0 fail** (termasuk Cursor Security Reviewer).
+
+**Catatan penting soal kata sandi awal.** Tabel `staff` di D1 **tidak menyimpan kata sandi** — hanya
+`email`, `name`, `role`, `approved`, `active`, `firebase_uid`. Autentikasi sepenuhnya di Firebase.
+Jadi "ganti `test1234` pada 8 akun produksi" **tidak bisa** dikerjakan dari sisi server atau repo:
+satu-satunya jalur sah adalah per akun, oleh pemiliknya, lewat **Akun & profil → ganti kata sandi**
+(butuh sandi lama, `FirebaseCloud.kt`) atau **Lupa kata sandi** untuk kirim email reset. Jangan
+menyetel kata sandi akun orang lain tanpa keputusan Owner.
+
 ## 0f. Pekerjaan terbaru (20 Sep, Hermes) — sinkronisasi hak akses, APK 1.10.30 dibangun ulang, Worker produksi dideploy
 
 **Status: SELESAI dan TERBUKTI di perangkat produksi. Di-commit `e9440ec`. BELUM di-push.**
