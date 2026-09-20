@@ -23,3 +23,13 @@ Kompatibilitas mundur diuji langsung, bukan diklaim: role Supervisor disimpan ul
 Tanda tangan rilis memakai sertifikat yang sama dengan kandidat sebelumnya: SHA-256 `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`, jadi APK ini dapat menimpa pemasangan 1.10.29 yang sudah ada. APK tetap non-debuggable, target SDK 36, izin hanya INTERNET, dan kompatibel dengan page size 16 KB.
 
 Gunakan APK release untuk pilot. Ikuti `../../OPERATIONS_RUNBOOK.md` dan selesaikan tindakan Owner pada `../../android/RELEASE_READINESS.md` sebelum big-bang 20 cabang.
+
+## Catatan kesegaran artefak
+
+Sesudah kandidat ini dibangun, dua berkas sumber tersentuh: `VersionHistory.kt` (entri 1.10.28 dan 1.10.29 ditambahkan, commit `343e1bb`) dan `values/colors.xml` (`R.color.foam` yang tidak dipakai dibuang, `2596b3a`). Keduanya **sudah ikut** ke dalam APK ini: penanda `1.10.29` dan `1.10.28` ditemukan di dex kandidat, dan nama resource `foam` tidak ada di `resources.arsc` karena resource mati memang dibuang saat build. Jadi artefak ini masih mewakili HEAD; tidak ada APK yang perlu dibangun ulang.
+
+## Yang belum dibuktikan
+
+- Deploy Worker produksi (menunggu perintah Owner); Worker debug sudah live.
+- Push ke remote.
+- Perilaku Worker sisi produksi hanya bisa diverifikasi dari perangkat dengan login Firebase; rute tanpa autentikasi hanya `/health`.
