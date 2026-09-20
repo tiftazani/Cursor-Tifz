@@ -14,7 +14,11 @@ Dua bug sisi server ikut diperbaiki. Pertama, `order.payment` disamakan dengan `
 
 Perbaikan tampilan: kartu role dan ringkasan di layar Kontrol Akses Role menghitung cermin kunci lama sebagai fungsi, sehingga role hasil preset "Hanya lihat" tampil 10 fungsi padahal presetnya 9. Sekarang angkanya dihitung sesudah kunci lama diterjemahkan.
 
+Layar Riwayat versi juga dilengkapi: entri 1.10.28 dan 1.10.29 sebelumnya tidak pernah dibuat, sehingga riwayat melompat dari 1.10.30 ke 1.10.27.
+
 Hasil sapu perangkat pada 1.10.30-debug: Owner 21 dari 21 menu, Kasir 11 dari 21, Supervisor 8 dari 21, tanpa satu pun `FATAL EXCEPTION` dari paket `com.cuciin.laundryops`. Dua "crash" yang tercatat di sapu Kasir berasal dari `UiAutomationService` milik alat uji, bukan dari aplikasi. Kasir dan Supervisor tidak mendapat pelebaran hak: jumlahnya sama dengan baseline 1.10.29.
+
+Kompatibilitas mundur diuji langsung, bukan diklaim: role Supervisor disimpan ulang lewat UI 1.10.30 sehingga cermin `attendance.write` benar-benar tertulis di `cuciin-data.json`, lalu APK **1.10.29 dipasang di atasnya**. Supervisor di 1.10.29 tetap membuka **8 dari 21** menu, sama dengan di 1.10.30, tanpa crash.
 
 Tanda tangan rilis memakai sertifikat yang sama dengan kandidat sebelumnya: SHA-256 `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`, jadi APK ini dapat menimpa pemasangan 1.10.29 yang sudah ada. APK tetap non-debuggable, target SDK 36, izin hanya INTERNET, dan kompatibel dengan page size 16 KB.
 

@@ -40,9 +40,16 @@ Kasir berasal dari `UiAutomationService` milik alat uji. Kasir dan Supervisor sa
 Role uji dihapus kembali lewat UI. Perbaikan hitungan di atas berasal dari uji ini.
 
 **APK rilis bertanda tangan selesai:** `releases/1.10.30-candidate/` berisi APK rilis, AAB, dan APK
-debug beserta `SHA256SUMS`. `verify_release.py` PASS (tanda tangan v2, non-debuggable, target SDK
+debug beserta `SHA256SUMS.txt`. `verify_release.py` PASS (tanda tangan v2, non-debuggable, target SDK
 36, izin minimum, ZIP/ELF selaras 16 KB). Sertifikat sama dengan 1.10.29, jadi dapat menimpa
-pemasangan lama.
+pemasangan lama. APK distribusi di akar `releases/` (`cuciin-release.apk`, `cuciin-debug.apk`) juga
+sudah 1.10.30.
+
+**Kompatibilitas mundur TERBUKTI di perangkat.** Role Supervisor disimpan ulang lewat UI 1.10.30,
+cermin `attendance.write` terverifikasi benar-benar tertulis di `cuciin-data.json`, lalu APK 1.10.29
+dipasang DI ATASNYA (`adb install -r -d`). Supervisor di 1.10.29 tetap membuka **8/21** menu, sama
+dengan di 1.10.30, 0 crash. Ini yang membuktikan klaim "APK lama tetap hidup" bukan sekadar teori.
+Perangkat dikembalikan ke 1.10.30 sesudahnya.
 
 Belum dibuktikan: deploy Worker produksi (menunggu perintah Owner), push ke remote.
 
