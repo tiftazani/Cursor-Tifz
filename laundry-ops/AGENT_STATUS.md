@@ -42,6 +42,20 @@ satu-satunya jalur sah adalah per akun, oleh pemiliknya, lewat **Akun & profil �
 (butuh sandi lama, `FirebaseCloud.kt`) atau **Lupa kata sandi** untuk kirim email reset. Jangan
 menyetel kata sandi akun orang lain tanpa keputusan Owner.
 
+**Backup D1 terjadwal — diperbaiki.** `.github/workflows/cuciin-backup.yml` sebelumnya hanya punya
+`workflow_dispatch`, jadi belum pernah jalan sendiri dan tidak ada backup terjadwal sama sekali.
+Ditambah `schedule: cron "0 20 * * *"` (03:00 WIB).
+
+Skrip `scripts/backup-d1.sh` + `scripts/verify-backup.sh` **diuji lokal dan terbukti benar**:
+backup uji dienkripsi AES-256-CBC/PBKDF2 600000 iterasi, `shasum -c` lulus, dekripsi + restore ke
+SQLite `PRAGMA integrity_check` = `ok` → keluar 0. **Uji negatif:** passphrase salah → keluar 1,
+jadi verifikasi tidak bisa lolos palsu. Uji ini memakai passphrase karangan lokal, bukan milik produksi.
+
+Yang **belum** terbukti: workflow-nya belum benar-benar jalan di GitHub, karena repo **tidak punya
+secret** `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, dan `CUCIIN_BACKUP_PASSPHRASE` (`gh secret
+list` kosong) dan repo publik. Isi passphrase produksi **hanya boleh** dipegang Owner; jangan
+membuatkannya di sini.
+
 ## 0f. Pekerjaan terbaru (20 Sep, Hermes) — sinkronisasi hak akses, APK 1.10.30 dibangun ulang, Worker produksi dideploy
 
 **Status: SELESAI dan TERBUKTI di perangkat produksi. Di-commit `e9440ec`. BELUM di-push.**
