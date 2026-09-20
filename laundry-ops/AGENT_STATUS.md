@@ -68,6 +68,19 @@ dipasang DI ATASNYA (`adb install -r -d`). Supervisor di 1.10.29 tetap membuka *
 dengan di 1.10.30, 0 crash. Ini yang membuktikan klaim "APK lama tetap hidup" bukan sekadar teori.
 Perangkat dikembalikan ke 1.10.30 sesudahnya.
 
+**Berkas yang Hermes pegang (pekerjaan 1.10.30):** `data/AccessCatalog.kt`, `data/AccessPolicy.kt`,
+`data/Models.kt`, `data/CuciinStore.kt`, `data/VersionHistory.kt`, `ui/AccessScreens.kt`,
+`ui/RouteAccess.kt`, `ui/OpsScreens.kt`, `ui/MasterScreens.kt`, `ui/BusinessScreens.kt`,
+`ui/AssetScreens.kt`, `ui/MoreScreens.kt`, `ui/CuciinNav.kt`, `ui/NavTabs.kt`,
+`res/values/colors.xml`, `app/build.gradle.kts`, `CHANGELOG.md`, dan test
+`AccessPresetTest.kt`, `AccessCatalogMigrationTest.kt`, `AccessUpgradeRegressionTest.kt`,
+`AccessFunctionEnforcementTest.kt`, `AccessPolicyTest.kt`, `ServicePriceAccessTest.kt`,
+`MenuRouteTest.kt`, `NavBarContractTest.kt`, `RouteAccessTest.kt`, `SupervisorMenuTest.kt`;
+di sisi Worker `cloudflare/src/command-sync.ts` dan `cloudflare/tests/access-policy.test.mjs`;
+ditambah seluruh berkas `.md` di `laundry-ops/` (audit dokumen 20 Sep). Daftar ini adalah kenyataan
+`git diff` pekerjaan 1.10.30, bukan perkiraan. **Agen lain: jangan sentuh berkas itu sampai baris ini
+diperbarui.**
+
 Belum dibuktikan: deploy Worker produksi (menunggu perintah Owner), push ke remote.
 
 ### 0e-2. Pembersihan dokumen & repo (20 Sep, Hermes)
