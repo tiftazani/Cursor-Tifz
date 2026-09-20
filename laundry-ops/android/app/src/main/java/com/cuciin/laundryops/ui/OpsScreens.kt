@@ -1020,9 +1020,11 @@ internal fun StockScreen(nav: NavHostController, toast: (String) -> Unit) {
             }
         }
         // Pintu ke master data produk diperiksa dengan FUNGSI, bukan nama peran: gerbang rute
-        // `products` memakai `owner.manage`, jadi role kustom pemegang fungsi itu juga boleh
-        // masuk. Dikunci nama peran, tombolnya hilang untuk mereka.
-        if (store.canAccess("owner", "owner.manage")) item {
+        // `products` memakai `stock` + `stock.product`, jadi role kustom pemegang fungsi itu juga
+        // boleh masuk. Sebelumnya yang diperiksa `owner.manage`, modul era 1.10.29 yang sudah
+        // dipecah, sehingga pemeriksaannya selalu false dan tombol ini hilang untuk SEMUA orang
+        // termasuk Owner.
+        if (store.canAccess("stock", "stock.product")) item {
             GhostBtn("Kelola produk", icon = Icons.Outlined.Edit) { nav.navigate("products") }
         }
     }

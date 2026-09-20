@@ -36,9 +36,12 @@ import com.cuciin.laundryops.ui.theme.Muted
 internal fun OwnerSettingsScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val session = CuciinStore.session.value ?: return
-    // Gerbang rute memakai fungsi `owner.manage`; layar ini harus memakai fungsi yang sama,
-    // bukan nama peran, supaya role kustom pemegang izin itu tidak ditolak di sini.
-    if (!CuciinStore.canAccess("owner", "owner.manage")) { nav.popBackStack(); return }
+    // Gerbang rute `ownerSettings` memakai `whatsapp` + `whatsapp.template`, jadi layar ini harus
+    // memakai ukuran yang sama. Sebelumnya layar memeriksa modul `owner`, yang sudah tidak ada
+    // sejak katalog 1.10.30 dipecah, sehingga `canAccess` selalu false dan SETIAP pengguna
+    // termasuk Owner langsung terlempar keluar: menu "Pengaturan Owner" tampak tidak bisa diklik.
+    // Dua lapis harus memakai ukuran yang sama, bukan nama modul era lama.
+    if (!CuciinStore.canAccess("whatsapp", "whatsapp.template")) { nav.popBackStack(); return }
     val template = CuciinStore.whatsappTemplate()
     var opening by remember { mutableStateOf(template.opening) }
     var content by remember { mutableStateOf(template.content) }

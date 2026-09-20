@@ -451,6 +451,80 @@ class RouteAccessTest {
     }
 
     /**
+     * Kunci seluruh kelas bug: pemeriksaan izin di layar memakai kunci yang TIDAK ADA di katalog.
+     *
+     * Katalog 1.10.30 memecah modul `owner` menjadi `branch`, `staff`, `serviceCatalog`, `access`,
+     * dan `settings`. Tiga layar tidak ikut diperbarui dan masih memeriksa `owner` +
+     * `owner.manage`. Karena `canAccess` mengembalikan false untuk kunci yang tidak dikenal, ketiga
+     * pemeriksaan itu menjadi SELALU SALAH:
+     *
+     * 1. `OwnerSettingsScreen` - setiap pengguna termasuk Owner langsung terlempar keluar, sehingga
+     *    menu "Pengaturan Owner" tampak tidak bisa diklik.
+     * 2. `UsersScreen` - hal yang sama pada menu "Daftar User".
+     * 3. Tombol "Kelola produk" di layar Stok tidak pernah tampil untuk siapa pun.
+     *
+     * Ketiganya lolos seluruh test lama karena test lama hanya memeriksa RUTE, bukan pemeriksaan
+     * yang ada DI DALAM layar. Kesalahan tulis kunci izin selalu gagal secara diam: bukan error,
+     * hanya pintu yang tidak pernah terbuka.
+     */
+    @Test
+    fun pemeriksaanIzinDiLayarMemakaiKunciYangAdaDiKatalog() {
+        val modulKatalog = AccessCatalog.moduleKeys
+        val fungsiKatalog = AccessCatalog.allFunctionKeys()
+        val rusak = mutableListOf<String>()
+        val berkas = appDir.resolve("src/main/java/com/cuciin/laundryops/ui")
+            .walkTopDown().filter { it.extension == "kt" }
+        for (f in berkas) {
+            for ((i, baris) in f.readLines().withIndex()) {
+                val b = baris.trim()
+                if (b.startsWith("//") || b.startsWith("*")) continue
+                for (m in Regex("""canAccess\("([^"]+)"(?:\s*,\s*"([^"]+)")?\)""").findAll(b)) {
+                    val (modul, fungsi) = m.destructured
+                    val cacat = buildList {
+                        if (modul !in modulKatalog) add("modul \"$modul\" tidak ada di katalog")
+                        if (fungsi.isNotEmpty() && fungsi !in fungsiKatalog) add("fungsi \"$fungsi\" tidak ada di katalog")
+                    }
+                    if (cacat.isNotEmpty()) {
+                        rusak.add("${f.name}:${i + 1}  canAccess(\"$modul\", \"$fungsi\") -> ${cacat.joinToString("; ")}")
+                    }
+                }
+            }
+        }
+        assertTrue(
+            "Pemeriksaan izin memakai kunci yang tidak ada di katalog, sehingga SELALU gagal dan " +
+                "menutup pintu untuk semua orang termasuk Owner:\n" +
+                rusak.joinToString("\n") { "  $it" },
+            rusak.isEmpty(),
+        )
+    }
+
+    /**
+     * Gerbang rute dan penjaga di layar harus memakai ukuran yang SAMA.
+     *
+     * Inilah bentuk asli ketiga bug di atas: gerbang rute `ownerSettings` memakai
+     * `whatsapp`/`whatsapp.template`, sedangkan layarnya memeriksa `owner.manage`. Selama dua lapis
+     * memakai kunci berbeda, satu di antaranya pasti salah.
+     */
+    @Test
+    fun penjagaLayarMemakaiGerbangRuteYangSama() {
+        val pasangan = mapOf(
+            "ownerSettings" to "OwnerSettingsScreen.kt",
+            "users" to "MasterScreens.kt",
+        )
+        val salah = pasangan.mapNotNull { (rute, berkas) ->
+            val gate = RouteAccess.gateOf(rute) ?: return@mapNotNull "rute $rute tidak punya gerbang"
+            val teks = appDir.resolve("src/main/java/com/cuciin/laundryops/ui/$berkas").readText()
+            val pola = Regex("""canAccess\("${Regex.escape(gate.module)}",\s*"${Regex.escape(gate.function.orEmpty())}"\)""")
+            if (pola.containsMatchIn(teks)) null else "$berkas tidak memeriksa ${gate.module}/${gate.function}"
+        }
+        assertTrue(
+            "Penjaga di layar berbeda dari gerbang rutenya, jadi salah satu pasti menolak yang " +
+                "seharusnya boleh: $salah",
+            salah.isEmpty(),
+        )
+    }
+
+    /**
      * Hasil fungsi store yang bisa MENOLAK tidak boleh dibuang di layar.
      *
      * Kelas bug B: fungsi store mengembalikan pesan penolakan (`String?`), tetapi UI memanggilnya

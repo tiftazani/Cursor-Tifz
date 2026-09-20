@@ -345,9 +345,11 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
 internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val session = store.session.value ?: return
-    // Gerbang rute memakai fungsi `owner.manage`, jadi layar ini memakai fungsi yang sama.
-    // Mengunci dengan NAMA peran membuat role kustom pemegang izin itu ditolak di sini.
-    if (!store.canAccess("owner", "owner.manage")) { nav.popBackStack(); return }
+    // Gerbang rute `users` memakai `staff` + `staff.manage`, jadi layar ini memakai ukuran yang
+    // sama. Sebelumnya layar memeriksa modul `owner`, yang sudah tidak ada sejak katalog 1.10.30
+    // dipecah, sehingga `canAccess` selalu false dan SETIAP pengguna termasuk Owner langsung
+    // terlempar keluar: menu "Daftar User" tampak tidak bisa diklik.
+    if (!store.canAccess("staff", "staff.manage")) { nav.popBackStack(); return }
     var editing by remember { mutableStateOf<Staff?>(null) }
     var creating by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()

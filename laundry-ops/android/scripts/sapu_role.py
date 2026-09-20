@@ -29,6 +29,37 @@ MENU = [
 ]
 
 
+# Judul yang wajib muncul di layar setelah tiap menu diklik.
+#
+# Tanpa daftar ini, harness hanya membuktikan "label ditemukan lalu di-tap" dan melaporkan OK.
+# Menu yang menendang pengguna balik ke daftar (mis. gerbang izin yang selalu menolak) tetap
+# dihitung OK, jadi bug pintu mati lolos dari sapu. Nilai None berarti rute itu memang tidak
+# punya judul tetap (mis. layar dengan tab), dan hanya diperiksa lewat `fatal`.
+JUDUL = {
+    "Antrian laundry": "Antrian",
+    "Service baru": "Service baru",
+    "Absensi karyawan": "Absensi",
+    "Daftar Aset Cabang": "Aset",
+    "Biaya operasional": "Biaya",
+    "Tutup kas": "Tutup kas",
+    "Pelanggan": "Pelanggan",
+    "WA menunggu": "WA",
+    "Arsip WA": "Arsip",
+    "Laporan transaksi": "Laporan",
+    "Laporan analitik": "Analitik",
+    "Riwayat aktivitas": "Riwayat aktivitas",
+    "Cabang": "Cabang",
+    "Daftar User": "Daftar User",
+    "Layanan & harga": "Layanan",
+    "Produk stok": "Produk",
+    "Kontrol Akses Role": "Kontrol Akses",
+    "Pengaturan Owner": "Pengaturan Owner",
+    "Akun & profil": "Akun",
+    "Theme Aplikasi": "Theme",
+    "Riwayat versi": "Riwayat versi",
+}
+
+
 def sh(*a):
     return subprocess.run([ADB, "shell", *a], capture_output=True, text=True).stdout
 
@@ -178,8 +209,19 @@ def keluar_akun():
 
 
 def buka_menu(label):
+    """Membuka satu menu dan MEMBUKTIKAN layarnya benar-benar terbuka.
+
+    Kembalian: (ditemukan, terbuka, judul).
+
+    - `ditemukan` berarti label menu ada di layar Modul dan berhasil di-tap.
+    - `terbuka` berarti judul layar tujuan benar-benar muncul sesudahnya.
+
+    Versi lama hanya mengembalikan `ditemukan`, sehingga menu yang menendang pengguna balik ke
+    daftar (gerbang izin selalu menolak, rute tidak terdaftar) tetap dihitung OK. Itu sebabnya
+    "Pengaturan Owner" pernah dilaporkan 21/21 padahal layarnya tidak pernah terbuka.
+    """
     if not ke_modul():
-        return False, []
+        return False, False, []
     for i in range(8):
         x = dump("bm")
         simp = simpul(x)
@@ -193,10 +235,16 @@ def buka_menu(label):
             titik = target or t[0]
             tap((titik["cx"], titik["cy"]), 3.5)
             time.sleep(1.5)
-            return True, [s for s in teks(dump("jl")) if len(s) < 40][:4]
+            judul = [s for s in teks(dump("jl")) if len(s) < 40][:4]
+            wajib = JUDUL.get(label)
+            if wajib is None:
+                terbuka = True
+            else:
+                terbuka = any(wajib.lower() in j.lower() for j in judul)
+            return True, terbuka, judul
         sh("input", "swipe", "540", "1900", "540", "1400", "250")
         time.sleep(0.8)
-    return False, []
+    return False, False, []
 
 
 def fatal(paket="com.cuciin.laundryops.debug"):
@@ -244,10 +292,11 @@ print(f"   peran: {peran}")
 
 hasil = []
 for m in MENU:
-    terbuka, judul = buka_menu(m)
+    ditemukan, terbuka, judul = buka_menu(m)
     f = fatal()
     hasil.append((m, terbuka, judul, len(f)))
-    print(f"   {'OK ' if terbuka and not f else 'CEK'}  {m:22s}  {judul[:2]}  fatal={len(f)}")
+    tanda = "OK " if terbuka and not f else "CEK"
+    print(f"   {tanda}  {m:22s}  {'tampil' if terbuka else ('tap gagal' if not ditemukan else 'TIDAK TERBUKA')}  {judul[:2]}  fatal={len(f)}")
     if f:
         print(f"        {f[0][:130]}")
         sh("logcat", "-c")
@@ -256,8 +305,7 @@ for m in MENU:
 print("\n=== RINGKASAN ===")
 print(f"   menu dibuka   : {sum(1 for h in hasil if h[1])}/{len(MENU)}")
 print(f"   tidak tampil  : {[h[0] for h in hasil if not h[1]]}")
-crash = [h[0] for h in hasil if h[3]]
-print(f"   CRASH         : {len(crash)} {crash}")
+print(f"   crash         : {[h[0] for h in hasil if h[3]]}")
 print(f"   aplikasi hidup: {bool(sh('pidof', PKG).strip())}")
 
 # Kembalikan scope perangkat ke Owner. Tanpa ini perangkat ditinggal dalam scope satu cabang
