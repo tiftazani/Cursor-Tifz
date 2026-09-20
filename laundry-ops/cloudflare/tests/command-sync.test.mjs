@@ -129,6 +129,24 @@ test("delta staf dan cabang non-Owner dibatasi ke penugasan cabangnya", async ()
   assert.match(statements[0],/entity_type='branch' AND entity_id IN/);
 });
 
+test("kursor klien yang di depan server dikembalikan ke revisi jurnal terakhir", async () => {
+  // Kejadian nyata: perangkat menyimpan kursornya sendiri (1018) sementara jurnal server berhenti di
+  // 409. Klien mengirim `after=1018`, tidak ada baris yang cocok, lalu `nextRevision` dikembalikan
+  // sebagai `after` — kursor lama. Perangkat berhenti menerima perubahan server selamanya, dan role
+  // yang sudah diturunkan di server tidak pernah sampai ke perangkat.
+  const env={DB:{prepare(sql) {
+    return {bind() { return sql.includes("MAX(sequence)")
+      ? {first:async()=>({revision:409})}
+      : {all:async()=>({results:[]})}; }}; }}};
+  const identity={email:"owner@cuciin.id",name:"Owner",role:"Owner",branchIds:["melati"],bootstrap:true};
+  const result=await pullChanges(new Request("https://cuciin.example/v1/sync/changes?after=1018"),env,identity);
+  const body=await result.json();
+  assert.equal(result.status,200);
+  assert.equal(body.changes.length,0);
+  assert.equal(body.nextRevision,409,"kursor harus turun ke revisi jurnal, bukan memantulkan after");
+  assert.equal(body.revision,409);
+});
+
 test("pemindahan staf mengirim delete ke cabang lama dan upsert ke cabang baru", () => {
   assert.deepEqual(staffJournalScopes(["a","b"],["b","c"]),{deletes:["a"],upserts:["b","c"]});
   assert.deepEqual(staffJournalScopes(["a"],[]),{deletes:["a"],upserts:[null]});

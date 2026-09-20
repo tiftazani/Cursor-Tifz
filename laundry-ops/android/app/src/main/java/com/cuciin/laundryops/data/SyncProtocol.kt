@@ -329,7 +329,11 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
 
     fun acceptRemote(entities: List<SyncEntity>, revision: Long, scopeKey: String = ""): Boolean {
         if (state.pending.isNotEmpty() || state.pendingRemote != null) return false
-        state = state.copy(revision = maxOf(state.revision, revision), shadow = entities, scopeKey = scopeKey.ifBlank { state.scopeKey })
+        // Kursor ditetapkan dari server, bukan `maxOf`. Perangkat yang kursornya melampaui server
+        // tidak akan pernah membaca halaman jurnal yang lebih tua dari kursornya, jadi perubahan
+        // server berhenti sampai selamanya. Kursor yang lebih rendah hanya berarti membaca ulang
+        // perubahan yang sudah diterapkan — aman karena penerapan bersifat idempoten.
+        state = state.copy(revision = revision, shadow = entities, scopeKey = scopeKey.ifBlank { state.scopeKey })
         return true
     }
 
@@ -347,7 +351,9 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
     fun completePreparedRemote(): Boolean {
         val prepared = state.pendingRemote ?: return false
         state = state.copy(
-            revision = maxOf(state.revision, prepared.revision),
+            // Sama seperti acceptRemote: kursor ditetapkan dari server, bukan maxOf. Kalau kursor
+            // perangkat dibiarkan di depan server, halaman jurnal yang lebih tua tidak pernah dibaca.
+            revision = prepared.revision,
             shadow = if (prepared.generation < 0 || state.generation == prepared.generation) prepared.entities else state.shadow,
             scopeKey = prepared.scopeKey.ifBlank { state.scopeKey },
             pendingRemote = null,
@@ -399,7 +405,7 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
     fun reconcileRejectedRemote(remote: List<SyncEntity>, revision: Long, scopeKey: String = ""): Boolean {
         if (state.pending.isNotEmpty() || state.pendingRemote != null) return false
         state = state.copy(
-            revision = maxOf(state.revision, revision),
+            revision = revision,
             shadow = remote,
             rejected = emptyList(),
             bootstrapped = true,
@@ -483,11 +489,21 @@ object SyncProjection {
         return LocalJson.json.decodeFromJsonElement(Snapshot.serializer(), JsonObject(root))
     }
 
+    /**
+     * Entitas yang hak aksesnya hanya boleh datang dari server.
+     *
+     * `staff` memuat peran; `accessRole` memuat centang modul dan fungsi. Kalau perangkat ikut
+     * merekonsiliasi keduanya, perangkat yang perannya pernah dinaikkan sementara untuk pengujian
+     * akan mengirim kenaikan itu sebagai UPSERT dan menimpanya ke server.
+     */
+    private val serverOwnedEntities = setOf("staff", "accessRole", "accessPolicy")
+
     fun reconcileBootstrap(remote: Snapshot, local: Snapshot, updatedAt: Long): Snapshot {
         val remoteEntities = entities(remote).associateBy { it.key }
         val localEntities = entities(local).associateBy { it.key }
         val changes = localEntities.values.mapNotNull { entity ->
-            if (remoteEntities[entity.key] == entity) null
+            if (entity.entityType in serverOwnedEntities) null
+            else if (remoteEntities[entity.key] == entity) null
             else SyncChange(
                 entityType = entity.entityType,
                 entityId = entity.entityId,
@@ -496,6 +512,37 @@ object SyncProjection {
                 payload = entity.payload,
             )
         }.toMutableList()
+        // Entitas hak akses harus mengikuti server SEPENUHNYA: yang sudah tidak ada di server
+        // dibuang dari perangkat, dan yang ada di server tetapi belum ada di perangkat ditambahkan.
+        // Tanpa langkah ini, akun uji atau role uji yang pernah dibuat di perangkat tetap tinggal
+        // selamanya — server tidak memuatnya, jadi tidak ada perubahan yang menyentuhnya, sedangkan
+        // `apply` hanya menambah entitas yang disebut di `changes`.
+        // Kejadian nyata: `gudang-uji@contoh.test` dan dua role "Gudang" bertahan di perangkat
+        // berminggu-minggu sesudah dihapus dari server, dan `aidanurita25@gmail.com` tetap
+        // Supervisor di perangkat padahal server sudah menurunkannya ke Kasir.
+        serverOwnedEntities.forEach { tipe ->
+            val entitasServer = remoteEntities.values.filter { it.entityType == tipe }.associateBy { it.entityId }
+            localEntities.values.filter { it.entityType == tipe && it.entityId !in entitasServer }
+                .forEach { entity ->
+                    changes += SyncChange(
+                        entityType = entity.entityType,
+                        entityId = entity.entityId,
+                        operation = "delete",
+                        branchId = entity.branchId,
+                    )
+                }
+            val entitasPerangkat = localEntities.values.filter { it.entityType == tipe }.map { it.entityId }.toSet()
+            entitasServer.values.filter { it.entityId !in entitasPerangkat }
+                .forEach { entity ->
+                    changes += SyncChange(
+                        entityType = entity.entityType,
+                        entityId = entity.entityId,
+                        operation = "upsert",
+                        branchId = entity.branchId,
+                        payload = entity.payload,
+                    )
+                }
+        }
         remoteEntities.values.filter { it.entityType == "nota" && it.entityId in local.deletedNotaIds }
             .forEach { entity ->
                 changes += SyncChange(
@@ -513,6 +560,23 @@ object SyncProjection {
     fun bootstrapSnapshot(remote: Snapshot, local: Snapshot, preserveLocal: Boolean, updatedAt: Long): Snapshot =
         if (preserveLocal) reconcileBootstrap(remote, local, updatedAt)
         else remote.copy(updatedAt = updatedAt)
+
+    /**
+     * Samakan entitas hak akses dengan server pada snapshot yang dibangun dari perubahan bertahap.
+     *
+     * `apply` hanya menambah dan mengubah entitas yang disebut di `changes`. Entitas hak akses yang
+     * sudah lama ada di perangkat tetapi TIDAK ada di server tidak pernah disebut, jadi tidak pernah
+     * dibuang: perangkat memakai peran lama selamanya. Ini terjadi pada perangkat yang sudah
+     * `bootstrapped` — jalur `bootstrapSnapshot` tidak dijalankan lagi, hanya `pullChanges`.
+     *
+     * Kejadian nyata: `aidanurita25@gmail.com` tetap Supervisor di perangkat padahal server sudah
+     * Kasir, dan akun serta role uji bertahan sesudah dihapus dari server.
+     */
+    fun samakanHakAkses(hasil: Snapshot, server: Snapshot): Snapshot = hasil.copy(
+        staff = server.staff,
+        accessRoles = server.accessRoles,
+        accessPolicies = server.accessPolicies,
+    )
 
     private fun stableId(value: JsonObject): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(value.toString().toByteArray())

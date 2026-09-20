@@ -791,6 +791,11 @@ export async function pullChanges(request:Request, env:CommandEnv, identity:Sync
   const rows=(await env.DB.prepare(query).bind(...binds).all<{sequence:number;entity_type:string;entity_id:string;operation:string;payload_json:string|null;updated_at:number;branch_id:string|null;actor_email:string|null;command_id:string|null}>()).results;
   const hasMore=rows.length>limit; const page=rows.slice(0,limit);
   const latest=await env.DB.prepare("SELECT COALESCE(MAX(sequence),0) AS revision FROM sync_changes WHERE organization_id=?").bind(ORG_ID).first<{revision:number}>();
-  const nextRevision=page.at(-1)?.sequence ?? after;
-  return response({revision:nextRevision,changes:page.map(row=>({revision:row.sequence,entityType:row.entity_type,entityId:row.entity_id,operation:row.operation,payload:row.payload_json?JSON.parse(row.payload_json):null,updatedAt:row.updated_at,branchId:row.branch_id,actorEmail:row.actor_email,commandId:row.command_id})),nextRevision,latestRevision:latest?.revision ?? 0,hasMore,scopeKey:syncScopeKey(identity)});
+  const latestRevision=latest?.revision ?? 0;
+  // Kursor tidak boleh melebihi revisi jurnal terakhir. Klien yang kursornya sudah di depan server
+  // (mis. sesudah jurnal dipangkas atau basis data dipulihkan dari cadangan) akan menerima
+  // `nextRevision = after` dan terus memakai kursor lama, sehingga halaman jurnal yang lebih tua
+  // dari kursornya tidak pernah dibaca lagi — perubahan server berhenti sampai selamanya.
+  const nextRevision=Math.min(page.at(-1)?.sequence ?? after, latestRevision);
+  return response({revision:nextRevision,changes:page.map(row=>({revision:row.sequence,entityType:row.entity_type,entityId:row.entity_id,operation:row.operation,payload:row.payload_json?JSON.parse(row.payload_json):null,updatedAt:row.updated_at,branchId:row.branch_id,actorEmail:row.actor_email,commandId:row.command_id})),nextRevision,latestRevision,hasMore,scopeKey:syncScopeKey(identity)});
 }

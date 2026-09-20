@@ -334,33 +334,59 @@ object CloudSync {
             collected += response.changes
             current = SyncProjection.apply(current, response.changes, maxOf(current.updatedAt + 1, Clock.nowMs()))
             val next = response.cursor()
-            if (!response.hasMore) { after = maxOf(after, next); break }
+            // Kursor harus turun bila perangkat berada DI DEPAN server. Kalau tidak, halaman jurnal
+            // yang lebih tua dari kursor perangkat tidak akan pernah dibaca lagi: server menjawab
+            // kosong, `maxOf` mempertahankan kursor lama, dan perangkat berhenti menerima perubahan
+            // selamanya. Perbaikan sebelumnya hanya menambah entri, jadi keadaan server yang sudah
+            // berubah tidak pernah sampai ke perangkat.
+            if (!response.hasMore) { after = next; break }
             if (next <= after) { markOffline("Cursor sinkronisasi server tidak maju"); return EndpointResult.FAILED }
             after = next
         }
         val remote = current
         val revision = after
+        // Hak akses harus disamakan dengan server pada setiap tarikan, bukan hanya saat bootstrap.
+        // Perangkat yang sudah `bootstrapped` tidak pernah menjalankan `bootstrapSnapshot` lagi,
+        // sedangkan `apply` tidak pernah membuang entitas yang tidak disebut di `changes`. Tanpa
+        // langkah ini, peran yang sudah diturunkan di server tetap berlaku di perangkat.
+        val kanonik = hakAksesDariServer()?.let { SyncProjection.samakanHakAkses(remote, it) } ?: remote
         main.post {
             val accepted = synchronized(this) { outbox.canAcceptRemote(expectedGeneration) }
             if (accepted) {
                 if (collected.isNotEmpty()) {
                     val prepared = synchronized(this) {
-                        outbox.prepareRemote(remote, SyncProjection.entities(remote), revision, expectedGeneration, responseScope)
+                        outbox.prepareRemote(kanonik, SyncProjection.entities(kanonik), revision, expectedGeneration, responseScope)
                             .also { if (it) saveState() }
                     }
-                    if (prepared) CuciinStore.applyCloud(remote) else synchronize()
+                    if (prepared) CuciinStore.applyCloud(kanonik) else synchronize()
                 } else {
                     synchronized(this) {
-                        outbox.acceptRemote(SyncProjection.entities(remote), revision, responseScope)
+                        outbox.acceptRemote(SyncProjection.entities(kanonik), revision, responseScope)
                         saveState()
                     }
-                    CuciinStore.touchStatus()
+                    CuciinStore.applyCloud(kanonik)
                 }
             } else synchronize()
         }
         markOnline()
         return EndpointResult.OK
     }
+
+    /**
+     * Snapshot server lengkap, khusus untuk menyamakan hak akses.
+     *
+     * Dipakai `pullChanges` pada perangkat yang sudah bootstrap. Kegagalan di sini tidak menghentikan
+     * sinkronisasi: pemanggilnya memakai snapshot hasil tarikan bertahap apa adanya, sehingga hanya
+     * hak akses yang tertunda penyamaannya, bukan seluruh sinkronisasi.
+     */
+    private fun hakAksesDariServer(): Snapshot? = runCatching {
+        val conn = open("GET")
+        val code = conn.responseCode
+        val body = readBody(conn, code)
+        conn.disconnect()
+        if (code !in 200..299 || body.isBlank()) null
+        else LocalJson.json.decodeFromString(Snapshot.serializer(), body)
+    }.getOrNull()
 
     private fun bootstrapSnapshot(): EndpointResult {
         val conn = open("GET")
