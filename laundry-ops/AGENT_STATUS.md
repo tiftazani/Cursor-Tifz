@@ -535,7 +535,7 @@ laundry-ops/cloudflare/tests/command-sync.test.mjs                              
 | Android | **1.10.30 (versionCode 49)** | `app/build.gradle.kts` |
 | Paket aplikasi | `com.cuciin.laundryops` (+ `.debug`) | `app/build.gradle.kts` |
 | Firebase project | **`cuciin-ops`** (lama: `cuciin-ops-tiftazani`) | `firebase/README.md` |
-| Worker produksi | versi `a95a0381-7096-4fd7-bcab-9f2a07d6887d` | `wrangler deployments list` |
+| Worker produksi | versi `16f4a825-ab15-4edc-853f-f78fa0363877` (memuat rilis 1.10.30) | `wrangler deployments list` |
 | Worker debug | versi `717ddfa4-2fe1-49c3-ab65-1c17e9733a5d` (memuat pekerjaan 1.10.30) | `wrangler deployments list -c wrangler.debug.toml` |
 | Health produksi | `ok`, database `ready`, revision 409 (20 Sep 2026) | `curl .../health` |
 | Test Worker | 60 lulus | `cd cloudflare && npm run check` |
