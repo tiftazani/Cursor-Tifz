@@ -30,6 +30,10 @@ bersih (12 warning `UseKtx` lama, tanpa error). Bukti pengunci: mengembalikan bu
 `customAccessRequirement` membuat 3 test GAGAL; melepas migrasi dari `AccessPolicy` membuat 1 test
 GAGAL.
 
+**Gate dijalankan ulang dari `clean` pada 20 Sep** (bukan hasil cache `UP-TO-DATE`): 262 debug + 262
+release Android dan 60 Worker, seluruhnya lulus, 0 gagal. Angka itu dibaca dari berkas XML hasil run
+yang benar-benar dieksekusi, bukan dari ingatan.
+
 **Sapu menu per peran pada 1.10.30-debug (selesai):** Owner **21/21**, Kasir **11/21**, Supervisor
 **8/21**, tanpa satu pun `FATAL EXCEPTION` dari paket `com.cuciin.laundryops`. Dua "crash" di sapu
 Kasir dan satu di sapu Owner berasal dari `UiAutomationService` milik alat uji. **Skrip sapu sudah

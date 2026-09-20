@@ -1,5 +1,4 @@
 <resources>
     <!-- Latar ikon adaptif mengikuti struktur navy Jemur. -->
     <color name="navy">#0D164B</color>
-    <color name="foam">#FFFFFF</color>
 </resources>
