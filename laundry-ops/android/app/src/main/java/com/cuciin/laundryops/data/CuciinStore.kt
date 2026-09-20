@@ -558,7 +558,8 @@ object CuciinStore {
         )
         val index = accessRoles.indexOfFirst { it.id == role.id }
         if (index >= 0) accessRoles[index] = cleaned else accessRoles.add(cleaned)
-        log("Role ${cleaned.name} disimpan · ${cleaned.modules.size} modul · ${cleaned.functions.size} fungsi", branches.firstOrNull()?.id.orEmpty())
+        val (modulBerlaku, fungsiBerlaku) = AccessCatalog.berlaku(cleaned)
+        log("Role ${cleaned.name} disimpan · ${modulBerlaku.size} modul · ${fungsiBerlaku.size} fungsi", branches.firstOrNull()?.id.orEmpty())
         bump()
         return null
     }

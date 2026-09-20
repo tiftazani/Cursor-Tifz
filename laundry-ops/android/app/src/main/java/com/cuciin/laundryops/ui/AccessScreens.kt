@@ -61,7 +61,7 @@ internal fun AccessRolesScreen(nav: NavHostController, toast: (String) -> Unit) 
                         mark = role.name,
                         title = role.name,
                         detail = buildString {
-                            append("${role.modules.size} modul · ${role.functions.size} fungsi")
+                            append("${AccessCatalog.berlaku(role).first.size} modul · ${AccessCatalog.berlaku(role).second.size} fungsi")
                             append(if (members == 0) " · belum dipakai" else " · $members pengguna")
                             if (role.builtIn) append(" · bawaan")
                         },
@@ -369,7 +369,7 @@ internal fun AccessRoleUserScreen(nav: NavHostController, email: String, toast: 
             FilterBar(
                 label = "Role pengguna",
                 value = current.name,
-                detail = "${current.modules.size} modul · ${current.functions.size} fungsi",
+                detail = "${AccessCatalog.berlaku(current).first.size} modul · ${AccessCatalog.berlaku(current).second.size} fungsi",
                 icon = Icons.Outlined.Badge,
                 onClick = { if (person.role != Role.Owner) showSheet = true },
             )
@@ -394,7 +394,7 @@ internal fun AccessRoleUserScreen(nav: NavHostController, email: String, toast: 
             Text("Pilih role", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             Text("Pengguna mengikuti modul dan fungsi dari role yang dipilih.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp))
             roles.forEach { role ->
-                FilterSheetRow(role.id == current.id, role.name, "${role.modules.size} modul · ${role.functions.size} fungsi") {
+                FilterSheetRow(role.id == current.id, role.name, "${AccessCatalog.berlaku(role).first.size} modul · ${AccessCatalog.berlaku(role).second.size} fungsi") {
                     accessStore.assignAccessRole(person.email, role.id)?.let(toast) ?: toast("${person.name} memakai role ${role.name}")
                     showSheet = false
                 }

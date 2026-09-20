@@ -272,4 +272,31 @@ class AccessCatalogMigrationTest {
         val (modulBaca, _) = AccessCatalog.migrate(penuh.first, penuh.second)
         assertEquals(penuh.first - "owner", modulBaca)
     }
+
+    /**
+     * Angka yang tampil di kartu role harus sama dengan centang yang berlaku, bukan dengan isi
+     * mentah yang menyimpan cermin kunci lama.
+     *
+     * Preset "Hanya lihat" berisi 9 fungsi. Sesudah disimpan, cermin `attendance.write` ikut
+     * tertulis, dan tanpa penerjemahan kartunya tampil "10 fungsi" padahal layar preset menjanjikan
+     * 9. Selisih satu angka ini pernah muncul di perangkat dan terlihat seperti centang yang
+     * bertambah sendiri.
+     */
+    @Test
+    fun hitunganTampilanTidakMenghitungCerminKunciLama() {
+        val viewer = AccessCatalog.presets.first { it.key == "viewer" }
+        val (modulSimpan, fungsiSimpan) = AccessCatalog.withLegacyMirror(viewer.modules, viewer.functions)
+        assertTrue("Cermin kunci lama benar-benar tertulis", fungsiSimpan.size > viewer.functions.size)
+
+        val role = AccessRole(
+            id = "role-uji",
+            name = "UjiPreset",
+            modules = modulSimpan,
+            functions = fungsiSimpan,
+            catalogVersion = AccessCatalog.VERSION,
+        )
+        val (modulBerlaku, fungsiBerlaku) = AccessCatalog.berlaku(role)
+        assertEquals("Modul yang berlaku sama dengan preset", viewer.modules, modulBerlaku)
+        assertEquals("Fungsi yang berlaku sama dengan preset", viewer.functions, fungsiBerlaku)
+    }
 }

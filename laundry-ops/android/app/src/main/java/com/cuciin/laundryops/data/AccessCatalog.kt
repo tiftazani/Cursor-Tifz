@@ -309,6 +309,16 @@ object AccessCatalog {
         )
     }
 
+    /**
+     * Modul dan fungsi yang berlaku untuk role ini SESUDAH kunci lama diterjemahkan.
+     *
+     * Dipakai untuk menghitung tampilan. Tanpa terjemahan ini, cermin kunci lama yang ditulis
+     * [withLegacyMirror] ikut terhitung sebagai fungsi, sehingga role dengan 9 fungsi tampil
+     * "10 fungsi" dan angka di kartu role tidak cocok dengan centang di dalamnya.
+     */
+    fun berlaku(role: AccessRole): Pair<Set<String>, Set<String>> =
+        if (role.id == "role-owner") moduleKeys to allFunctionKeys() else migrate(role.modules, role.functions)
+
     fun functionsOf(module: String): List<FunctionDef> = modules.firstOrNull { it.key == module }?.functions.orEmpty()
 
     fun allFunctionKeys(): Set<String> = modules.flatMap { it.functions }.map { it.key }.toSet()
