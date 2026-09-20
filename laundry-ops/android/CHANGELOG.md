@@ -58,7 +58,7 @@ yang menyimpannya akan menghapus seluruh hak role itu.
   Selisih satu angka itu terlihat seperti centang yang bertambah sendiri sesudah disimpan. Sekarang
   angkanya dihitung sesudah kunci lama diterjemahkan.
 
-## 1.10.29 — 19 Sep 2026
+## 1.10.29 — 19 Sep 2026 (versionCode 48)
 
 Perbaikan dua lapis untuk satu insiden data: berpindah akun ke peran non-Owner menghasilkan enam
 perintah `assetType.delete` untuk **seluruh jenis aset organisasi**.
