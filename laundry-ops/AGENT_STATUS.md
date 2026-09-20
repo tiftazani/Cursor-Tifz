@@ -59,6 +59,33 @@ Perangkat dikembalikan ke 1.10.30 sesudahnya.
 
 Belum dibuktikan: deploy Worker produksi (menunggu perintah Owner), push ke remote.
 
+### 0e-2. Pembersihan dokumen & repo (20 Sep, Hermes)
+
+Sesudah pekerjaan 1.10.30 selesai, dokumen yang dibaca agen lain dan manusia diaudit terhadap
+kenyataan kode. Yang ditemukan dan diperbaiki:
+
+| Dokumen | Klaim basi | Sekarang |
+|---|---|---|
+| `android/RELEASE_READINESS.md` | 1.10.1/v20, 47 test, 39 test Worker | 1.10.30/v49, 262 test, 60 Worker |
+| `AGENT_HANDOVER.md` | 1.10.0/v19, PR #18 "aktif", migrasi berhenti 0004 | 1.10.30/v49, PR merged, migrasi 0008 |
+| `CODING_AGENT_CONTEXT.md` | versi 1.10.0/v19, model izin nama-peran | 1.10.30/v49 + katalog 15/41 + AccessPolicy |
+| `android/README.md` | **package lama `com.tiftazani.laundryops`** di 5 tempat, 1.9.0, tautan APK 404, "Firestore otomatis" | package benar, 1.10.30, Firestore dihapus |
+| `README.md` | "Masuk cepat di login: Owner/Kasir/SPV" (fitur terlarang) | login email + kata sandi saja |
+| `AGENT_PROMPTS.md` | versionCode 19 | versionCode 49 |
+| `cloudflare/DATABASE_SCHEMA.md` | 5 tabel tak terdokumentasi | dilengkapi, diverifikasi ke D1 produksi |
+| `PLAY-PROTECT.md` | versi pemeriksaan tak ditandai | ditandai 1.10.24 + dicek ulang di 1.10.30 |
+
+Temuan repo: **60 APK/AAB kandidat lama (1.5.1-1.10.24) masih dilacak Git** padahal `.gitignore`
+sudah mengecualikannya dan aturan repo melarang. Semuanya dihentikan dari pelacakan dengan
+`git rm --cached` setelah diverifikasi 60/60 ada di disk, jadi berkas tetap bisa dibagikan. Riwayat
+lama masih memuat blobs itu (`.git` 451 MB); mengecilkannya butuh penulisan ulang riwayat dan itu
+belum dilakukan. `1.9.1-candidate` juga satu-satunya kandidat tanpa `README.md`; sekarang lengkap
+beserta `SHA256SUMS.txt`.
+
+`R.color.foam` yang tidak dipakai dibuang. Kandidat 1.10.30 diperiksa kesegarannya: dua berkas sumber
+tersentuh sesudah build, tetapi penanda sudah ada di dex dan `foam` tidak ada di `resources.arsc`,
+jadi **tidak perlu build ulang**.
+
 ## 0d. Pekerjaan terbaru (19 Sep, Hermes) — tujuh kelas bug izin ditutup, 1.10.28
 
 **Status: selesai, gate hijau, teruji di perangkat, versi 1.10.28 (versionCode 47), branch
