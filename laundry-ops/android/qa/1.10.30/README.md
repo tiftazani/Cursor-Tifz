@@ -8,12 +8,13 @@ Hasil verifikasi 20 September 2026, versionCode 49.
 |---|---|---|
 | Unit test debug | `./gradlew testDebugUnitTest` | 262 lulus, 0 gagal |
 | Unit test rilis | `./gradlew testReleaseUnitTest` | 262 lulus, 0 gagal |
-| Lint | `./gradlew lint` | 0 error, 18 peringatan |
+| Lint | `./gradlew lint` | 0 error, 19 peringatan |
 | Worker | `cd cloudflare && npm test` | 60 lulus, 0 gagal |
 | Sertifikat rilis | `apksigner verify --print-certs` | `3a988c53...` sama dengan 1.10.1 dan 1.10.29 |
 
-18 peringatan lint seluruhnya bawaan lama: 12 `UseKtx`, 4 versi dependensi, 1 `ObsoleteSdkInt`,
-1 versi plugin Gradle. Tidak ada yang berasal dari pekerjaan 1.10.30.
+19 peringatan lint (sama untuk debug dan release) seluruhnya bawaan lama: 12 `UseKtx`,
+4 `GradleDependency`, 1 `AndroidGradlePluginVersion`, 1 `ObsoleteSdkInt`. Tidak ada yang berasal dari
+pekerjaan 1.10.30.
 
 ## Sapu menu per peran
 

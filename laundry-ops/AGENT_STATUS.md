@@ -26,8 +26,8 @@ preset peran, pemisahan baca/tulis dan ubah/hapus, dan penerjemahan kunci katalo
 | Hitungan role | kartu role menghitung cermin kunci lama sebagai fungsi, preset "Hanya lihat" tampil 10 fungsi padahal 9 | `AccessCatalog.berlaku` menerjemahkan kunci lama lebih dulu; tiga tempat tampilan dan satu baris log memakainya |
 
 Hasil terukur: Android **262 kasus, 0 gagal** (debug dan rilis); Worker **60 kasus, 0 gagal**; lint
-bersih (0 error, 18 warning lama tanpa error: 12 `UseKtx`, 4 versi dependency, 1 `ObsoleteSdkInt`, 1
-versi plugin Gradle). Bukti pengunci: mengembalikan bug pada
+bersih (0 error, 19 warning lama tanpa error: 12 `UseKtx`, 4 `GradleDependency`, 1
+`AndroidGradlePluginVersion`, 1 `ObsoleteSdkInt`). Bukti pengunci: mengembalikan bug pada
 `customAccessRequirement` membuat 3 test GAGAL; melepas migrasi dari `AccessPolicy` membuat 1 test
 GAGAL.
 

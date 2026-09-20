@@ -18,7 +18,7 @@ Konsekuensi yang perlu diketahui sebelum distribusi:
 
 ## Bukti verifikasi kandidat (1.10.30)
 
-- Android: **262 unit test debug dan 262 unit test rilis lulus**, lint tanpa error (18 warning lama: 12 `UseKtx`, 4 versi dependency, 1 `ObsoleteSdkInt`, 1 versi plugin Gradle), APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
+- Android: **262 unit test debug dan 262 unit test rilis lulus**, lint tanpa error (19 warning lama: 12 `UseKtx`, 4 `GradleDependency`, 1 `AndroidGradlePluginVersion`, 1 `ObsoleteSdkInt`), APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
 - APK rilis: non-debuggable, application ID `com.cuciin.laundryops`, versionCode `49`, versionName `1.10.30`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB. `verify_release.py` PASS.
 - SHA-256 sertifikat rilis cocok dengan fingerprint yang dicatat: `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`. Sertifikat **tidak berubah** sejak 1.10.1, jadi APK baru dapat menimpa pemasangan lama.
 - Worker: **60 test lulus** (`npm run check`), termasuk pemetaan fungsi izin per command, penjagaan revisi reproject, dan penerimaan dua project Firebase.
