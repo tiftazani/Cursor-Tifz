@@ -19,8 +19,10 @@ import org.junit.Test
  * (menguji AccessPolicy). Daftar tangan itu sendiri dikunci oleh test yang membaca kode, supaya
  * klaimnya tidak bisa menyimpang dari kenyataan.
  *
- * Keadaan per 1.10.26 setelah perbaikan, diukur langsung ke kode: SELURUH 17 fungsi diperiksa,
- * 15 di antaranya lewat titik jaga di CuciinStore.kt dan 2 lewat gerbang rute di RouteAccess.kt.
+ * Keadaan pada 1.10.30, diukur langsung ke kode: SELURUH 41 fungsi katalog diperiksa. Sebagian besar
+ * lewat titik jaga di CuciinStore.kt, sisanya lewat gerbang rute di RouteAccess.kt dan lewat
+ * pemeriksaan di layar. Catatan 1.10.26 yang menyebut "17 fungsi, 15 di store dan 2 di rute" sudah
+ * tidak berlaku dan tidak boleh dipakai lagi sebagai angka.
  */
 class AccessFunctionEnforcementTest {
 

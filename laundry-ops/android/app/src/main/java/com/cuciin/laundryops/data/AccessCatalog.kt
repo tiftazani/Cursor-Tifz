@@ -7,15 +7,19 @@ package com.cuciin.laundryops.data
  * pemeriksaan izin memakai kunci yang sama supaya tidak ada modul yang tampil di layar
  * tetapi tidak pernah diperiksa, atau sebaliknya.
  *
- * Versi 1.10.30 memerinci katalog dari 12 modul/17 fungsi menjadi 16 modul/43 fungsi. Tiga
+ * Versi 1.10.30 memerinci katalog dari 12 modul/17 fungsi menjadi 15 modul/41 fungsi. Tiga
  * pemisahan yang paling berpengaruh:
  *
  * 1. BACA dipisah dari TULIS. Sebelumnya satu-satunya cara memberi "lihat stok" adalah
  *    memberi "ubah stok". Sekarang ada `stock.view` di samping `stock.write`.
  * 2. UBAH dipisah dari HAPUS. Menghapus lebih berisiko daripada mengubah, tetapi keduanya
  *    dulu menumpang satu centang (`service.correct` untuk koreksi DAN hapus).
- * 3. Modul `owner` dipecah menjadi `branch`, `staff`, `serviceCatalog`, `access`, dan
- *    `settings`, supaya "boleh menambah user" tidak lagi menuntut "boleh mengubah cabang".
+ * 3. Modul `owner` dipecah menjadi `branch`, `staff`, `serviceCatalog`, dan `access`, supaya
+ *    "boleh menambah user" tidak lagi menuntut "boleh mengubah cabang".
+ *
+ * Angka 15 modul dan 41 fungsi itu bukan tulisan bebas: keduanya adalah jumlah entri di
+ * [modules] dan [allFunctionKeys], dan test penegakan membandingkannya dengan kenyataan kode
+ * sehingga komentar ini tidak bisa menyimpang tanpa ada test yang gagal.
  *
  * Aturan kunci: setiap fungsi WAJIB berawalan kunci modulnya (`stock.write` milik `stock`).
  * Konvensi ini yang membuat [sanitize] aman: fungsi dari modul yang tidak dimiliki dapat
