@@ -57,7 +57,46 @@ Entity yang diterima adalah `branch`, `staff`, `customer`, `service`, `product`,
 }
 ```
 
-Modul yang dikenal: `queue`, `service`, `customer`, `stock`, `inventory`, `attendance`, `whatsapp`, `expense`, `cash`. Fungsi yang dikenal: `service.create`, `service.correct`, `queue.status`, `stock.write`, `attendance.write`, `whatsapp.send`.
+Katalog lengkap yang boleh dipakai klien ada di `AccessCatalog` aplikasi: **15 modul / 41 fungsi** pada
+1.10.30. Server hanya memeriksa fungsi yang memang dipakai command-nya, dan pemetaan itu ada di
+`customAccessRequirement` (`cloudflare/src/command-sync.ts`). Daftar yang benar-benar diperiksa server:
+
+| Perintah | Modul | Fungsi |
+|---|---|---|
+| `order.status`, `syncIntent: status` | `queue` | `queue.status` |
+| `order.handover` | `queue` | `queue.handover` |
+| `order.create` (Nota baru) | `service` | `service.create` |
+| koreksi Nota yang sudah ada | `service` | `service.correct` |
+| `order.payment`, `payment*` | `service` | `service.payment` |
+| `order.delete` | `service` | `service.delete` |
+| `order.*` dengan `waSent: true` | `whatsapp` | `whatsapp.send` |
+| `stock*`, `branchStock*` | `stock` | `stock.write` |
+| `attendance*` | `attendance` | `attendance.self` |
+| `customer.delete` | `customer` | `customer.delete` |
+| `customer*` lain | `customer` | `customer.write` |
+| `inventory.delete` | `inventory` | `inventory.delete` |
+| `inventory*` lain | `inventory` | `inventory.write` |
+| `assetType*` | `inventory` | `inventory.type` |
+| `expense.delete` | `expense` | `expense.delete` |
+| `expense*` lain | `expense` | `expense.write` |
+| `cashClose*` | `cash` | `cash.close` |
+| `accessRole*` | `access` | `access.role` |
+| `accessPolicy*` | `access` | `access.assign` |
+| `whatsappTemplate*` | `whatsapp` | `whatsapp.template` |
+
+Tidak ada lagi fungsi bernama `attendance.write`. Kunci itu adalah kunci katalog 1.10.29 yang berarti
+"Absen"; padanannya di katalog 1.10.30 adalah `attendance.self`, dan perangkat lama yang mengirimnya
+tetap diterima selama peralihan karena `AccessCatalog.migrate` menerjemahkannya di sisi aplikasi.
+
+Dua catatan yang mudah salah dibaca:
+
+- **Urutan pemeriksaan itu berarti.** Di dalam cabang `order.*`, penjaga `waSent: true` diperiksa
+  SEBELUM `order.payment` dan `order.delete`. Jadi satu command `order.payment` yang sekaligus membawa
+  `waSent: true` diperiksa terhadap `whatsapp.send`, bukan `service.payment`.
+- **`service.price` diperiksa di tempat lain**, bukan lewat tabel di atas: penjaga harga di
+  `command-sync.ts` memanggil `hasFunction(..., "service", "service.price")` saat menerima `unitPrice`
+  dari payload. Fungsinya ada di daftar itu karena `service.price` tidak punya command sendiri.
+  Sebaliknya `service.correctSent` TIDAK diperiksa server; ia hanya ditegakkan di sisi aplikasi.
 
 Aturan yang berlaku di server:
 
