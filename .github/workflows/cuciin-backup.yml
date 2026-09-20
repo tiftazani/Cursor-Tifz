@@ -2,6 +2,9 @@ name: Cuciin D1 backup verification
 
 on:
   workflow_dispatch:
+  schedule:
+    # Tiap hari 20:00 UTC = 03:00 WIB, saat pemakaian cabang paling sepi.
+    - cron: "0 20 * * *"
 
 permissions:
   contents: read
