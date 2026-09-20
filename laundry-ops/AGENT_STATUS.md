@@ -483,6 +483,13 @@ laundry-ops/cloudflare/migrations/0008_owner_name_neutral.sql
 
 **Tujuan:** menerapkan sistem desain Jemur ke seluruh aplikasi, mengganti ikon, memigrasikan data cabang dan akun operasional, serta memperbaiki tiga layar yang dikeluhkan Owner.
 
+> **Catatan pembacaan:** daftar di bawah adalah klaim file pada 16 Sep untuk pekerjaan versi 1.9.x, dan
+> sebagian keterangannya sudah tidak berlaku. Dua yang terbukti sudah tidak ada di kode sekarang:
+> "masuk cepat" pada `AuthScreens.kt` (fitur itu dihapus; login hanya email + kata sandi) dan
+> `demoLogin` pada `CuciinStore.kt`. Seed bawaan sekarang berisi 4 cabang nyata (Bunayya, Laupay
+> Kirab, Laupay Dayeuh, dan satu lagi), bukan cabang contoh. Untuk keadaan sekarang, pakai tabel
+> "Titik berangkat" dan bagian 0e di atas.
+
 **Klaim file Hermes untuk pekerjaan ini:**
 
 ```
