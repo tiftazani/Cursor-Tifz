@@ -5,6 +5,69 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
+## 0h. Pekerjaan terbaru (21 Sep dini hari, Hermes) — kata sandi, pembersihan data produksi, rilis 1.10.33
+
+**Status: SELESAI, di-commit `4a5bab9`, sudah di-push. PR #22 `CLEAN`/`MERGEABLE`.**
+
+### Jawaban: tabel `staff` memang tidak menyimpan kata sandi
+
+`staff` di D1 berisi `email`, `organization_id`, `name`, `role`, `approved`, `active`,
+`updated_at`, `firebase_uid`. **Tidak ada** kolom sandi, dan itu memang rancangannya, bukan tabel
+yang belum dibuat:
+
+- Kata sandi asli dipegang **Firebase Authentication**. Worker tidak punya endpoint ganti sandi
+  sama sekali (`/v1/me`, `/v1/snapshot`, `/v1/sync/*`, `/v1/registration`, `/v1/admin/reproject` saja).
+  Bahkan Worker **membuang** `passwordHash` sebelum snapshot dikirim ke perangkat (`src/index.ts:265`).
+- Perangkat menyimpan **hash lokal PBKDF2-SHA256 120.000 iterasi** (`Passwords.kt`) sebagai cadangan
+  saat server tidak terjangkau. Hash itu tinggal di perangkat, tidak pernah ke D1.
+- Jadi menyimpan sandi di D1 tidak perlu: ia menggandakan rahasia di tempat yang paling banyak
+  dibaca. Yang benar adalah memastikan kedua sandi **berubah bersama**, dan itu yang diperbaiki.
+
+### Cacat nyata yang ditemukan dan diperbaiki
+
+1. **Ganti kata sandi tidak pernah memperbarui hash lokal.** `FirebaseCloud.enabled` selalu benar di
+   rilis, jadi tombol "Simpan kata sandi" selalu memakai jalur Firebase dan
+   `store.changeMyPassword()` tidak pernah jalan. Akibatnya orang yang mengganti kata sandi lalu
+   keluar **tidak bisa masuk lagi** dengan kata sandi barunya.
+2. **"Lupa kata sandi" punya celah sama.** Kata sandi Firebase berubah lewat tautan email di luar
+   aplikasi, hash lokal tetap yang lama dan menolak kata sandi baru.
+
+Perbaikan: setelah Firebase menerima kata sandi baru, hash lokal ikut diperbarui lewat pengait
+`FirebaseCloud.changeLocal`; setelah tautan reset dikirim, hash lokal dibuang lewat
+`FirebaseCloud.forgetLocal` sehingga layar masuk memverifikasi lewat Firebase. Penolakan lokal
+sekarang ditampilkan sebagai pesan, bukan dilaporkan sukses. Dikunci oleh `PasswordSyncTest` (4 kasus);
+`RouteAccessTest` yang sudah ada sempat menangkap versi pertama perbaikan karena hasilnya dibuang.
+
+### Pemakaian D1 produksi setelah dibersihkan
+
+Diminta Owner: sisa hanya user, Owner, cabang, dan layanan. Dijalankan lewat
+`cloudflare/scripts/bersihkan-data-produksi.sql` (969 baris terhapus, 26 tabel).
+
+| Dipertahankan | Jumlah | Dibuang | Jumlah |
+|---|---|---|---|
+| `staff` (6 Kasir + 2 Owner) | 8 | `orders` / `order_lines` | 8 / 14 |
+| `branches` | 4 | `payments`, `cash_closes`, `expenses` | 4, 1, 0 |
+| `services` | 9 | `customers`, `attendance` | 1, 2 |
+| `access_roles` | 3 | `branch_stocks`, `stock_moves`, `inventory_items` | 4, 5, 0 |
+| | | `audit_logs`, `asset_types`, `whatsapp_templates` | 74, 0, 1 |
+| | | `sync_changes`, `processed_commands`, `sync_snapshots` | 421, 433, 1 |
+
+`sync_snapshots` ikut dikosongkan supaya data transaksi lama tidak bisa dipulihkan.
+**D1 debug `cuciin-debug-db` TIDAK disentuh** (9 staff, 6 cabang, 10 layanan, 8 order seperti semula).
+
+Bukti sesudah: `/health` 200 `revision: 0`; `/v1/snapshot` dan `/api/cuciin` **401** tanpa token
+(jalur PUT snapshot lama tidak hidup kembali); `sync_changes` 0 baris, sequence maksimum 0.
+Cadangan sebelum dibersihkan: `firebase-migration/backup-d1/cuciin-prod-preBersih-20260920T173214Z.sql` (554.652 byte).
+
+### Belum terbukti
+
+- **Masuk ulang dengan kata sandi baru belum terbukti di perangkat.** Uji ke Firebase langsung dari
+  Mac dengan sandi akun uji mengembalikan `INVALID_LOGIN_CREDENTIALS`, yang justru membuktikan kata
+  sandi akun **berhasil diubah** lewat aplikasi. Sandi akun `tiftazani.khara@gmail.com` sekarang
+  tidak diketahui siapa pun; Owner menyetel ulang lewat Firebase Console.
+- Ada satu uji di tengah jalan yang tidak sengaja menekan tombol Simpan saat mengisi kolom untuk
+  menguji keadaan terkunci. Akibatnya kata sandi akun Owner berubah. Emulator hanya dipakai uji.
+
 ## 0g. Pekerjaan terbaru (20 Sep malam, Hermes) — rilis 1.10.31 & 1.10.32, peringatan sinkronisasi di layar data
 
 **Status: SELESAI, di-commit `f1d2695` + `5716ebb`, SUDAH di-push. CI PR #22 hijau seluruhnya.**
