@@ -6,8 +6,8 @@ Hasil verifikasi 20 September 2026, versionCode 49.
 
 | Pemeriksaan | Perintah | Hasil |
 |---|---|---|
-| Unit test debug | `./gradlew testDebugUnitTest` | 262 lulus, 0 gagal |
-| Unit test rilis | `./gradlew testReleaseUnitTest` | 262 lulus, 0 gagal |
+| Unit test debug | `./gradlew testDebugUnitTest` | 267 lulus, 0 gagal |
+| Unit test rilis | `./gradlew testReleaseUnitTest` | 267 lulus, 0 gagal |
 | Lint | `./gradlew lint` | 0 error, 19 peringatan |
 | Worker | `cd cloudflare && npm test` | 60 lulus, 0 gagal |
 | Sertifikat rilis | `apksigner verify --print-certs` | `3a988c53...` sama dengan 1.10.1 dan 1.10.29 |
@@ -61,10 +61,27 @@ Dua sifat penting dari impor juga dibuktikan:
 Database debug dikembalikan ke kondisi semula (cabang, produk, staff, layanan, role, pelanggan,
 aset, stok, dan seluruh jurnal `impor-template` dihapus). Angka produksi tidak pernah tersentuh.
 
+## Peran akses custom
+
+Role bawaan hanya Owner, Supervisor, dan Kasir; preset katalog hanya owner, supervisor, kasir,
+viewer, dan kosong. Peran lain (mis. Gudang) dibuat manual lewat Kontrol Akses Role. Perilaku menu
+untuk role custom dikunci di `ui/CustomRoleMenuTest.kt` dengan role Gudang tiruan berisi modul
+`stock` + `inventory` dan fungsi `stock.view`, `stock.write`, `inventory.view`:
+
+- membuka Daftar Aset Cabang (gerbang `inventory` + `inventory.view`);
+- **tidak** membuka Produk stok, karena rute itu digerbangi fungsi `stock.product` yang tidak
+  dipegangnya --- ini pemisahan baca dari tulis yang ditambahkan di 1.10.30;
+- tetap boleh mencatat perubahan stok (`stock.write`);
+- tidak melihat menu di luar modulnya walau peran akunnya ditulis Supervisor.
+
+Test-nya diuji negatif: melepas fungsi `stock.product` dari gerbang rute `products` membuat test
+GAGAL; memulihkannya membuat hijau lagi.
+
 ## Belum diuji
 
 - CRUD registrasi pengguna penuh dari UI.
-- Sapu menu tersendiri untuk peran Gudang.
+- Sapu menu perangkat untuk peran Gudang (butuh akun Firebase dengan kata sandi; penegakan
+  izinnya sendiri sudah dikunci lewat unit test).
 - Template Excel dan importer dengan data produksi (yang diuji memakai data uji di database debug).
 - Perilaku APK pada tiap tipe HP operasional milik cabang.
 - Firebase debug dan produksi masih berbagi satu identity project.

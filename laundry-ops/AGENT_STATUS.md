@@ -25,7 +25,7 @@ preset peran, pemisahan baca/tulis dan ubah/hapus, dan penerjemahan kunci katalo
 | Tombol hapus | tombol "Hapus" pada koreksi Service ada walau `service.delete` dicabut | tombol dibuang, penolakan dilaporkan lewat pesan |
 | Hitungan role | kartu role menghitung cermin kunci lama sebagai fungsi, preset "Hanya lihat" tampil 10 fungsi padahal 9 | `AccessCatalog.berlaku` menerjemahkan kunci lama lebih dulu; tiga tempat tampilan dan satu baris log memakainya |
 
-Hasil terukur: Android **262 kasus, 0 gagal** (debug dan rilis); Worker **60 kasus, 0 gagal**; lint
+Hasil terukur: Android **267 kasus, 0 gagal** (debug dan rilis); Worker **60 kasus, 0 gagal**; lint
 bersih (0 error, 19 warning lama tanpa error: 12 `UseKtx`, 4 `GradleDependency`, 1
 `AndroidGradlePluginVersion`, 1 `ObsoleteSdkInt`). Bukti pengunci: mengembalikan bug pada
 `customAccessRequirement` membuat 3 test GAGAL; melepas migrasi dari `AccessPolicy` membuat 1 test
@@ -41,7 +41,7 @@ Angka katalog diukur langsung ke kode, bukan dikutip: 15 `ModuleDef(`, 41 `fn(`,
 `ownerLocked`, 5 `Preset(`. Komentar KDoc di `AccessCatalog.kt` dan `AccessFunctionEnforcementTest.kt`
 yang sebelumnya menulis 16 modul/43 fungsi dan modul `settings` (tidak ada di kode) sudah dibetulkan.
 
-**Gate dijalankan ulang dari `clean` pada 20 Sep** (bukan hasil cache `UP-TO-DATE`): 262 debug + 262
+**Gate dijalankan ulang dari `clean` pada 20 Sep** (bukan hasil cache `UP-TO-DATE`): 267 debug + 267
 release Android dan 60 Worker, seluruhnya lulus, 0 gagal. Angka itu dibaca dari berkas XML hasil run
 yang benar-benar dieksekusi, bukan dari ingatan.
 
@@ -90,7 +90,7 @@ kenyataan kode. Yang ditemukan dan diperbaiki:
 
 | Dokumen | Klaim basi | Sekarang |
 |---|---|---|
-| `android/RELEASE_READINESS.md` | 1.10.1/v20, 47 test, 39 test Worker | 1.10.30/v49, 262 test, 60 Worker |
+| `android/RELEASE_READINESS.md` | 1.10.1/v20, 47 test, 39 test Worker | 1.10.30/v49, 267 test, 60 Worker |
 | `AGENT_HANDOVER.md` | 1.10.0/v19, PR #18 "aktif", migrasi berhenti 0004 | 1.10.30/v49, PR merged, migrasi 0008 |
 | `CODING_AGENT_CONTEXT.md` | versi 1.10.0/v19, model izin nama-peran | 1.10.30/v49 + katalog 15/41 + AccessPolicy |
 | `android/README.md` | **package lama `com.tiftazani.laundryops`** di 5 tempat, 1.9.0, tautan APK 404, "Firestore otomatis" | package benar, 1.10.30, Firestore dihapus |
@@ -539,7 +539,7 @@ laundry-ops/cloudflare/tests/command-sync.test.mjs                              
 | Worker debug | versi `717ddfa4-2fe1-49c3-ab65-1c17e9733a5d` (memuat pekerjaan 1.10.30) | `wrangler deployments list -c wrangler.debug.toml` |
 | Health produksi | `ok`, database `ready`, revision 409 (20 Sep 2026) | `curl .../health` |
 | Test Worker | 60 lulus | `cd cloudflare && npm run check` |
-| Test Android | **262 lulus** (262 debug + 262 rilis), lint 0 error | `./gradlew testDebugUnitTest testReleaseUnitTest lintDebug` |
+| Test Android | **267 lulus** (267 debug + 267 rilis), lint 0 error | `./gradlew testDebugUnitTest testReleaseUnitTest lintDebug` |
 | Kandidat rilis | `releases/1.10.30-candidate/` | folder + `SHA256SUMS.txt` |
 | Data produksi | 4 cabang, 8 akun, 8 nota, 4 role akses | `wrangler d1 execute cuciin-db --remote` |
 

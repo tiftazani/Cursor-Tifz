@@ -10,7 +10,7 @@ Dokumen ini adalah titik mulai untuk Hermes, OpenCode, Cursor, Codex, atau revie
 - Kandidat rilis: `releases/1.10.30-candidate/`. Jangan mengubah atau mengganti APK/AAB tanpa build dan checksum baru.
 - Worker produksi: `cuciin-api`, D1 `cuciin-db`, Firebase project `cuciin-ops` (project lama `cuciin-ops-tiftazani` masih diterima selama masa peralihan).
 - Skema D1 produksi: migrasi `0001` sampai `0008_owner_name_neutral.sql` sudah diterapkan.
-- Validasi terakhir: 262 unit test Android debug + 262 release, lint kedua varian tanpa error, APK/AAB release, serta 60 test Worker lulus.
+- Validasi terakhir: 267 unit test Android debug + 267 release, lint kedua varian tanpa error, APK/AAB release, serta 60 test Worker lulus.
 
 Kondisi ini adalah kandidat rilis, bukan keputusan big-bang. Daftar tugas Owner yang masih tersisa ada di `android/RELEASE_READINESS.md` dan `OPERATIONS_RUNBOOK.md`.
 
