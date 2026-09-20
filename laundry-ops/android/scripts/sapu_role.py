@@ -65,10 +65,30 @@ def sh(*a):
 
 
 def dump(n):
-    sh("rm", "-f", f"/sdcard/{n}.xml")
-    sh("uiautomator", "dump", f"/sdcard/{n}.xml")
-    return html.unescape(subprocess.run([ADB, "exec-out", "cat", f"/sdcard/{n}.xml"],
-                                        capture_output=True, text=True).stdout)
+    """Dump UI, dengan pemulihan bila uiautomator menggantung atau mengembalikan isi kosong.
+
+    Dua kegagalan yang sudah terjadi dan harus ditangani di sini:
+
+    1. `uiautomator dump` gagal dengan "UiAutomationService ... already registered" karena proses
+       uiautomator dari run sebelumnya masih menggantung. Proses itu dibunuh lalu dump diulang.
+    2. Dump bisa menghasilkan berkas kosong. Tanpa pengulangan, seluruh menu setelahnya terbaca
+       sebagai "tak sampai modul" padahal layarnya baik-baik saja.
+
+    Kegagalan ini mudah disalahartikan sebagai bug aplikasi, padahal bugnya di alat.
+    """
+    for _ in range(4):
+        sh("pkill", "-f", "uiautomator")
+        sh("rm", "-f", f"/sdcard/{n}.xml")
+        keluaran = sh("uiautomator", "dump", f"/sdcard/{n}.xml")
+        if "ERROR" in keluaran or "already registered" in keluaran:
+            time.sleep(1.5)
+            continue
+        isi = subprocess.run([ADB, "exec-out", "cat", f"/sdcard/{n}.xml"],
+                             capture_output=True, text=True).stdout
+        if isi.strip():
+            return html.unescape(isi)
+        time.sleep(1.5)
+    return ""
 
 
 def simpul(x):
@@ -81,9 +101,29 @@ def simpul(x):
             continue
         x1, y1, x2, y2 = (int(b.group(i)) for i in (1, 2, 3, 4))
         out.append({"text": t.group(1) if t else "", "cx": (x1 + x2) // 2, "cy": (y1 + y2) // 2,
-                    "click": 'clickable="true"' in n,
+                    "click": 'clickable="true"' in n, "box": (x1, y1, x2, y2),
                     "cls": (re.search(r'class="([^"]*)"', n) or [None, ""])[1]})
     return out
+
+
+def pembungkus_klik(simp, s):
+    """Container clickable terkecil yang membungkus node `s`, atau None.
+
+    Di Compose, teks dan penangan klik ada di node BERBEDA: node teks sendiri tidak pernah
+    clickable, sedangkan container pembungkusnya clickable tapi teksnya kosong. Men-tap koordinat
+    node teks tetap bekerja karena container menutupi area yang sama, tetapi men-tap node yang
+    TIDAK punya container clickable (mis. judul bagian) tidak melakukan apa pun. Fungsi ini yang
+    membedakan keduanya.
+    """
+    x1, y1, x2, y2 = s["box"]
+    kand = []
+    for o in simp:
+        if not o["click"]:
+            continue
+        a1, b1, a2, b2 = o["box"]
+        if a1 <= x1 and b1 <= y1 and a2 >= x2 and b2 >= y2:
+            kand.append((((a2 - a1) * (b2 - b1)), o))
+    return min(kand)[1] if kand else None
 
 
 def teks(x):
@@ -102,36 +142,64 @@ def segar():
     time.sleep(9)
 
 
+# Penanda yang HANYA ada di layar Modul. "Antrian laundry" dan "Service baru" sengaja TIDAK
+# dipakai meski keduanya juga nama menu, karena keduanya muncul pula di beranda dan di layar lain,
+# sehingga layar beranda akan salah dikenali sebagai Modul.
+PENANDA_MODUL = (
+    "Atur urutan menu", "Pekerjaan harian", "Keuangan", "Laporan", "Master data", "Aplikasi",
+    "Kontrol Akses Role", "Produk stok", "Daftar Aset Cabang",
+)
+
+
 def di_modul(x=None):
+    """Apakah layar sekarang adalah daftar Modul.
+
+    Judul "Kelola laundry" hilang setelah daftar digulir, jadi isi daftar dipakai sebagai penanda
+    kedua. Versi lama jatuh ke pemeriksaan teks tab bawah ("ada Modul, tidak ada Antrian"), padahal
+    keempat ikon tab lain ikut terbaca di dump sehingga "Antrian" selalu ada dan hasilnya selalu
+    False. Akibatnya sapu mengira tidak pernah sampai Modul dan melaporkan "tap gagal" pada menu
+    yang sebenarnya ada di layar.
+    """
     x = x or dump("cek")
     t = teks(x)
     if any("Kelola laundry" in s for s in t) or any("Atur urutan menu" in s for s in t):
         return True
-    bawah = [e["text"].strip() for e in simpul(x) if e["cy"] > 2150 and e["text"].strip()]
-    return "Modul" in bawah and "Antrian" not in bawah
+    return sum(1 for p in PENANDA_MODUL if any(p in s for s in t)) >= 2
 
 
 def tab_modul(x=None):
+    """Titik tap tab "Modul" di bilah bawah, atau None bila bilah itu tidak ada.
+
+    Teks tab berada di dekat dasar layar, sedangkan container clickable-nya kadang dilaporkan
+    dengan batas yang melewati dasar jendela, jadi pencarian tidak boleh mensyaratkan pusat
+    container ada di bawah ambang tertentu. Ambang dipakai hanya untuk teksnya.
+    """
     x = x or dump("tab")
     simp = simpul(x)
-    t = [s for s in simp if s["text"].strip() == "Modul" and s["cy"] > 2150]
+    t = [s for s in simp if s["text"].strip() == "Modul" and s["cy"] > 2100]
     if not t:
         return None
     for s in simp:
-        if s["click"] and s["cy"] > 2150 and abs(s["cx"] - t[0]["cx"]) <= 12:
+        if s["click"] and abs(s["cx"] - t[0]["cx"]) <= 20 and s["cy"] > 2000:
             return s
-    return None
+    return t[0]
 
 
 def ke_modul():
-    if di_modul():
-        return True
-    for _ in range(4):
+    """Pulang ke layar Modul dari mana pun.
+
+    Sebagian menu membuka layar penuh yang TIDAK punya tab bawah (mis. "Laporan analitik"), jadi
+    tab "Modul" tidak ada di layar dan penekanan tab mustahil. Karena itu bila tab tidak terlihat,
+    tekan Back beberapa kali lebih dulu sampai kerangka bertab kembali. Tanpa langkah ini, semua
+    menu sesudah layar penuh dilaporkan "tap gagal" padahal tidak ada yang rusak.
+    """
+    for putaran in range(3):
+        if di_modul():
+            return True
         m = tab_modul()
         if not m:
-            time.sleep(1.2)
-            if di_modul():
-                return True
+            sh("input", "keyevent", "4")
+            time.sleep(1.5)
             continue
         tap((m["cx"], m["cy"]), 2.2)
         if di_modul():
@@ -187,11 +255,19 @@ def login():
 
 
 def peran_sekarang():
+    """Judul peran di layar Modul, mis. "Cuciin · Owner".
+
+    Dicoba beberapa kali karena layar Modul butuh sepersekian detik untuk selesai digambar setelah
+    tab ditekan. Membaca sekali membuat hasilnya None pada sapu yang sebenarnya sudah masuk akun,
+    dan pemanggilnya lalu menyimpulkan perlu login ulang padahal tidak.
+    """
     if not ke_modul():
         return None
-    for t in teks(dump("rp")):
-        if "·" in t and any(r in t for r in ("Owner", "Kasir", "SPV", "Supervisor", "Gudang")):
-            return t
+    for _ in range(3):
+        for t in teks(dump("rp")):
+            if "·" in t and any(r in t for r in ("Owner", "Kasir", "SPV", "Supervisor", "Gudang")):
+                return t
+        time.sleep(1.0)
     return None
 
 
@@ -219,20 +295,30 @@ def buka_menu(label):
     Versi lama hanya mengembalikan `ditemukan`, sehingga menu yang menendang pengguna balik ke
     daftar (gerbang izin selalu menolak, rute tidak terdaftar) tetap dihitung OK. Itu sebabnya
     "Pengaturan Owner" pernah dilaporkan 21/21 padahal layarnya tidak pernah terbuka.
+
+    Menu yang belum terlihat digulir, tetapi DIULANG hanya bila layar masih di Modul. Tanpa
+    pemeriksaan itu, satu gulir yang berakhir di luar layar Modul membuat sisa gulir dilakukan di
+    sembarang layar, dan menu berikutnya dilaporkan "TIDAK TERBUKA" padahal hanya tap-nya meleset.
+    Itu menghasilkan temuan palsu pada menu "Pelanggan".
     """
     if not ke_modul():
         return False, False, []
     for i in range(8):
+        if i and not di_modul(dump("bm")):
+            if not ke_modul():
+                return False, False, []
         x = dump("bm")
         simp = simpul(x)
         t = [s for s in simp if s["text"].strip() == label]
+        # Nama menu bisa SAMA dengan nama bagian, mis. "Pelanggan" adalah judul bagian sekaligus
+        # label menu di dalamnya. Di Compose, node teks tidak pernah bertanda clickable; penangan
+        # klik ada di container pembungkus yang teksnya kosong. Karena itu kandidat disaring ke node
+        # yang PUNYA container clickable yang membungkusnya, dan titik tap diambil dari container
+        # itu. Men-tap judul bagian akan diam saja dan menunya dilaporkan gagal padahal tidak ada
+        # yang salah.
+        t = [s for s in t if pembungkus_klik(simp, s)]
         if t:
-            target = None
-            for s in simp:
-                if s["click"] and abs(s["cy"] - t[0]["cy"]) <= 20 and abs(s["cx"] - t[0]["cx"]) <= 40:
-                    target = s
-                    break
-            titik = target or t[0]
+            titik = pembungkus_klik(simp, t[0])
             tap((titik["cx"], titik["cy"]), 3.5)
             time.sleep(1.5)
             judul = [s for s in teks(dump("jl")) if len(s) < 40][:4]
