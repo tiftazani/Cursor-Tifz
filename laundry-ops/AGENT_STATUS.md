@@ -32,8 +32,10 @@ GAGAL.
 
 **Sapu menu per peran pada 1.10.30-debug (selesai):** Owner **21/21**, Kasir **11/21**, Supervisor
 **8/21**, tanpa satu pun `FATAL EXCEPTION` dari paket `com.cuciin.laundryops`. Dua "crash" di sapu
-Kasir berasal dari `UiAutomationService` milik alat uji. Kasir dan Supervisor sama dengan baseline
-1.10.29, jadi tidak ada pelebaran hak.
+Kasir dan satu di sapu Owner berasal dari `UiAutomationService` milik alat uji. **Skrip sapu sudah
+diperbaiki** supaya menyaring `Process: <paket>` sebelum menghitung crash; Owner dijalankan ulang
+dan hasilnya 21/21 dengan 0 crash. Kasir dan Supervisor sama dengan baseline 1.10.29, jadi tidak ada
+pelebaran hak.
 
 **Preset peran terbukti di perangkat:** role uji dibuat lewat UI, preset "Hanya lihat" diterapkan
 (8 modul / 9 fungsi), disimpan, lalu masih utuh sesudah aplikasi dihentikan paksa dan dibuka ulang.
