@@ -719,6 +719,17 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
 internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val s = store.session.value ?: return
+    // Firebase mengubah kata sandi login; layar masuk memakai hash lokal. Keduanya harus
+    // berubah bersama, jadi hash lokal ikut diperbarui setelah Firebase menerima sandi baru.
+    // Firebase sudah memverifikasi sandi lama lebih dulu, jadi penolakan lokal di sini berarti
+    // state perangkat tidak sinkron dan itu harus terlihat, bukan dilaporkan sebagai sukses.
+    DisposableEffect(Unit) {
+        FirebaseCloud.changeLocal = { lama, baru ->
+            store.changeMyPassword(lama, baru)?.let { pesan -> "Kata sandi berubah, tetapi perangkat menolak: $pesan" }
+        }
+        FirebaseCloud.forgetLocal = { email -> store.forgetLocalPassword(email) }
+        onDispose { FirebaseCloud.changeLocal = { _, _ -> null } }
+    }
     val account = store.staff.firstOrNull { it.email.equals(s.email, true) }
     val assignedBranches = account?.branchIds.orEmpty().mapNotNull { id -> store.branches.firstOrNull { it.id == id }?.name }
     var changePassword by remember { mutableStateOf(false) }
@@ -774,7 +785,7 @@ internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
                             if (error != null) toast(error) else { oldPassword = ""; newPassword = ""; confirmation = ""; changePassword = false; toast("Kata sandi akun berhasil disimpan") }
                         }
                         if (FirebaseCloud.enabled) FirebaseCloud.changePassword(oldPassword, newPassword) { cloudError ->
-                            if (cloudError != null) finish(cloudError) else finish(store.changeMyPassword(oldPassword, newPassword))
+                            if (cloudError != null) finish(cloudError) else finish(null)
                         } else finish(store.changeMyPassword(oldPassword, newPassword))
                     }
                     GhostBtn("Batal") { oldPassword = ""; newPassword = ""; confirmation = ""; changePassword = false }

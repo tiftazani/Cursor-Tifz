@@ -1785,6 +1785,22 @@ object CuciinStore {
         return updateStaff(account.email, account.name, account.role, account.branchIds, password = newPassword)
     }
 
+    /**
+     * Buang hash lokal akun ini setelah kata sandinya diubah lewat Firebase di luar aplikasi
+     * (link "Lupa kata sandi"). Hash lama akan menolak kata sandi baru, jadi lebih baik kosong:
+     * layar masuk lalu memverifikasi lewat Firebase.
+     *
+     * Hanya state lokal yang dibersihkan: `staff` termasuk entitas milik server, jadi sandi tidak
+     * pernah ikut ke antrean kirim dan tidak ada hash lama yang bisa terkirim balik.
+     */
+    fun forgetLocalPassword(email: String): Unit {
+        val key = email.trim().lowercase()
+        val index = staff.indexOfFirst { it.email.trim().lowercase() == key }
+        if (index < 0) return
+        staff[index] = staff[index].copy(passwordHash = "")
+        bump()
+    }
+
     fun changeMyEmail(newEmail: String, password: String): String? {
         val current = session.value ?: return "Silakan masuk kembali"
         val account = staff.firstOrNull { it.email.equals(current.email, true) } ?: return "Akun tidak ditemukan"

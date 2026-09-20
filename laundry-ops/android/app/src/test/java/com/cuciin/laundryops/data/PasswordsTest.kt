@@ -22,4 +22,17 @@ class PasswordsTest {
         assertTrue(Passwords.needsUpgrade(legacy))
         assertTrue(Passwords.matches("test1234", legacy))
     }
+
+    @Test fun hashKataSandiTidakIkutKeSnapshotServer() {
+        // Endpoint /v1/sync/changes mengirim snapshot dari D1. Kolom sandi tidak pernah ada
+        // di sana, jadi snapshot yang datang selalu membawa passwordHash kosong. Kalau
+        // applyBusiness tidak mempertahankan hash lokal, semua akun langsung tidak bisa masuk.
+        val dariServer = Staff("Aida", "aida@cuciin.test", Role.Kasir, listOf("bunayya"), approved = true)
+        assertTrue(dariServer.passwordHash.isEmpty())
+
+        val lokal = HashMap<String, String>().apply { put("aida@cuciin.test", Passwords.hash("rahasia-uji")) }
+        val digabung = dariServer.copy(passwordHash = lokal[dariServer.email.lowercase()].orEmpty())
+        assertTrue(Passwords.matches("rahasia-uji", digabung.passwordHash))
+        assertFalse(Passwords.matches("rahasia-uji", dariServer.passwordHash))
+    }
 }

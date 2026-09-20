@@ -104,9 +104,16 @@ object FirebaseCloud {
         if (!enabled) return ui { onDone("Layanan reset email belum aktif pada build ini.") }
         if (email.isBlank()) return ui { onDone("Isi email akun terlebih dahulu.") }
         FirebaseAuth.getInstance().sendPasswordResetEmail(email.trim())
-            .addOnSuccessListener { ui { onDone(null) } }
+            // Setelah link reset dipakai, kata sandi Firebase berubah tanpa melalui aplikasi,
+            // sementara hash lokal tetap yang lama. Akibatnya orang tidak bisa masuk lagi dan
+            // harus memakai "Lupa kata sandi" sekali lagi. Baris ini membuang hash lokal supaya
+            // layar masuk jatuh ke jalur verifikasi Firebase, bukan menolak sandi barunya.
+            .addOnSuccessListener { ui { forgetLocal(email); onDone(null) } }
             .addOnFailureListener { e -> ui { onDone(e.message ?: "Link reset belum berhasil dikirim") } }
     }
+
+    /** Dipakai setelah reset supaya hash lokal yang usang tidak menolak kata sandi baru. */
+    var forgetLocal: (String) -> Unit = {}
 
     fun changeEmail(currentPassword: String, newEmail: String, onDone: (String?) -> Unit) {
         val user = FirebaseAuth.getInstance().currentUser ?: return ui { onDone("Silakan masuk kembali") }
@@ -122,7 +129,13 @@ object FirebaseCloud {
         val email = user.email ?: return ui { onDone("Email akun tidak ditemukan") }
         val credential = EmailAuthProvider.getCredential(email, currentPassword)
         user.reauthenticate(credential).continueWithTask { user.updatePassword(newPassword) }
-            .addOnSuccessListener { ui { onDone(null) } }
+            // Kata sandi yang dipakai layar masuk adalah hash lokal, bukan kata sandi Firebase.
+            // Jadi keduanya harus berubah bersama, kalau tidak orang tidak bisa masuk lagi
+            // dengan kata sandi barunya meski Firebase sudah menerimanya.
+            .addOnSuccessListener { ui { onDone(changeLocal(currentPassword, newPassword)) } }
             .addOnFailureListener { e -> ui { onDone(e.message ?: "Kata sandi belum berhasil diubah") } }
     }
+
+    /** Menyamakan hash lokal dengan kata sandi baru. Diisi MoreScreens supaya tanpa impor lingkar. */
+    var changeLocal: (String, String) -> String? = { _, _ -> null }
 }
