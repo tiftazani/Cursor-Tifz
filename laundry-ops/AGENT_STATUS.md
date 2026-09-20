@@ -5,6 +5,36 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
+## 0f. Pekerjaan terbaru (20 Sep, Hermes) — sinkronisasi hak akses, APK 1.10.30 dibangun ulang, Worker produksi dideploy
+
+**Status: SELESAI dan TERBUKTI di perangkat produksi. Di-commit `e9440ec`. BELUM di-push.**
+
+Tiga cacat sinkronisasi yang membuat keadaan server tidak pernah sampai ke perangkat:
+
+| Kelas | Gejala nyata | Perbaikan |
+|---|---|---|
+| Angkat hak akses | Perangkat mengubah `staff`/`accessRole`/`accessPolicy` saat bootstrap lalu mengirimkannya ke server | `SyncProjection.serverOwnedEntities` — entitas hak akses tidak direkonsiliasi dari perangkat |
+| Entri hantu | Entri hak akses yang hilang di server bertahan di perangkat selamanya | `reconcileBootstrap` mengikuti server penuh; `SyncProjection.samakanHakAkses` berlaku juga di jalur `pullChanges` |
+| Kursor di depan jurnal | Worker mengembalikan `nextRevision` = `after` saat tidak ada baris cocok, sehingga kursor klien yang sudah di depan server dipantulkan dan halaman jurnal lebih tua tidak pernah dibaca lagi | Worker: `nextRevision` di-clamp ke `latestRevision`. Perangkat: kursor ditetapkan dari server (`acceptRemote`, `completePreparedRemote`, `reconcileRejectedRemote`), bukan `maxOf` |
+
+**Bukti terukur (semua dijalankan ulang, bukan dikutip):**
+
+- Gate bersih `clean` lalu `testDebugUnitTest testReleaseUnitTest lintDebug assembleDebug assembleRelease`: **276 + 276 kasus, 0 gagal, 0 error**; lint **0 error**. Naik dari 267 karena tambahan `BootstrapPrivilegeTest` (6 kasus).
+- Worker `npm test`: **61 kasus, 0 gagal** (naik dari 60).
+- Uji negatif dua sisi: memulihkan `maxOf` pada perangkat dan menghapus clamp di Worker masing-masing membuat test GAGAL, lalu hijau lagi setelah dikembalikan.
+- **Bukti produksi di perangkat (APK release, menunjuk Worker produksi):** masuk sebagai Owner, Daftar User menampilkan **8 dari 8 user**, `aidanurita25@gmail.com` = **Kasir**, tanpa `alfin` dan `gudang-uji`. Role uji **Test** dihapus lewat Kontrol Akses Role; server sekarang **3 role bawaan** saja.
+- **Worker produksi dideploy**: versi `07442ff9-6f7f-4d13-a932-261a3f40dfc3`, health `revision: 409` saat deploy.
+- APK rilis `1.10.30`/`versionCode 49`, sertifikat `3a988c53…` (sama dengan sebelumnya, bisa menimpa pemasangan lama), `verify_release.py` PASS.
+  `releases/cuciin-release.apk` sha256 `a5d7d7329664d523db595843beb07de2fc3502ac2f0e9a94c2762d812ef3ce6e`;
+  `releases/cuciin-debug.apk` sha256 `e4715a6e46cb64cfe3294edc7e4653db5e020459f1eaf75d7872cdcbb6fe152d`.
+- Backup D1 produksi sebelum perubahan: `firebase-migration/backup-d1/cuciin-prod-20260920T141453Z.sql` (541 KB, 26 tabel, 1004 baris).
+- Sapu peran di APK debug: Owner **21/21 menu tampil, 0 crash**, kembali ke `Cuciin · Owner`.
+
+**Catatan lingkungan penting:** APK **debug** selalu menunjuk Worker debug (`cuciin-api-debug…`, D1
+`cuciin-debug-db`), dan APK **release** menunjuk produksi. Basis data debug punya riwayat sendiri
+(revisi jurnal 1018) dan berbeda isinya; kesimpulan tentang data produksi **tidak boleh** diambil
+dari APK debug. Jalur sah untuk memeriksa atau mengubah data produksi adalah APK release.
+
 ## 0e. Pekerjaan terbaru (20 Sep, Hermes) — modul & fungsi izin diperinci, 1.10.30
 
 **Status: kode selesai, gate hijau, teruji di perangkat. SUDAH di-commit (`1b1e126`, `38bd79e`).

@@ -11,7 +11,7 @@ import sys
 import time
 
 ADB = "/opt/homebrew/share/android-commandlinetools/platform-tools/adb"
-PKG = "com.cuciin.laundryops.debug"
+PKG = "com.cuciin.laundryops"
 ACT = f"{PKG}/com.cuciin.laundryops.MainActivity"
 EMAIL, SANDI = sys.argv[1], sys.argv[2]
 
@@ -62,6 +62,19 @@ def segar():
     sh("am", "start", "-n", ACT); time.sleep(9)
 
 
+def lewati_onboarding():
+    """Layar perkenalan muncul pada pemasangan baru dan harus dilewati sebelum layar masuk."""
+    for _ in range(6):
+        t = teks(dump("ob"))
+        if any("Antrian laundry" in s for s in t):
+            return True
+        tombol = [s for s in simpul(dump("obk")) if s["text"] in ("Lewati", "Lanjut")]
+        if not tombol:
+            return False
+        tap((tombol[0]["cx"], tombol[0]["cy"]), 2.0)
+    return False
+
+
 def login():
     x = dump("l0")
     et = [s for s in simpul(x) if s["box"][3] - s["box"][1] > 80 and s["box"][2] - s["box"][0] > 500]
@@ -81,6 +94,7 @@ def login():
 
 print("=== buka sebagai Owner, tunggu sinkronisasi ===")
 segar()
+lewati_onboarding()
 t = teks(dump("awal"))
 if not any("Antrian laundry" in s for s in t):
     if not login():
