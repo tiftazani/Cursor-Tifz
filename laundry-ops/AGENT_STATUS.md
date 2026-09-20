@@ -644,6 +644,12 @@ File-file itu menyimpan aturan uang, stok, komisi, otorisasi, dan protokol sinkr
 10. **Alamat lengkap Shelly belum ada**, jadi kolom alamat dan tautan peta cabang itu masih kosong.
 11. **Backup pascamigrasi sudah dibuat** di `firebase-migration/backup-d1/post-migration-rev286-20260916.sql` (revision 286, 4 cabang, 8 akun, integrity ok). Backup lama `pre-real-data-20260916.sql` adalah kondisi sebelum migrasi dan tidak bisa direstore sendirian.
     **Koreksi 20 Sep:** kedua berkas itu **sudah tidak ada** di disk maupun di Git — folder `firebase-migration/backup-d1/` tidak lagi ada di repo. Catatan ini disimpan sebagai riwayat; jangan dicari. Yang benar-benar bisa dipakai sekarang adalah workflow `cuciin-backup`, dan workflow itu **belum pernah dijalankan sekali pun** (`gh run list --workflow=cuciin-backup.yml` kosong), sedangkan folder `backups/` dibuat oleh `.gitignore`. Artinya data produksi saat ini **tanpa backup terverifikasi**. Jalankan `cuciin-backup` secara manual sebelum menyentuh data produksi.
+    **Alur backup sudah diuji 20 Sep dan terbukti bekerja:** `npx wrangler d1 export cuciin-db --remote`
+    menghasilkan 1.258 baris SQL / 26 tabel, enkripsi `openssl aes-256-cbc -pbkdf2 -iter 600000`
+    menghasilkan berkas biner yang nol tabel terbaca tanpa kunci, dan `verify-backup.sh` melaporkan
+    `OK` beserta lulus `integrity_check`. Yang belum ada hanyalah passphrase asli; itu milik Owner
+    (diatur sebagai `CUCIIN_BACKUP_PASSPHRASE`) dan tidak disimpan di repo. Seluruh berkas uji berisi
+    data produksi sudah dihapus setelah pengujian.
 
 ## 5. Urutan kerja yang disarankan
 
