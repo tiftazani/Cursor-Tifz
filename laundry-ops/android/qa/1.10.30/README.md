@@ -42,11 +42,30 @@ Akun uji `UjiPreset` dibuat untuk membuktikan preset bertahan setelah restart, l
 command aplikasi (bukan menyunting `cuciin-data.json` langsung). Kondisi akhir perangkat: 4 role wajar,
 pending 0, rejected 0.
 
+## Importer Excel
+
+Diuji 20 September ke `cuciin-debug-db` (bukan produksi). Alur lengkap dari
+`PANDUAN-IMPOR-EXCEL.md` berjalan: `fetch_d1_reference.py` membaca acuan dari database,
+`import_template_to_d1.py` mengubah isi template menjadi SQL (9 baris uji, 0 dilewati),
+`wrangler d1 execute --file` menulis 20 statement + 9 jurnal `sync_changes` sekali jalan, dan
+baca balik membuktikan 9 entitas (cabang, jenis aset, produk, role, staff + penugasan, layanan,
+stok, aset, pelanggan) hadir dengan nilai yang benar.
+
+Dua sifat penting dari impor juga dibuktikan:
+
+- **Idempoten** --- menjalankan berkas yang sama dua kali tidak menggandakan (stok upsert,
+  cabang/report memakai `ON CONFLICT`).
+- **Bersih kembali lewat jalur `sync_changes`** --- entitas uji dihapus dengan DELETE +
+  9 jurnal `delete` ber-`command_id` unik, bukan dengan menyunting JSON perangkat.
+
+Database debug dikembalikan ke kondisi semula (cabang, produk, staff, layanan, role, pelanggan,
+aset, stok, dan seluruh jurnal `impor-template` dihapus). Angka produksi tidak pernah tersentuh.
+
 ## Belum diuji
 
 - CRUD registrasi pengguna penuh dari UI.
 - Sapu menu tersendiri untuk peran Gudang.
-- Template Excel dan importer dengan data produksi.
+- Template Excel dan importer dengan data produksi (yang diuji memakai data uji di database debug).
 - Perilaku APK pada tiap tipe HP operasional milik cabang.
 - Firebase debug dan produksi masih berbagi satu identity project.
 
