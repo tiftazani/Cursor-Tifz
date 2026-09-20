@@ -12,10 +12,19 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.30"
-    val currentCode: Int = 49
+    val currentName: String = "1.10.35"
+    val currentCode: Int = 54
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.35", code = 54, date = "21 Sep 2026",
+            notes = listOf(
+                "Kegagalan masuk sekarang selalu memberi jawaban yang terbaca: pesannya tampil sebagai banner di layar Masuk, sebelumnya hilang tanpa jejak sehingga tombol terasa tidak bereaksi.",
+                "Jawaban proses masuk dipindahkan ke main thread, sehingga tampilan ikut berubah saat server identitas menolak.",
+                "Bila server identitas tidak menjawab dalam 20 detik, proses masuk berhenti sendiri dengan pesan yang jelas dan tombol Masuk bisa ditekan lagi.",
+                "Layar pendaftaran juga menampilkan pesan kegagalan di layar, bukan lagi lewat pesan singkat yang tidak terlihat.",
+            ),
+        ),
         AppRelease(
             name = "1.10.30", code = 49, date = "20 Sep 2026",
             notes = listOf(

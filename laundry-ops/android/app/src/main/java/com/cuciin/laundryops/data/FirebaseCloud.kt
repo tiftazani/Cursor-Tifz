@@ -48,29 +48,78 @@ object FirebaseCloud {
 
     fun signIn(email: String, password: String, onDone: (ok: Boolean, pending: Boolean, msg: String) -> Unit) {
         if (!enabled) return ui { onDone(false, false, "Firebase belum dikonfigurasi") }
+        // Rantai Task Firebase tidak bisa diandalkan untuk memberi jawaban: saat kredensial salah,
+        // reCAPTCHA call wrapper menangkap kegagalannya dan mencoba ulang lewat SafetyNet, dan di
+        // perangkat yang layanan Google-nya tidak lengkap rantai itu tidak pernah selesai. Listener
+        // sukses maupun gagal tidak dipanggil, jadi tombol Masuk berhenti tanpa penjelasan apa pun.
+        // Karena itu jawaban selalu dipaksa keluar dari sini, bukan diserahkan ke Task.
+        val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun finish(ok: Boolean, pending: Boolean, msg: String) {
+            if (!done.compareAndSet(false, true)) return
+            // Semua listener Firebase (sukses, gagal, maupun batal) dipanggil di thread
+            // internal Firebase, bukan main thread. Memperbarui state Compose dari thread
+            // itu membuat pesannya tidak pernah tergambar, sehingga kegagalan login tampak
+            // seperti tombol yang tidak bereaksi. Jawaban wajib diantar ke main thread.
+            ui {
+                onDone(ok, pending, msg)
+            }
+        }
+        val watchdog = Runnable {
+            finish(false, false, "Server identitas tidak menjawab. Periksa koneksi lalu coba lagi.")
+        }
+        main.postDelayed(watchdog, 20_000)
         FirebaseAuth.getInstance().signInWithEmailAndPassword(email.trim(), password)
             .addOnSuccessListener {
                 CloudSync.verifyIdentity { identity, error ->
+                    main.removeCallbacks(watchdog)
                     if (identity == null) {
                         FirebaseAuth.getInstance().signOut()
-                        onDone(false, false, error ?: "Akun belum diizinkan")
+                        finish(false, false, error ?: "Akun belum diizinkan")
                         return@verifyIdentity
                     }
                     val local = CuciinStore.staff.firstOrNull { it.email.equals(identity.email, true) }
                     val branchId = identity.branchIds.firstOrNull() ?: local?.branchIds?.firstOrNull()
                     if (branchId == null) {
                         FirebaseAuth.getInstance().signOut()
-                        onDone(false, false, "Akun belum memiliki cabang")
+                        finish(false, false, "Akun belum memiliki cabang")
                         return@verifyIdentity
                     }
                     CuciinStore.session.value = Session(identity.role, identity.name, identity.email, branchId)
                     CuciinStore.viewBranch.value = if (identity.role == Role.Owner) "all" else branchId
                     CuciinStore.bumpPublic()
                     CloudSync.onAuthenticated()
-                    onDone(true, false, "ok")
+                    finish(true, false, "ok")
                 }
             }
-            .addOnFailureListener { e -> ui { onDone(false, false, e.message ?: "Auth gagal") } }
+            .addOnFailureListener { e ->
+                main.removeCallbacks(watchdog)
+                finish(false, false, friendlyAuthMessage(e))
+            }
+        // addOnCanceledListener: rantai yang dibatalkan reCAPTCHA juga harus menjawab.
+        .addOnCanceledListener {
+            main.removeCallbacks(watchdog)
+            finish(false, false, "Email atau kata sandi tidak sesuai.")
+        }
+    }
+
+    /**
+     * Pesan Firebase mentah berbahasa Inggris dan menyebut istilah teknis yang tidak berguna bagi
+     * kasir, misalnya "The supplied auth credential is incorrect, malformed or has expired".
+     * Yang penting hanya: apakah email/sandi salah, atau akunnya memang belum bisa dipakai.
+     */
+    private fun friendlyAuthMessage(e: Exception): String {
+        val raw = e.message.orEmpty().lowercase()
+        return when {
+            "password is invalid" in raw || "credential is incorrect" in raw || "invalid_login" in raw ||
+                "malformed" in raw || "no user record" in raw || "user not found" in raw ->
+                "Email atau kata sandi tidak sesuai."
+            "network" in raw || "timeout" in raw || "unreachable" in raw ->
+                "Tidak dapat menghubungi server. Periksa koneksi lalu coba lagi."
+            "too many" in raw || "blocked" in raw ->
+                "Terlalu banyak percobaan masuk. Tunggu sebentar lalu coba lagi."
+            e.message.isNullOrBlank() -> "Masuk belum berhasil. Periksa email dan kata sandi."
+            else -> e.message!!
+        }
     }
 
     fun register(name: String, email: String, password: String, role: Role, branchId: String, onDone: (String) -> Unit) {

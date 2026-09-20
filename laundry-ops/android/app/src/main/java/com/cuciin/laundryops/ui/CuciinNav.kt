@@ -218,8 +218,8 @@ fun CuciinRoot() {
                             nav.navigate("login") { popUpTo("onboarding") { inclusive = true } }
                         }
                     }
-                    composable("login") { LoginScreen(nav, ::toast) }
-                    composable("register") { RegisterScreen(nav, ::toast) }
+                    composable("login") { LoginScreen(nav) }
+                    composable("register") { RegisterScreen(nav) }
                     composable("pending") { PendingScreen(nav) }
                     composable("home") { HomeScreen(nav) }
                     composable("nota") { NotaScreen(nav, ::toast) }

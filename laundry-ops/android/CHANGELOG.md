@@ -2,6 +2,24 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.35 — 21 Sep 2026 (versionCode 54)
+
+### Kegagalan masuk tidak lagi diam
+
+Sebelumnya, menekan **Masuk** dengan sandi salah membuat tombol kembali seperti semula tanpa
+penjelasan apa pun. Log perangkat membuktikan aplikasi memang menerima penolakan dari server
+identitas, tetapi pesannya dikirim lewat pesan singkat yang tidak pernah dirender di layar Masuk,
+dan jawabannya datang di thread yang salah sehingga tampilan tidak ikut berubah. Akibatnya
+pengguna mengira aplikasi rusak.
+
+Yang diperbaiki:
+
+- Pesan kegagalan masuk tampil sebagai banner di layar Masuk, dan hilang begitu kolom diubah lagi.
+- Jawaban proses masuk diantar ke main thread, jadi tampilan ikut berubah saat server menolak.
+- Bila server identitas tidak menjawab dalam 20 detik, proses berhenti dengan pesan yang jelas
+  dan tombol Masuk bisa ditekan lagi.
+- Layar **Daftar** juga menampilkan pesan kegagalannya di layar.
+
 ## 1.10.30 — 20 Sep 2026 (versionCode 49)
 
 ### Modul dan fungsi izin diperinci, plus preset peran

@@ -1,9 +1,90 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 20 September 2026 (oleh Hermes).
+Terakhir diperbarui: 21 September 2026 (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
+
+## 0i. Pekerjaan terbaru (21 Sep, Hermes) — kegagalan masuk akhirnya terlihat, rilis 1.10.35/v54
+
+**Status: selesai di working tree, rilis 1.10.35 dibangun & terverifikasi di perangkat. Belum di-commit.**
+
+### Jawaban: mengapa sandi salah tampak seperti tombol yang tidak bereaksi
+
+Ditanyakan Owner setelah uji perangkat: menekan **Masuk** dengan sandi salah membuat tombol kembali
+seperti semula tanpa penjelasan apa pun. Log perangkat membuktikan aplikasi **memang** menerima
+penolakan dari server identitas:
+
+```
+FirebaseAuth: Logging in as <email> with empty reCAPTCHA token
+RecaptchaCallWrapper: Initial task failed for action RecaptchaAction(action=signInWithPassword)
+  with exception - The supplied auth credential is incorrect, malformed or has expired.
+```
+
+Jadi ini bukan kegagalan jaringan dan bukan Play Services yang tidak lengkap — dua dugaan awal itu
+salah. Ada **dua** sebab yang bertumpuk, dan keduanya harus ditutup:
+
+1. **Pesan dikirim lewat jalur yang tidak dirender di layar pra-login.** `toast()` memakai
+   `SnackbarHost` yang berada di dalam `Scaffold` ber-sesi (`CuciinNav.kt:148`); layar Masuk
+   dirender di luar `Scaffold` itu. Bukti: `uiautomator dump` tidak pernah memuat satu pun elemen
+   `Snackbar` meski `showSnackbar` dipanggil.
+2. **Jawaban datang di thread yang salah.** Seluruh listener Firebase dipanggil di thread internal
+   Firebase, dan pembaruan state Compose dari thread itu tidak tergambar. Ini yang membuat
+   penyebabnya tidak terlihat meski pesannya sudah benar.
+
+Perbaikan: `finish()` mengantar jawaban lewat `ui { }`; layar Masuk dan layar Daftar menyimpan
+pesannya di state layar dan menampilkannya sebagai `FeedbackBanner`; parameter `toast` yang tidak
+lagi terpakai dibuang dari `LoginScreen`/`RegisterScreen` sehingga bug lama tidak bisa dikembalikan
+tanpa gagal kompilasi.
+
+Penjaga tambahan: batas waktu 20 detik (`main.postDelayed(watchdog, 20_000)`) supaya tombol tidak
+pernah berhenti tanpa jawaban, dan `addOnCanceledListener` karena kegagalan reCAPTCHA **membatalkan**
+Task, bukan memanggil listener gagal biasa.
+
+### Rilis 1.10.35 (versionCode 54)
+
+Versi dinaikkan karena `src/main` berubah. **Ketiga sumber versi sebelumnya tidak sinkron** dan
+diselaraskan sekaligus: `app/build.gradle.kts` sempat 1.10.34/v53 sementara `VersionHistory.kt` dan
+`CHANGELOG.md` masih berhenti di 1.10.30/v49.
+
+| Pemeriksaan | Hasil |
+| --- | --- |
+| `testDebugUnitTest` / `testReleaseUnitTest` dari `clean` | 285 / 285, **0 gagal**, 0 error |
+| `lintDebug` + `lintRelease` | **0 error** |
+| `verify_release.py` | PASS (v2, non-debuggable, izin minimum, ZIP/ELF 16 KB) |
+| Sertifikat | `3a988c53...befee` **tidak berubah** → menimpa 1.10.33 di perangkat tanpa uninstall |
+| Perangkat: sandi salah (release) | pesan **Email atau kata sandi tidak sesuai.** tampil di layar |
+| Perangkat: sandi benar Kasir (release) | masuk ke **Antrian laundry**, cabang **Laupay Kirab** |
+
+Tes penjaga dibuktikan bisa MERAH: `jawabanDiantarKeMainThread` merah saat `ui { }` dibuang;
+`gagalMasukDitampilkanDiLayarBukanLewatPesanSingkat` merah saat pesan dikembalikan ke `toast`.
+
+Artefak: `releases/1.10.35-candidate/` (+ `README.md`), dan salinan akar `releases/cuciin-release.apk`
+serta `releases/cuciin-debug.apk` sudah disamakan (hash identik dengan kandidat).
+
+### Belum terbukti pada versi ini
+
+- Batas waktu 20 detik belum pernah benar-benar berbunyi di perangkat: pada emulator ini rantai
+  Firebase selalu berakhir di `addOnCanceledListener` dalam ~1,3 detik.
+- Perbaikan hanya diuji di satu emulator, bukan HP cabang. Tidak ada `androidTest`.
+- Sapu menu per peran pada 1.10.35 belum dijalankan ulang (sapu terakhir pada 1.10.30).
+- Tombol Simpan pada dialog Ubah kata sandi belum diuji ulang setelah perubahan ini.
+- Akun Owner `tiftazani.khara@gmail.com` masih memakai sandi yang tidak diketahui pemiliknya
+  (akibat insiden uji di `## 0h`); jalur sukses diuji memakai akun Kasir.
+
+### Skrip uji baru: `android/scripts/uji_login.py`
+
+Menggantikan koordinat tap yang ditempel-tempel. **Koordinat tombol di layar ini bergeser** saat
+keyboard lunak terbuka (email 637→629, sandi 831→751, Masuk 1037→957), dan tombol "Lupa kata sandi?"
+menempati y yang sama dengan Masuk saat keyboard terbuka. Catatan koordinat lama di `references/`
+karena itu menyesatkan: tap di 957 kena "Lupa kata sandi?", bukan tombol Masuk, sehingga login
+tampak tidak berfungsi padahal tidak ada percobaan yang salah.
+
+Skrip membaca ulang `bounds` dari `uiautomator dump` sebelum setiap tap, memilih tombol lebar
+berdasarkan **label teks di dalam bounds** (ada dua tombol lebar di layar Masuk: "Masuk" dan
+"Daftar akun baru"), dan menghindari `keyevent 4` untuk menutup keyboard karena tombol itu keluar
+dari aplikasi saat keyboard sudah tertutup.
+
 
 ## 0h. Pekerjaan terbaru (21 Sep dini hari, Hermes) — kata sandi, pembersihan data produksi, rilis 1.10.33
 
@@ -676,18 +757,18 @@ laundry-ops/cloudflare/tests/command-sync.test.mjs                              
 |---|---|---|
 | Repo lokal | `/Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz` | satu-satunya clone; `~/Cursor-Tifz` bukan clone repo ini |
 | Branch | `codex/cuciin-1-8-1` | `git status -sb` |
-| Android | **1.10.30 (versionCode 49)** | `app/build.gradle.kts` |
+| Android | **1.10.35 (versionCode 54)** | `app/build.gradle.kts`; juga harus sama di `VersionHistory.kt` dan `CHANGELOG.md` |
 | Paket aplikasi | `com.cuciin.laundryops` (+ `.debug`) | `app/build.gradle.kts` |
 | Firebase project | **`cuciin-ops`** (lama: `cuciin-ops-tiftazani`) | `firebase/README.md` |
-| Worker produksi | versi `16f4a825-ab15-4edc-853f-f78fa0363877` (memuat rilis 1.10.30) | `wrangler deployments list` |
+| Worker produksi | versi `07442ff9-6f7f-4d13-a932-261a3f40dfc3` | `wrangler deployments list` |
 | Worker debug | versi `717ddfa4-2fe1-49c3-ab65-1c17e9733a5d` (memuat pekerjaan 1.10.30) | `wrangler deployments list -c wrangler.debug.toml` |
-| Health produksi | `ok`, database `ready`, revision 409 (20 Sep 2026) | `curl .../health` |
-| Test Worker | 60 lulus | `cd cloudflare && npm run check` |
-| Test Android | **267 lulus** (267 debug + 267 rilis), lint 0 error | `./gradlew testDebugUnitTest testReleaseUnitTest lintDebug` |
-| Kandidat rilis | `releases/1.10.30-candidate/` | folder + `SHA256SUMS.txt` |
-| Data produksi | 4 cabang, 8 akun, 8 nota, 4 role akses | `wrangler d1 execute cuciin-db --remote` |
+| Health produksi | `ok`, revision 0 (kursor bersih pasca-pembersihan) | `curl .../health` |
+| Test Worker | 61 lulus | `cd cloudflare && npm run check` |
+| Test Android | **285 lulus** (285 debug + 285 rilis), lint 0 error | `./gradlew testDebugUnitTest testReleaseUnitTest lintDebug` (jalankan dari `clean`; `app/build/test-results/` menyimpan hasil run terakhir) |
+| Kandidat rilis | `releases/1.10.35-candidate/` | folder + `SHA256SUMS.txt` + `README.md` |
+| Data produksi | 4 cabang, 8 akun, 9 layanan, 3 role akses; **semua tabel transaksi 0** | `wrangler d1 execute cuciin-db --remote` |
 
-Angka pada tabel ini berasal dari pengukuran langsung ke produksi dan ke kode pada 20 September 2026.
+Angka pada tabel ini berasal dari pengukuran langsung ke produksi dan ke kode pada 21 September 2026.
 Tabel versi-versi 1.10.0 sampai 1.10.29 di bagian berikutnya **sengaja dibiarkan apa adanya** sebagai
 catatan sejarah; jangan pakai angkanya untuk menyimpulkan keadaan sekarang.
 
