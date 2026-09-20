@@ -29,6 +29,23 @@ object VersionHistory {
             ),
         ),
         AppRelease(
+            name = "1.10.29", code = 48, date = "19 Sep 2026",
+            notes = listOf(
+                "Perbaikan penting: berpindah akun tidak lagi menghasilkan perintah hapus untuk seluruh jenis aset organisasi. Sebelumnya perangkat menyusun penghapusan massal karena membandingkan data yang sudah disaring per cabang dengan data yang belum.",
+                "Perintah hapus untuk data tingkat organisasi hanya disusun saat aktornya Owner, dan perintah tertahan yang aktornya tidak berhak dibuang sebelum terkirim.",
+                "Server menolak perintah tambah dan hapus jenis aset dari akun selain Owner, sejalan dengan penjaga di aplikasi.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.28", code = 47, date = "19 Sep 2026",
+            notes = listOf(
+                "Perbaikan penting: penolakan izin tidak lagi menutup aplikasi. Sebelumnya menyimpan Service tanpa izin membuat aplikasi berhenti.",
+                "Sepuluh tindakan yang ditolak izin dulu tetap menampilkan pesan berhasil padahal tidak ada data tersimpan. Sekarang pesan penolakannya jelas.",
+                "Layar Daftar Aset Cabang, Biaya operasional, Pelanggan, WA menunggu, Arsip WA, dan Absensi kini punya gerbang izin. Sebelumnya terbuka untuk peran mana pun.",
+                "Layar Antrian dan Service kini memeriksa fungsi, bukan hanya modulnya. Hak baca yang sudah dimiliki tetap dipertahankan.",
+            ),
+        ),
+        AppRelease(
             name = "1.10.27", code = 46, date = "18 Sep 2026",
             notes = listOf(
                 "Perbaikan penting: seluruh 17 fungsi di Kontrol Akses Role kini benar-benar diperiksa. Sebelumnya 9 fungsi hanya menghiasi layar: mencabut centangnya tidak mengubah apa pun.",
