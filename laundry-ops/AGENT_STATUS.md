@@ -525,15 +525,23 @@ laundry-ops/cloudflare/tests/command-sync.test.mjs                              
 |---|---|---|
 | Repo lokal | `/Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz` | satu-satunya clone; `~/Cursor-Tifz` bukan clone repo ini |
 | Branch | `codex/cuciin-1-8-1` | `git status -sb` |
-| Android | **1.10.0 (versionCode 19)** | `app/build.gradle.kts` |
+| Android | **1.10.30 (versionCode 49)** | `app/build.gradle.kts` |
 | Paket aplikasi | `com.cuciin.laundryops` (+ `.debug`) | `app/build.gradle.kts` |
 | Firebase project | **`cuciin-ops`** (lama: `cuciin-ops-tiftazani`) | `firebase/README.md` |
-| Worker produksi | versi `09ce0c80-70eb-4655-994f-a8cece811921` | `wrangler deployments list` |
-| Health produksi | `ok`, database `ready`, revision 286 | `curl .../health` |
-| Test Worker | 38 lulus | `cd cloudflare && npm run check` |
-| Test Android | 94 lulus (47 debug + 47 rilis), lint 0 error | `./gradlew testDebugUnitTest testReleaseUnitTest lintDebug` |
-| Kandidat rilis | `releases/1.10.0-candidate/` | folder + `SHA256SUMS` |
-| Data produksi | 4 cabang, 8 akun (2 Owner + 6 Kasir), 0 data operasional dummy | `wrangler d1 execute cuciin-db --remote` |
+| Worker produksi | versi `a95a0381-7096-4fd7-bcab-9f2a07d6887d` | `wrangler deployments list` |
+| Worker debug | versi `717ddfa4-2fe1-49c3-ab65-1c17e9733a5d` (memuat pekerjaan 1.10.30) | `wrangler deployments list -c wrangler.debug.toml` |
+| Health produksi | `ok`, database `ready`, revision 409 (20 Sep 2026) | `curl .../health` |
+| Test Worker | 60 lulus | `cd cloudflare && npm run check` |
+| Test Android | **262 lulus** (262 debug + 262 rilis), lint 0 error | `./gradlew testDebugUnitTest testReleaseUnitTest lintDebug` |
+| Kandidat rilis | `releases/1.10.30-candidate/` | folder + `SHA256SUMS.txt` |
+| Data produksi | 4 cabang, 8 akun, 8 nota, 4 role akses | `wrangler d1 execute cuciin-db --remote` |
+
+Angka pada tabel ini berasal dari pengukuran langsung ke produksi dan ke kode pada 20 September 2026.
+Tabel versi-versi 1.10.0 sampai 1.10.29 di bagian berikutnya **sengaja dibiarkan apa adanya** sebagai
+catatan sejarah; jangan pakai angkanya untuk menyimpulkan keadaan sekarang.
+
+Tabel ini sengaja bisa diperiksa ulang: setiap baris menyebut cara mengeceknya, jadi bila angkanya
+berbeda saat diperiksa, yang salah adalah tabel ini — bukan alat pemeriksanya.
 
 ## 2. Perpindahan identitas aplikasi (16 September 2026)
 
