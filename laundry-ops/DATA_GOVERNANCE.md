@@ -10,7 +10,7 @@ Foto bukti tidak masuk D1, laporan cloud, backup D1, atau sinkronisasi. File ter
 
 Service dan mutasi keuangan yang sudah menjadi catatan operasional tidak dihapus diam-diam. Koreksi harga, jumlah, petugas, pembayaran, status, stok, dan penghapusan Service harus menghasilkan audit trail dengan akun, cabang, dan waktu. ID command sinkronisasi mencegah retry menghasilkan mutasi ganda.
 
-Backup produksi dibuat setiap hari, dienkripsi, dan disimpan selama 30 hari oleh workflow GitHub. Pemilik menyimpan passphrase di luar repository. Restore selalu diuji ke database terpisah sebelum dipakai pada produksi.
+Backup produksi dibuat lewat workflow `cuciin-backup` (`.github/workflows/cuciin-backup.yml`), yang saat ini hanya berjalan saat dijalankan manual (`workflow_dispatch`, belum ada jadwal harian). Prosesnya mengekspor D1 lalu mengenkripsinya dengan passphrase sebelum diunggah, dan setiap backup wajib lolos pemeriksaan restore sebelum dianggap sah. Hasil unggahan disimpan 7 hari. Pemilik menyimpan passphrase di luar repository. Restore selalu diuji ke database terpisah sebelum dipakai pada produksi.
 
 ## Akun
 

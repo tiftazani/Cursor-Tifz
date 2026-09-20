@@ -643,6 +643,7 @@ File-file itu menyimpan aturan uang, stok, komisi, otorisasi, dan protokol sinkr
 9. **Sebagian daftar sudah jadi baris.** Pelanggan, layanan, produk, aset, biaya, persediaan, riwayat stok, riwayat WA, dan ringkasan petugas laporan sudah memakai `ListCard` + `ListRow`. Tabel laporan keuangan diganti kartu bertingkat per Service supaya terbaca di layar sempit.
 10. **Alamat lengkap Shelly belum ada**, jadi kolom alamat dan tautan peta cabang itu masih kosong.
 11. **Backup pascamigrasi sudah dibuat** di `firebase-migration/backup-d1/post-migration-rev286-20260916.sql` (revision 286, 4 cabang, 8 akun, integrity ok). Backup lama `pre-real-data-20260916.sql` adalah kondisi sebelum migrasi dan tidak bisa direstore sendirian.
+    **Koreksi 20 Sep:** kedua berkas itu **sudah tidak ada** di disk maupun di Git — folder `firebase-migration/backup-d1/` tidak lagi ada di repo. Catatan ini disimpan sebagai riwayat; jangan dicari. Yang benar-benar bisa dipakai sekarang adalah workflow `cuciin-backup`, dan workflow itu **belum pernah dijalankan sekali pun** (`gh run list --workflow=cuciin-backup.yml` kosong), sedangkan folder `backups/` dibuat oleh `.gitignore`. Artinya data produksi saat ini **tanpa backup terverifikasi**. Jalankan `cuciin-backup` secara manual sebelum menyentuh data produksi.
 
 ## 5. Urutan kerja yang disarankan
 
