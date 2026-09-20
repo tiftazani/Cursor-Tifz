@@ -1,14 +1,15 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 18 September 2026 (oleh Hermes).
+Terakhir diperbarui: 20 September 2026 (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
 ## 0e. Pekerjaan terbaru (20 Sep, Hermes) — modul & fungsi izin diperinci, 1.10.30
 
-**Status: kode selesai, gate hijau, teruji di perangkat. BELUM di-commit, BELUM di-push, BELUM
-di-deploy (menunggu perintah Owner).**
+**Status: kode selesai, gate hijau, teruji di perangkat. SUDAH di-commit (`1b1e126`, `38bd79e`).
+BELUM di-push (menunggu perintah Owner). Worker debug SUDAH dideploy (`717ddfa4`); Worker produksi
+BELUM.**
 
 Katalog izin diperinci dari **12 modul / 17 fungsi** menjadi **15 modul / 41 fungsi**, ditambah
 preset peran, pemisahan baca/tulis dan ubah/hapus, dan penerjemahan kunci katalog lama.
@@ -22,13 +23,28 @@ preset peran, pemisahan baca/tulis dan ubah/hapus, dan penerjemahan kunci katalo
 | Worker pelanggan | hanya memeriksa MODUL, sehingga kebijakan tanpa `customer.write` tetap bisa menulis | memeriksa fungsinya |
 | Fungsi hantu | `settings.manage`, `cash.view`, `inventory.delete` tidak punya pemeriksa | `settings.manage`/`cash.view` dibuang; `inventory.delete` diberi titik jaga |
 | Tombol hapus | tombol "Hapus" pada koreksi Service ada walau `service.delete` dicabut | tombol dibuang, penolakan dilaporkan lewat pesan |
+| Hitungan role | kartu role menghitung cermin kunci lama sebagai fungsi, preset "Hanya lihat" tampil 10 fungsi padahal 9 | `AccessCatalog.berlaku` menerjemahkan kunci lama lebih dulu; tiga tempat tampilan dan satu baris log memakainya |
 
-Hasil terukur: Android **253 kasus, 0 gagal**; Worker **60 kasus, 0 gagal**; lint bersih.
-Bukti pengunci: mengembalikan bug pada `customAccessRequirement` membuat 3 test GAGAL; melepas
-migrasi dari `AccessPolicy` membuat 1 test GAGAL.
+Hasil terukur: Android **262 kasus, 0 gagal** (debug dan rilis); Worker **60 kasus, 0 gagal**; lint
+bersih (12 warning `UseKtx` lama, tanpa error). Bukti pengunci: mengembalikan bug pada
+`customAccessRequirement` membuat 3 test GAGAL; melepas migrasi dari `AccessPolicy` membuat 1 test
+GAGAL.
 
-Belum dibuktikan: sapu menu per peran pada 1.10.30 (sedang berjalan), APK rilis bertanda tangan,
-deploy Worker debug dan produksi.
+**Sapu menu per peran pada 1.10.30-debug (selesai):** Owner **21/21**, Kasir **11/21**, Supervisor
+**8/21**, tanpa satu pun `FATAL EXCEPTION` dari paket `com.cuciin.laundryops`. Dua "crash" di sapu
+Kasir berasal dari `UiAutomationService` milik alat uji. Kasir dan Supervisor sama dengan baseline
+1.10.29, jadi tidak ada pelebaran hak.
+
+**Preset peran terbukti di perangkat:** role uji dibuat lewat UI, preset "Hanya lihat" diterapkan
+(8 modul / 9 fungsi), disimpan, lalu masih utuh sesudah aplikasi dihentikan paksa dan dibuka ulang.
+Role uji dihapus kembali lewat UI. Perbaikan hitungan di atas berasal dari uji ini.
+
+**APK rilis bertanda tangan selesai:** `releases/1.10.30-candidate/` berisi APK rilis, AAB, dan APK
+debug beserta `SHA256SUMS`. `verify_release.py` PASS (tanda tangan v2, non-debuggable, target SDK
+36, izin minimum, ZIP/ELF selaras 16 KB). Sertifikat sama dengan 1.10.29, jadi dapat menimpa
+pemasangan lama.
+
+Belum dibuktikan: deploy Worker produksi (menunggu perintah Owner), push ke remote.
 
 ## 0d. Pekerjaan terbaru (19 Sep, Hermes) — tujuh kelas bug izin ditutup, 1.10.28
 

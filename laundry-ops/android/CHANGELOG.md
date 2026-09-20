@@ -53,6 +53,43 @@ yang menyimpannya akan menghapus seluruh hak role itu.
   lewat pesan, bukan gagal diam-diam.
 - Dua fungsi katalog dibuang karena tidak punya pemeriksa: `settings.manage` dan `cash.view`.
   Fungsi tanpa pemeriksa membuat janji Kontrol Akses Role bohong.
+- Kartu role dan ringkasan di layar Kontrol Akses Role menghitung cermin kunci lama sebagai fungsi,
+  sehingga role hasil preset "Hanya lihat" tampil "10 fungsi" padahal presetnya menjanjikan 9.
+  Selisih satu angka itu terlihat seperti centang yang bertambah sendiri sesudah disimpan. Sekarang
+  angkanya dihitung sesudah kunci lama diterjemahkan.
+
+## 1.10.29 — 19 Sep 2026
+
+Perbaikan dua lapis untuk satu insiden data: berpindah akun ke peran non-Owner menghasilkan enam
+perintah `assetType.delete` untuk **seluruh jenis aset organisasi**.
+
+Sebabnya dua cacat yang saling menutupi:
+
+1. **Android** — `SyncOutbox.enqueue` membandingkan `shadow` dengan snapshot yang baru masuk. Snapshot
+   non-Owner disaring per cabang, sedangkan master data tingkat organisasi (`branchId == null`:
+   cabang, staff, layanan, produk, jenis aset, role) tidak punya cabang sehingga tidak ikut disaring.
+   Entitas itu lalu terbaca sebagai "sudah dihapus" dan perangkat menyusun perintah delete.
+2. **Worker** — `assetType.upsert` dan `assetType.delete` tidak ada di `OWNER_ONLY`, padahal
+   `asset_types` tidak punya kolom cabang dan `deleteAssetType` di aplikasi dijaga `owner.manage`.
+   Gerbang lebih longgar dari penjaganya, jadi perintah itu diterima.
+
+Perbaikan tiga lapis:
+
+- `SyncOutbox.enqueue` tidak lagi menyimpulkan delete untuk entitas tanpa cabang bila aktornya bukan
+  Owner. Sejalan dengan izin Worker: seluruh delete tanpa cabang memang Owner-only.
+- `SyncOutbox.buangYangTidakBerhak` membuang perintah tertahan yang aktornya tidak berhak SEBELUM
+  terkirim, dipanggil di awal `flushCommands`. Perintah yang tertinggal dari sesi lain masuk
+  `rejected` dengan alasannya, jadi tetap ada jejak dan tidak pernah meninggalkan perangkat.
+- `OWNER_ONLY` di Worker menerima `assetType.upsert` dan `assetType.delete`.
+
+Test pengunci, ketiganya terbukti GAGAL saat perbaikan dikembalikan:
+
+- Android: `nonOwnerTidakMenyimpulkanDeleteUntukEntitasTanpaCabang` (GAGAL saat penjaga dilepas),
+  `perintahDeleteTanpaCabangDibuangSaatAktorBukanOwner` (GAGAL saat penjaga pembuang dilumpuhkan),
+  dan dua test yang memastikan Owner tidak ikut dikunci.
+- Worker: jenis aset ditolak untuk Kasir dan Supervisor, diterima untuk Owner.
+
+Test Android 220 lulus (debug+release), lint bersih, test Worker 56 lulus.
 
 ## 1.10.28 — 19 Sep 2026 (versionCode 47)
 
@@ -266,47 +303,6 @@ Absensi. Dulu layar-layar itu terbuka untuk peran mana pun. Dua akibat yang perl
 - `queue` dan `service` kini memeriksa FUNGSI (`queue.view`, `service.create`), bukan hanya
   modulnya. Role tersimpan yang hanya memegang modulnya mendapat kembali fungsi bacanya lewat
   penerjemahan kunci, jadi menunya tidak tertutup.
-
-## 1.10.29 — 19 Sep 2026
-
-Perbaikan dua lapis untuk satu insiden data: berpindah akun ke peran non-Owner menghasilkan enam
-perintah `assetType.delete` untuk **seluruh jenis aset organisasi**.
-
-Sebabnya dua cacat yang saling menutupi:
-
-1. **Android** — `SyncOutbox.enqueue` membandingkan `shadow` dengan snapshot yang baru masuk. Snapshot
-   non-Owner disaring per cabang, sedangkan master data tingkat organisasi (`branchId == null`:
-   cabang, staff, layanan, produk, jenis aset, role) tidak punya cabang sehingga tidak ikut disaring.
-   Entitas itu lalu terbaca sebagai "sudah dihapus" dan perangkat menyusun perintah delete.
-2. **Worker** — `assetType.upsert` dan `assetType.delete` tidak ada di `OWNER_ONLY`, padahal
-   `asset_types` tidak punya kolom cabang dan `deleteAssetType` di aplikasi dijaga `owner.manage`.
-   Gerbang lebih longgar dari penjaganya, jadi perintah itu diterima.
-
-Perbaikan tiga lapis:
-
-- `SyncOutbox.enqueue` tidak lagi menyimpulkan delete untuk entitas tanpa cabang bila aktornya bukan
-  Owner. Sejalan dengan izin Worker: seluruh delete tanpa cabang memang Owner-only.
-- `SyncOutbox.buangYangTidakBerhak` membuang perintah tertahan yang aktornya tidak berhak SEBELUM
-  terkirim, dipanggil di awal `flushCommands`. Perintah yang tertinggal dari sesi lain masuk
-  `rejected` dengan alasannya, jadi tetap ada jejak dan tidak pernah meninggalkan perangkat.
-- `OWNER_ONLY` di Worker menerima `assetType.upsert` dan `assetType.delete`.
-
-Test pengunci, ketiganya terbukti GAGAL saat perbaikan dikembalikan:
-
-- Android: `nonOwnerTidakMenyimpulkanDeleteUntukEntitasTanpaCabang` (GAGAL saat penjaga dilepas),
-  `perintahDeleteTanpaCabangDibuangSaatAktorBukanOwner` (GAGAL saat penjaga pembuang dilumpuhkan),
-  dan dua test yang memastikan Owner tidak ikut dikunci.
-- Worker: jenis aset ditolak untuk Kasir dan Supervisor, diterima untuk Owner.
-
-Test Android 220 lulus (debug+release), lint bersih, test Worker 56 lulus.
-
-## 1.10.28 — 19 Sep 2026
-
-Perbaikan kelas A sampai H pada izin akses. Ringkas: A (crash `require(boleh(...))`), B (penolakan
-diam), C (gerbang rute lebih longgar dari penjaganya), D (tombol dikunci nama peran), E (pintu alur
-tulis tidak diperiksa), F (`require()` validasi lain masih melempar), G (layar ber-gerbang fungsi
-masih dikunci nama peran), H (hasil fungsi yang bisa menolak dibuang di layar, dan dua pemeriksa
-Service yang berbeda isi).
 
 ## 1.10.27 — 18 Sep 2026 (versionCode 46)
 
