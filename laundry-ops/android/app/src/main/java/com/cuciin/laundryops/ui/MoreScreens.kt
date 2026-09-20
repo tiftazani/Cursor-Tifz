@@ -65,6 +65,7 @@ import com.cuciin.laundryops.ui.components.PeriodRow
 import com.cuciin.laundryops.ui.components.PrimaryBtn
 import com.cuciin.laundryops.ui.components.ScreenHeader
 import com.cuciin.laundryops.ui.components.SelectChip
+import com.cuciin.laundryops.ui.components.SyncNotice
 import com.cuciin.laundryops.ui.theme.Ink
 import com.cuciin.laundryops.ui.theme.Muted
 import com.cuciin.laundryops.ui.theme.Teal
@@ -609,6 +610,9 @@ internal fun AuditScreen(nav: NavHostController) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(ui.gap)) {
         item { ScreenHeader("Riwayat aktivitas", "Semua transaksi", onBack = { nav.popBackStack() }) }
         item { SyncNotice() }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         item { GhostBtn("Ekspor riwayat perubahan", icon = Icons.Outlined.FileDownload) { FileExports.shareAudit(ctx, store.audit.toList()) } }
         items(store.audit) { a ->
             ListRow(
@@ -654,6 +658,9 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
                 onBack = { nav.popBackStack() },
             )
         }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         if (canViewAllBranches(s)) {
             // Pemilih cabang harus ada di layar ini. Sebelumnya layar hanya meminta "Pilih satu
             // cabang" tanpa menyediakan pemilihnya, sehingga Owner yang melihat semua cabang

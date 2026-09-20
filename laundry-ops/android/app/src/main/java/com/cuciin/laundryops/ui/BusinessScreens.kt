@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.cuciin.laundryops.data.*
 import com.cuciin.laundryops.ui.components.*
+import com.cuciin.laundryops.ui.components.SyncNotice
 import com.cuciin.laundryops.ui.theme.*
 import java.time.LocalDateTime
 import java.io.File
@@ -65,6 +66,9 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 onClick = { showBranchSheet = true },
             )
         }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         item { Hero("Total biaya cabang", rp(rows.sumOf { it.amount }), listOf("${rows.size} transaksi biaya", businessStore.branch(branchId).name)) }
         if (!creating) item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -188,6 +192,8 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
         contentPadding = PaddingValues(bottom = 28.dp),
     ) {
         item { ScreenHeader("Absensi karyawan", "Jam masuk dan pulang tercatat per cabang", onBack = { nav.popBackStack() }) }
+        // Absensi yang belum tersinkron bisa membuat jam pulang tampak hilang.
+        item { SyncNotice() }
         item {
             CardBlock(accent = if (today?.checkOutAtMs == null) Teal else Green) {
                 SectionLabel("Absensi saya hari ini")

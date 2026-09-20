@@ -32,6 +32,7 @@ import androidx.navigation.NavHostController
 import android.graphics.BitmapFactory
 import com.cuciin.laundryops.data.*
 import com.cuciin.laundryops.ui.components.*
+import com.cuciin.laundryops.ui.components.SyncNotice
 import com.cuciin.laundryops.ui.theme.*
 import java.io.File
 import java.time.LocalDateTime
@@ -74,6 +75,9 @@ internal fun AssetListScreen(nav: NavHostController, toast: (String) -> Unit) {
                 onClick = { if (allowedBranches.size > 1) showBranchSheet = true },
             )
         }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         item {
             FilterBar(
                 label = "Jenis aset",
@@ -417,6 +421,9 @@ internal fun AssetTypesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
         }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         item { Text("Jenis yang sudah dipakai aset tidak dapat dihapus, hanya dinonaktifkan, agar kode aset lama tetap terbaca.", color = Muted, fontSize = 12.sp, lineHeight = 17.sp) }
         item { SectionLabel("Jenis aset baru") }
         item { Field(newName, { newName = it }, "Nama jenis aset") }

@@ -74,6 +74,7 @@ import com.cuciin.laundryops.ui.components.PrimaryBtn
 import com.cuciin.laundryops.ui.components.ScreenHeader
 import com.cuciin.laundryops.ui.components.SectionLabel
 import com.cuciin.laundryops.ui.components.SelectChip
+import com.cuciin.laundryops.ui.components.SyncNotice
 import com.cuciin.laundryops.ui.theme.Amber
 import com.cuciin.laundryops.ui.theme.Green
 import com.cuciin.laundryops.ui.theme.Ink
@@ -103,6 +104,9 @@ internal fun CustomersScreen(nav: NavHostController, toast: (String) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), state = listState, verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Pelanggan", if (pickMode) "Ketuk nama untuk memilih pelanggan" else "Kontak pelanggan laundry Anda", onBack = { nav.popBackStack() }) }
         // Tombol pembuka form diperiksa dengan FUNGSI, bukan hanya modul rutenya. Rute `customers`
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         // memakai gerbang modul supaya role kustom tetap bisa MEMBACA daftar pelanggan; pintu yang
         // MENULIS tetap harus memeriksa `customer.write`, kalau tidak role itu membuka formulir
         // yang pasti ditolak saat disimpan.
@@ -231,6 +235,9 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
         }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         if (!creating && editing == null) item {
             // Header menyebut jumlah cabang yang benar-benar ada, bukan angka tetap.
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -386,6 +393,9 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
     }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), state = listState, verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Daftar User", "Owner, kasir, SPV, dan akses cabang", onBack = { nav.popBackStack() }) }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: daftar user dan perannya paling berbahaya kalau tertinggal dari server.
+        item { SyncNotice() }
         if (!creating && editing == null) {
             item { PrimaryBtn("Tambah user", icon = Icons.Outlined.Add) { creating = true; editing = null; fill(null) } }
             item { SearchField(userQuery, { userQuery = it }, "Cari nama atau email") }
@@ -553,6 +563,9 @@ internal fun ServicesScreen(nav: NavHostController, toast: (String) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), state = listState, verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Layanan & harga", "Atur layanan dan tarif laundry", onBack = { nav.popBackStack() }) }
         if (!creating && editing == null) item { PrimaryBtn("Layanan baru", icon = Icons.Outlined.Add) { creating = true; editing = null; fill(null) } }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         if (creating || editing != null) {
             item {
                 CardBlock(accent = Teal) {
@@ -668,6 +681,9 @@ internal fun ProductsScreen(nav: NavHostController, toast: (String) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), state = listState, verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Produk stok & bahan", "Barang dijual dan bahan habis pakai per cabang", onBack = { nav.popBackStack() }) }
         if (!creating && editing == null) item { GhostBtn("Kelola aset & mesin cabang", icon = Icons.Outlined.Build) { nav.navigate("inventory") } }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         if (!creating && editing == null) item { PrimaryBtn("Produk baru", icon = Icons.Outlined.Add) { creating = true; editing = null; fill(null) } }
         if (creating || editing != null) {
             item {
