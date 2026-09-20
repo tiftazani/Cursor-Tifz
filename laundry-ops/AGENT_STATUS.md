@@ -555,7 +555,10 @@ File-file itu menyimpan aturan uang, stok, komisi, otorisasi, dan protokol sinkr
    - Repo GitHub `tiftazani/Cursor-Tifz`
    - Email Owner `tiftazani.khara@gmail.com` (dipertahankan atas permintaan Owner)
 5. **Isi template email reset** masih bawaan Firebase (`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`).
-6. **PR #18 dan #19** masih terbuka; `main` belum memuat 1.9.2 sampai 1.10.0.
+6. **PR #18 sampai #21 sudah MERGED**, jadi catatan lama "masih terbuka" sudah tidak berlaku.
+   Meski begitu `main` masih tertinggal **37 commit** dari `codex/cuciin-1-8-1`: `main` berhenti di
+   versionCode 43 / 1.10.24, sedangkan branch kerja sudah 1.10.30 / 49. Perlu PR baru supaya `main`
+   memuat 1.10.25 sampai 1.10.30 (keputusan Owner).
 7. **Kata sandi awal `test1234`** wajib diubah semua akun sebelum data nyata dipakai.
 8. **State loading dan error di layar data belum lengkap.** Beranda dan riwayat aktivitas sudah menampilkan `SyncNotice` saat server belum terhubung, tetapi layar lain belum. Hanya layar masuk yang punya indikator proses panjang.
 9. **Sebagian daftar sudah jadi baris.** Pelanggan, layanan, produk, aset, biaya, persediaan, riwayat stok, riwayat WA, dan ringkasan petugas laporan sudah memakai `ListCard` + `ListRow`. Tabel laporan keuangan diganti kartu bertingkat per Service supaya terbaca di layar sempit.
