@@ -1,6 +1,8 @@
-# Cuciin 1.10.1 — kesiapan rilis
+# Cuciin 1.10.30 — kesiapan rilis
 
-Status: kandidat rilis operasional yang menjalani ulang pemeriksaan kode, build, dan verifikasi cloud pada 16 September 2026. Owner tetap harus menyelesaikan validasi perangkat, rotasi akun, saldo awal, backup terjadwal pertama, dan keputusan go-live. APK bertanda tangan tidak menjamin hilangnya peringatan Play Protect pada distribusi di luar store.
+Status: kandidat rilis operasional yang menjalani ulang pemeriksaan kode, build, dan verifikasi cloud pada 20 September 2026. Owner tetap harus menyelesaikan validasi perangkat, rotasi akun, saldo awal, backup terjadwal pertama, dan keputusan go-live. APK bertanda tangan tidak menjamin hilangnya peringatan Play Protect pada distribusi di luar store.
+
+Dokumen ini terakhir diselaraskan saat rilis **1.10.30 (versionCode 49)**; sebelumnya masih menyebut 1.10.1 dan tertinggal 29 versi. Bagian perpindahan identitas aplikasi di bawah tetap berlaku sebagai catatan sejarah, tetapi angka versi di dalamnya sudah tidak dipakai.
 
 ## Perpindahan identitas aplikasi (16 September 2026)
 
@@ -14,19 +16,21 @@ Konsekuensi yang perlu diketahui sebelum distribusi:
 - Seluruh akun operasional dibuat ulang di project baru. Kata sandi awal `test1234` dan wajib diubah dari Profil sebelum data nyata dipakai.
 - Alamat email Owner tidak diubah; hanya nama tampilan yang menjadi `Cuciin`.
 
-## Bukti verifikasi kandidat
+## Bukti verifikasi kandidat (1.10.30)
 
-- Android: 47 unit test debug dan 47 unit test rilis lulus, lint debug/rilis tanpa error, APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
-- APK rilis: non-debuggable, application ID `com.cuciin.laundryops`, versionCode `20`, versionName `1.10.1`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB.
-- SHA-256 sertifikat rilis cocok dengan fingerprint yang dicatat: `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`.
-- Firebase: 7 akun (2 Owner, 3 Kasir, 2 Supervisor) login berhasil di project `cuciin-ops`; kedua app Android terdaftar dengan sidik jari SHA-1 dan SHA-256.
-- Worker: 39 test lulus, termasuk penjagaan revisi reproject dan penerimaan dua project Firebase.
-- Uji integrasi nyata: token project **baru** dan token project **lama** dua-duanya diterima `/v1/me` (HTTP 200); login penuh dari APK paket baru sampai masuk dashboard berhasil di emulator.
+- Android: **262 unit test debug dan 262 unit test rilis lulus**, lint tanpa error (12 warning `UseKtx` lama), APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
+- APK rilis: non-debuggable, application ID `com.cuciin.laundryops`, versionCode `49`, versionName `1.10.30`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB. `verify_release.py` PASS.
+- SHA-256 sertifikat rilis cocok dengan fingerprint yang dicatat: `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`. Sertifikat **tidak berubah** sejak 1.10.1, jadi APK baru dapat menimpa pemasangan lama.
+- Worker: **60 test lulus** (`npm run check`), termasuk pemetaan fungsi izin per command, penjagaan revisi reproject, dan penerimaan dua project Firebase.
+- Sapu menu per peran di perangkat (emulator 1080x2400, APK 1.10.30-debug): Owner **21/21**, Kasir **11/21**, Supervisor **8/21**, tanpa satu pun `FATAL EXCEPTION` dari paket `com.cuciin.laundryops`. Kasir dan Supervisor sama dengan baseline 1.10.29, jadi tidak ada pelebaran hak.
+- Kompatibilitas mundur terbukti di perangkat: role Supervisor disimpan lewat 1.10.30 (cermin `attendance.write` tertulis di `cuciin-data.json`), lalu APK 1.10.29 dipasang di atasnya dengan `adb install -r -d`; Supervisor di 1.10.29 tetap membuka 8/21 menu, 0 crash.
+- Preset peran terbukti di perangkat: role uji dibuat lewat UI, preset "Hanya lihat" diterapkan (8 modul / 9 fungsi), tersimpan utuh sesudah aplikasi dihentikan paksa dan dibuka ulang.
+- Firebase: akun operasional login berhasil di project `cuciin-ops`; kedua app Android terdaftar dengan sidik jari SHA-1 dan SHA-256.
 - Data D1 produksi: seluruh nama pribadi diganti; yang tersisa hanya alamat email Owner yang memang dipertahankan.
 
 ## Yang disiapkan
 
-- Application ID rilis `com.cuciin.laundryops`, versi `1.10.1`, versionCode `20`, target Android 16/API 36.
+- Application ID rilis `com.cuciin.laundryops`, versi `1.10.30`, versionCode `49`, target Android 16/API 36.
 - APK non-debuggable dan AAB dengan kunci rilis terpisah. Build rilis berhenti bila konfigurasi penandatanganan tidak tersedia.
 - Kunci privat dan kata sandi berada di luar repo, pada folder `signing-private` di sebelah folder repo; izin folder 700 dan berkas rahasia 600. Cadangkan keduanya ke penyimpanan privat yang aman sebelum dipakai untuk distribusi. Jangan mengganti kunci sembarangan setelah aplikasi terpasang.
 - Rilis menolak akun tanpa kata sandi dan tidak menampilkan masuk cepat. Sesuai konfigurasi operasional saat ini, akun awal memakai `test1234` dan wajib diubah dari Profil sebelum dipakai untuk data nyata.
@@ -59,7 +63,9 @@ Cloudflare Workers + D1 dapat dimulai dari paket gratis dan dinaikkan ke paket b
 
 Worker memverifikasi Firebase ID token menggunakan kunci publik Google, mendukung secret bootstrap melalui Cloudflare Secrets, memakai query terparameter, dan tidak menyimpan kata sandi. Command per entitas dicatat idempoten, delta dibatasi cabang, koreksi Service memakai optimistic concurrency, dan stok dijaga nonnegatif secara atomik. Foto bukti tetap disimpan di perangkat. QRIS tetap pencatatan metode pembayaran.
 
-Resource produksi aktif: Worker `cuciin-api` versi `a539b2e0-49e2-4d1f-a6cf-8d4912c1a7a7`, D1 `cuciin-db` di APAC, dan proyek Firebase `cuciin-ops` (project lama `cuciin-ops-tiftazani` masih diterima selama masa peralihan). Health check produksi lulus pada 16 September 2026; endpoint snapshot tanpa autentikasi mengembalikan 401. Petunjuk migrasi, deploy, pemulihan, dan build ada di `laundry-ops/cloudflare/README.md`.
+Resource produksi aktif: Worker `cuciin-api` (health `ok`, D1 `ready`, revision **409** pada 20 September 2026), D1 `cuciin-db` di APAC, dan proyek Firebase `cuciin-ops` (project lama `cuciin-ops-tiftazani` masih diterima selama masa peralihan). Endpoint snapshot tanpa autentikasi mengembalikan 401. Petunjuk migrasi, deploy, pemulihan, dan build ada di `laundry-ops/cloudflare/README.md`.
+
+**Catatan penting sebelum deploy Worker dari pekerjaan 1.10.30:** perintah sinkronisasi **tidak membawa versi aplikasi**, jadi penjaga izin sisi server yang baru akan ikut menolak APK lama yang belum punya pemetaan fungsi terkini. Jangan deploy Worker ini ke produksi sebelum seluruh perangkat 20 cabang memakai versionCode ≥ 40 (penjaga harga sejak 1.10.21). Worker debug sudah dideploy (`717ddfa4`); Worker produksi belum, dan itu menunggu keputusan Owner.
 
 ## Build ulang
 
