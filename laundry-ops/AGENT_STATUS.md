@@ -5,6 +5,67 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
+**Keadaan `main` per 21 Sep malam: branch `codex/cuciin-1-8-1` sudah di-merge** (merge commit `28e8f5b`,
+0 konflik, 0 regresi), lalu ditambah tiga commit perbaikan di atasnya. `main` sekarang `efafa45`.
+
+| Commit | Isi |
+| --- | --- |
+| `28e8f5b` | Merge 1.10.35: tombol Next keyboard, polling 60 detik, mirror D1 harian |
+| `5efa382` | Perbaiki workflow mirror D1 (Node 22, `npm ci`, cegah run paralel) |
+| `5dac080` | Perbarui APK release dan debug dari `main` |
+| `efafa45` | Perbaiki login gagal 500 saat kuota tulis D1 habis (lihat `0o`) |
+
+Yang **sudah** hidup: workflow mirror D1 berjadwal `0 18 * * *` (01:00 WIB) — sudah terbukti
+`completed/success` di `main`, cadangan `cuciin-backup-db` terisi 8 staff / 26 tabel.
+Yang **belum**: Worker produksi masih `fd21cc8c`, jadi perbaikan login di `0o` belum berlaku di server.
+
+## 0o. Perbaikan: login gagal 500 saat kuota tulis D1 habis (21 Sep, Hermes)
+
+**Status: bug ditemukan, diperbaiki, teruji, dan sudah masuk `main`. Worker produksi BELUM di-deploy.**
+
+Bagian `0m` di bawah menyimpulkan kegagalan login ini "bukan bug aplikasi". **Kesimpulan itu salah** dan
+sudah dikoreksi di sini. Kuota habis memang pemicunya, tetapi yang mengubahnya jadi 500 adalah cacat
+nyata di kode Worker: satu `UPDATE` kecil yang kegagalannya dibiarkan menjalar ke atas.
+
+Akar tepatnya, `cloudflare/src/index.ts` baris 94 saat itu:
+
+```ts
+if (staff) await env.DB.prepare("UPDATE staff SET firebase_uid=? WHERE email=? AND firebase_uid IS NULL")...
+```
+
+Ini dijalankan hanya saat login **pertama** (baris staff belum punya `firebase_uid`). Cloudflare menolak
+tulis itu (`code: 7500`), exception naik ke `authorize()`, Worker menjawab **500 code 1101**, dan app
+menerjemahkannya jadi "Server identitas belum tersedia". Login kedua dan seterusnya berhasil karena tidak
+butuh tulis, sehingga gejalanya tampak seperti "akun Owner rusak" padahal servernya yang menutup pintu.
+Terbukti dari tiga percobaan langsung ke REST:
+
+```
+A. Kasir Aida (firebase_uid sudah ada)   -> /v1/me 200 OK
+B. Owner kedua (firebase_uid NULL)       -> /v1/me 500 code 1101
+C. Tulis kecil ke D1                     -> code 7500 (kuota tulis harian habis)
+```
+
+**Perbaikan.** `authorize()` dipecah menjadi `resolveStaff()` dan `linkFirebaseUid()`.
+`linkFirebaseUid()` menyerap kegagalan tulis dan melaporkannya lewat nilai balik, bukan exception.
+Pencarian lewat email sudah membuktikan identitasnya sah, jadi login tetap dilanjutkan dan penyambungan
+`firebase_uid` diulang pada login berikutnya. Akun yang tidak terdaftar tetap ditolak.
+
+**Bukti.** `cloudflare/tests/login-quota.test.mjs`, 5 tes, dan terbukti **merah saat perbaikan dikembalikan**:
+
+```
+perbaikan aktif        -> 5 lulus, 0 gagal
+perbaikan dikembalikan -> 2 lulus, 3 gagal   <- MERAH
+perbaikan dipulihkan   -> 5 lulus, 0 gagal
+```
+
+Gate Worker naik dari 64 ke **69 tes, 0 gagal**, `tsc --noEmit` bersih. Commit `efafa45`, CI
+`Cuciin Cloudflare validation` hijau.
+
+**Pelajaran yang berlaku untuk kode Worker berikutnya:** jangan pernah membiarkan operasi tulis yang
+sifatnya opsional (percepatan, cache, penanda) bisa menggagalkan seluruh permintaan. Kuota D1 free tier
+100.000 tulis/hari **per akun** dan bisa habis kapan saja, termasuk karena pekerjaan agen sendiri.
+Tulis opsional harus dibungkus, dan keputusan sah/tidaknya pemakai diambil dari baca.
+
 ## 0n. Keadaan lingkungan 21 Sep 2026 (baca ini sebelum menilai apa pun)
 
 Papan ini sempat salah melaporkan pada hari yang sama, jadi angka di bawah diukur, bukan dikutip.
@@ -13,8 +74,8 @@ Papan ini sempat salah melaporkan pada hari yang sama, jadi angka di bawah diuku
 | --- | --- | --- |
 | Versi aplikasi | `1.10.35` / `versionCode 54` | `grep versionName laundry-ops/android/app/build.gradle.kts` |
 | Sumber versi (3) | `build.gradle.kts`, `data/VersionHistory.kt`, `android/CHANGELOG.md` — ketiganya `1.10.35`, sinkron | `grep 1.10 laundry-ops/android/CHANGELOG.md` (letaknya di `android/`, BUKAN di akar `laundry-ops/`) |
-| Gate Android | 285 debug + 285 release = 570, 0 gagal, lint bersih | `./gradlew clean testDebugUnitTest testReleaseUnitTest lintDebug`, baca `app/build/test-results/*/*.xml` |
-| Gate Worker | 64/64 lulus | `cd laundry-ops/cloudflare && npm run check` |
+| Gate Android | 288 debug + 288 release = 576, 0 gagal, lint bersih | `./gradlew clean testDebugUnitTest testReleaseUnitTest lintDebug`, baca `app/build/test-results/*/*.xml` |
+| Gate Worker | 69/69 lulus | `cd laundry-ops/cloudflare && npm run check` |
 | Worker produksi | `fd21cc8c-6f4b-4d47-b392-38fdf9b3f890` | `npx wrangler deployments list --name cuciin-api` |
 | `/health` | 200, `revision: 0` | `curl -s https://cuciin-api.tiftazani-cuciin.workers.dev/health` |
 | Tanda tangan rilis | `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee` (TIDAK berubah) | `apksigner verify --print-certs <apk>` |
@@ -88,6 +149,12 @@ memegang outbox lama akan mengirim ulang command-nya karena `processed_commands`
 command itu diterima sebagai baru.
 
 ## 0m. Login rilis gagal 500: kuota tulis D1 free tier habis (bukan bug aplikasi)
+
+> **KOREKSI (21 Sep malam):** judul dan kesimpulan bagian ini **salah**. Kuota habis memang pemicunya,
+> tetapi yang mengubahnya jadi 500 adalah cacat nyata di kode Worker. Sudah diperbaiki dan teruji —
+> lihat bagian `0o` di atas. Bagian ini dibiarkan utuh sebagai catatan bagaimana kesimpulan pertama
+> keliru: kesimpulan itu berhenti di "kuota habis" tanpa menanyakan mengapa kuota habis bisa mematikan
+> login yang identitasnya sudah terbukti sah.
 
 **Status: akar ditemukan dan dibuktikan. Menunggu reset kuota, tidak ada perbaikan kode yang diperlukan.**
 
