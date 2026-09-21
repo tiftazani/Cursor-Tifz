@@ -159,7 +159,11 @@ object CloudSync {
         poll.post(object : Runnable {
             override fun run() {
                 if (FirebaseCloud.authenticated) synchronize()
-                poll.postDelayed(this, 12_000)
+                // Polling latar belakang untuk menarik perubahan cabang lain.
+                // Pengiriman perubahan lokal tetap instan karena dipicu langsung
+                // oleh push(). Nilai 60 detik cukup segar antar-kasir tanpa
+                // memboroskan baterai, kuota data, dan kuota baca server.
+                poll.postDelayed(this, 60_000)
             }
         })
     }
