@@ -236,7 +236,7 @@ export function applyJournalToSnapshot(base:JsonRecord,changes:SnapshotJournalCh
   return snapshot;
 }
 
-async function materializedSnapshot(env:Env,row?:{payload_json:string}|null):Promise<{snapshot:JsonRecord;revision:number}> {
+export async function materializedSnapshot(env:Env,row?:{payload_json:string}|null):Promise<{snapshot:JsonRecord;revision:number}> {
   const stored=row === undefined ? await env.DB.prepare("SELECT payload_json FROM sync_snapshots WHERE organization_id=?").bind(ORG_ID).first<{payload_json:string}>() : row;
   let snapshot=stored ? withoutLocalCredentials(JSON.parse(stored.payload_json) as JsonRecord) : {};
   const storedRevision=num(snapshot,"syncRevision");
@@ -249,6 +249,13 @@ async function materializedSnapshot(env:Env,row?:{payload_json:string}|null):Pro
     if(changes.length<500) break;
   }
   snapshot.syncRevision=revision;
+  // Snapshot hasil rekonstruksi belum tentu punya updatedAt: kalau baris sync_snapshots
+  // kosong, snapshot dibangun dari {} sehingga updatedAt bernilai 0. Perangkat menolak
+  // snapshot dengan updatedAt lebih tua daripada state lokalnya (CuciinStore.applyCloud),
+  // jadi snapshot kosong akan dibuang dan data lama di perangkat tidak pernah terhapus.
+  // Nilainya diambil dari waktu sekarang karena revisi bisa 0 saat jurnal juga kosong;
+  // memakai revisi akan menghasilkan 0 dan perangkat tetap membuang snapshotnya.
+  if(!num(snapshot,"updatedAt")) snapshot.updatedAt=Date.now();
   if(stored && revision>storedRevision) {
     await env.DB.prepare(`UPDATE sync_snapshots SET payload_json=?,updated_at=? WHERE organization_id=? AND COALESCE(CAST(json_extract(payload_json,'$.syncRevision') AS INTEGER),0)<=?`)
       .bind(JSON.stringify(withoutLocalCredentials(snapshot)),Date.now(),ORG_ID,revision).run();

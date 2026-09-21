@@ -5,6 +5,67 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
+## 0l. Bug: data transaksi tetap tampil di perangkat setelah server dibersihkan
+
+**Status: diperbaiki, teruji, dan sudah dipasang di produksi. Terbukti di perangkat.**
+
+Keluhan Owner setelah pembersihan D1: aplikasi rilis **masih** menampilkan transaksi dan data
+keuangan (Laporan transaksi: 7 Service, Rp 251.000) dan masih ada di emulator. Data di server
+sudah 0, jadi ini **bukan sisa data** — ini bug jalur baca.
+
+### Akar masalah
+
+`materializedSnapshot()` di `cloudflare/src/index.ts` membangun snapshot dari `{}` ketika baris
+`sync_snapshots` tidak ada:
+
+```ts
+let snapshot = stored ? withoutLocalCredentials(JSON.parse(stored.payload_json)) : {};
+```
+
+Akibatnya `snapshot.updatedAt` tidak pernah ada, dan `num(snapshot,"updatedAt")` mengembalikan
+`0`. Di perangkat, `CuciinStore.applyCloud()` menolak snapshot yang lebih tua daripada state
+lokal:
+
+```kotlin
+if (s.updatedAt < localUpdatedAt && !CloudSync.hasPreparedRemote()) return
+```
+
+Perangkat memegang `localUpdatedAt` dari transaksi terakhir, jadi snapshot `updatedAt = 0`
+**dibuang** dan data lama di perangkat tidak pernah terhapus. Jalur tulis (`putSnapshot`) tidak
+kena karena menulis `snapshot.updatedAt = revision`; hanya jalur baca yang cacat.
+
+Ini muncul justru karena pembersihan sebelumnya **benar**: menghapus `sync_changes` dan
+`sync_snapshots` menghilangkan satu-satunya sumber `updatedAt`. Selama jurnal masih ada,
+`applyJournalToSnapshot` mengisi `updatedAt` dari `change.updated_at`.
+
+### Perbaikan
+
+`materializedSnapshot` mengisi `updatedAt` bila kosong, memakai `Date.now()`. Memakai `revision`
+tidak cukup: saat jurnal dan baris snapshot sama-sama kosong, `revision` juga 0 sehingga
+`updatedAt` tetap 0. Bug ini ditemukan oleh tes penjaga sendiri, bukan dari penalaran.
+
+### Bukti
+
+| Pemeriksaan | Hasil |
+| --- | --- |
+| `npm run check` | tsc bersih, validasi skema lolos, **64/64 tes lulus** (61 lama + 3 baru) |
+| Tes penjaga | `cloudflare/tests/snapshot-freshness.test.mjs` |
+| Bukti merah | perbaikan dibalik: **2 dari 3 tes MERAH**; dipulihkan: hijau |
+| Deploy produksi | Worker `cuciin-api` versi `fd21cc8c-6f4b-4d47-b392-38fdf9b3f890` |
+| `/health` | 200, `database: ready`, `revision: 0` |
+| Perangkat, Antrian laundry | Sedang dikerjakan **0**, Cucian telat **0**, Selesai **0**, "Tidak ada cucian dikerjakan" |
+| Perangkat, Biaya operasional | Total biaya cabang **Rp 0**, "0 transaksi biaya", "Belum ada biaya" |
+
+Uji perangkat memakai APK rilis 1.10.35 setelah `pm clear` lalu login Kasir, sehingga snapshot
+ditarik dari Worker yang sudah diperbaiki. D1 produksi diperiksa ulang sesudahnya: tetap bersih
+(`orders` 0, `expenses` 0, `payments` 0, `processed_commands` 0), artinya sinkronisasi tidak
+menghidupkan kembali data lama.
+
+**Efek yang masih perlu diuji Owner:** perangkat cabang yang sudah lama terpasang **belum** tentu
+tertarik snapshot baru ini sampai aplikasi dibuka dan sinkronisasi berjalan. Perangkat yang masih
+memegang outbox lama akan mengirim ulang command-nya karena `processed_commands` kosong, dan
+command itu diterima sebagai baru.
+
 ## 0k. Email reset sandi: teks "project-634935388002" berasal dari OAuth brand, bukan nama project
 
 **Status: akar masalah terbukti; perubahan template TIDAK bisa lewat API — harus dari Console.**
