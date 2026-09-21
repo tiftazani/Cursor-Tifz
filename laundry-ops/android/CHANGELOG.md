@@ -2,6 +2,36 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.36 — 21 Sep 2026 (versionCode 55)
+
+### Login akun baru tidak lagi ditolak, dan isian papan ketik diperbaiki
+
+Perbaikan utamanya ada di sisi server, bukan di aplikasi: saat sebuah akun masuk untuk
+pertama kali, Worker menyimpan penanda identitas (`firebase_uid`) ke baris `staff`. Bila
+penyimpanan itu ditolak karena kuota tulis D1 harian habis, kegagalannya menjalar ke atas
+dan **seluruh** proses masuk gagal 500 dengan pesan "Server identitas belum tersedia" —
+padahal email dan sandinya benar. Akun yang sudah pernah masuk tidak terpengaruh, sehingga
+gejalanya tampak seperti "akun rusak". Sekarang penyimpanan penanda itu tidak lagi menjadi
+syarat masuk; identitas diverifikasi dari bacaan, dan penanda diisi ulang pada kesempatan
+berikutnya.
+
+Nomor versi aplikasi dinaikkan supaya perangkat yang masih memegang versi 54 bisa menimpa
+dengan bersih dan pemasangan baru terlihat jelas di layar Riwayat versi. Isi aplikasinya
+sendiri tidak berubah dari 1.10.35 — perbaikan tombol papan ketik dan perlambatan
+sinkronisasi di bawah sudah ikut di 1.10.35.
+
+### Isian papan ketik di seluruh aplikasi
+
+- Kolom isian berpindah dengan tombol **Berikutnya**, dan tombol **Selesai** menutup papan ketik.
+- Sebelumnya fokus tidak berpindah, sehingga ketikan berikutnya masuk ke kolom yang sama.
+- Satu perbaikan di komponen bersama menutup sekitar 30 kolom, termasuk formulir buat akun kasir.
+
+### Sinkronisasi latar belakang diperlambat
+
+- Pemeriksaan perubahan cabang lain: 60 detik, sebelumnya 12 detik.
+- Pengiriman transaksi dari perangkat tetap seketika; yang berkurang hanya pemeriksaan latar
+  belakang, jadi baterai dan paket data lebih hemat di 20 cabang.
+
 ## 1.10.35 — 21 Sep 2026 (versionCode 54)
 
 ### Kegagalan masuk tidak lagi diam

@@ -1,0 +1,3 @@
+e5ada6826d4dc4a34fdf4bf3ddb275312cf1c13a31c88f6695695ae9a0acb96a  cuciin-1.10.36-debug.apk
+ce7373679916610fc268666c61d04b6e91997c83a1b8dfd40a82fabe1bb2c678  cuciin-1.10.36-release.apk
+3b52a438b3263f32ecbfa5e8c3c7ecd7eaa96691b0baec01d6687169251c2d0c  cuciin-1.10.36-release.aab

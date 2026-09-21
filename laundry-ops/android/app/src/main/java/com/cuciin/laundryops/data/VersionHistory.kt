@@ -12,10 +12,18 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.35"
-    val currentCode: Int = 54
+    val currentName: String = "1.10.36"
+    val currentCode: Int = 55
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.36", code = 55, date = "21 Sep 2026",
+            notes = listOf(
+                "Akun yang belum pernah masuk tidak lagi ditolak server. Sebelumnya, login pertama sebuah akun meminta server menyimpan penanda identitas; bila penyimpanan itu ditolak, seluruh proses masuk gagal dan aplikasi menampilkan pesan server identitas tidak tersedia. Sekarang penanda itu tidak lagi menjadi syarat masuk.",
+                "Sinkronisasi ke cabang lain diperiksa tiap 60 detik, sebelumnya 12 detik. Pengiriman transaksi tetap seketika; yang berkurang hanya pemeriksaan latar belakang, sehingga baterai dan paket data lebih hemat.",
+                "Kolom isian di seluruh aplikasi kini berpindah dengan tombol Berikutnya di papan ketik, dan tombol Selesai menutup papan ketik. Sebelumnya fokus tidak berpindah sehingga ketikan berikutnya masuk ke kolom yang sama.",
+            ),
+        ),
         AppRelease(
             name = "1.10.35", code = 54, date = "21 Sep 2026",
             notes = listOf(
