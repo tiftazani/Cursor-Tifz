@@ -112,6 +112,62 @@ Keadaan data saat kuota habis (dibaca, bukan ditulis): `staff` 8, `staff_branche
 
 Tindakan yang dihindari: menyalakan Workers Paid ($5/bulan) tanpa persetujuan. Bila nanti login sering menyentuh limit ini di operasi normal 20 cabang, itu tanda kuota free tier memang tak cukup, dan naik paket jadi keputusan bisnis.
 
+## 0m-2. Penyebab kuota tulis habis sudah dipastikan, dan cadangan D1 kedua dibuat (21 Sep, Hermes)
+
+**Penyebab lonjakan tulis: pekerjaan agen sendiri, bukan aplikasi.** Diukur dari analitik D1
+per jam (`d1AnalyticsAdaptiveGroups`, tanggal 21 Sep):
+
+```
+00:00Z  tulis=69.779  kueri-tulis=34.749   ← regression test menyeluruh (permintaan user)
+02:00Z  tulis=50.640  kueri-tulis=10       ← pembersihan 50.623 baris di ## 0j
+04:00Z  tulis=900     kueri-tulis=300
+05:00Z  tulis=904     kueri-tulis=302
+06:00Z  tulis=900     kueri-tulis=300
+07:00Z  tulis=891     kueri-tulis=297
+```
+
+Total dua lonjakan = 120.419 baris tulis, sendirian sudah melewati batas 100.000/hari.
+Angka 50.640 cocok dengan pembersihan 50.623 baris; selisihnya sisa operasi hari itu.
+
+**Sinkronisasi aplikasi tidak menulis ke D1.** Diukur langsung: 5 siklus penuh
+(`/v1/snapshot` + `/v1/sync/changes`) menghasilkan selisih `write_queries_24h` = **0**.
+App 60 detik idle tanpa login juga 0. Jadi polling 12 detik hanya membuang kuota **baca**
+(5.000.000/hari; terpakai 529.807), bukan kuota tulis.
+
+**Polling tetap diperlambat** dari 12 detik ke 60 detik (`CloudSync.kt`, `poll.postDelayed`).
+Alasannya bukan kuota tulis, melainkan baterai dan paket data 20 cabang: 300 permintaan/jam
+turun jadi 60. Pengiriman transaksi lokal tetap instan karena `push()` memanggil
+`synchronize()` sendiri; polling hanya untuk menarik perubahan cabang lain.
+
+**Cadangan D1 kedua: `cuciin-backup-db`** (`0165ec93-8567-4774-8f80-78e4e604a7da`, region APAC).
+Dibuat gratis tanpa kartu kredit, mengisi celah yang dulu mentok di R2/Drive.
+
+- Skrip: `laundry-ops/cloudflare/scripts/mirror-d1.sh` — export produksi lalu impor ke cadangan.
+- Workflow: `.github/workflows/cuciin-d1-mirror.yml`, jadwal `0 */6 * * *` (tiap 6 jam).
+- **Terbukti jalan dua kali berturut-turut** (`exit 0`), mencakup jalur cadangan kosong dan
+  jalur cadangan sudah terisi; verifikasi membandingkan jumlah `staff` produksi vs cadangan (8 = 8).
+
+Dua jebakan yang sudah ditangani skrip, jangan dihapus tanpa alasan:
+
+1. `DROP TABLE` pada tabel yang masih dirujuk foreign key gagal dengan
+   `no such table: main.staff` dan membatalkan seluruh berkas. Wajib
+   `PRAGMA foreign_keys=OFF;` di berkas yang sama dengan pernyataan DROP.
+2. Dengan `set -o pipefail`, `grep` yang tidak menemukan hasil mengembalikan kode 1 dan
+   menghentikan skrip — padahal "cadangan kosong" itu keadaan sah. Setiap pipeline
+   `wrangler ... | grep` diberi `|| true`.
+
+**Batasan yang harus diketahui sebelum mengandalkan mirror ini:**
+
+- `wrangler d1 export` mengunci database produksi sesaat (wrangler memperingatkan sendiri).
+  Jangan naikkan frekuensi ke tiap jam; 6 jam sudah cukup dan jadwalnya jatuh di luar jam sibuk.
+- Kuota 100.000 tulis/hari berlaku **per akun, bukan per database**. Mengimpor ke cadangan
+  ikut memotong kuota produksi. Saat ini murah (50 baris = 50 tulis, 200/hari), tapi begitu
+  data transaksi tumbuh, impor penuh 4x sehari bisa memakan kuota yang dibutuhkan kasir.
+  Ukur ulang sebelum menganggapnya aman di 20 cabang.
+- **Time Travel tetap jaring pengaman terbaik untuk 7 hari terakhir** (gratis, selalu aktif,
+  tanpa mengunci DB). Mirror ini untuk yang lebih lama dari 7 hari dan untuk selamat bila
+  akun Cloudflare hilang. Keduanya saling melengkapi, bukan saling menggantikan.
+
 ## 0k. Email reset sandi: teks "project-634935388002" berasal dari OAuth brand, bukan nama project
 
 **Status: akar masalah terbukti; perubahan template TIDAK bisa lewat API — harus dari Console.**
