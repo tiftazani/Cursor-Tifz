@@ -1,28 +1,64 @@
 name: Cuciin D1 database mirror
 
+# Menyalin database produksi (cuciin-db) ke database cadangan (cuciin-backup-db)
+# sekali sehari. Ini melengkapi Time Travel, bukan menggantikannya: Time Travel
+# menutup 7 hari terakhir dengan gratis dan tanpa mengunci database, sedangkan
+# mirror ini menyimpan riwayat lebih panjang dan tetap ada bila akun Cloudflare
+# hilang.
+#
+# Dijalankan 01:00 WIB karena `wrangler d1 export` mengunci database produksi
+# sesaat. Jangan naikkan frekuensinya ke jam operasional cabang.
+
 on:
   workflow_dispatch:
   schedule:
-    # 18:00 UTC = 01:00 WIB. Sekali sehari, di luar jam operasional cabang,
-    # karena wrangler d1 export mengunci database produksi sesaat.
+    # 18:00 UTC = 01:00 WIB keesokan harinya.
     - cron: "0 18 * * *"
+
+permissions:
+  contents: read
+
+# Dua run bersamaan akan saling mengunci database produksi dan menghasilkan
+# impor yang tidak konsisten. Yang berikutnya menunggu, bukan berjalan paralel.
+concurrency:
+  group: cuciin-d1-mirror
+  cancel-in-progress: false
 
 jobs:
   mirror:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: laundry-ops/cloudflare
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          # wrangler 4.x menolak berjalan di bawah Node 22.
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: laundry-ops/cloudflare/package-lock.json
 
-      - name: Jalankan mirroring database
+      - run: npm ci
+
+      - name: Export produksi lalu impor ke database cadangan
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: laundry-ops/cloudflare
+        run: bash scripts/mirror-d1.sh
+
+      - name: Laporkan hasil
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          npm ci --ignore-scripts || npm install --no-audit --no-fund
-          bash scripts/mirror-d1.sh
+          set -euo pipefail
+          for db in cuciin-db cuciin-backup-db; do
+            n="$(npx wrangler d1 execute "$db" --remote --json \
+              --command="SELECT count(*) AS n FROM staff;" 2>/dev/null \
+              | grep -oE '"n": *[0-9]+' | grep -oE '[0-9]+' || true)"
+            echo "$db staff: ${n:-tidak terbaca}"
+          done
