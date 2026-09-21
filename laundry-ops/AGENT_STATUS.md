@@ -66,6 +66,31 @@ tertarik snapshot baru ini sampai aplikasi dibuka dan sinkronisasi berjalan. Per
 memegang outbox lama akan mengirim ulang command-nya karena `processed_commands` kosong, dan
 command itu diterima sebagai baru.
 
+## 0m. Login rilis gagal 500: kuota tulis D1 free tier habis (bukan bug aplikasi)
+
+**Status: akar ditemukan dan dibuktikan. Menunggu reset kuota, tidak ada perbaikan kode yang diperlukan.**
+
+Gejala: app rilis 1.10.35 menampilkan "Server identitas belum tersedia (500)" pada semua percobaan login, termasuk akun Owner.
+
+Bukti langsung:
+
+```
+npx wrangler d1 execute cuciin-db --remote --command "INSERT ..."
+→ code: 7500
+  "Your account has exceeded D1's free tier daily row write limit.
+   Upgrade to a paid plan or wait until tomorrow (midnight UTC)"
+```
+
+Email Cloudflare (diterima user bersamaan): operasi **"Rows written"**, limit **100.000**/hari, reset **2026-09-22 00:00:00 UTC** (07:00 WIB). Kalimat resminya: *"D1 row write requests will return errors until the limit resets. Your stored data is not affected."*
+
+Kenapa jadi 500 di login: `/health` tetap **200** (`{"ok":true,"database":"ready","revision":0}`) karena ia hanya membaca. Login menulis (baris sesi/`processed_commands`), jadi Worker mengembalikan 500 dan app menerjemahkannya jadi pesan identitas.
+
+Bukan bug app maupun Worker: baca hidup, tulis mati. Kuota habis tersedot oleh pekerjaan hari itu — pembersihan 50.623 baris, uji perangkat, sapu peran, puluhan putaran tes.
+
+Keadaan data saat kuota habis (dibaca, bukan ditulis): `staff` 8, `staff_branches` 14, `branches` 4, `access_roles` 3, `organizations` 1; seluruh tabel transaksi, keuangan, jurnal, dan command **0**. Tidak ada sisa sampah uji yang perlu dibereskan saat kuota pulih — begitu reset, tulis jalan sendiri.
+
+Tindakan yang dihindari: menyalakan Workers Paid ($5/bulan) tanpa persetujuan. Bila nanti login sering menyentuh limit ini di operasi normal 20 cabang, itu tanda kuota free tier memang tak cukup, dan naik paket jadi keputusan bisnis.
+
 ## 0k. Email reset sandi: teks "project-634935388002" berasal dari OAuth brand, bukan nama project
 
 **Status: akar masalah terbukti; perubahan template TIDAK bisa lewat API — harus dari Console.**
