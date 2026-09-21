@@ -143,9 +143,13 @@ turun jadi 60. Pengiriman transaksi lokal tetap instan karena `push()` memanggil
 Dibuat gratis tanpa kartu kredit, mengisi celah yang dulu mentok di R2/Drive.
 
 - Skrip: `laundry-ops/cloudflare/scripts/mirror-d1.sh` — export produksi lalu impor ke cadangan.
-- Workflow: `.github/workflows/cuciin-d1-mirror.yml`, jadwal `0 */6 * * *` (tiap 6 jam).
+- Workflow: `.github/workflows/cuciin-d1-mirror.yml`, jadwal `0 18 * * *` (**01:00 WIB sekali sehari**,
+  keputusan user). Sengaja bukan tiap 6 jam: `wrangler d1 export` mengunci database produksi
+  sesaat, dan jadwal 6 jam jatuh di 07:00/13:00/19:00/01:00 WIB — dua di antaranya jam sibuk kasir.
 - **Terbukti jalan dua kali berturut-turut** (`exit 0`), mencakup jalur cadangan kosong dan
   jalur cadangan sudah terisi; verifikasi membandingkan jumlah `staff` produksi vs cadangan (8 = 8).
+- **Jadwal otomatis belum aktif** sampai workflow ini masuk branch default `main`. Sebelum itu,
+  jalankan manual: `bash laundry-ops/cloudflare/scripts/mirror-d1.sh`.
 
 Dua jebakan yang sudah ditangani skrip, jangan dihapus tanpa alasan:
 

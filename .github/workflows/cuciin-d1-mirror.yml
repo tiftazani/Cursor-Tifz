@@ -3,7 +3,9 @@ name: Cuciin D1 database mirror
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 */6 * * *"
+    # 18:00 UTC = 01:00 WIB. Sekali sehari, di luar jam operasional cabang,
+    # karena wrangler d1 export mengunci database produksi sesaat.
+    - cron: "0 18 * * *"
 
 jobs:
   mirror:
