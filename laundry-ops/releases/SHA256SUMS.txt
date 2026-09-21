@@ -1,2 +1,2 @@
-73c43f379337395fb5bf33cc5ebf077477fa47d3395db945900a3770cacc1d02  cuciin-release.apk
-f8df633894e5e9fff74eaf5361c357c89b63d278dddaf2826e58fa41d4803ce0  cuciin-debug.apk
+9e8cb6a0236a90f791d5bde5811c98b2b480f3a4541efc641be949a825616acd  cuciin-release.apk
+bda619c6befac4daf2b072737d7f7cb711adafc85ea9e2245c7b40614bca4e36  cuciin-debug.apk
