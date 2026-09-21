@@ -14,7 +14,7 @@ class AccessPolicyTest {
     @Test fun ownerAlwaysHasEverything() {
         val owner = staff(Role.Owner)
         assertTrue(AccessPolicy.can(owner, roles, null, "queue"))
-        assertTrue(AccessPolicy.can(owner, roles, null, "owner", "owner.access"))
+        assertTrue(AccessPolicy.can(owner, roles, null, "access", "access.role"))
         assertEquals(AccessCatalog.moduleKeys, AccessPolicy.grants(owner, roles, null).first)
     }
 
@@ -29,7 +29,7 @@ class AccessPolicyTest {
         val effective = AccessPolicy.effectiveRole(cashier, roles)
         assertEquals("role-kasir", effective.id)
         assertTrue(AccessPolicy.can(cashier, roles, null, "service", "service.create"))
-        assertFalse(AccessPolicy.can(cashier, roles, null, "owner", "owner.access"))
+        assertFalse(AccessPolicy.can(cashier, roles, null, "access", "access.role"))
     }
 
     @Test fun userFollowsTheAssignedRoleNotTheLegacyRole() {
@@ -62,8 +62,8 @@ class AccessPolicyTest {
         // Role mengizinkan queue, tetapi kebijakan pengguna mempersempitnya.
         assertFalse(AccessPolicy.can(person, roles, narrowed, "queue"))
         // Kebijakan tidak dapat menambah modul di luar role.
-        val widened = UserAccessPolicy(email = person.email, modules = setOf("owner"), functions = setOf("owner.access"))
-        assertFalse(AccessPolicy.can(person, roles, widened, "owner", "owner.access"))
+        val widened = UserAccessPolicy(email = person.email, modules = setOf("access"), functions = setOf("access.role"))
+        assertFalse(AccessPolicy.can(person, roles, widened, "access", "access.role"))
     }
 
     @Test fun functionsWithoutTheirModuleAreDropped() {

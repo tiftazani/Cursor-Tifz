@@ -4,14 +4,13 @@ Dokumen ini adalah titik mulai untuk Hermes, OpenCode, Cursor, Codex, atau revie
 
 ## Status yang sudah diverifikasi
 
-- Branch: `codex/cuciin-1-8-1`; PR: `https://github.com/tiftazani/Cursor-Tifz/pull/18`.
-- Commit sumber terakhir saat handover: `2f47351` (lihat `AGENT_STATUS.md` untuk pekerjaan 1.10.0).
-- Android: `com.cuciin.laundryops`, Kotlin + Jetpack Compose, versionName `1.10.0`, versionCode `19`.
-- Kandidat rilis: `releases/1.10.0-candidate/`. Jangan mengubah atau mengganti APK/AAB tanpa build dan checksum baru.
+- Branch: `codex/cuciin-1-8-1`; PR #18-#21 sudah MERGED, tetapi `main` masih tertinggal dari branch kerja — lihat `AGENT_STATUS.md` untuk selisih terbaru.
+- Commit sumber terakhir saat handover diperbarui: lihat `AGENT_STATUS.md` (bagian pekerjaan terbaru), karena dokumen ini hanya mencerminkan handover 1.10.0.
+- Android: `com.cuciin.laundryops`, Kotlin + Jetpack Compose, versionName `1.10.30`, versionCode `49`.
+- Kandidat rilis: `releases/1.10.30-candidate/`. Jangan mengubah atau mengganti APK/AAB tanpa build dan checksum baru.
 - Worker produksi: `cuciin-api`, D1 `cuciin-db`, Firebase project `cuciin-ops` (project lama `cuciin-ops-tiftazani` masih diterima selama masa peralihan).
-- Worker yang aktif saat handover: `5a2741cc-96b8-423a-8de1-8b2e1ea66f35`; health memberi HTTP 200 dan database `ready`.
-- Skema D1 produksi: migrasi `0001` sampai `0004_operational_links.sql` sudah diterapkan.
-- Validasi terakhir: 47 unit test Android debug + 47 release, lint kedua varian tanpa error, APK/AAB release, serta 35 test Worker lulus.
+- Skema D1 produksi: migrasi `0001` sampai `0008_owner_name_neutral.sql` sudah diterapkan.
+- Validasi terakhir: 267 unit test Android debug + 267 release, lint kedua varian tanpa error, APK/AAB release, serta 60 test Worker lulus.
 
 Kondisi ini adalah kandidat rilis, bukan keputusan big-bang. Daftar tugas Owner yang masih tersisa ada di `android/RELEASE_READINESS.md` dan `OPERATIONS_RUNBOOK.md`.
 

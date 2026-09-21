@@ -145,13 +145,14 @@ internal fun Field(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
+internal fun LoginScreen(nav: NavHostController) {
     val ui = rememberUi()
     val palette = LocalCuciinPalette.current
     var email by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var loginHelp by remember { mutableStateOf(false) }
+    var loginError by remember { mutableStateOf("") }
     var resetEmail by remember { mutableStateOf("") }
     var resetBusy by remember { mutableStateOf(false) }
     var resetMessage by remember { mutableStateOf("") }
@@ -225,8 +226,15 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
                         lineHeight = 17.sp,
                         modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
                     )
-                    GlassField(email, { email = it }, "Email", modifier = Modifier.padding(bottom = 13.dp))
-                    GlassField(pass, { pass = it }, "Kata sandi", password = true)
+                    GlassField(email, { email = it; loginError = "" }, "Email", modifier = Modifier.padding(bottom = 13.dp))
+                    GlassField(pass, { pass = it; loginError = "" }, "Kata sandi", password = true)
+                    // Pesan kegagalan masuk ditampilkan sebagai banner di layar, bukan
+                    // lewat toast/snackbar: SnackbarHost berada di Scaffold yang hanya
+                    // membungkus rute setelah login, jadi pesan untuk layar Masuk
+                    // pernah hilang tanpa jejak dan pengguna tidak tahu kenapa gagal.
+                    if (loginError.isNotBlank()) {
+                        Box(Modifier.padding(top = 12.dp)) { FeedbackBanner(loginError) }
+                    }
                     Row(
                         Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 14.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -245,11 +253,11 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
                     PrimaryBtn(if (busy) "Memeriksa akun…" else "Masuk", enabled = !busy, icon = Icons.Outlined.Login) {
                         if (busy) return@PrimaryBtn
                         if (email.isBlank() || pass.isBlank()) {
-                            toast("Email dan kata sandi wajib diisi.")
+                            loginError = "Email dan kata sandi wajib diisi."
                             return@PrimaryBtn
                         }
                         if (!FirebaseCloud.enabled) {
-                            toast("Konfigurasi identitas belum tersedia. Hubungi Owner sebelum memakai aplikasi.")
+                            loginError = "Konfigurasi identitas belum tersedia. Hubungi Owner sebelum memakai aplikasi."
                             return@PrimaryBtn
                         }
                         busy = true
@@ -260,7 +268,7 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
                                 pending -> nav.navigate("pending")
                                 else -> {
                                     if (store.pendingName.value != null) nav.navigate("pending")
-                                    else toast(msg)
+                                    else loginError = msg
                                 }
                             }
                         }
@@ -314,7 +322,7 @@ internal fun LoginScreen(nav: NavHostController, toast: (String) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun RegisterScreen(nav: NavHostController, toast: (String) -> Unit) {
+internal fun RegisterScreen(nav: NavHostController) {
     val ui = rememberUi()
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -330,12 +338,13 @@ internal fun RegisterScreen(nav: NavHostController, toast: (String) -> Unit) {
         Role.Kasir -> "Kasir"
     }
     val branchName = store.branches.firstOrNull { it.id == branch }?.name?.removePrefix("Cuciin ")?.ifBlank { null } ?: "Pilih cabang"
+    var regError by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize().padding(horizontal = ui.pad)) {
         ScreenHeader("Daftar", "Akun akan ditinjau Owner", onBack = { nav.popBackStack() })
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Field(name, { name = it }, "Nama")
-            Field(email, { email = it }, "Email")
-            Field(pass, { pass = it }, "Kata sandi", password = true)
+            Field(name, { name = it; regError = "" }, "Nama")
+            Field(email, { email = it; regError = "" }, "Email")
+            Field(pass, { pass = it; regError = "" }, "Kata sandi", password = true)
             FilterBar(
                 label = "Peran akses",
                 value = roleLabel(role),
@@ -350,24 +359,27 @@ internal fun RegisterScreen(nav: NavHostController, toast: (String) -> Unit) {
                 icon = Icons.Outlined.Storefront,
                 onClick = { showBranchSheet = true },
             )
+            // Layar pendaftaran juga berada di luar Scaffold ber-snackbar, jadi
+            // pesan kegagalannya ditampilkan sebagai banner di layar.
+            if (regError.isNotBlank()) FeedbackBanner(regError)
             PrimaryBtn(if (busy) "Mengirim…" else "Kirim pendaftaran", enabled = !busy) {
                 if (name.isBlank() || email.isBlank()) {
-                    toast("Nama dan email wajib")
+                    regError = "Nama dan email wajib diisi."
                     return@PrimaryBtn
                 }
                 if (branch.isBlank()) {
-                    toast("Pilih cabang penugasan")
+                    regError = "Pilih cabang penugasan."
                     return@PrimaryBtn
                 }
                 if (!BuildConfig.DEBUG && pass.length < 12) {
-                    toast("Gunakan kata sandi minimal 12 karakter.")
+                    regError = "Gunakan kata sandi minimal 12 karakter."
                     return@PrimaryBtn
                 }
                 busy = true
                 FirebaseCloud.register(name, email, pass, role, branch) { result ->
                     busy = false
                     if (result == "pending" || result == "pending-local") nav.navigate("pending")
-                    else toast("Pendaftaran belum berhasil. Periksa koneksi dan data akun.")
+                    else regError = "Pendaftaran belum berhasil. Periksa koneksi dan data akun."
                 }
             }
             Spacer(Modifier.height(24.dp))

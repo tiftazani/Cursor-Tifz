@@ -18,7 +18,7 @@ Saya melanjutkan Cuciin dari repository https://github.com/tiftazani/Cursor-Tifz
 
 Tugas saya: [TULIS TUGAS SPESIFIK].
 
-Paket aplikasi adalah `com.cuciin.laundryops` (versionCode 19) dan Firebase project aktif adalah `cuciin-ops`. Selama masa peralihan, Worker juga menerima token dari project lama `cuciin-ops-tiftazani`; jangan kurangi daftar itu di `wrangler.toml` selama masih ada perangkat yang memakai paket lama.
+Paket aplikasi adalah `com.cuciin.laundryops` (versionCode 49, versi 1.10.30) dan Firebase project aktif adalah `cuciin-ops`. Selama masa peralihan, Worker juga menerima token dari project lama `cuciin-ops-tiftazani`; jangan kurangi daftar itu di `wrangler.toml` selama masih ada perangkat yang memakai paket lama.
 
 Batasi perubahan hanya pada file yang relevan. Sebelum mengedit, laporkan file yang akan disentuh. Pertahankan CRUD, audit trail, alur periksa Service–pembayaran–nota, local-first outbox, command idempoten, dan data foto lokal. Semua UI berbahasa Indonesia dan harus nyaman untuk HP sempit maupun tablet. Jangan mengubah API, Firebase project, applicationId, signing identity, secret, atau version tanpa alasan dan dampak yang jelas. Jangan force-push atau menimpa perubahan agent lain.
 

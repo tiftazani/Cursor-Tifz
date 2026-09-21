@@ -83,6 +83,14 @@ test("otorisasi membatasi role, cabang, dan absensi orang lain", () => {
   assert.equal(attendanceRecordOwnedBy(kasir,"KASIR@CUCIIN.ID"),true);
   assert.equal(attendanceRecordOwnedBy(owner,"oranglain@cuciin.id"),true);
   assert.equal(commandPermission(owner,"service.upsert").allowed,true);
+  // Jenis aset adalah master data organisasi: tanpa aturan ini Kasir atau SPV bisa menghapusnya
+  // untuk semua cabang, sementara aplikasi menjaganya dengan owner.manage.
+  assert.equal(commandPermission(kasir,"assetType.delete").allowed,false);
+  assert.equal(commandPermission(spv,"assetType.delete").allowed,false);
+  assert.equal(commandPermission(kasir,"assetType.upsert").allowed,false);
+  assert.equal(commandPermission(spv,"assetType.upsert").allowed,false);
+  assert.equal(commandPermission(owner,"assetType.delete").allowed,true);
+  assert.equal(commandPermission(owner,"assetType.upsert").allowed,true);
 });
 
 test("komisi transaksi selalu berasal dari katalog server", () => {
@@ -119,6 +127,24 @@ test("delta staf dan cabang non-Owner dibatasi ke penugasan cabangnya", async ()
   assert.match(statements[0],/entity_type NOT IN \('staff','branch','attendance'\)/);
   assert.match(statements[0],/json_extract\(payload_json,'\$\.staffEmail'\)/);
   assert.match(statements[0],/entity_type='branch' AND entity_id IN/);
+});
+
+test("kursor klien yang di depan server dikembalikan ke revisi jurnal terakhir", async () => {
+  // Kejadian nyata: perangkat menyimpan kursornya sendiri (1018) sementara jurnal server berhenti di
+  // 409. Klien mengirim `after=1018`, tidak ada baris yang cocok, lalu `nextRevision` dikembalikan
+  // sebagai `after` — kursor lama. Perangkat berhenti menerima perubahan server selamanya, dan role
+  // yang sudah diturunkan di server tidak pernah sampai ke perangkat.
+  const env={DB:{prepare(sql) {
+    return {bind() { return sql.includes("MAX(sequence)")
+      ? {first:async()=>({revision:409})}
+      : {all:async()=>({results:[]})}; }}; }}};
+  const identity={email:"owner@cuciin.id",name:"Owner",role:"Owner",branchIds:["melati"],bootstrap:true};
+  const result=await pullChanges(new Request("https://cuciin.example/v1/sync/changes?after=1018"),env,identity);
+  const body=await result.json();
+  assert.equal(result.status,200);
+  assert.equal(body.changes.length,0);
+  assert.equal(body.nextRevision,409,"kursor harus turun ke revisi jurnal, bukan memantulkan after");
+  assert.equal(body.revision,409);
 });
 
 test("pemindahan staf mengirim delete ke cabang lama dan upsert ke cabang baru", () => {
@@ -363,6 +389,41 @@ test("stock.batch menjurnal riwayat stok dan saldo sebagai entity yang dikenal p
   assert.equal(rows(env,"SELECT quantity FROM branch_stocks WHERE branch_id='melati' AND product_id='detergen'")[0].quantity,5);
   const types=rows(env,"SELECT entity_type FROM sync_changes WHERE entity_type IN ('stockMove','branchStock','stock') ORDER BY entity_type").map(row=>row.entity_type);
   assert.deepEqual(types,["branchStock","stockMove"],"riwayat stok harus dijurnal dengan tipe yang dipahami materializer");
+});
+
+test("harga Service yang menyimpang dari katalog ditolak untuk pengirim non-Owner", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  const body=await (await pushCommands(commandRequest([{
+    commandId:"nota-harga-0001",type:"order.create",entityId:"MLT-9",branchId:"melati",
+    payload:{id:"MLT-9",branchId:"melati",customerName:"Pelanggan Uji",phone:"0812",total:99999,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:99999}]},
+  }]),env,identities.kasir)).json();
+  assert.equal(body.results[0].accepted,false,"harga di luar katalog harus ditolak");
+  assert.equal(body.results[0].code,403);
+  assert.equal(rows(env,"SELECT count(*) AS n FROM orders WHERE id='MLT-9'")[0].n,0,"Nota tidak boleh tersimpan");
+});
+
+test("harga Service sesuai katalog tetap diterima untuk non-Owner", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  const body=await (await pushCommands(commandRequest([{
+    commandId:"nota-harga-0002",type:"order.create",entityId:"MLT-10",branchId:"melati",
+    payload:{id:"MLT-10",branchId:"melati",customerName:"Pelanggan Uji",phone:"0812",total:20000,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:2,unit:"kg",unitPrice:10000}]},
+  }]),env,identities.kasir)).json();
+  assert.equal(body.results[0].accepted,true,"harga katalog tidak boleh ikut ditolak");
+});
+
+test("Owner tetap boleh memakai harga Service di luar katalog", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  const body=await (await pushCommands(commandRequest([{
+    commandId:"nota-harga-0003",type:"order.create",entityId:"MLT-11",branchId:"melati",
+    payload:{id:"MLT-11",branchId:"melati",customerName:"Pelanggan Uji",phone:"0812",total:7500,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:7500}]},
+  }]),env,identities.owner)).json();
+  assert.equal(body.results[0].accepted,true,"Owner berhak menyesuaikan harga Service");
 });
 
 test("reproject memakai revisi jurnal terbaru supaya versi entity tidak mundur", async () => {

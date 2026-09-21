@@ -5,9 +5,10 @@ Dokumen ini adalah sumber konteks ringkas untuk Hermes, OpenCode, Router, Codex,
 ```text
 Repo: https://github.com/tiftazani/Cursor-Tifz
 Branch kerja: codex/cuciin-1-8-1
-PR aktif: https://github.com/tiftazani/Cursor-Tifz/pull/18
+PR aktif: #18-#21 sudah MERGED; main masih tertinggal dari branch kerja (lihat AGENT_STATUS.md)
 Folder produk: laundry-ops/
-Versi source saat ini: 1.10.0 (versionCode 19)
+Versi source saat ini: 1.10.30 (versionCode 49)
+Katalog izin: 15 modul / 41 fungsi, 5 preset peran, mode manual — lihat data/AccessCatalog.kt
 Android: Kotlin + Jetpack Compose, package com.cuciin.laundryops
 Backend: Cloudflare Worker + D1, autentikasi Firebase Email/Password
 Endpoint produksi: https://cuciin-api.tiftazani-cuciin.workers.dev
@@ -18,10 +19,12 @@ Penerapan delta memakai pending-remote marker yang persisten; jangan menulis sna
 Kompensasi stok yang bergantung pada penghapusan Service tidak boleh dikirim selama command Service dengan ID yang sama masih antre. Delta staff/branch untuk non-Owner harus dijurnal per cabang lama/baru; absensi hanya boleh terkirim kepada pemiliknya dan harus memeriksa pemilik baris server, bukan hanya email payload. Scope sinkronisasi non-Owner wajib membedakan role, email, dan daftar cabang.
 Server adalah sumber tarif komisi; harga nota boleh berubah tetapi `commissionPerUnit` tidak boleh dipercaya dari klien. Jika layanan lama sudah tidak ada di katalog, koreksi nota hanya boleh memakai komisi historis yang tersimpan pada baris nota itu. Hapus pelanggan hanya untuk Owner di UI, store, dan server. Tutup kas append-only dan ID collision harus 409. Pending remote marker harus menyimpan generation agar acknowledgement yang cepat tidak mengembalikan shadow lama.
 
-Peran:
-- Owner: semua cabang dan modul; boleh mengganti petugas Service.
+Peran (katalog rinci 15 modul / 41 fungsi di `data/AccessCatalog.kt`; role boleh berupa preset atau centang manual):
+- Owner: semua cabang dan modul; beberapa fungsi dikunci Owner (`ownerLocked`) dan ditolak Worker untuk non-Owner; boleh mengganti petugas Service.
 - Kasir: Service, pelanggan, stok, kas pada cabang yang ditugaskan; petugas Service selalu akun sesi.
 - SPV: antrian dan stok pada cabang yang ditugaskan; tanpa pembuatan Service/WhatsApp.
+- Izin WAJIB ditegakkan di store lewat `boleh(modul, fungsi)`/`tolak(fungsi, pesan)` atas `AccessPolicy`, bukan lewat perbandingan nama role. Menyembunyikan tombol saja bukan penegakan.
+- Role lama yang memakai kunci `owner.manage`/`attendance.write` diterjemahkan `AccessCatalog.migrate` saat dibaca; `withLegacyMirror` menulis kunci lama sebagai cermin supaya APK 1.10.29 di cabang tetap bekerja. Cermin itu tidak boleh dihitung sebagai fungsi baru di UI.
 
 Aturan yang tidak boleh dilanggar:
 - Jangan hapus atau melemahkan CRUD, audit trail, sinkronisasi, alur periksa Service, pembayaran, atau nota.

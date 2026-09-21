@@ -66,6 +66,10 @@ object CuciinStore {
         CloudSync.init(application)
         val snap = LocalJson.load()
         val loadedPersistedData = snap != null && snap.staff.isNotEmpty()
+        // Satu tempat untuk menaikkan role ke versi katalog sekarang, apa pun jalur muatnya
+        // (applySeed, applySnapshot, applyBusiness). Sebelumnya penambalan hanya terjadi saat
+        // layar Kontrol Akses Role dibuka, sehingga perangkat cabang yang tidak pernah membuka
+        // layar itu tetap memakai kunci lama: hak bacanya hilang dan absennya ditolak server.
         val preserveLocalOnBootstrap = loadedPersistedData && !isPristineSeed(snap!!)
         if (!loadedPersistedData) {
             applySeed()
@@ -73,6 +77,10 @@ object CuciinStore {
         } else {
             applySnapshot(snap!!)
             localUpdatedAt = snap.updatedAt
+            // Role dari server memakai kunci katalog lama sampai perangkat ini menaikkannya.
+            // Tanpa ini, perangkat cabang yang tidak pernah membuka layar Kontrol Akses Role
+            // tetap memakai kunci lama: hak bacanya hilang dan absennya ditolak server.
+            persist()
         }
         ready = true
         CloudSync.initializeLocalState(cloudSnapshot(), preserveLocalOnBootstrap)?.let(::applyRecoveredCloud)
@@ -241,6 +249,7 @@ object CuciinStore {
         fill(accessPolicies, s.accessPolicies)
         fill(accessRoles, s.accessRoles.ifEmpty { AccessCatalog.builtInRoles() })
         fill(whatsappTemplates, s.whatsappTemplates.ifEmpty { listOf(WhatsAppTemplate()) })
+        upgradeAccessRoles()
     }
 
     fun applyCloud(s: Snapshot, onPersisted: (() -> Unit)? = null) {
@@ -329,7 +338,31 @@ object CuciinStore {
     )
 
     private fun persist() {
+        // Dijalankan tepat sebelum menulis: setiap jalur yang menyimpan snapshot ikut menaikkan
+        // role ke versi katalog sekarang, apa pun yang memicunya.
+        //
+        // `updatedAt` dimajukan bila ada role yang dinaikkan. `LocalJson.save` menolak menulis
+        // snapshot yang `updatedAt`-nya tidak lebih baru dari yang terakhir tersimpan, jadi tanpa
+        // ini hasil naik versi tidak pernah sampai ke berkas.
+        if (upgradeAccessRoles()) localUpdatedAt = maxOf(Clock.nowMs(), localUpdatedAt + 1)
         LocalJson.save(snapshot())
+    }
+
+    /**
+     * Menaikkan seluruh role ke versi katalog sekarang.
+     *
+     * Dipanggil dari [persist], jadi setiap jalur yang menyimpan snapshot ikut menjalankannya:
+     * muat berkas lokal, seed, dan data dari server. Naik versi HANYA terjadi sekali per
+     * [AccessCatalog.VERSION] (ditandai [AccessRole.catalogVersion]), jadi centang yang sengaja
+     * dicabut Owner tidak hidup kembali. Tanpa ini, perangkat yang tidak pernah membuka layar
+     * Kontrol Akses Role tetap memakai kunci lama dan kehilangan hak bacanya.
+     */
+    private fun upgradeAccessRoles(): Boolean {
+        val hasil = accessRoles.map { AccessCatalog.upgrade(it) }
+        if (hasil == accessRoles.toList()) return false
+        accessRoles.clear()
+        accessRoles.addAll(hasil)
+        return true
     }
 
     private fun bump() {
@@ -431,6 +464,39 @@ object CuciinStore {
         return AccessPolicy.can(me, accessRoles, policy, module, function)
     }
 
+    /**
+     * Penjaga fungsi tulis yang sensitif.
+     *
+     * Layar Kontrol Akses Role menjanjikan "Fungsi tanpa centang berarti tidak diizinkan".
+     * Janji itu hanya benar bila setiap fungsi katalog benar-benar diperiksa. Sebelumnya yang
+     * menentukan hanyalah modul dan [Role] lama, sehingga mencabut centang sebuah fungsi tidak
+     * mengubah apa pun: seorang Kasir yang role-nya sudah dicabut fungsi `service.correct` tetap
+     * bisa mengoreksi dan menghapus transaksi.
+     *
+     * Dua lapis tetap berlaku dan tidak saling menggantikan:
+     * 1. [Role] menjaga batas lama yang tidak dapat diubah dari layar (Supervisor tidak mengoreksi,
+     *    cabang sendiri saja, nota yang sudah dikirim hanya Owner).
+     * 2. Fungsi katalog menjaga centang di Kontrol Akses Role, dan inilah lapis yang bisa diatur.
+     */
+    private fun boleh(modul: String, fungsi: String): Boolean = canAccess(modul, fungsi)
+
+    /**
+     * Penanda penolakan izin untuk fungsi yang mengembalikan Int.
+     *
+     * Nilai negatif tidak mungkin muncul dari perhitungan sah (jumlah perubahan selalu >= 0), jadi
+     * UI dapat membedakan "izin dicabut" dari "tidak ada yang berubah" tanpa mengubah tipe
+     * kembalian dan tanpa melempar pengecualian.
+     */
+    const val TOLAK_STOK: Int = -1
+
+    /** Pesan penolakan yang menyebut fungsi mana yang dicabut, supaya tidak membingungkan. */
+    private fun tolak(fungsi: String): String =
+        "Akses ${AccessCatalog.functionLabel(fungsi)} dicabut untuk role akun ini"
+
+    /** Pesan untuk pemeriksaan gabungan Role dan fungsi. */
+    private fun tolak(fungsi: String, alasan: String): String =
+        if (boleh(AccessCatalog.moduleOf(fungsi).orEmpty(), fungsi)) alasan else tolak(fungsi)
+
     /** Role yang melekat pada pengguna yang sedang masuk, dipakai untuk menampilkan hak aksesnya. */
     fun currentAccessRole(): AccessRole? {
         val s = session.value ?: return null
@@ -447,36 +513,28 @@ object CuciinStore {
     /**
      * Memastikan katalog role tersedia dan role bawaan mengikuti katalog terbaru.
      *
-     * Katalog bisa bertambah seiring versi aplikasi (misalnya fungsi "Ubah harga Service").
+     * Katalog bisa bertambah seiring versi aplikasi (misalnya pemisahan hapus dari koreksi).
      * Role bawaan yang sudah tersimpan di server tidak otomatis memuat fungsi baru itu, karena
      * isinya dibekukan saat pertama dibuat. Tanpa penambalan ini, fitur baru tidak akan pernah
      * berlaku walaupun kodenya sudah ada.
      *
-     * Hanya fungsi yang ditandai bawaan untuk role itu yang ditambahkan, dan hanya bila
-     * modulnya memang sudah dimiliki role tersebut. Fungsi yang sudah dicabut Owner tidak
-     * dihidupkan kembali: yang ditambal hanya fungsi yang belum pernah ada di versi mana pun,
-     * yaitu yang ditandai di [AccessCatalog.builtInFunctionsFor].
+     * Penambalan hanya terjadi SEKALI per [AccessCatalog.VERSION], ditandai
+     * [AccessRole.catalogVersion]. Tanpa penanda itu, penambal tidak dapat membedakan fungsi yang
+     * "belum pernah ada" dari fungsi yang "sengaja dicabut Owner", sehingga centang yang dicabut
+     * akan hidup kembali setiap aplikasi dibuka. Fungsi yang sudah dicabut Owner tidak dihidupkan
+     * kembali: hanya fungsi yang belum pernah ada di versi katalog mana pun yang ditambal.
      */
     fun ensureAccessRoles() {
         if (accessRoles.isEmpty()) {
             accessRoles.addAll(AccessCatalog.builtInRoles())
             return
         }
-        var berubah = false
-        val hasil = accessRoles.map { role ->
-            val tambahan = AccessCatalog.builtInFunctionsFor(role.id).filter { fn ->
-                fn !in role.functions && AccessCatalog.moduleOf(fn) in role.modules
-            }
-            if (tambahan.isEmpty()) role
-            else {
-                berubah = true
-                role.copy(functions = role.functions + tambahan)
-            }
-        }
-        if (berubah) {
-            accessRoles.clear()
-            accessRoles.addAll(hasil)
-        }
+        // Role yang dibaca dari server bisa masih memakai kunci katalog lama. Diterjemahkan di
+        // sini, BUKAN hanya saat memeriksa izin: layar Kontrol Akses Role menampilkan centang dari
+        // `role.modules` dan `role.functions`, sehingga kunci lama tampil sebagai centang KOSONG.
+        // Owner yang menyimpan role itu lalu kehilangan seluruh haknya, karena sanitasi membuang
+        // kunci yang tidak dikenal katalog.
+        upgradeAccessRoles()
     }
 
     fun saveAccessRole(role: AccessRole): String? {
@@ -486,10 +544,22 @@ object CuciinStore {
         if (accessRoles.any { it.id != role.id && it.name.equals(name, true) }) return "Nama role $name sudah dipakai"
         val (modules, functions) = AccessCatalog.sanitize(role.modules, role.functions)
         if (modules.isEmpty()) return "Pilih minimal satu modul"
-        val cleaned = role.copy(name = name, modules = modules, functions = functions)
+        // Cermin kunci lama ditulis SESUDAH sanitasi. Perangkat yang masih memakai APK 1.10.29
+        // hanya mengenal kunci lama, dan sanitasi di sana membuang kunci baru: tanpa cermin ini,
+        // role yang disimpan di sini tampil sebagai centang kosong di cabang yang belum pindah.
+        val (modulesSimpan, functionsSimpan) = AccessCatalog.withLegacyMirror(modules, functions)
+        val cleaned = role.copy(
+            name = name,
+            modules = modulesSimpan,
+            functions = functionsSimpan,
+            // Versi katalog dipertahankan: role yang disimpan Owner tidak boleh ditambal ulang
+            // pada versi katalog yang sama, supaya centang yang sengaja dicabut tetap tercabut.
+            catalogVersion = maxOf(role.catalogVersion, AccessCatalog.VERSION),
+        )
         val index = accessRoles.indexOfFirst { it.id == role.id }
         if (index >= 0) accessRoles[index] = cleaned else accessRoles.add(cleaned)
-        log("Role ${cleaned.name} disimpan · ${cleaned.modules.size} modul · ${cleaned.functions.size} fungsi", branches.firstOrNull()?.id.orEmpty())
+        val (modulBerlaku, fungsiBerlaku) = AccessCatalog.berlaku(cleaned)
+        log("Role ${cleaned.name} disimpan · ${modulBerlaku.size} modul · ${fungsiBerlaku.size} fungsi", branches.firstOrNull()?.id.orEmpty())
         bump()
         return null
     }
@@ -516,7 +586,7 @@ object CuciinStore {
 
     /** Memindahkan pengguna ke role lain; aksesnya langsung mengikuti role tersebut. */
     fun assignAccessRole(email: String, roleId: String): String? {
-        if (session.value?.role != Role.Owner) return "Hanya Owner yang dapat mengubah role pengguna"
+        if (!boleh("access", "access.assign")) return tolak("access.assign", "Hanya Owner yang dapat mengubah role pengguna")
         val index = staff.indexOfFirst { it.email.equals(email, true) }
         if (index < 0) return "Pengguna tidak ditemukan"
         if (roleId.isNotBlank() && accessRoles.none { it.id == roleId }) return "Role tidak ditemukan"
@@ -552,7 +622,7 @@ object CuciinStore {
     fun whatsappTemplate(): WhatsAppTemplate = whatsappTemplates.firstOrNull() ?: WhatsAppTemplate()
 
     fun saveWhatsAppTemplate(opening: String, content: String, closing: String): String? {
-        if (session.value?.role != Role.Owner) return "Hanya Owner yang dapat mengubah pesan WhatsApp"
+        if (!boleh("whatsapp", "whatsapp.template")) return tolak("whatsapp.template", "Akun ini tidak dapat mengubah pesan WhatsApp")
         if (opening.isBlank() || content.isBlank() || closing.isBlank()) return "Pesan pembuka, isi, dan penutup wajib diisi"
         whatsappTemplates.clear()
         whatsappTemplates.add(WhatsAppTemplate(opening = opening.trim(), content = content.trim(), closing = closing.trim()))
@@ -718,7 +788,15 @@ object CuciinStore {
         bump()
     }
 
-    fun approve(name: String, ok: Boolean) {
+    /**
+     * Menyetujui atau menolak akun yang mendaftar sendiri.
+     *
+     * Sebelumnya fungsi ini TIDAK memeriksa izin apa pun: siapa pun yang berhasil membuka layar
+     * Daftar User bisa menyetujui akunnya sendiri atau akun lain, walaupun menunya sudah dijaga
+     * di UI. Penjagaan di UI bukan penjagaan: store adalah lapis terakhir yang harus menolak.
+     */
+    fun approve(name: String, ok: Boolean): String? {
+        if (!boleh("staff", "staff.approve")) return tolak("staff.approve", "Akun ini tidak dapat menyetujui pendaftar")
         val i = staff.indexOfFirst { it.name == name }
         if (i >= 0) staff[i] = staff[i].copy(approved = ok)
         // Cabang audit diambil dari data nyata. Sebelumnya ada nilai tetap "melati" yang sudah
@@ -729,9 +807,11 @@ object CuciinStore {
             ?: branches.firstOrNull()?.id.orEmpty()
         log("${if (ok) "Setujui" else "Tolak"} $name", auditBranch)
         bump()
+        return null
     }
 
-    fun addBranch(name: String, code: String, location: String, maps: String): Branch {
+    fun addBranch(name: String, code: String, location: String, maps: String): Branch? {
+        if (!boleh("branch", "branch.manage")) return null
         val id = uniqueBranchId(name)
         val b = Branch(id, code.uppercase().take(4).ifBlank { "CAB" }, name.trim(), location.trim(), maps.trim())
         branches.add(b)
@@ -742,9 +822,10 @@ object CuciinStore {
         return b
     }
 
-    fun updateBranch(id: String, name: String, code: String, location: String, maps: String) {
+    fun updateBranch(id: String, name: String, code: String, location: String, maps: String): String? {
+        if (!boleh("branch", "branch.manage")) return tolak("branch.manage", "Akun ini tidak dapat mengubah cabang")
         val i = branches.indexOfFirst { it.id == id }
-        if (i < 0) return
+        if (i < 0) return null
         branches[i] = branches[i].copy(
             name = name.trim(),
             code = code.uppercase().take(4).ifBlank { branches[i].code },
@@ -753,17 +834,21 @@ object CuciinStore {
         )
         log("Cabang ${name.trim()} diubah", id)
         bump()
+        return null
     }
 
-    fun updateBranchMap(id: String, maps: String) {
+    fun updateBranchMap(id: String, maps: String): String? {
+        if (!boleh("branch", "branch.manage")) return tolak("branch.manage", "Akun ini tidak dapat mengubah lokasi cabang")
         val i = branches.indexOfFirst { it.id == id }
-        if (i < 0 || maps.isBlank()) return
+        if (i < 0 || maps.isBlank()) return null
         branches[i] = branches[i].copy(mapsQuery = maps.trim())
         log("Lokasi peta ${branches[i].name} diperbarui", id)
         bump()
+        return null
     }
 
     fun deleteBranch(id: String): String? {
+        if (!boleh("branch", "branch.delete")) return tolak("branch.delete", "Akun ini tidak dapat menghapus cabang")
         if (branches.size <= 1) return "Minimal satu cabang harus tersisa"
         if (notas.any { it.branchId == id }) return "Cabang memiliki riwayat Service dan tidak dapat dihapus"
         if (inventory.any { it.branchId == id } || expenses.any { it.branchId == id } ||
@@ -784,7 +869,8 @@ object CuciinStore {
         return null
     }
 
-    fun addCustomer(name: String, phone: String, address: String): Customer {
+    fun addCustomer(name: String, phone: String, address: String): Customer? {
+        if (!boleh("customer", "customer.write")) return null
         val c = Customer("c-${newId()}", name.trim(), address.trim(), phone.trim())
         customers.add(0, c)
         selectedCustomer.value = c
@@ -793,17 +879,19 @@ object CuciinStore {
         return c
     }
 
-    fun updateCustomer(id: String, name: String, phone: String, address: String) {
+    fun updateCustomer(id: String, name: String, phone: String, address: String): String? {
+        if (!boleh("customer", "customer.write")) return tolak("customer.write", "Akun ini tidak dapat mengubah pelanggan")
         val i = customers.indexOfFirst { it.id == id }
-        if (i < 0) return
+        if (i < 0) return null
         customers[i] = customers[i].copy(name = name.trim(), phone = phone.trim(), address = address.trim())
         if (selectedCustomer.value?.id == id) selectedCustomer.value = customers[i]
         log("Pelanggan ${name.trim()} diubah", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
+        return null
     }
 
     fun deleteCustomer(id: String): String? {
-        if (session.value?.role != Role.Owner) return "Hanya Owner yang dapat menghapus pelanggan"
+        if (!boleh("customer", "customer.delete")) return tolak("customer.delete", "Hanya Owner yang dapat menghapus pelanggan")
         val c = customers.find { it.id == id } ?: return "Pelanggan tidak ketemu"
         customers.removeAll { it.id == id }
         if (selectedCustomer.value?.id == id) selectedCustomer.value = null
@@ -813,6 +901,7 @@ object CuciinStore {
     }
 
     fun addStaff(name: String, email: String, role: Role, branchIds: List<String>, password: String = "", approved: Boolean = true): String? {
+        if (!boleh("staff", "staff.manage")) return tolak("staff.manage", "Akun ini tidak dapat menambah user")
         val em = email.trim()
         if (name.isBlank() || em.isBlank()) return "Nama dan email wajib"
         if (staff.any { it.email.equals(em, ignoreCase = true) }) return "Email sudah dipakai"
@@ -825,6 +914,7 @@ object CuciinStore {
     }
 
     fun updateStaff(email: String, name: String, role: Role, branchIds: List<String>, password: String? = null, approved: Boolean? = null, newEmail: String = email): String? {
+        if (!boleh("staff", "staff.manage")) return tolak("staff.manage", "Akun ini tidak dapat mengubah user")
         val i = staff.indexOfFirst { it.email.equals(email, ignoreCase = true) }
         if (i < 0) return "User tidak ketemu"
         val old = staff[i]
@@ -853,6 +943,7 @@ object CuciinStore {
     }
 
     fun deleteStaff(email: String): String? {
+        if (!boleh("staff", "staff.delete")) return tolak("staff.delete", "Akun ini tidak dapat menghapus user")
         val u = staff.find { it.email.equals(email, ignoreCase = true) } ?: return "User tidak ketemu"
         if (u.role == Role.Owner && staff.count { it.role == Role.Owner } <= 1) return "Owner terakhir tidak bisa dihapus"
         if (session.value?.email.equals(email, ignoreCase = true) == true) return "Tidak bisa hapus akun yang sedang login. Pakai Hapus akun saya."
@@ -862,7 +953,8 @@ object CuciinStore {
         return null
     }
 
-    fun addService(name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean, selfService: Boolean = false, commissionPerUnit: Int = 0, productKey: String = ""): ServiceItem {
+    fun addService(name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean, selfService: Boolean = false, commissionPerUnit: Int = 0, productKey: String = ""): ServiceItem? {
+        if (!boleh("serviceCatalog", "serviceCatalog.manage")) return null
         val id = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "svc-${newId()}" }
         val unique = if (services.any { it.id == id }) "$id-${newId()}" else id
         val finalUnit = if (selfService) "Load" else unit.trim().ifBlank { "pcs" }
@@ -874,9 +966,10 @@ object CuciinStore {
         return s
     }
 
-    fun updateService(id: String, name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean, selfService: Boolean = false, commissionPerUnit: Int = 0, productKey: String = "") {
+    fun updateService(id: String, name: String, unit: String, price: Int, retail: Boolean, dropOut: Boolean, selfService: Boolean = false, commissionPerUnit: Int = 0, productKey: String = ""): String? {
+        if (!boleh("serviceCatalog", "serviceCatalog.manage")) return tolak("serviceCatalog.manage", "Akun ini tidak dapat mengubah layanan")
         val i = services.indexOfFirst { it.id == id }
-        if (i < 0) return
+        if (i < 0) return null
         services[i] = services[i].copy(
             name = name.trim(),
             unit = if (selfService) "Load" else unit.trim().ifBlank { services[i].unit },
@@ -889,9 +982,11 @@ object CuciinStore {
         )
         log("Layanan ${name.trim()} diubah", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
+        return null
     }
 
     fun deleteService(id: String): String? {
+        if (!boleh("serviceCatalog", "serviceCatalog.delete")) return tolak("serviceCatalog.delete", "Akun ini tidak dapat menghapus layanan")
         val s = services.find { it.id == id } ?: return "Layanan tidak ketemu"
         services.removeAll { it.id == id }
         cart.removeAll { it.service.id == id }
@@ -900,7 +995,8 @@ object CuciinStore {
         return null
     }
 
-    fun addProduct(name: String, stock: Int, min: Int, initialBranchIds: Set<String>, kind: ProductKind = ProductKind.BahanHabisPakai, unit: String = "pcs"): Product {
+    fun addProduct(name: String, stock: Int, min: Int, initialBranchIds: Set<String>, kind: ProductKind = ProductKind.BahanHabisPakai, unit: String = "pcs"): Product? {
+        if (!boleh("stock", "stock.product")) return null
         val p = Product(name.trim(), 0, min.coerceAtLeast(0), "p-${newId()}", kind, unit.trim().ifBlank { "pcs" })
         products.add(p)
         branches.forEach { branch ->
@@ -911,9 +1007,10 @@ object CuciinStore {
         return p
     }
 
-    fun updateProduct(key: String, name: String, min: Int, kind: ProductKind, unit: String) {
+    fun updateProduct(key: String, name: String, min: Int, kind: ProductKind, unit: String): String? {
+        if (!boleh("stock", "stock.product")) return tolak("stock.product", "Akun ini tidak dapat mengubah produk")
         val i = products.indexOfFirst { it.key == key || it.name == key }
-        if (i < 0) return
+        if (i < 0) return null
         val old = products[i]
         val updated = old.copy(name = name.trim(), min = min.coerceAtLeast(0), id = old.id.ifBlank { "p-${newId()}" }, kind = kind, unit = unit.trim().ifBlank { old.unit })
         products[i] = updated
@@ -922,9 +1019,11 @@ object CuciinStore {
         }
         log("Produk ${name.trim()} diubah", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
+        return null
     }
 
     fun deleteProduct(key: String): String? {
+        if (!boleh("stock", "stock.productDelete")) return tolak("stock.productDelete", "Akun ini tidak dapat menghapus produk")
         val p = products.find { it.key == key || it.name == key } ?: return "Produk tidak ketemu"
         products.removeAll { it.key == key || it.name == key }
         branchStocks.removeAll { it.productKey == p.key }
@@ -947,7 +1046,8 @@ object CuciinStore {
         sellable: Boolean,
         assetTypeId: String = "",
         photoPath: String = "",
-    ): InventoryItem {
+    ): InventoryItem? {
+        if (!boleh("inventory", "inventory.write")) return null
         val row = InventoryItem(
             id = "inv-${newId()}", branchId = branchId, name = name.trim(), category = category,
             brand = brand.trim(), serialNumber = serialNumber.trim(), quantity = quantity.coerceAtLeast(0),
@@ -989,6 +1089,7 @@ object CuciinStore {
     )
 
     fun addAssetType(code: String, name: String): String? {
+        if (!boleh("inventory", "inventory.type")) return tolak("inventory.type", "Akun ini tidak dapat menambah jenis aset")
         val cleanCode = code.trim().uppercase().filter { it.isLetterOrDigit() }.take(4)
         val cleanName = name.trim()
         if (cleanName.isBlank()) return "Nama jenis aset wajib diisi"
@@ -1001,15 +1102,18 @@ object CuciinStore {
         return null
     }
 
-    fun updateAssetType(row: AssetType) {
+    fun updateAssetType(row: AssetType): String? {
+        if (!boleh("inventory", "inventory.type")) return tolak("inventory.type", "Akun ini tidak dapat mengubah jenis aset")
         val index = assetTypes.indexOfFirst { it.id == row.id }
-        if (index < 0) return
+        if (index < 0) return null
         assetTypes[index] = row.copy(code = row.code.trim().uppercase().take(4), name = row.name.trim())
         bump()
+        return null
     }
 
     /** Jenis yang sudah dipakai aset tidak dihapus supaya kode aset lama tetap terbaca. */
     fun deleteAssetType(id: String): String? {
+        if (!boleh("inventory", "inventory.type")) return tolak("inventory.type", "Akun ini tidak dapat menghapus jenis aset")
         if (inventory.any { it.assetTypeId == id }) return "Jenis ini masih dipakai aset. Nonaktifkan saja."
         assetTypes.removeAll { it.id == id }
         bump()
@@ -1019,15 +1123,18 @@ object CuciinStore {
     fun assetTypeName(id: String): String =
         (assetTypes + defaultAssetTypes()).firstOrNull { it.id == id }?.name.orEmpty()
 
-    fun updateInventory(row: InventoryItem) {
+    fun updateInventory(row: InventoryItem): String? {
+        if (!boleh("inventory", "inventory.write")) return tolak("inventory.write", "Akun ini tidak dapat mengubah aset")
         val index = inventory.indexOfFirst { it.id == row.id }
-        if (index < 0) return
+        if (index < 0) return null
         inventory[index] = row.copy(name = row.name.trim(), quantity = row.quantity.coerceAtLeast(0), unit = row.unit.trim().ifBlank { "unit" })
         log("Aset ${row.assetCode.ifBlank { row.name }} diubah · ${row.status.label}", row.branchId)
         bump()
+        return null
     }
 
     fun deleteInventory(id: String): String? {
+        if (!boleh("inventory", "inventory.delete")) return tolak("inventory.delete", "Akun ini tidak dapat menghapus aset")
         val row = inventory.firstOrNull { it.id == id } ?: return "Aset tidak ditemukan"
         inventory.removeAll { it.id == id }
         AssetPhotos.delete(row.photoPath)
@@ -1036,8 +1143,9 @@ object CuciinStore {
         return null
     }
 
-    fun addExpense(branchId: String, category: ExpenseCategory, amount: Int, occurredAtMs: Long, note: String): Expense {
-        val s = session.value!!
+    fun addExpense(branchId: String, category: ExpenseCategory, amount: Int, occurredAtMs: Long, note: String): Expense? {
+        val s = session.value ?: return null
+        if (!boleh("expense", "expense.write")) return null
         val row = Expense(
             id = "cost-${newId()}", branchId = branchId, category = category,
             amount = amount.coerceAtLeast(0), occurredAtMs = occurredAtMs,
@@ -1050,6 +1158,7 @@ object CuciinStore {
     }
 
     fun deleteExpense(id: String): String? {
+        if (!boleh("expense", "expense.delete")) return tolak("expense.delete")
         val row = expenses.firstOrNull { it.id == id } ?: return "Biaya tidak ditemukan"
         expenses.removeAll { it.id == id }
         log("Biaya ${row.category.label} ${rp(row.amount)} dihapus", row.branchId)
@@ -1060,17 +1169,49 @@ object CuciinStore {
     fun todayAttendance(email: String = session.value?.email.orEmpty()): AttendanceRecord? =
         attendance.firstOrNull { it.staffEmail.equals(email, true) && it.workDate == Clock.dateKey() }
 
+    /**
+     * Absensi yang boleh dilihat akun ini.
+     *
+     * Pemisahan hak baca absensi dari hak absen: `attendance.view` membuka absensi karyawan lain
+     * (dibatasi cabang yang dipilih), sedangkan tanpa fungsi itu akun hanya melihat absensinya
+     * sendiri. Sebelumnya satu-satunya ukuran adalah nama peran Owner, sehingga role kustom yang
+     * diberi hak melihat absensi tetap terkurung pada barisnya sendiri.
+     */
+    /**
+     * Mengoreksi catatan absensi milik karyawan lain.
+     *
+     * Dipisah dari [checkIn]/[checkOut] yang memakai `attendance.self`: absen sendiri adalah
+     * pekerjaan setiap karyawan, mengoreksi absen orang lain adalah wewenang pengawas.
+     */
+    fun correctAttendance(id: String, note: String): String? {
+        if (!boleh("attendance", "attendance.correct")) return tolak("attendance.correct", "Akun ini tidak dapat mengoreksi absensi karyawan")
+        val index = attendance.indexOfFirst { it.id == id }
+        if (index < 0) return "Catatan absensi tidak ditemukan"
+        val row = attendance[index]
+        if (!canAccess("attendance", "attendance.view") && !row.staffEmail.equals(session.value?.email, true)) {
+            return "Akun ini tidak dapat mengoreksi absensi karyawan"
+        }
+        attendance[index] = row.copy(note = note.trim())
+        log("Absensi ${row.staffName} dikoreksi", row.branchId)
+        bump()
+        return null
+    }
+
     fun visibleAttendance(fromMs: Long? = null, untilMs: Long? = null, branchIds: Set<String> = emptySet()): List<AttendanceRecord> {
         val s = session.value ?: return emptyList()
         return attendance.filter { row ->
-            val maySee = if (s.role == Role.Owner) branchIds.isEmpty() || row.branchId in branchIds
-            else row.staffEmail.equals(s.email, true) && row.branchId == s.branchId
+            val maySee = if (canAccess("attendance", "attendance.view")) {
+                branchIds.isEmpty() || row.branchId in branchIds
+            } else {
+                row.staffEmail.equals(s.email, true) && row.branchId == s.branchId
+            }
             maySee && (fromMs == null || row.checkInAtMs >= fromMs) && (untilMs == null || row.checkInAtMs <= untilMs)
         }.sortedByDescending { it.checkInAtMs }
     }
 
     fun checkIn(branchId: String, note: String = "", photoPath: String = ""): String? {
         val s = session.value ?: return "Silakan masuk kembali"
+        if (!boleh("attendance", "attendance.self")) return tolak("attendance.self")
         if (s.role != Role.Owner && branchId != s.branchId) return "Cabang absensi tidak sesuai akun"
         if (s.role == Role.Owner && branches.none { it.id == branchId }) return "Cabang tidak ditemukan"
         if (todayAttendance(s.email) != null) return "Anda sudah absen masuk hari ini"
@@ -1095,6 +1236,7 @@ object CuciinStore {
 
     fun checkOut(note: String = "", photoPath: String = ""): String? {
         val s = session.value ?: return "Silakan masuk kembali"
+        if (!boleh("attendance", "attendance.self")) return tolak("attendance.self")
         val index = attendance.indexOfFirst {
             it.staffEmail.equals(s.email, true) && it.workDate == Clock.dateKey() && it.checkOutAtMs == null
         }
@@ -1178,8 +1320,58 @@ object CuciinStore {
     /** Apakah pengguna yang sedang masuk boleh mengubah harga Service. */
     fun canChangePrice(): Boolean = canAccess("service", "service.price")
 
+    /**
+     * Apakah pengguna yang sedang masuk boleh membuat Service baru.
+     *
+     * Dipakai layar Service baru untuk menampilkan pesan penolakan SEBELUM memanggil [saveNota].
+     * Sebelumnya layar hanya memeriksa modul `service`, sedangkan fungsi `service.create` tidak
+     * pernah diperiksa di UI: Supervisor boleh membuka layarnya lalu aplikasi mati saat menekan
+     * Simpan karena `saveNota` memakai `require`. Menyembunyikan menu saja bukan penjagaan.
+     */
+    fun canCreateService(): Boolean = canAccess("service", "service.create")
+
+    /** Apakah pengguna yang sedang masuk boleh mengirim WhatsApp. */
+    fun canSendWa(): Boolean = canAccess("whatsapp", "whatsapp.send")
+
+    /** Apakah pengguna yang sedang masuk boleh mencatat perubahan stok. */
+    fun canWriteStock(): Boolean = canAccess("stock", "stock.write")
+
+    /** Apakah pengguna yang sedang masuk boleh mencatat pelunasan dan bukti cucian. */
+    fun canTakePayment(): Boolean = canAccess("service", "service.payment")
+
+    /** Apakah pengguna yang sedang masuk boleh menambah atau mengubah aset cabang. */
+    fun canWriteInventory(): Boolean = canAccess("inventory", "inventory.write")
+
+    /** Apakah pengguna yang sedang masuk boleh mengelola jenis aset (data induk). */
+    fun canManageAssetTypes(): Boolean = canAccess("inventory", "inventory.type")
+
+    /** Apakah pengguna yang sedang masuk boleh menghapus transaksi Service. */
+    fun canDeleteNota(): Boolean = canAccess("service", "service.delete")
+
+    /** Apakah pengguna yang sedang masuk boleh mengoreksi nota yang sudah dikirim ke pelanggan. */
+    fun canCorrectSentNota(): Boolean = canAccess("service", "service.correctSent")
+
+    /** Apakah pengguna yang sedang masuk boleh menghapus kontak pelanggan. */
+    fun canDeleteCustomer(): Boolean = canAccess("customer", "customer.delete")
+
+    /** Apakah pengguna yang sedang masuk boleh menghapus pengeluaran yang sudah tercatat. */
+    fun canDeleteExpense(): Boolean = canAccess("expense", "expense.delete")
+
+    /** Apakah pengguna yang sedang masuk boleh mengekspor seluruh data ke berkas. */
+    fun canExportData(): Boolean = canAccess("analytics", "analytics.export")
+
+    /** Apakah pengguna yang sedang masuk boleh memilih petugas penanggung jawab layanan. */
+    fun canAssignHandler(): Boolean = canAccess("queue", "queue.status")
+
+    /**
+     * Menetapkan petugas penanggung jawab satu layanan di keranjang.
+     *
+     * Dulu dikunci NAMA PERAN (`role != Role.Owner`), sehingga Owner tidak bisa memberi hak ini
+     * kepada role lain. Sekarang memakai fungsi `queue.status`, yang memang mengatur siapa
+     * mengerjakan apa di antrian.
+     */
     fun setCartHandler(svcId: String, email: String) {
-        if (session.value?.role != Role.Owner) return
+        if (!canAssignHandler()) return
         val staffMember = staff.firstOrNull { it.email.equals(email, true) } ?: return
         cart.find { it.service.id == svcId }?.let {
             it.handledByEmail = staffMember.email
@@ -1196,6 +1388,31 @@ object CuciinStore {
             if (needed > available) "${product.name}: perlu $needed, tersedia $available" else null
         }
 
+    /**
+     * Pesan penolakan pertama yang menghalangi penyimpanan Service, atau null bila lolos.
+     *
+     * Dipakai layar Pembayaran supaya semua penolakan muncul sebagai pesan, bukan aplikasi mati.
+     * [saveNota] tetap memeriksa hal yang sama sebagai lapis kedua; pemeriksa ini hanya
+     * memindahkan penolakan ke tempat yang bisa menampilkannya.
+     */
+    fun notaReject(cartLines: List<CartLine>, paid: Int, branchId: String): String? {
+        val s = session.value ?: return "Silakan masuk kembali"
+        if (!canCreateService()) return tolak("service.create", "Akun ini tidak dapat membuat Service baru")
+        val permittedBranch = when (s.role) {
+            Role.Owner -> branches.any { it.id == branchId }
+            else -> branchId == s.branchId
+        }
+        if (!permittedBranch) return "Cabang transaksi tidak tersedia untuk akun ini"
+        if (cartLines.isEmpty()) return "Service harus memiliki minimal satu layanan"
+        if (!cartLines.all { it.qty.isFinite() && it.qty > 0.0 && it.qty <= 9999.0 && (it.service.unit == "kg" || it.qty % 1.0 == 0.0) }) {
+            return "Jumlah layanan belum valid"
+        }
+        if (retailStockShortages(cartLines, branchId).isNotEmpty()) return "Stok retail cabang tidak mencukupi"
+        val total = cartLines.sumOf { (it.qty * it.unitPrice.coerceAtLeast(0)).toInt() }
+        if (paid !in 0..total) return "Pembayaran harus berada antara Rp 0 dan total Service"
+        return null
+    }
+
     fun saveNota(
         customer: Customer,
         cartLines: List<CartLine>,
@@ -1205,17 +1422,13 @@ object CuciinStore {
         branchId: String,
         sendWa: Boolean,
     ): Nota {
-        val s = session.value!!
-        val permittedBranch = when (s.role) {
-            Role.Owner -> branches.any { it.id == branchId }
-            else -> branchId == s.branchId
-        }
-        require(permittedBranch) { "Cabang transaksi tidak tersedia untuk akun ini" }
-        require(cartLines.isNotEmpty()) { "Service harus memiliki minimal satu layanan" }
-        require(cartLines.all { it.qty.isFinite() && it.qty > 0.0 && it.qty <= 9999.0 && (it.service.unit == "kg" || it.qty % 1.0 == 0.0) }) { "Jumlah layanan belum valid" }
-        require(retailStockShortages(cartLines, branchId).isEmpty()) { "Stok retail cabang tidak mencukupi" }
+        val s = session.value ?: throw IllegalStateException("Silakan masuk kembali")
+        // Penjaga lapis kedua memakai pemeriksa yang SAMA dengan yang dipakai UI, bukan salinannya.
+        // Sebelumnya dua daftar penolakan hidup berdampingan dan harus dijaga tetap sinkron dengan
+        // tangan; begitu satu penolakan ditambahkan di sini tanpa padanannya di [notaReject], UI
+        // tidak dapat menampilkannya lebih dulu dan penolakan itu menjadi crash di perangkat.
+        notaReject(cartLines, paid, branchId)?.let { throw IllegalArgumentException(it) }
         val total = cartLines.sumOf { (it.qty * it.unitPrice.coerceAtLeast(0)).toInt() }
-        require(paid in 0..total) { "Pembayaran harus berada antara Rp 0 dan total Service" }
         val t = Clock.nowMs()
         val nota = Nota(
             id = nextNotaId(branchId),
@@ -1286,10 +1499,13 @@ object CuciinStore {
         val index = notas.indexOfFirst { it.id == id }
         if (index < 0) return "Service tidak ditemukan"
         val old = notas[index]
+        if (!boleh("service", "service.correct")) {
+            return tolak("service.correct", "Akun ini tidak dapat mengoreksi Service tersebut")
+        }
         if (s.role == Role.Supervisor || (s.role != Role.Owner && s.branchId != old.branchId)) {
             return "Akun ini tidak dapat mengoreksi Service tersebut"
         }
-        if (old.waSent && s.role != Role.Owner) return "Service sudah dikirim ke pelanggan; hanya Owner yang dapat mengoreksi"
+        if (old.waSent && !canCorrectSentNota()) return tolak("service.correctSent", "Service sudah dikirim ke pelanggan; hanya Owner yang dapat mengoreksi")
         val clean = newLines.map {
             it.copy(
                 qty = it.qty.coerceAtLeast(0.0),
@@ -1371,10 +1587,13 @@ object CuciinStore {
     fun deleteNota(id: String): String? {
         val s = session.value ?: return "Silakan masuk kembali"
         val old = notas.firstOrNull { it.id == id } ?: return "Service tidak ditemukan"
+        if (!boleh("service", "service.delete")) {
+            return tolak("service.delete", "Akun ini tidak dapat menghapus Service tersebut")
+        }
         if (s.role == Role.Supervisor || (s.role != Role.Owner && s.branchId != old.branchId)) {
             return "Akun ini tidak dapat menghapus Service tersebut"
         }
-        if (old.waSent && s.role != Role.Owner) return "Service sudah dikirim ke pelanggan; hanya Owner yang dapat menghapus"
+        if (old.waSent && !canCorrectSentNota()) return tolak("service.correctSent", "Service sudah dikirim ke pelanggan; hanya Owner yang dapat menghapus")
         if (old.paid > 0) return "Service yang sudah menerima pembayaran tidak dapat dihapus. Catat pengembalian dana terlebih dahulu."
         val now = Clock.nowMs()
         old.lines.forEach { line ->
@@ -1396,16 +1615,19 @@ object CuciinStore {
         return null
     }
 
-    fun markWaSent(id: String) {
-        val n = notas.find { it.id == id } ?: return
+    fun markWaSent(id: String): String? {
+        if (!boleh("whatsapp", "whatsapp.send")) return tolak("whatsapp.send", "Akun ini tidak dapat mengirim WhatsApp")
+        val n = notas.find { it.id == id } ?: return null
         val t = Clock.nowMs()
         n.waSent = true
         n.waAt = Clock.nowLabel(t)
         log("WA nota ${n.id} terkirim → archive", n.branchId, n.id)
         bump()
+        return null
     }
 
     fun advanceLaundry(id: String): String? {
+        if (!boleh("queue", "queue.status")) return tolak("queue.status", "Akun ini tidak dapat mengubah status pengerjaan")
         val s = session.value ?: return "Silakan masuk kembali"
         val n = notas.find { it.id == id } ?: return "Service tidak ditemukan"
         if (s.role != Role.Owner && s.branchId != n.branchId) return "Cabang Service tidak sesuai akun"
@@ -1420,6 +1642,9 @@ object CuciinStore {
     fun markLunas(id: String, method: PayMethod = PayMethod.Tunai): String? {
         val s = session.value ?: return "Silakan masuk kembali"
         val n = notas.find { it.id == id } ?: return "Service tidak ditemukan"
+        if (!boleh("service", "service.payment")) {
+            return tolak("service.payment", "Akun ini tidak dapat mencatat pembayaran Service tersebut")
+        }
         if (s.role == Role.Supervisor || (s.role != Role.Owner && s.branchId != n.branchId)) return "Akun ini tidak dapat mencatat pembayaran Service tersebut"
         val remaining = (n.total - n.paid).coerceAtLeast(0)
         if (remaining == 0 || n.pay == PayStatus.Lunas) return "Pembayaran Service sudah lunas"
@@ -1434,6 +1659,7 @@ object CuciinStore {
     }
 
     fun markPickedUp(id: String): String? {
+        if (!boleh("queue", "queue.handover")) return tolak("queue.handover", "Akun ini tidak dapat menyerahkan pesanan ke pelanggan")
         val n = notas.find { it.id == id } ?: return "Nota tidak ditemukan"
         if (n.laundry != LaundryStatus.Selesai) return "Pesanan belum selesai dikerjakan"
         if (n.pay != PayStatus.Lunas) return "Lunasi pembayaran sebelum serah terima"
@@ -1454,11 +1680,14 @@ object CuciinStore {
         return path
     }
 
-    fun editStock(product: String, branchId: String, kind: StockKind, qty: Int, occurredAtMs: Long = Clock.nowMs()) {
+    fun editStock(product: String, branchId: String, kind: StockKind, qty: Int, occurredAtMs: Long = Clock.nowMs()): String? {
+        if (!boleh("stock", "stock.write")) return tolak("stock.write", "Akun ini tidak dapat mencatat stok")
         editStocks(mapOf(product to qty), branchId, kind, occurredAtMs)
+        return null
     }
 
     fun editStocks(changes: Map<String, Int>, branchId: String, kind: StockKind, occurredAtMs: Long = Clock.nowMs()): Int {
+        if (!boleh("stock", "stock.write")) return TOLAK_STOK
         val s = session.value ?: return 0
         if (s.role != Role.Owner && branchId != s.branchId) return 0
         val t = occurredAtMs
@@ -1500,12 +1729,30 @@ object CuciinStore {
      */
     internal fun newId(): String = UUID.randomUUID().toString().take(13)
 
+    /**
+     * Alasan tutup kas tidak dapat dilakukan, atau null bila boleh.
+     *
+     * Sebelumnya layar hanya bisa membedakan "berhasil" dan "sudah ditutup", sehingga akun yang
+     * izinnya dicabut melihat pesan "Kas cabang ini sudah ditutup hari ini" padahal kasnya sama
+     * sekali tidak ditutup. Penolakan izin harus punya pesannya sendiri.
+     */
+    fun cashCloseReject(): String? {
+        val s = session.value ?: return "Silakan masuk kembali"
+        if (!boleh("cash", "cash.close")) return tolak("cash.close", "Akun ini tidak dapat menutup kas")
+        val bid = if (s.role == Role.Owner) viewBranch.value else s.branchId
+        if (bid == "all") return "Pilih satu cabang sebelum menutup kas"
+        val t = Clock.nowMs()
+        if (cashCloses.any { it.branchId == bid && Clock.dateKey(it.atMs) == Clock.dateKey(t) }) {
+            return "Kas cabang ini sudah ditutup hari ini"
+        }
+        return null
+    }
+
     fun closeCash(): CashClose? {
         val s = session.value ?: return null
+        if (cashCloseReject() != null) return null
         val bid = if (s.role == Role.Owner) viewBranch.value else s.branchId
-        if (bid == "all") return null
         val t = Clock.nowMs()
-        if (cashCloses.any { it.branchId == bid && Clock.dateKey(it.atMs) == Clock.dateKey(t) }) return null
         val received = paymentRecords(notas.filter { it.branchId == bid }).filter { it.atMs >= Clock.todayStartMs() }
         val row = CashClose(
             id = "kas-$bid-$t-${syncEventId().take(8)}",
@@ -1536,6 +1783,22 @@ object CuciinStore {
         if (account.passwordHash.isNotBlank() && !Passwords.matches(currentPassword, account.passwordHash)) return "Kata sandi saat ini tidak sesuai"
         if (newPassword.length < 8) return "Kata sandi minimal 8 karakter"
         return updateStaff(account.email, account.name, account.role, account.branchIds, password = newPassword)
+    }
+
+    /**
+     * Buang hash lokal akun ini setelah kata sandinya diubah lewat Firebase di luar aplikasi
+     * (link "Lupa kata sandi"). Hash lama akan menolak kata sandi baru, jadi lebih baik kosong:
+     * layar masuk lalu memverifikasi lewat Firebase.
+     *
+     * Hanya state lokal yang dibersihkan: `staff` termasuk entitas milik server, jadi sandi tidak
+     * pernah ikut ke antrean kirim dan tidak ada hash lama yang bisa terkirim balik.
+     */
+    fun forgetLocalPassword(email: String): Unit {
+        val key = email.trim().lowercase()
+        val index = staff.indexOfFirst { it.email.trim().lowercase() == key }
+        if (index < 0) return
+        staff[index] = staff[index].copy(passwordHash = "")
+        bump()
     }
 
     fun changeMyEmail(newEmail: String, password: String): String? {

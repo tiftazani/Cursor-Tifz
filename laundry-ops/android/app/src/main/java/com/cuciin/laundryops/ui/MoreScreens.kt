@@ -65,6 +65,7 @@ import com.cuciin.laundryops.ui.components.PeriodRow
 import com.cuciin.laundryops.ui.components.PrimaryBtn
 import com.cuciin.laundryops.ui.components.ScreenHeader
 import com.cuciin.laundryops.ui.components.SelectChip
+import com.cuciin.laundryops.ui.components.SyncNotice
 import com.cuciin.laundryops.ui.theme.Ink
 import com.cuciin.laundryops.ui.theme.Muted
 import com.cuciin.laundryops.ui.theme.Teal
@@ -124,7 +125,7 @@ internal fun MoreScreen(nav: NavHostController) {
                 }
             }
         }
-        if (role == Role.Owner) item { GhostBtn("Ekspor semua data (JSON)", icon = Icons.Outlined.FileDownload) { FileExports.shareAllData(ctx, store.exportSnapshot()) } }
+        if (store.canExportData()) item { GhostBtn("Ekspor semua data (JSON)", icon = Icons.Outlined.FileDownload) { FileExports.shareAllData(ctx, store.exportSnapshot()) } }
         item { GhostBtn("Keluar dari akun", icon = Icons.Outlined.Logout) { store.logout(); nav.navigate("login") { popUpTo(0) } } }
     }
 }
@@ -135,17 +136,17 @@ internal fun MoreScreen(nav: NavHostController) {
  * Modul yang diperiksa dibaca dari [RouteAccess] supaya setiap modul di katalog izin benar-benar
  * diperiksa di suatu tempat; rute yang tidak punya modul (akun, tema, versi) selalu boleh.
  *
- * Menu yang tabnya disembunyikan untuk SPV juga disembunyikan di sini. Aturannya dibaca dari
- * [NavTabs], sumber yang sama dengan bar navigasi, supaya menu Modul tidak pernah menampilkan
- * pintu yang tidak bisa dipakai. Sebelumnya SPV melihat "Service baru" di menu Modul padahal
- * layar Antrian dan tab bawah menyembunyikannya, dan server pun menolak pembuatan Service
- * oleh SPV, sehingga pesanannya gagal tersinkron tanpa penjelasan.
+ * Pengecualian nama peran dihapus di 1.10.30. Sebelumnya menu yang tabnya disembunyikan untuk SPV
+ * (`hiddenForSupervisor`) ikut disembunyikan di sini dengan NAMA PERAN. Aturan itu hanya mengenal
+ * peran bawaan: role kustom dengan bentuk izin yang sama tetap melihat pintu yang tidak bisa
+ * dipakainya, dan Owner tidak bisa membukanya untuk SPV walaupun fungsinya dicentang. Sekarang
+ * satu ukuran untuk semua: menu tampil bila fungsi yang diperiksa [RouteAccess] diizinkan, dan
+ * role bawaan Supervisor tetap tidak melihat "Service baru" maupun "WA menunggu" karena memang
+ * tidak memegang `service.create` dan `whatsapp.send`.
  */
 internal fun routeAllowed(route: String): Boolean {
-    val tab = NavTabs.routeOf(MenuOrder.destinationOf(route))
-    if (tab?.hiddenForSupervisor == true && store.session.value?.role == Role.Supervisor) return false
-    val module = RouteAccess.moduleOf(route) ?: return true
-    return store.canAccess(module)
+    val gate = RouteAccess.gateOf(route) ?: return true
+    return store.canAccess(gate.module, gate.function)
 }
 
 /** Nama ikon di katalog dipetakan ke ikon sungguhan di sini supaya katalognya tetap murni. */
@@ -609,6 +610,9 @@ internal fun AuditScreen(nav: NavHostController) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(ui.gap)) {
         item { ScreenHeader("Riwayat aktivitas", "Semua transaksi", onBack = { nav.popBackStack() }) }
         item { SyncNotice() }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         item { GhostBtn("Ekspor riwayat perubahan", icon = Icons.Outlined.FileDownload) { FileExports.shareAudit(ctx, store.audit.toList()) } }
         items(store.audit) { a ->
             ListRow(
@@ -623,11 +627,29 @@ internal fun AuditScreen(nav: NavHostController) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val s = store.session.value ?: return
-    val bid = if (s.role == Role.Owner) store.viewBranch.value else s.branchId
+    val bid = if (canViewAllBranches(s)) store.viewBranch.value else s.branchId
+    var showBranchSheet by remember { mutableStateOf(false) }
+    if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            if (canViewAllBranches(s)) {
+                store.branches.forEach { branch ->
+                    FilterSheetRow(bid == branch.id, branch.name, "Tutup kas per cabang") {
+                        store.viewBranch.value = branch.id
+                        store.touchStatus()
+                        showBranchSheet = false
+                    }
+                }
+            } else {
+                FilterSheetRow(true, store.branch(bid).name, "Cabang tugas Anda") { showBranchSheet = false }
+            }
+        }
+    }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(ui.gap)) {
         item {
             ScreenHeader(
@@ -635,6 +657,23 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
                 "${s.name} · ${if (bid == "all") "semua cabang" else store.branch(bid).name}",
                 onBack = { nav.popBackStack() },
             )
+        }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
+        if (canViewAllBranches(s)) {
+            // Pemilih cabang harus ada di layar ini. Sebelumnya layar hanya meminta "Pilih satu
+            // cabang" tanpa menyediakan pemilihnya, sehingga Owner yang melihat semua cabang
+            // menemui jalan buntu dan harus memilih cabang di tab Antrian lebih dulu.
+            item {
+                FilterBar(
+                    label = "Cabang",
+                    value = if (bid == "all") "Belum dipilih" else store.branch(bid).name,
+                    detail = "Tutup kas dibuat per cabang",
+                    icon = Icons.Outlined.Storefront,
+                    onClick = { showBranchSheet = true },
+                )
+            }
         }
         item {
             CardBlock {
@@ -650,11 +689,17 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
         } else {
             item {
                 PrimaryBtn("Tutup kas hari ini") {
-                    val row = store.closeCash()
-                    if (row == null) toast("Kas cabang ini sudah ditutup hari ini")
+                    // Pesan penolakan dibaca dari store, bukan ditebak layar. Sebelumnya izin yang
+                    // dicabut dilaporkan sebagai "sudah ditutup hari ini", yang tidak benar.
+                    val tolakKas = store.cashCloseReject()
+                    if (tolakKas != null) toast(tolakKas)
                     else {
-                        toast("Kas ditutup ${row.at}")
-                        nav.popBackStack()
+                        val row = store.closeCash()
+                        if (row == null) toast("Kas cabang ini sudah ditutup hari ini")
+                        else {
+                            toast("Kas ditutup ${row.at}")
+                            nav.popBackStack()
+                        }
                     }
                 }
             }
@@ -674,6 +719,17 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
 internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val s = store.session.value ?: return
+    // Firebase mengubah kata sandi login; layar masuk memakai hash lokal. Keduanya harus
+    // berubah bersama, jadi hash lokal ikut diperbarui setelah Firebase menerima sandi baru.
+    // Firebase sudah memverifikasi sandi lama lebih dulu, jadi penolakan lokal di sini berarti
+    // state perangkat tidak sinkron dan itu harus terlihat, bukan dilaporkan sebagai sukses.
+    DisposableEffect(Unit) {
+        FirebaseCloud.changeLocal = { lama, baru ->
+            store.changeMyPassword(lama, baru)?.let { pesan -> "Kata sandi berubah, tetapi perangkat menolak: $pesan" }
+        }
+        FirebaseCloud.forgetLocal = { email -> store.forgetLocalPassword(email) }
+        onDispose { FirebaseCloud.changeLocal = { _, _ -> null } }
+    }
     val account = store.staff.firstOrNull { it.email.equals(s.email, true) }
     val assignedBranches = account?.branchIds.orEmpty().mapNotNull { id -> store.branches.firstOrNull { it.id == id }?.name }
     var changePassword by remember { mutableStateOf(false) }
@@ -692,7 +748,7 @@ internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
                 Text(s.email, color = Muted)
                 Chip(if (s.role == Role.Supervisor) "SPV" else s.role.name, Teal)
                 InfoRow(Icons.Outlined.Storefront, "Cabang penugasan", assignedBranches.joinToString().ifBlank { "Belum ada cabang" })
-                if (s.role == Role.Owner) InfoRow(Icons.Outlined.Visibility, "Tampilan data", if (store.viewBranch.value == "all") "Semua cabang" else store.branch(store.viewBranch.value).name)
+                if (canViewAllBranches(s)) InfoRow(Icons.Outlined.Visibility, "Tampilan data", if (store.viewBranch.value == "all") "Semua cabang" else store.branch(store.viewBranch.value).name)
             }
         }
         if (account != null) {
@@ -729,7 +785,7 @@ internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
                             if (error != null) toast(error) else { oldPassword = ""; newPassword = ""; confirmation = ""; changePassword = false; toast("Kata sandi akun berhasil disimpan") }
                         }
                         if (FirebaseCloud.enabled) FirebaseCloud.changePassword(oldPassword, newPassword) { cloudError ->
-                            if (cloudError != null) finish(cloudError) else finish(store.changeMyPassword(oldPassword, newPassword))
+                            if (cloudError != null) finish(cloudError) else finish(null)
                         } else finish(store.changeMyPassword(oldPassword, newPassword))
                     }
                     GhostBtn("Batal") { oldPassword = ""; newPassword = ""; confirmation = ""; changePassword = false }

@@ -15,6 +15,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -28,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.cuciin.laundryops.data.*
 import com.cuciin.laundryops.ui.components.*
+import com.cuciin.laundryops.ui.components.SyncNotice
 import com.cuciin.laundryops.ui.theme.*
 import java.time.LocalDateTime
 import java.io.File
@@ -42,7 +46,7 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
     val session = businessStore.session.value ?: return
     var showBranchSheet by rememberSaveable { mutableStateOf(false) }
     businessStore.revision.intValue
-    val allowedBranches = if (session.role == Role.Owner) businessStore.branches.toList() else businessStore.branches.filter { it.id == session.branchId }
+    val allowedBranches = if (canViewAllBranches(session)) businessStore.branches.toList() else businessStore.branches.filter { it.id == session.branchId }
     var branchId by rememberSaveable { mutableStateOf(session.branchId) }
     var creating by rememberSaveable { mutableStateOf(false) }
     var category by remember { mutableStateOf(ExpenseCategory.Gaji) }
@@ -62,10 +66,17 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 onClick = { showBranchSheet = true },
             )
         }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         item { Hero("Total biaya cabang", rp(rows.sumOf { it.amount }), listOf("${rows.size} transaksi biaya", businessStore.branch(branchId).name)) }
         if (!creating) item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PrimaryBtn("Catat biaya", Modifier.weight(1f), icon = Icons.Outlined.Add) { creating = true }
+                // Pintu MENULIS diperiksa fungsinya; rute `expenses` hanya memeriksa modul supaya
+                // role kustom tetap dapat MEMBACA daftar biaya.
+                if (businessStore.canAccess("expense", "expense.write")) {
+                    PrimaryBtn("Catat biaya", Modifier.weight(1f), icon = Icons.Outlined.Add) { creating = true }
+                }
                 GhostBtn("Ekspor", Modifier.weight(.65f), icon = Icons.Outlined.FileDownload) { FileExports.shareExpenses(ctx, rows) }
             }
         }
@@ -77,8 +88,11 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 DateTimeFields(parsedTime, { time = DisplayDates.encode(it) }, "Waktu biaya")
                 Field(note, { note = it }, "Keterangan / penerima")
                 PrimaryBtn("Simpan biaya", enabled = (amount.toIntOrNull() ?: 0) > 0 && note.isNotBlank(), icon = Icons.Outlined.Check) {
-                    businessStore.addExpense(branchId, category, amount.toInt(), parsedTime.atZone(Clock.ZONE).toInstant().toEpochMilli(), note)
-                    toast("Biaya tercatat di ${businessStore.branch(branchId).name}"); amount = ""; note = ""; creating = false
+                    val tersimpan = businessStore.addExpense(branchId, category, amount.toInt(), parsedTime.atZone(Clock.ZONE).toInstant().toEpochMilli(), note)
+                    if (tersimpan == null) toast("Akses Catat biaya dicabut untuk role akun ini")
+                    else {
+                        toast("Biaya tercatat di ${businessStore.branch(branchId).name}"); amount = ""; note = ""; creating = false
+                    }
                 }
                 GhostBtn("Batal") { creating = false }
             }
@@ -139,10 +153,14 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
     var checkOutPhotoPath by rememberSaveable { mutableStateOf("") }
     var pendingCheckIn by remember { mutableStateOf<File?>(null) }
     var pendingCheckOut by remember { mutableStateOf<File?>(null) }
-    val allowedBranches = if (session.role == Role.Owner) businessStore.branches.toList()
+    // Koreksi catatan absensi karyawan lain. Hanya tampil bila fungsi `attendance.correct`
+    // dimiliki; tanpa itu tombolnya tidak ada dan store pun menolak.
+    var editingAttendance by remember { mutableStateOf<AttendanceRecord?>(null) }
+    var attendanceNote by remember { mutableStateOf("") }
+    val allowedBranches = if (canViewAllBranches(session)) businessStore.branches.toList()
     else businessStore.branches.filter { it.id == session.branchId }
     val today = businessStore.todayAttendance(session.email)
-    val rows = if (session.role == Role.Owner) businessStore.visibleAttendance(branchIds = setOf(branchId))
+    val rows = if (canViewAllBranches(session)) businessStore.visibleAttendance(branchIds = setOf(branchId))
     else businessStore.visibleAttendance()
     val tap = rememberTapFeedback()
     val takeCheckIn = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
@@ -174,6 +192,8 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
         contentPadding = PaddingValues(bottom = 28.dp),
     ) {
         item { ScreenHeader("Absensi karyawan", "Jam masuk dan pulang tercatat per cabang", onBack = { nav.popBackStack() }) }
+        // Absensi yang belum tersinkron bisa membuat jam pulang tampak hilang.
+        item { SyncNotice() }
         item {
             CardBlock(accent = if (today?.checkOutAtMs == null) Teal else Green) {
                 SectionLabel("Absensi saya hari ini")
@@ -223,7 +243,7 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
         }
-        item { SectionLabel(if (session.role == Role.Owner) "Riwayat cabang" else "Riwayat saya") }
+        item { SectionLabel(if (canViewAllBranches(session)) "Riwayat cabang" else "Riwayat saya") }
         item { GhostBtn("Ekspor absensi CSV", icon = Icons.Outlined.FileDownload) { FileExports.shareAttendance(ctx, rows) } }
         if (rows.isEmpty()) item { EmptyHint("Belum ada absensi", "Riwayat absen masuk dan pulang akan tampil di sini.") }
         items(rows, key = { it.id }) { row ->
@@ -240,8 +260,39 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
                 AttendancePhotoPreview(row.checkInPhotoPath, "Foto masuk tersimpan di perangkat")
                 if (row.checkOutPhotoPath.isNotBlank()) AttendancePhotoPreview(row.checkOutPhotoPath, "Foto pulang tersimpan di perangkat")
                 if (row.note.isNotBlank()) Text(row.note, color = Muted, fontSize = 12.sp)
+                if (businessStore.canAccess("attendance", "attendance.correct")) {
+                    GhostBtn("Koreksi catatan", icon = Icons.Outlined.Edit) {
+                        editingAttendance = row
+                        attendanceNote = row.note
+                    }
+                }
             }
         }
+    }
+    editingAttendance?.let { row ->
+        AlertDialog(
+            onDismissRequest = { editingAttendance = null },
+            title = { Text("Koreksi catatan ${row.staffName}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Catatan absensi tidak mengubah jam masuk atau pulang.", color = Muted, fontSize = 12.sp)
+                    OutlinedTextField(
+                        attendanceNote,
+                        { attendanceNote = it },
+                        label = { Text("Catatan") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val err = businessStore.correctAttendance(row.id, attendanceNote)
+                    toast(err ?: "Catatan absensi diperbarui")
+                    if (err == null) editingAttendance = null
+                }) { Text("Simpan catatan") }
+            },
+            dismissButton = { TextButton(onClick = { editingAttendance = null }) { Text("Batal") } },
+        )
     }
     if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

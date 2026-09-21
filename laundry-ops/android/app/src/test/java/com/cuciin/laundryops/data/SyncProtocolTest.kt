@@ -472,4 +472,98 @@ class SyncProtocolTest {
         assertEquals(0, legacy.state.revision)
         assertFalse(legacy.state.bootstrapped)
     }
+
+    /**
+     * Snapshot non-Owner tidak memuat master data tingkat organisasi, dan selisih itu TIDAK boleh
+     * dibaca sebagai penghapusan.
+     *
+     * Insiden nyata: login sebagai Supervisor menghasilkan enam `assetType.delete` (semua jenis
+     * aset organisasi) karena `asset_types` tidak punya kolom cabang sehingga tidak ikut disaring.
+     * Perintah itu diterima Worker pada saat itu dan akan menghapus jenis aset untuk semua cabang.
+     */
+    @Test fun nonOwnerTidakMenyimpulkanDeleteUntukEntitasTanpaCabang() {
+        val outbox = SyncOutbox(
+            SyncClientState(
+                revision = 5,
+                shadow = listOf(entity("assetType", "at-setrika"), entity("expense", "e-1", "melati")),
+                bootstrapped = true,
+                scopeKey = "supervisor:melati",
+            ),
+        )
+        // Snapshot Supervisor hanya memuat entitas bercabang; jenis aset tidak ada di dalamnya.
+        val dibuat = outbox.enqueue(
+            listOf(entity("expense", "e-1", "melati", value = 2)),
+            10,
+            "melati",
+            setOf("melati"),
+            Role.Supervisor,
+        )
+        assertEquals(listOf("expense.upsert"), dibuat.map { it.entityType + "." + it.operation })
+    }
+
+    /** Owner tetap boleh menghapus master data organisasi: aturan di atas hanya menahan non-Owner. */
+    @Test fun ownerTetapMenyimpulkanDeleteUntukEntitasTanpaCabang() {
+        val outbox = SyncOutbox(
+            SyncClientState(
+                revision = 5,
+                shadow = listOf(entity("assetType", "at-setrika")),
+                bootstrapped = true,
+                scopeKey = "owner",
+            ),
+        )
+        val dibuat = outbox.enqueue(emptyList(), 10, null, null, Role.Owner)
+        assertEquals(listOf("assetType.delete"), dibuat.map { it.entityType + "." + it.operation })
+    }
+
+    /**
+     * Perintah tertahan dari sesi lain dibuang sebelum terkirim, bukan menunggu terkirim.
+     *
+     * Insiden nyata: enam `assetType.delete` tertinggal di antrean setelah berpindah dari Owner ke
+     * Supervisor. Tanpa aturan ini perintah itu terkirim pada sync berikutnya, dan pada saat itu
+     * `assetType.delete` belum Owner-only di Worker sehingga diterima.
+     */
+    @Test fun perintahDeleteTanpaCabangDibuangSaatAktorBukanOwner() {
+        val outbox = SyncOutbox(
+            SyncClientState(
+                revision = 5,
+                shadow = listOf(entity("assetType", "at-setrika"), entity("assetType", "at-mesin-cuci")),
+                bootstrapped = true,
+                scopeKey = "owner",
+            ),
+        )
+        // Owner menghapus dua jenis aset: perintahnya sah saat itu.
+        outbox.enqueue(emptyList(), 10, null, null, Role.Owner)
+        assertEquals(2, outbox.state.pending.size)
+
+        // Akun berganti ke Supervisor sebelum perintah sempat terkirim.
+        val dibuang = outbox.buangYangTidakBerhak(Role.Supervisor)
+        assertEquals(2, dibuang)
+        assertTrue(outbox.state.pending.isEmpty())
+        assertEquals(2, outbox.state.rejected.size)
+    }
+
+    /** Owner tidak kehilangan perintah sahnya sendiri. */
+    @Test fun ownerTidakMembuangPerintahDeleteTanpaCabang() {
+        val outbox = SyncOutbox(
+            SyncClientState(
+                revision = 5,
+                shadow = listOf(entity("assetType", "at-setrika")),
+                bootstrapped = true,
+                scopeKey = "owner",
+            ),
+        )
+        outbox.enqueue(emptyList(), 10, null, null, Role.Owner)
+        assertEquals(0, outbox.buangYangTidakBerhak(Role.Owner))
+        assertEquals(1, outbox.state.pending.size)
+    }
+
+    /** Bila shadow benar-benar diganti, kursor memang harus maju. */
+    @Test fun kursorMajuBilaShadowDiganti() {
+        val outbox = SyncOutbox(SyncClientState(revision = 4, shadow = listOf(entity("customer", "c-1")), bootstrapped = true, scopeKey = "kasir:melati"))
+        val remote = listOf(entity("customer", "c-1", value = 2))
+        assertTrue(outbox.prepareRemote(Snapshot(updatedAt = 20), remote, 9, outbox.state.generation, "kasir:melati"))
+        assertTrue(outbox.completePreparedRemote())
+        assertEquals(9, outbox.state.revision)
+        assertEquals(remote, outbox.state.shadow)
+    }
 }

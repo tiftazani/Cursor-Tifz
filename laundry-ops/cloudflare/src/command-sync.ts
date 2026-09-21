@@ -22,11 +22,18 @@ const ORG_ID = "cuciin";
 const MAX_COMMAND_BODY_BYTES = 512_000;
 const MAX_COMMANDS = 100;
 const MAX_CHANGE_LIMIT = 500;
-const OWNER_ONLY = new Set(["branch.upsert", "staff.upsert", "service.upsert", "product.upsert", "accessRole.upsert", "accessRole.delete", "accessPolicy.upsert", "accessPolicy.delete", "whatsappTemplate.upsert", "whatsappTemplate.delete"]);
+// Master data tingkat organisasi (tanpa cabang) hanya boleh diubah Owner.
+//
+// `assetType` sebelumnya tidak ada di daftar ini, padahal `asset_types` tidak punya kolom cabang
+// dan aplikasi menjaganya dengan `owner.manage`. Akibatnya Kasir atau Supervisor dapat membuat dan
+// MENGHAPUS jenis aset untuk seluruh organisasi. Insiden nyata: perangkat yang berpindah ke akun
+// Supervisor menyusun enam `assetType.delete` untuk semua cabang, dan tanpa aturan ini Worker
+// menerimanya.
+const OWNER_ONLY = new Set(["branch.upsert", "staff.upsert", "service.upsert", "product.upsert", "assetType.upsert", "assetType.delete", "accessRole.upsert", "accessRole.delete", "accessPolicy.upsert", "accessPolicy.delete", "whatsappTemplate.upsert", "whatsappTemplate.delete"]);
 const KNOWN_COMMANDS = new Set([
   "order.create", "order.update", "order.put", "order.delete", "order.status", "order.payment", "order.handover",
   "stock.batch", "expense.upsert", "expense.delete", "attendance.upsert", "attendance.delete", "customer.upsert",
-  "payment.upsert",
+  "payment.upsert", "payment.delete",
   "branch.upsert", "branch.delete", "staff.upsert", "staff.delete", "service.upsert", "service.delete", "product.upsert", "product.delete", "customer.delete", "inventory.upsert", "inventory.delete", "assetType.upsert", "assetType.delete", "accessRole.upsert", "accessRole.delete", "accessPolicy.upsert", "accessPolicy.delete", "whatsappTemplate.upsert", "whatsappTemplate.delete",
   "branchStock.put", "branchStock.delete", "stockMove.upsert", "stockMove.delete", "audit.upsert", "audit.delete", "cashClose.upsert", "cashClose.delete",
 ]);
@@ -180,22 +187,55 @@ function assertRole(identity: SyncIdentity, command: SyncCommand): void {
   if (!permission.allowed) throw new CommandError(403, permission.reason === "owner" ? "Command khusus Owner" : "Role tidak diizinkan");
 }
 
+/**
+ * Modul dan fungsi katalog yang setara dengan sebuah command.
+ *
+ * Dipakai untuk memeriksa izin sisi server pada akun yang punya kebijakan akses per pengguna.
+ * Kuncinya HARUS sama dengan `AccessCatalog` di aplikasi; test `AccessPresetTest` di sisi Android
+ * membaca berkas ini dan memastikan pemetaannya tidak menyimpang.
+ *
+ * Riwayat: sebelum 1.10.30 pemetaan ini memakai modul lama (`owner`, `inventory` untuk jenis aset)
+ * dan menyamakan pembayaran dengan koreksi Service. Akibatnya akun ber-kebijakan yang diberi
+ * `service.payment` tanpa `service.correct` DITOLAK saat mencatat pembayaran.
+ */
 function customAccessRequirement(command: SyncCommand): { module: string; function?: string } | null {
   if (command.type.startsWith("order.")) {
     if (command.payload.syncIntent === "status" || command.type === "order.status") return {module:"queue",function:"queue.status"};
+    if (command.type === "order.handover") return {module:"queue",function:"queue.handover"};
     if (command.payload.waSent === true) return {module:"whatsapp",function:"whatsapp.send"};
+    if (command.type === "order.payment") return {module:"service",function:"service.payment"};
+    if (command.type === "order.delete") return {module:"service",function:"service.delete"};
     return {module:"service",function:command.type === "order.create" ? "service.create" : "service.correct"};
   }
   if (command.type.startsWith("stock") || command.type.startsWith("branchStock")) return {module:"stock",function:"stock.write"};
-  if (command.type.startsWith("attendance")) return {module:"attendance",function:"attendance.write"};
-  if (command.type.startsWith("customer")) return {module:"customer"};
-  if (command.type.startsWith("payment")) return {module:"service",function:"service.correct"};
-  if (command.type.startsWith("inventory")) return {module:"inventory"};
-  if (command.type.startsWith("assetType")) return {module:"inventory"};
-  if (command.type.startsWith("expense")) return {module:"expense"};
-  if (command.type.startsWith("cashClose")) return {module:"cash"};
-  if (command.type.startsWith("accessRole")) return {module:"owner",function:"owner.access"};
+  if (command.type.startsWith("attendance")) return {module:"attendance",function:"attendance.self"};
+  if (command.type.startsWith("customer")) return {module:"customer",function:command.type === "customer.delete" ? "customer.delete" : "customer.write"};
+  if (command.type.startsWith("payment")) return {module:"service",function:"service.payment"};
+  if (command.type.startsWith("inventory")) return {module:"inventory",function:command.type === "inventory.delete" ? "inventory.delete" : "inventory.write"};
+  // Jenis aset adalah data induk aset, bukan aset cabang: kuncinya `inventory.type`.
+  if (command.type.startsWith("assetType")) return {module:"inventory",function:"inventory.type"};
+  if (command.type.startsWith("expense")) return {module:"expense",function:command.type === "expense.delete" ? "expense.delete" : "expense.write"};
+  if (command.type.startsWith("cashClose")) return {module:"cash",function:"cash.close"};
+  if (command.type.startsWith("accessRole")) return {module:"access",function:"access.role"};
+  if (command.type.startsWith("accessPolicy")) return {module:"access",function:"access.assign"};
+  if (command.type.startsWith("whatsappTemplate")) return {module:"whatsapp",function:"whatsapp.template"};
   return null;
+}
+
+/**
+ * Apakah email ini memegang fungsi izin tertentu menurut kebijakan akses kustomnya.
+ *
+ * Dipakai untuk memeriksa izin di sisi server pada hal yang tidak punya modul sendiri, misalnya
+ * `service.price`. Owner selalu dianggap boleh; akun tanpa baris kebijakan memakai aturan bawaan
+ * peran (dan karena itu diperiksa terpisah oleh pemanggilnya).
+ */
+async function hasFunction(db: D1Database, email: string, module: string, fn: string): Promise<boolean> {
+  const row = await db.prepare("SELECT payload_json FROM access_policies WHERE organization_id=? AND lower(email)=lower(?)").bind(ORG_ID, email).first<{payload_json:string}>();
+  if (!row) return false;
+  const policy = JSON.parse(row.payload_json) as JsonRecord;
+  const modules = Array.isArray(policy.modules) ? policy.modules.filter((value): value is string => typeof value === "string") : [];
+  const functions = Array.isArray(policy.functions) ? policy.functions.filter((value): value is string => typeof value === "string") : [];
+  return modules.includes(module) && functions.includes(fn);
 }
 
 async function assertCustomAccess(db: D1Database, identity: SyncIdentity, command: SyncCommand): Promise<void> {
@@ -300,7 +340,10 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
   }
 
   if (command.type === "order.delete") {
-    if (!existing) throw new CommandError(404, "Service tidak ditemukan");
+    // Nota yang belum pernah sampai ke server (dibuat lalu dihapus saat offline, atau
+    // sudah hilang di sisi server) sudah sesuai maksud command. Menolaknya 404 membuat
+    // perangkat menyimpan command yang tidak akan pernah berhasil dan menahan antreannya.
+    if (!existing) return { statements: [], entityType: command.wireEntityType ?? "order", entityId: id, branchId, operation: "delete", changePayload: null, updatedAt: now };
     if (existing.paid > 0) throw new CommandError(422, "Service yang sudah menerima pembayaran tidak dapat dihapus. Catat pengembalian dana terlebih dahulu.");
     const adjustments=await retailAdjustments(db,id,[]);
     statements.push(db.prepare(`DELETE FROM orders WHERE id=? AND organization_id=? AND updated_at=? AND ${gate}`).bind(id, ORG_ID, existing.updated_at, command.commandId, ORG_ID, token));
@@ -353,11 +396,29 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
     };
   });
   const serviceIds=[...new Set(parsedLines.map(line=>line.serviceId))];
-  const commissions=(await db.prepare(`SELECT id,commission_per_unit FROM services WHERE organization_id=? AND active=1 AND id IN (${serviceIds.map(()=>"?").join(",")})`).bind(ORG_ID,...serviceIds).all<{id:string;commission_per_unit:number}>()).results;
+  const commissions=(await db.prepare(`SELECT id,commission_per_unit,default_price FROM services WHERE organization_id=? AND active=1 AND id IN (${serviceIds.map(()=>"?").join(",")})`).bind(ORG_ID,...serviceIds).all<{id:string;commission_per_unit:number;default_price:number}>()).results;
   const commissionCatalogue=new Map(commissions.map(row=>[row.id,row.commission_per_unit]));
-  const storedCommissions=existing ? (await db.prepare(`SELECT service_id,commission_per_unit FROM order_lines WHERE order_id=? AND service_id IN (${serviceIds.map(()=>"?").join(",")})`).bind(id,...serviceIds).all<{service_id:string;commission_per_unit:number}>()).results : [];
+  const priceCatalogue=new Map(commissions.map(row=>[row.id,row.default_price]));
+  const storedCommissions=existing ? (await db.prepare(`SELECT service_id,commission_per_unit,unit_price FROM order_lines WHERE order_id=? AND service_id IN (${serviceIds.map(()=>"?").join(",")})`).bind(id,...serviceIds).all<{service_id:string;commission_per_unit:number;unit_price:number}>()).results : [];
   const historicalCommissions=new Map(storedCommissions.map(row=>[row.service_id,row.commission_per_unit]));
+  const historicalPrices=new Map(storedCommissions.map(row=>[row.service_id,row.unit_price]));
   const lines=parsedLines.map(line=>({...line,commissionPerUnit:trustedCommission(line.serviceId,commissionCatalogue,historicalCommissions)}));
+  // Harga per satuan hanya boleh berbeda dari harga katalog bila pengirimnya memang pemegang
+  // fungsi `service.price` (bawaannya Owner). Tanpa pemeriksaan ini, perangkat yang dimodifikasi
+  // bisa menulis harga apa pun ke server walau tombolnya disembunyikan di UI.
+  if (identity.role !== "Owner" && !identity.bootstrap) {
+    const bolehUbahHarga = await hasFunction(db, identity.email, "service", "service.price");
+    if (!bolehUbahHarga) {
+      const menyimpang = lines.find(line => {
+        const katalog = priceCatalogue.get(line.serviceId);
+        if (typeof katalog !== "number" || line.unitPrice === katalog) return false;
+        // Harga yang sudah tersimpan pada Service ini tetap boleh dipertahankan, supaya koreksi
+        // rincian lain tidak ikut ditolak hanya karena ada harga Service dari transaksi sebelumnya.
+        return line.unitPrice !== historicalPrices.get(line.serviceId);
+      });
+      if (menyimpang) throw new CommandError(403, "Harga Service hanya dapat diubah oleh Owner");
+    }
+  }
   const total = lines.reduce((sum, line) => sum + Math.round(line.quantity * line.unitPrice), 0);
   const stockAdjustments=await retailAdjustments(db,id,lines);
   const paid = integer(p,"paid");
@@ -508,6 +569,19 @@ async function planDerivedStock(db:D1Database, command:SyncCommand, identity:Syn
 async function planPayment(db:D1Database, command:SyncCommand, identity:SyncIdentity, token:string, now:number):Promise<Plan> {
   const p=command.payload;
   const id=command.entityId || requiredString(p,"id",100);
+  if(command.type==="payment.delete") {
+    const existing=await db.prepare("SELECT order_id,branch_id FROM payments WHERE id=? AND organization_id=?").bind(id,ORG_ID).first<{order_id:string;branch_id:string}>();
+    // Pembayaran yang sudah tidak ada dianggap selesai. Command dari perangkat bisa
+    // terkirim ulang setelah barisnya hilang, dan menolaknya akan menahan antrean.
+    if(!existing) return {statements:[],entityType:"payment",entityId:id,branchId:command.branchId || null,operation:"delete",changePayload:null};
+    assertBranch(identity,existing.branch_id);
+    const statements=[
+      db.prepare(`DELETE FROM payments WHERE id=? AND organization_id=? AND ${commandGate()}`).bind(id,ORG_ID,command.commandId,ORG_ID,token),
+      guardPreviousMutation(db,command,token),
+      audit(db,command,identity,token,existing.branch_id,"Menghapus pembayaran",existing.order_id,now),
+    ];
+    return {statements,entityType:"payment",entityId:id,branchId:existing.branch_id,operation:"delete",changePayload:null,updatedAt:now};
+  }
   const notaId=requiredString(p,"notaId",100);
   const branchId=command.branchId || requiredString(p,"branchId",100);
   assertBranch(identity,branchId);
@@ -650,10 +724,30 @@ export async function pushCommands(request:Request, env:CommandEnv, identity:Syn
   if(new TextEncoder().encode(text).byteLength>MAX_COMMAND_BODY_BYTES) return response({error:"Payload command terlalu besar"},413);
   let raw:unknown; try { raw=JSON.parse(text); } catch { return response({error:"JSON tidak valid"},400); }
   if(!isObject(raw) || !Array.isArray(raw.commands) || raw.commands.length<1 || raw.commands.length>MAX_COMMANDS) return response({error:`commands harus berisi 1–${MAX_COMMANDS} item`},422);
-  let commands:SyncCommand[];
-  try { commands=raw.commands.map(parseCommand); } catch(error) { return error instanceof CommandError ? response({error:error.message,detail:error.detail},error.status) : response({error:"Command tidak valid"},422); }
-  if(new Set(commands.map(c=>c.commandId)).size!==commands.length) return response({error:"commandId dalam satu request tidak boleh duplikat"},422);
   const results:JsonRecord[]=[];
+  let commands:SyncCommand[]=[];
+  // Satu command yang tidak valid tidak boleh menahan seluruh antrean perangkat.
+  // Batch yang gagal di-parse seluruhnya dulu membuat klien menerima 422 tanpa
+  // results, sehingga perangkat tidak tahu command mana yang harus dibuang dan
+  // antreannya macet selamanya. Sekarang command yang sah tetap dijalankan.
+  const parsed:Array<SyncCommand|null>=[];
+  for(const item of raw.commands) {
+    if(!isObject(item)) { results.push({commandId:"",accepted:false,status:"rejected",code:422,error:"Command tidak valid"}); parsed.push(null); continue; }
+    try { parsed.push(parseCommand(item)); }
+    catch(error) {
+      const commandId=typeof item.commandId === "string" ? item.commandId.trim() : "";
+      results.push(error instanceof CommandError
+        ? {commandId,accepted:false,status:"rejected",code:error.status,error:error.message,detail:error.detail}
+        : {commandId,accepted:false,status:"rejected",code:422,error:"Command tidak valid"});
+      parsed.push(null);
+    }
+  }
+  commands=parsed.filter((command):command is SyncCommand => command !== null);
+  const seenIds=new Set<string>();
+  for(const command of commands) {
+    if(seenIds.has(command.commandId)) return response({error:"commandId dalam satu request tidak boleh duplikat"},422);
+    seenIds.add(command.commandId);
+  }
   let priorFailure=false;
   for(const command of commands) {
     if(priorFailure) {
@@ -664,7 +758,11 @@ export async function pushCommands(request:Request, env:CommandEnv, identity:Syn
     catch(error) {
       if(!(error instanceof CommandError) || error.status >= 500) console.error("command_retryable",command.commandId,error);
       results.push(commandFailureResult(command.commandId,error));
-      priorFailure=true;
+      // Hanya gangguan sementara yang menahan command berikutnya. Command yang
+      // ditolak permanen (4xx) sudah dilaporkan ke perangkat dan akan dibuang dari
+      // antrean; menghentikan rantai di sini membuat command sesudahnya berstatus
+      // retryable selamanya sehingga seluruh antrean perangkat macet.
+      priorFailure = !(error instanceof CommandError) || error.status >= 500;
     }
   }
   const acknowledgedCommandIds=results.filter(item=>item.accepted===true).map(item=>String(item.commandId));
@@ -693,6 +791,11 @@ export async function pullChanges(request:Request, env:CommandEnv, identity:Sync
   const rows=(await env.DB.prepare(query).bind(...binds).all<{sequence:number;entity_type:string;entity_id:string;operation:string;payload_json:string|null;updated_at:number;branch_id:string|null;actor_email:string|null;command_id:string|null}>()).results;
   const hasMore=rows.length>limit; const page=rows.slice(0,limit);
   const latest=await env.DB.prepare("SELECT COALESCE(MAX(sequence),0) AS revision FROM sync_changes WHERE organization_id=?").bind(ORG_ID).first<{revision:number}>();
-  const nextRevision=page.at(-1)?.sequence ?? after;
-  return response({revision:nextRevision,changes:page.map(row=>({revision:row.sequence,entityType:row.entity_type,entityId:row.entity_id,operation:row.operation,payload:row.payload_json?JSON.parse(row.payload_json):null,updatedAt:row.updated_at,branchId:row.branch_id,actorEmail:row.actor_email,commandId:row.command_id})),nextRevision,latestRevision:latest?.revision ?? 0,hasMore,scopeKey:syncScopeKey(identity)});
+  const latestRevision=latest?.revision ?? 0;
+  // Kursor tidak boleh melebihi revisi jurnal terakhir. Klien yang kursornya sudah di depan server
+  // (mis. sesudah jurnal dipangkas atau basis data dipulihkan dari cadangan) akan menerima
+  // `nextRevision = after` dan terus memakai kursor lama, sehingga halaman jurnal yang lebih tua
+  // dari kursornya tidak pernah dibaca lagi — perubahan server berhenti sampai selamanya.
+  const nextRevision=Math.min(page.at(-1)?.sequence ?? after, latestRevision);
+  return response({revision:nextRevision,changes:page.map(row=>({revision:row.sequence,entityType:row.entity_type,entityId:row.entity_id,operation:row.operation,payload:row.payload_json?JSON.parse(row.payload_json):null,updatedAt:row.updated_at,branchId:row.branch_id,actorEmail:row.actor_email,commandId:row.command_id})),nextRevision,latestRevision,hasMore,scopeKey:syncScopeKey(identity)});
 }

@@ -74,6 +74,7 @@ import com.cuciin.laundryops.ui.components.PrimaryBtn
 import com.cuciin.laundryops.ui.components.ScreenHeader
 import com.cuciin.laundryops.ui.components.SectionLabel
 import com.cuciin.laundryops.ui.components.SelectChip
+import com.cuciin.laundryops.ui.components.SyncNotice
 import com.cuciin.laundryops.ui.theme.Amber
 import com.cuciin.laundryops.ui.theme.Green
 import com.cuciin.laundryops.ui.theme.Ink
@@ -102,7 +103,16 @@ internal fun CustomersScreen(nav: NavHostController, toast: (String) -> Unit) {
     }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), state = listState, verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Pelanggan", if (pickMode) "Ketuk nama untuk memilih pelanggan" else "Kontak pelanggan laundry Anda", onBack = { nav.popBackStack() }) }
-        if (!creating && editing == null) item { PrimaryBtn("Pelanggan baru", icon = Icons.Outlined.Add) { creating = true; editing = null; fill(null) } }
+        // Tombol pembuka form diperiksa dengan FUNGSI, bukan hanya modul rutenya. Rute `customers`
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
+        // memakai gerbang modul supaya role kustom tetap bisa MEMBACA daftar pelanggan; pintu yang
+        // MENULIS tetap harus memeriksa `customer.write`, kalau tidak role itu membuka formulir
+        // yang pasti ditolak saat disimpan.
+        if (!creating && editing == null && store.canAccess("customer", "customer.write")) {
+            item { PrimaryBtn("Pelanggan baru", icon = Icons.Outlined.Add) { creating = true; editing = null; fill(null) } }
+        }
         if (creating || editing != null) {
             item {
                 CardBlock(accent = Teal) {
@@ -118,17 +128,22 @@ internal fun CustomersScreen(nav: NavHostController, toast: (String) -> Unit) {
                         }
                         val e = editing
                         if (e == null) {
-                            store.addCustomer(name, phone, address)
+                            val c = store.addCustomer(name, phone, address)
+                            if (c == null) {
+                                toast("Akses Ubah pelanggan dicabut untuk role akun ini")
+                                return@PrimaryBtn
+                            }
                             toast("Pelanggan disimpan")
                             if (pickMode) nav.popBackStack()
                         } else {
-                            store.updateCustomer(e.id, name, phone, address)
+                            val tolak = store.updateCustomer(e.id, name, phone, address)
+                            if (tolak != null) { toast(tolak); return@PrimaryBtn }
                             toast("Perubahan disimpan")
                         }
                         creating = false
                         editing = null
                     }
-                    if (editing != null && store.session.value?.role == Role.Owner) {
+                    if (editing != null && store.canDeleteCustomer()) {
                         DangerBtn("Hapus pelanggan") {
                             store.deleteCustomer(editing!!.id)?.let { toast(it) } ?: toast("Dihapus")
                             creating = false
@@ -197,7 +212,8 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 creating = true
                 toast("Lokasi dari peta berhasil dipilih")
             } else {
-                store.updateBranchMap(editing.id, incomingMap)
+                val tolak = store.updateBranchMap(editing.id, incomingMap)
+                if (tolak != null) { toast(tolak); MapSelection.pendingLink.value = null; return@LaunchedEffect }
                 toast("Lokasi peta ${editing.name} berhasil disimpan")
             }
             MapSelection.pendingLink.value = null
@@ -219,6 +235,9 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
         }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         if (!creating && editing == null) item {
             // Header menyebut jumlah cabang yang benar-benar ada, bukan angka tetap.
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -257,8 +276,15 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
                             toast("Kode cabang sudah dipakai. Gunakan kode unik agar ID Service tidak bertabrakan.")
                             return@PrimaryBtn
                         }
-                        if (e == null) store.addBranch(name, code, location, maps)
-                        else store.updateBranch(e.id, name, code, location, maps)
+                        if (e == null) {
+                            if (store.addBranch(name, code, location, maps) == null) {
+                                toast("Akses Kelola master data dicabut untuk role akun ini")
+                                return@PrimaryBtn
+                            }
+                        } else {
+                            val tolak = store.updateBranch(e.id, name, code, location, maps)
+                            if (tolak != null) { toast(tolak); return@PrimaryBtn }
+                        }
                         toast("Cabang tersimpan")
                         creating = false
                         editingId = null
@@ -326,7 +352,11 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
 internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val session = store.session.value ?: return
-    if (session.role != Role.Owner) { nav.popBackStack(); return }
+    // Gerbang rute `users` memakai `staff` + `staff.manage`, jadi layar ini memakai ukuran yang
+    // sama. Sebelumnya layar memeriksa modul `owner`, yang sudah tidak ada sejak katalog 1.10.30
+    // dipecah, sehingga `canAccess` selalu false dan SETIAP pengguna termasuk Owner langsung
+    // terlempar keluar: menu "Daftar User" tampak tidak bisa diklik.
+    if (!store.canAccess("staff", "staff.manage")) { nav.popBackStack(); return }
     var editing by remember { mutableStateOf<Staff?>(null) }
     var creating by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -363,6 +393,9 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
     }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), state = listState, verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Daftar User", "Owner, kasir, SPV, dan akses cabang", onBack = { nav.popBackStack() }) }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: daftar user dan perannya paling berbahaya kalau tertinggal dari server.
+        item { SyncNotice() }
         if (!creating && editing == null) {
             item { PrimaryBtn("Tambah user", icon = Icons.Outlined.Add) { creating = true; editing = null; fill(null) } }
             item { SearchField(userQuery, { userQuery = it }, "Cari nama atau email") }
@@ -414,9 +447,9 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
                     if (editing != null && !editing!!.approved) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             PrimaryBtn("Setujui", modifier = Modifier.weight(1f)) {
-                                store.approve(editing!!.name, true)
-                                toast("User disetujui")
-                                editing = null
+                                val err = store.approve(editing!!.name, true)
+                                toast(err ?: "User disetujui")
+                                if (err == null) editing = null
                             }
                             GhostBtn("Tolak", modifier = Modifier.weight(1f)) {
                                 store.deleteStaff(editing!!.email)?.let { toast(it) } ?: toast("Permohonan ditolak")
@@ -530,6 +563,9 @@ internal fun ServicesScreen(nav: NavHostController, toast: (String) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), state = listState, verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Layanan & harga", "Atur layanan dan tarif laundry", onBack = { nav.popBackStack() }) }
         if (!creating && editing == null) item { PrimaryBtn("Layanan baru", icon = Icons.Outlined.Add) { creating = true; editing = null; fill(null) } }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         if (creating || editing != null) {
             item {
                 CardBlock(accent = Teal) {
@@ -571,8 +607,14 @@ internal fun ServicesScreen(nav: NavHostController, toast: (String) -> Unit) {
                         }
                         val e = editing
                         if (retail && productKey.isBlank()) { toast("Pilih produk stok untuk layanan retail"); return@PrimaryBtn }
-                        if (e == null) store.addService(name, unit, price, retail, dropOut, selfService, commission, productKey)
-                        else store.updateService(e.id, name, unit, price, retail, dropOut, selfService, commission, productKey)
+                        if (e == null) {
+                            if (store.addService(name, unit, price, retail, dropOut, selfService, commission, productKey) == null) {
+                                toast("Akses Kelola master data dicabut untuk role akun ini"); return@PrimaryBtn
+                            }
+                        } else {
+                            val tolak = store.updateService(e.id, name, unit, price, retail, dropOut, selfService, commission, productKey)
+                            if (tolak != null) { toast(tolak); return@PrimaryBtn }
+                        }
                         toast("Layanan tersimpan")
                         creating = false
                         editing = null
@@ -639,6 +681,9 @@ internal fun ProductsScreen(nav: NavHostController, toast: (String) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), state = listState, verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Produk stok & bahan", "Barang dijual dan bahan habis pakai per cabang", onBack = { nav.popBackStack() }) }
         if (!creating && editing == null) item { GhostBtn("Kelola aset & mesin cabang", icon = Icons.Outlined.Build) { nav.navigate("inventory") } }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         if (!creating && editing == null) item { PrimaryBtn("Produk baru", icon = Icons.Outlined.Add) { creating = true; editing = null; fill(null) } }
         if (creating || editing != null) {
             item {
@@ -668,8 +713,14 @@ internal fun ProductsScreen(nav: NavHostController, toast: (String) -> Unit) {
                             return@PrimaryBtn
                         }
                         val e = editing
-                        if (e == null) store.addProduct(name, stock, min, initialBranchIds, kind, unit)
-                        else store.updateProduct(e.key, name, min, kind, unit)
+                        if (e == null) {
+                            if (store.addProduct(name, stock, min, initialBranchIds, kind, unit) == null) {
+                                toast("Akses Kelola master data dicabut untuk role akun ini"); return@PrimaryBtn
+                            }
+                        } else {
+                            val tolak = store.updateProduct(e.key, name, min, kind, unit)
+                            if (tolak != null) { toast(tolak); return@PrimaryBtn }
+                        }
                         toast("Produk tersimpan")
                         creating = false
                         editing = null

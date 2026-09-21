@@ -380,6 +380,14 @@ data class AccessRole(
     val functions: Set<String> = emptySet(),
     /** Role bawaan dibuat sistem; hanya hak aksesnya yang boleh diubah. */
     val builtIn: Boolean = false,
+    /**
+     * Versi [AccessCatalog] yang terakhir menambal role ini.
+     *
+     * Dipakai supaya penambalan fungsi bawaan hanya terjadi SEKALI per versi katalog. Tanpa
+     * penanda ini, fungsi yang sengaja dicabut Owner akan hidup kembali setiap aplikasi dibuka,
+     * karena penambal tidak bisa membedakan "belum pernah ada" dari "sengaja dihapus".
+     */
+    val catalogVersion: Int = 0,
 )
 
 /** Pesan dapat disusun oleh Owner tanpa mengubah template nota di kode aplikasi. */

@@ -1,0 +1,105 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  color: var(--teks);
+  line-height: 1.65;
+  background: #f8fafc;
+  font-size: 15px;
+}
+.sampul {
+  background: linear-gradient(135deg, var(--aksen) 0%, var(--aksen2) 100%);
+  color: #fff;
+  padding: 56px 48px 44px;
+}
+.sampul code { background: rgba(0,0,0,.22); color: #fff; border-color: rgba(255,255,255,.45); }
+.sampul .sub { color: rgba(255,255,255,.95); }
+.sampul .label {
+  display: inline-block;
+  background: rgba(255,255,255,.2);
+  border: 1px solid rgba(255,255,255,.35);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.sampul h1 {
+  margin: 18px 0 8px;
+  font-size: 40px;
+  line-height: 1.15;
+  border: 0;
+  padding: 0;
+  color: #fff;
+}
+.sampul .sub { margin: 0; opacity: .92; font-size: 16px; max-width: 60ch; }
+.wadah { max-width: 960px; margin: 0 auto; padding: 36px 24px 72px; }
+.kartu {
+  background: var(--kartu);
+  border: 1px solid var(--garis);
+  border-radius: 12px;
+  padding: 32px 40px;
+  margin-bottom: 22px;
+}
+h1, h2, h3, h4 { line-height: 1.25; color: #111827; }
+h1 { font-size: 30px; margin: 0 0 20px; padding-bottom: 12px; border-bottom: 3px solid var(--aksen); }
+h2 {
+  font-size: 22px; margin: 40px 0 14px; padding-left: 12px;
+  border-left: 5px solid var(--aksen);
+}
+h3 { font-size: 17px; margin: 28px 0 10px; color: var(--aksen); }
+h4 { font-size: 15px; margin: 22px 0 8px; color: var(--teks-lembut); text-transform: uppercase; letter-spacing: .04em; }
+p { margin: 0 0 14px; }
+a { color: var(--aksen); text-decoration: none; border-bottom: 1px solid var(--aksen2); }
+a:hover { background: var(--lembut); }
+ul, ol { margin: 0 0 16px; padding-left: 26px; }
+li { margin-bottom: 6px; }
+ol li { padding-left: 4px; }
+ol li::marker { color: var(--aksen); font-weight: 700; }
+code {
+  background: #f1f5f9; border: 1px solid var(--garis); border-radius: 4px;
+  padding: 1px 6px; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+pre {
+  background: #0f172a; color: #e2e8f0; border-radius: 10px; padding: 18px 20px;
+  overflow-x: auto; font-size: 13px; line-height: 1.5;
+}
+pre code { background: none; border: 0; padding: 0; color: inherit; }
+table { width: 100%; border-collapse: collapse; margin: 0 0 20px; font-size: 14px; }
+th {
+  background: var(--aksen); color: #fff; text-align: left;
+  padding: 10px 12px; font-weight: 600; font-size: 13px;
+}
+td { padding: 9px 12px; border-bottom: 1px solid var(--garis); vertical-align: top; }
+tbody tr:nth-child(even) { background: var(--lembut); }
+blockquote { margin: 0 0 16px; padding: 0; }
+.catatan {
+  border-radius: 10px; padding: 14px 18px 14px 16px; margin: 0 0 18px;
+  border-left: 5px solid var(--aksen); background: var(--lembut);
+}
+.catatan p { margin: 0; }
+.catatan-label {
+  display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--aksen); margin-bottom: 5px;
+}
+.catatan-awas { border-left-color: #d97706; background: #fffbeb; }
+.catatan-awas .catatan-label { color: #b45309; }
+.catatan-bahaya { border-left-color: #dc2626; background: #fef2f2; }
+.catatan-bahaya .catatan-label { color: #b91c1c; }
+.catatan-ringkas { border-left-color: var(--aksen2); }
+img {
+  max-width: 100%; border: 1px solid var(--garis); border-radius: 10px;
+  display: block; margin: 6px auto 22px; box-shadow: 0 2px 10px rgba(15,23,42,.08);
+}
+hr { border: 0; border-top: 1px solid var(--garis); margin: 32px 0; }
+.kaki { text-align: center; color: var(--teks-lembut); font-size: 12px; padding: 18px 0 0; }
+@media print {
+  body { background: #fff; font-size: 11pt; }
+  .sampul { padding: 32px; }
+  .wadah { max-width: none; padding: 0; }
+  .kartu { border: 0; padding: 0; margin: 0; }
+  h2 { break-after: avoid; page-break-after: avoid; }
+  table, img, pre, .catatan { break-inside: avoid; page-break-inside: avoid; }
+  a { border: 0; }
+}

@@ -12,10 +12,74 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.24"
-    val currentCode: Int = 43
+    val currentName: String = "1.10.35"
+    val currentCode: Int = 54
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.35", code = 54, date = "21 Sep 2026",
+            notes = listOf(
+                "Kegagalan masuk sekarang selalu memberi jawaban yang terbaca: pesannya tampil sebagai banner di layar Masuk, sebelumnya hilang tanpa jejak sehingga tombol terasa tidak bereaksi.",
+                "Jawaban proses masuk dipindahkan ke main thread, sehingga tampilan ikut berubah saat server identitas menolak.",
+                "Bila server identitas tidak menjawab dalam 20 detik, proses masuk berhenti sendiri dengan pesan yang jelas dan tombol Masuk bisa ditekan lagi.",
+                "Layar pendaftaran juga menampilkan pesan kegagalan di layar, bukan lagi lewat pesan singkat yang tidak terlihat.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.30", code = 49, date = "20 Sep 2026",
+            notes = listOf(
+                "Kontrol Akses Role kini lebih rinci: 15 modul dan 41 fungsi, dari sebelumnya 12 modul dan 17 fungsi.",
+                "Ada preset peran sekali tekan untuk Owner, Supervisor, Kasir, Hanya lihat, dan Kosongkan. Sesudah diterapkan, centangnya tetap bisa diubah satu per satu.",
+                "Hak baca dipisah dari hak ubah, dan hak hapus dipisah dari hak koreksi. Memberi izin lihat stok tidak lagi sekalian memberi izin mengubah stok.",
+                "Modul master data dipecah menjadi Cabang, Daftar User, Layanan dan harga, serta Kontrol Akses, supaya izinnya dapat diberikan terpisah.",
+                "Koreksi Service yang sudah dikirim, ekspor seluruh data, dan hapus pelanggan kini menjadi centang fungsi, bukan lagi terkunci pada nama peran.",
+                "Fungsi yang hanya boleh dilakukan Owner ditandai di layar supaya tidak ada centang yang tidak akan pernah tersinkron.",
+                "Perbaikan: pembayaran Service ditolak server bila role hanya diberi izin koreksi, bukan izin pembayaran.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.29", code = 48, date = "19 Sep 2026",
+            notes = listOf(
+                "Perbaikan penting: berpindah akun tidak lagi menghasilkan perintah hapus untuk seluruh jenis aset organisasi. Sebelumnya perangkat menyusun penghapusan massal karena membandingkan data yang sudah disaring per cabang dengan data yang belum.",
+                "Perintah hapus untuk data tingkat organisasi hanya disusun saat aktornya Owner, dan perintah tertahan yang aktornya tidak berhak dibuang sebelum terkirim.",
+                "Server menolak perintah tambah dan hapus jenis aset dari akun selain Owner, sejalan dengan penjaga di aplikasi.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.28", code = 47, date = "19 Sep 2026",
+            notes = listOf(
+                "Perbaikan penting: penolakan izin tidak lagi menutup aplikasi. Sebelumnya menyimpan Service tanpa izin membuat aplikasi berhenti.",
+                "Sepuluh tindakan yang ditolak izin dulu tetap menampilkan pesan berhasil padahal tidak ada data tersimpan. Sekarang pesan penolakannya jelas.",
+                "Layar Daftar Aset Cabang, Biaya operasional, Pelanggan, WA menunggu, Arsip WA, dan Absensi kini punya gerbang izin. Sebelumnya terbuka untuk peran mana pun.",
+                "Layar Antrian dan Service kini memeriksa fungsi, bukan hanya modulnya. Hak baca yang sudah dimiliki tetap dipertahankan.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.27", code = 46, date = "18 Sep 2026",
+            notes = listOf(
+                "Perbaikan penting: seluruh 17 fungsi di Kontrol Akses Role kini benar-benar diperiksa. Sebelumnya 9 fungsi hanya menghiasi layar: mencabut centangnya tidak mengubah apa pun.",
+                "Fungsi yang kini ditegakkan: ubah status kerja, serahkan ke pelanggan, buat Service, ubah stok, ubah aset, kirim WhatsApp, kelola master data, lihat laporan, dan lihat riwayat.",
+                "Kontrol akses: tambah dan ubah pelanggan, seluruh perubahan cabang, user, layanan, produk, dan jenis aset kini ditolak sistem bila fungsinya dicabut, bukan hanya disembunyikan dari layar.",
+                "Laporan transaksi, laporan analitik, dan riwayat aktivitas kini memeriksa fungsinya sendiri, bukan hanya modulnya.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.26", code = 45, date = "18 Sep 2026",
+            notes = listOf(
+                "Perbaikan penting: centang fungsi di Kontrol Akses Role kini benar-benar berlaku. Sebelumnya yang menentukan hanya modul dan peran lama, sehingga mencabut centang sebuah fungsi tidak mengubah apa pun.",
+                "Koreksi Service, penghapusan Service, pencatatan pembayaran, biaya operasional, absensi, tutup kas, dan penghapusan pelanggan sekarang ditolak sistem bila fungsinya dicabut dari role, bukan hanya tombolnya disembunyikan.",
+                "Perbaikan: layar Tutup kas kini punya pemilih cabang sendiri. Sebelumnya Owner yang melihat semua cabang hanya diminta memilih satu cabang tanpa ada cara memilihnya di layar itu.",
+                "Pesan penolakan menyebut nama fungsi yang dicabut supaya jelas kenapa tindakannya tidak diizinkan.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.25", code = 44, date = "18 Sep 2026",
+            notes = listOf(
+                "Antrean sinkronisasi tidak lagi macet ketika satu perubahan ditolak server.",
+                "Penghapusan pembayaran kini dikenal server, sehingga antrean lanjut terkirim.",
+                "Perubahan yang ditolak server dilaporkan satu per satu agar bisa ditinjau.",
+            ),
+        ),
         AppRelease(
             name = "1.10.24", code = 43, date = "18 Sep 2026",
             notes = listOf(

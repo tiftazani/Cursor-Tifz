@@ -1,0 +1,2 @@
+1ea2e38a01fac3808bd55b97ea5cda8e8828d3dbca613de5816254a74b0a4e30  cuciin-1.9.1-release.apk
+57ce53f8cd04d3988021aecffd5a83a88218cde324eb9f77fad2890711a6383e  cuciin-1.9.1-release.aab

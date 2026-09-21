@@ -2,6 +2,485 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.35 — 21 Sep 2026 (versionCode 54)
+
+### Kegagalan masuk tidak lagi diam
+
+Sebelumnya, menekan **Masuk** dengan sandi salah membuat tombol kembali seperti semula tanpa
+penjelasan apa pun. Log perangkat membuktikan aplikasi memang menerima penolakan dari server
+identitas, tetapi pesannya dikirim lewat pesan singkat yang tidak pernah dirender di layar Masuk,
+dan jawabannya datang di thread yang salah sehingga tampilan tidak ikut berubah. Akibatnya
+pengguna mengira aplikasi rusak.
+
+Yang diperbaiki:
+
+- Pesan kegagalan masuk tampil sebagai banner di layar Masuk, dan hilang begitu kolom diubah lagi.
+- Jawaban proses masuk diantar ke main thread, jadi tampilan ikut berubah saat server menolak.
+- Bila server identitas tidak menjawab dalam 20 detik, proses berhenti dengan pesan yang jelas
+  dan tombol Masuk bisa ditekan lagi.
+- Layar **Daftar** juga menampilkan pesan kegagalannya di layar.
+
+## 1.10.30 — 20 Sep 2026 (versionCode 49)
+
+### Modul dan fungsi izin diperinci, plus preset peran
+
+Katalog izin naik dari **12 modul / 17 fungsi** menjadi **15 modul / 41 fungsi**, dan kini bisa
+diisi sekali tekan lewat preset peran (Owner, Supervisor, Kasir, Hanya lihat, Kosongkan). Preset
+adalah titik awal, bukan larangan: sesudah diterapkan, centangnya tetap bisa diubah satu per satu.
+
+**Tiga pemisahan yang paling berpengaruh.**
+
+1. BACA dipisah dari TULIS. Sebelumnya satu-satunya cara memberi "lihat stok" adalah memberi
+   "ubah stok". Sekarang ada `stock.view` di samping `stock.write`.
+2. UBAH dipisah dari HAPUS. Menghapus lebih berisiko daripada mengubah, tetapi keduanya dulu
+   menumpang satu centang: `service.correct` menaungi koreksi DAN hapus, `expense.write` menaungi
+   catat DAN hapus.
+3. Modul `owner` dipecah menjadi `branch`, `staff`, `serviceCatalog`, dan `access`, supaya "boleh
+   menambah user" tidak lagi menuntut "boleh mengubah cabang". Sebelumnya satu fungsi
+   `owner.manage` dipakai di **17 titik jaga di store dan 7 gerbang rute**.
+
+**Kunci keras yang sekarang jadi centangan.** Empat aturan yang dulu dikunci dengan NAMA peran di
+kode sekarang mengikuti centang fungsi, dengan nilai bawaan yang sama supaya perilakunya tidak
+berubah: koreksi/hapus Service yang sudah dikirim (`service.correctSent`), ekspor seluruh data
+(`analytics.export`), hapus pelanggan (`customer.delete`), dan tab Service/WA di bar bawah
+(sekarang mengikuti `service.create` dan `whatsapp.send`, bukan nama "Supervisor").
+
+**Fungsi yang tetap dikunci keras.** Bukan izin, melainkan invarian keamanan: "Owner terakhir tidak
+bisa dihapus atau diturunkan", Owner selalu penuh, dan kebijakan per pengguna hanya mempersempit.
+Lima belas fungsi yang SERVER tolak untuk non-Owner ditandai "Khusus Owner" di layar dan centangnya
+tidak dapat dinyalakan, supaya Owner tidak menyimpan centang yang tidak akan pernah tersinkron.
+Daftarnya mengikuti `OWNER_ONLY` dan perintah khusus Owner di Worker, dan kecocokannya dikunci
+`AccessPresetTest`.
+
+**Kompatibilitas kunci lama.** Role yang sudah tersimpan di server masih memakai kunci lama
+(`owner.manage`, `attendance.write`), dan APK 1.10.29 yang masih dipakai cabang juga menulis kunci
+lama. Kunci lama diterjemahkan ke kunci baru saat role dibaca, bukan hanya saat izin diperiksa:
+tanpa itu, layar Kontrol Akses Role menampilkan centang KOSONG untuk role yang sudah ada, dan Owner
+yang menyimpannya akan menghapus seluruh hak role itu.
+
+**Bug yang ikut diperbaiki.**
+
+- Worker menyamakan pembayaran dengan koreksi Service. Akun ber-kebijakan yang diberi
+  `service.payment` tanpa `service.correct` DITOLAK saat mencatat pembayaran. Sekarang
+  `order.payment` memetakan ke `service.payment`.
+- Worker memetakan absensi ke `attendance.write` dan jenis aset ke modul `inventory` saja, tidak
+  sesuai katalog. Sekarang `attendance.self` dan `inventory.type`.
+- Worker hanya memeriksa MODUL untuk command pelanggan, sehingga kebijakan tanpa `customer.write`
+  tetap bisa menulis pelanggan. Sekarang memeriksa fungsinya.
+- Tombol "Hapus" pada koreksi Service dibuang; penolakan `service.delete` sekarang dilaporkan
+  lewat pesan, bukan gagal diam-diam.
+- Dua fungsi katalog dibuang karena tidak punya pemeriksa: `settings.manage` dan `cash.view`.
+  Fungsi tanpa pemeriksa membuat janji Kontrol Akses Role bohong.
+- Kartu role dan ringkasan di layar Kontrol Akses Role menghitung cermin kunci lama sebagai fungsi,
+  sehingga role hasil preset "Hanya lihat" tampil "10 fungsi" padahal presetnya menjanjikan 9.
+  Selisih satu angka itu terlihat seperti centang yang bertambah sendiri sesudah disimpan. Sekarang
+  angkanya dihitung sesudah kunci lama diterjemahkan.
+
+## 1.10.29 — 19 Sep 2026 (versionCode 48)
+
+Perbaikan dua lapis untuk satu insiden data: berpindah akun ke peran non-Owner menghasilkan enam
+perintah `assetType.delete` untuk **seluruh jenis aset organisasi**.
+
+Sebabnya dua cacat yang saling menutupi:
+
+1. **Android** — `SyncOutbox.enqueue` membandingkan `shadow` dengan snapshot yang baru masuk. Snapshot
+   non-Owner disaring per cabang, sedangkan master data tingkat organisasi (`branchId == null`:
+   cabang, staff, layanan, produk, jenis aset, role) tidak punya cabang sehingga tidak ikut disaring.
+   Entitas itu lalu terbaca sebagai "sudah dihapus" dan perangkat menyusun perintah delete.
+2. **Worker** — `assetType.upsert` dan `assetType.delete` tidak ada di `OWNER_ONLY`, padahal
+   `asset_types` tidak punya kolom cabang dan `deleteAssetType` di aplikasi dijaga `owner.manage`.
+   Gerbang lebih longgar dari penjaganya, jadi perintah itu diterima.
+
+Perbaikan tiga lapis:
+
+- `SyncOutbox.enqueue` tidak lagi menyimpulkan delete untuk entitas tanpa cabang bila aktornya bukan
+  Owner. Sejalan dengan izin Worker: seluruh delete tanpa cabang memang Owner-only.
+- `SyncOutbox.buangYangTidakBerhak` membuang perintah tertahan yang aktornya tidak berhak SEBELUM
+  terkirim, dipanggil di awal `flushCommands`. Perintah yang tertinggal dari sesi lain masuk
+  `rejected` dengan alasannya, jadi tetap ada jejak dan tidak pernah meninggalkan perangkat.
+- `OWNER_ONLY` di Worker menerima `assetType.upsert` dan `assetType.delete`.
+
+Test pengunci, ketiganya terbukti GAGAL saat perbaikan dikembalikan:
+
+- Android: `nonOwnerTidakMenyimpulkanDeleteUntukEntitasTanpaCabang` (GAGAL saat penjaga dilepas),
+  `perintahDeleteTanpaCabangDibuangSaatAktorBukanOwner` (GAGAL saat penjaga pembuang dilumpuhkan),
+  dan dua test yang memastikan Owner tidak ikut dikunci.
+- Worker: jenis aset ditolak untuk Kasir dan Supervisor, diterima untuk Owner.
+
+Test Android 220 lulus (debug+release), lint bersih, test Worker 56 lulus.
+
+## 1.10.28 — 19 Sep 2026 (versionCode 47)
+
+### Penolakan izin tidak lagi mematikan aplikasi atau melapor palsu
+
+Versi 1.10.27 menutup seluruh 17 fungsi izin, tetapi cara MENOLAKnya masih salah di 12 titik.
+Dua kelas bug, keduanya ditemukan dengan memeriksa seluruh kelas bug yang sama setelah menemukan
+yang pertama, bukan hanya titik yang dilaporkan:
+
+**Kelas A, penolakan mematikan aplikasi.** `saveNota` dan `addInventory` memakai
+`require(boleh(...))` yang melempar `IllegalArgumentException`. Supervisor memiliki MODUL
+`service` sehingga menu "Service baru" tampil, tetapi tidak memiliki fungsi `service.create`:
+menekan Simpan langsung menutup aplikasi. Penolakan izin adalah kejadian NORMAL, bukan kesalahan
+program. Sekarang `saveNota` memakai `check` (dicegat lebih dulu oleh `canCreateService()` di UI)
+dan `addInventory` mengembalikan `null`.
+
+**Kelas B, penolakan dilaporkan sebagai sukses.** Sepuluh fungsi memakai
+`if (!boleh(...)) return` sehingga store tidak menulis apa pun, tetapi UI tetap menampilkan
+"Cabang tersimpan", "Layanan tersimpan", "Perubahan aset tersimpan". Itu laporan palsu: pengguna
+mengira datanya tersimpan, dan bug tersembunyi karena layar tampak bekerja. Semua titik itu kini
+mengembalikan pesan penolakan (`tolak(...)`), dan UI menampilkannya.
+
+Rincian yang ikut diperbaiki:
+
+- `updateBranch`, `updateBranchMap`, `updateCustomer`, `updateService`, `updateProduct`,
+  `updateAssetType`, `updateInventory`, `markWaSent`, `editStock` mengembalikan `String?`.
+- `editStocks` memakai penanda `CuciinStore.TOLAK_STOK` (-1) karena mengembalikan jumlah
+  perubahan; jumlah sah selalu >= 0, jadi UI dapat membedakan "ditolak" dari "tidak ada perubahan".
+- `addService` dan `addProduct` ternyata tidak punya penjaga izin sama sekali; keduanya kini
+  dijaga `owner.manage` dan mengembalikan `null` saat ditolak.
+- Pemeriksa izin di UI ditambahkan supaya jalur penolakan tidak pernah dipanggil:
+  `canCreateService()` dan `canSendWa()`.
+
+Tiga test pengunci baru, semuanya membaca kode sumber dan sudah dibuktikan GAGAL saat bug
+dikembalikan:
+
+- `penolakanIzinTidakMemakaiRequireYangMelempar` — menolak `require(boleh(...))` di store.
+- `penolakanIzinSelaluMembawaPesan` — menolak `if (!boleh(...)) return` telanjang.
+- `uiMemakaiPesanPenolakanDariStore` — setiap pemanggil di UI harus memakai pesan penolakan,
+  `?.let`, atau pemeriksa izin. Test ini menemukan satu call site nyata yang mengabaikan hasilnya
+  (`markWaSent` di layar nota) saat pertama dijalankan.
+
+### Kelas C — gerbang rute lebih longgar dari penjaganya
+
+Rute "Service baru" hanya memeriksa MODUL `service`, sedangkan `saveNota` memeriksa FUNGSI
+`service.create`. Role kustom yang dicentang modul `service` tanpa fungsi `service.create` melihat
+menunya, mengisi formulirnya, lalu aplikasi mati saat menekan Simpan. Menu itu memang sudah
+disembunyikan untuk Supervisor lewat `hiddenForSupervisor`, tetapi aturan izin tidak boleh
+bergantung pada pengecualian nama peran: role kustom dengan bentuk izin yang sama tetap terkena.
+
+Gerbang rute kini memeriksa fungsi yang benar-benar diperiksa saat MENYIMPAN pada alur utama rute:
+`service` memeriksa `service.create`, dan seluruh menu master data memeriksa `owner.manage`
+(`accessRoles` memeriksa `owner.access`). Sebelumnya keenam menu master data hanya memeriksa modul.
+
+Tiga test pengunci baru, sudah dibuktikan GAGAL saat gerbang dikembalikan menjadi hanya-modul:
+
+- `gerbangRuteTidakLebihLonggarDariPenjagaStore` — memetakan fungsi penjaga alur utama tiap rute.
+- `supervisorBawaanTidakLolosGerbangServiceBaru` — Supervisor memuat modul `service` tanpa fungsi
+  `service.create`, jadi gerbang hanya-modul pasti meloloskannya.
+- `ownerTetapLolosSeluruhGerbangRute` — perbaikan ini tidak boleh mengunci Owner dari menunya.
+
+### Kelas D — pintu alur tulis dikunci NAMA PERAN, bukan fungsi
+
+Enam tombol yang membuka alur TULIS diperiksa dengan `role != Role.Supervisor`, bukan dengan fungsi
+izin. Pengecualian nama peran hanya mengenal peran BAWAAN, jadi role kustom dengan bentuk izin yang
+sama tetap lolos: role yang memuat modul `service` tanpa fungsi `service.create` (mis. Kasir yang
+dicabut `service.create`) melihat tombol "Service baru" di beranda, mengisi formulirnya, lalu
+aplikasi MATI saat menekan Simpan.
+
+Titik yang diperbaiki, semuanya kini membaca fungsi:
+
+- Beranda, tombol "Service baru" -> `canCreateService()`
+- Stok, tombol "Catat perubahan stok" -> `canWriteStock()`
+- Daftar Aset Cabang, tombol "Daftarkan aset" -> `canWriteInventory()`
+- Daftar Aset Cabang, "Kelola jenis aset" di sheet jenis -> `canManageAssetTypes()`
+- Detail Service, "Catat pelunasan" -> `canTakePayment()`
+- Detail Service, "Tambah foto dari galeri" -> `canTakePayment()`
+- Detail Service, blok "Koreksi Service" -> `service.correct` (sebelumnya digabung nama peran)
+
+Helper baru: `canWriteStock()`, `canTakePayment()`, `canWriteInventory()`, `canManageAssetTypes()`.
+
+Pengecualian nama peran TETAP dipakai untuk aturan TAMPIL (bar navigasi dan menu Modul), karena itu
+memang kebijakan peran. `routeAllowed` kini memeriksa gerbang FUNGSI lebih dulu, baru pengecualian
+nama peran, supaya dua lapis itu tidak saling menggantikan.
+
+Tiga test pengunci baru, terbukti GAGAL saat bug dikembalikan:
+
+- `tombolAlurTulisTidakDikunciNamaPeran` — membaca jendela beberapa baris sebelum setiap pintu
+  alur tulis, karena kondisi peran biasanya ada di baris `if` di atas tombolnya.
+- `helperIzinMemakaiFungsiYangAdaDiKatalog` — salah tulis nama fungsi membuat pemeriksaan selalu
+  false dan tombolnya hilang untuk semua orang.
+- `ownerTetapLolosSeluruhGerbangRute` — Owner tidak boleh terkunci dari menunya sendiri.
+
+Titik jaga `owner.manage` naik dari 15 ke 17.
+
+### Kelas E: pintu masuk alur tulis yang tidak diperiksa sama sekali
+
+Tiga tombol membuka formulir yang MENYIMPAN tetapi tidak diperiksa izin apa pun:
+
+  aset "Daftarkan aset"    -> sekarang canWriteInventory()
+  aset baris "Ubah aset"   -> sekarang canWriteInventory() + pesan tolak
+  aset "Tambah jenis aset baru" (sheet) -> sekarang canManageAssetTypes()
+
+Sebelumnya role yang hanya memegang modul `inventory` tanpa `inventory.write`
+(mis. Supervisor bawaan) bisa membuka dan mengisi formulirnya, lalu ditolak saat
+menyimpan. Sama seperti kelas C: gerbang yang lebih longgar dari penjaganya.
+
+Dua test pengunci baru: `pintuMasukAlurTulisDiperiksaDenganFungsi` dan perluasan
+daftar pintu di `tombolAlurTulisTidakDikunciNamaPeran`. Keduanya terbukti GAGAL
+saat bug dikembalikan.
+
+Test Android 211 lulus (debug+release), lint bersih.
+
+### Kelas F: penolakan `saveNota` yang belum punya padanan di UI
+
+`saveNota` memeriksa izin, cabang, jumlah layanan, stok retail, dan batas bayar
+dengan `check`/`require` yang MELEMPAR. UI hanya memeriksa izinnya, jadi penolakan
+lain (mis. cabang transaksi tidak lagi tersedia) masih mematikan aplikasi.
+
+Pemeriksa baru `CuciinStore.notaReject(cartLines, paid, branchId): String?` memuat
+seluruh penolakan yang sama dan mengembalikannya sebagai pesan. Layar Pembayaran
+memanggilnya sebelum `saveNota`. Dua test pengunci baru:
+
+  layarPembayaranMemakaiPemeriksaPenolakanLebihDulu
+  pemeriksaPenolakanServiceTidakBerbedaIsi
+
+Keduanya terbukti GAGAL saat bug dikembalikan. Test Android 213 lulus (debug+release). Test Android 210 lulus (dari 205), Worker 53 lulus.
+
+### Kelas G: layar ber-gerbang fungsi masih dikunci nama peran
+
+`UsersScreen` dan `OwnerSettingsScreen` dijaga gerbang rute lewat fungsi `owner.manage`, tetapi
+kedua layar itu lalu menolak semua yang bukan Owner (`session.role != Role.Owner`). Role kustom
+yang diberi `owner.manage` masuk lewat gerbang rute lalu langsung terlempar keluar. Kedua layar
+kini memakai fungsi yang sama dengan gerbangnya.
+
+Test `layarBergerbangFungsiTidakMengunciNamaPeran` membaca kode layar dan terbukti GAGAL saat
+kunci nama peran dikembalikan. Test Android 214 lulus (debug+release), lint bersih.
+
+### Kelas H: penolakan store yang hasilnya dibuang, dan sebab yang ditebak layar
+
+Ditemukan saat menyisir ulang seluruh pemanggilan fungsi store yang bisa MENOLAK, bukan hanya
+titik yang dilaporkan.
+
+**Kelas H1, hasil penolakan dibuang.** `markWaSent()` dipanggil sebagai pernyataan berdiri sendiri
+di dua tempat, lalu layar menampilkan "WhatsApp dibuka untuk nota ini". Padahal store menolak bila
+izin `whatsapp.send` dicabut atau cabangnya tidak sesuai: nota TIDAK ditandai terkirim, tetapi
+pengguna melihat pesan sukses. Penolakan yang tidak pernah dibaca sama saja tidak ada.
+
+**Kelas H2, sebab penolakan ditebak layar.** `closeCash()` mengembalikan `null` untuk dua sebab
+yang berbeda (izin dicabut, dan kas memang sudah ditutup), dan layar selalu melaporkan "Kas cabang
+ini sudah ditutup hari ini". Akun yang izinnya dicabut diberi keterangan yang tidak benar.
+`cashCloseReject()` baru memisahkan sebabnya.
+
+**Kelas H3, gerbang rute `cash` lebih longgar dari penjaganya.** Gerbangnya hanya memeriksa modul
+`cash`, sedangkan `closeCash` memeriksa fungsi `cash.close`. Role kustom pemegang modul tanpa fungsi
+itu membuka layar Tutup kas yang tidak dapat dipakainya.
+
+**Kelas H4, pintu master data dikunci nama peran.** Tombol "Kelola produk" di layar Persediaan
+memakai `role == Role.Owner`, sedangkan gerbang rute `products` memakai `owner.manage`. Role kustom
+pemegang `owner.manage` lolos gerbangnya tetapi tidak menemukan pintunya.
+
+Empat test pengunci baru, semuanya terbukti GAGAL saat bug dikembalikan:
+
+- `hasilFungsiYangBisaMenolakTidakDibuang` — memindai setiap panggilan ke fungsi `String?` milik
+  store dengan tanda kurung berimbang, lalu menolak panggilan yang hasilnya tidak dipakai.
+- `layarMembacaPesanPenolakanSebelumMemanggilFungsi` — pemeriksa penolakan wajib dipanggil sebelum
+  fungsinya, untuk Pembayaran dan Tutup kas.
+- perluasan `gerbangRuteTidakLebihLonggarDariPenjagaStore` dengan rute `cash`.
+- perluasan daftar pintu di `tombolAlurTulisTidakDikunciNamaPeran` dengan `navigate("products")`.
+
+**Kelas H5, dua daftar penolakan yang harus dijaga sinkron dengan tangan.** `notaReject` (dipakai
+UI, mengembalikan pesan) dan `saveNota` (penjaga lapis kedua, memakai `check`/`require` yang
+melempar) masing-masing menyalin daftar penolakan yang sama. Selama dua daftar itu hidup
+berdampingan, setiap penolakan baru di `saveNota` yang lupa ditambahkan ke `notaReject` langsung
+menjadi crash di perangkat, karena UI tidak dapat menampilkannya lebih dulu. Sekarang `saveNota`
+memanggil `notaReject` dan melempar pesannya, jadi daftarnya hanya punya satu sumber.
+
+Test `penolakanServiceHanyaPunyaSatuSumber` mengunci bentuk itu: `saveNota` wajib memakai
+`notaReject` dan tidak boleh memuat `require`/`check` sendiri. Terbukti GAGAL saat daftarnya
+disalin ulang.
+
+**Kelas H6, pintu MENULIS di rute ber-gerbang modul tidak diperiksa.** Tiga tombol membuka formulir
+yang menyimpan data tanpa pemeriksaan fungsi, sementara rute induknya sengaja hanya memeriksa modul
+supaya role kustom tetap dapat MEMBACA daftar:
+
+| Tombol | Layar | Sekarang |
+| --- | --- | --- |
+| "Pelanggan baru" | Pelanggan | `customer.write` |
+| "Catat biaya" | Biaya operasional | `expense.write` |
+
+Role kustom pemegang modul `customer` atau `expense` tanpa fungsi tulisnya bisa membuka dan mengisi
+formulir, lalu ditolak saat menyimpan. Akses MEMBACAnya sengaja dipertahankan; yang dikunci hanya
+pintu menulisnya. Daftar pintu di `pintuMasukAlurTulisDiperiksaDenganFungsi` diperluas, dan test
+itu terbukti GAGAL saat pemeriksaannya dikembalikan.
+
+Test Android 216 lulus (debug+release), lint bersih.
+
+Sengaja TIDAK diubah: gerbang rute `attendance`, `expenses`, dan `customers` tetap hanya memeriksa
+modul. Ketiganya memang menyimpan data, tetapi penolakan fungsinya sudah tampil sebagai pesan yang
+benar di layar, dan memperketat gerbangnya akan mencabut akses MEMBACA laporan dari role kustom
+yang sah. Tidak ada kerugian nyata yang terbukti dari bentuk itu.
+
+**Gerbang rute yang baru dipasang.** Enam layar yang tadinya TIDAK diperiksa sama sekali sekarang
+punya gerbang: Daftar Aset Cabang, Biaya operasional, Pelanggan, WA menunggu, Arsip WA, dan
+Absensi. Dulu layar-layar itu terbuka untuk peran mana pun. Dua akibat yang perlu diketahui:
+
+- Peran yang tidak memegang modul terkait kini kehilangan akses ke layar itu: Kasir pada Daftar
+  Aset Cabang, Supervisor pada Pelanggan, Biaya operasional, WA menunggu, dan Arsip WA. Itu
+  perbaikan, bukan regresi, dan daftarnya dikunci di
+  `AccessUpgradeRegressionTest.penutupanYangDisengaja`.
+- `queue` dan `service` kini memeriksa FUNGSI (`queue.view`, `service.create`), bukan hanya
+  modulnya. Role tersimpan yang hanya memegang modulnya mendapat kembali fungsi bacanya lewat
+  penerjemahan kunci, jadi menunya tidak tertutup.
+
+## 1.10.27 — 18 Sep 2026 (versionCode 46)
+
+### Seluruh 17 fungsi Kontrol Akses Role kini benar-benar diperiksa
+
+Versi 1.10.26 menegakkan 8 dari 17 fungsi katalog. Sembilan sisanya hanya menghiasi layar:
+mencabut centangnya tidak mengubah perilaku apa pun. Versi ini menutup seluruhnya.
+
+Diukur langsung ke kode, bukan dari klaim:
+
+| Fungsi | Titik jaga |
+| --- | --- |
+| `queue.status` | `advanceLaundry` |
+| `queue.handover` | `markPickedUp` |
+| `service.create` | `saveNota` |
+| `service.correct` | `updateNotaLines`, `deleteNota` |
+| `service.payment` | `markLunas` |
+| `service.price` | `setCartPrice`, `canChangePrice` |
+| `customer.write` | `addCustomer`, `updateCustomer`, `deleteCustomer` |
+| `stock.write` | `editStock`, `editStocks` |
+| `inventory.write` | `addInventory`, `updateInventory`, `deleteInventory` |
+| `attendance.write` | `checkIn`, `checkOut` |
+| `whatsapp.send` | `markWaSent` |
+| `expense.write` | `addExpense`, `deleteExpense` |
+| `cash.close` | `closeCash` |
+| `owner.manage` | 15 titik: cabang, user, layanan, produk, jenis aset, template WhatsApp |
+| `owner.access` | `assignAccessRole` |
+| `analytics.view` | gerbang rute `analytics` dan `analyticsReport` |
+| `audit.view` | gerbang rute `audit` |
+
+Dua fungsi laporan diperiksa lewat `RouteAccess` yang kini memeriksa fungsi, bukan hanya modul.
+Sebelumnya mencabut `analytics.view` tidak menyembunyikan menu laporan, padahal layar Kontrol
+Akses Role menjanjikan sebaliknya.
+
+### Perubahan tanda tangan yang perlu diketahui
+
+`addCustomer` dan `addBranch` kini mengembalikan nilai nullable, karena keduanya dapat ditolak
+oleh izin. Pemanggil di `MasterScreens.kt` menampilkan pesan penolakan, bukan gagal diam-diam.
+
+### Perbaikan pada test penegakan izin
+
+`AccessFunctionEnforcementTest` sebelumnya dapat lulus walau tidak ada kode yang memeriksa,
+karena membandingkan katalog dengan daftar yang ditulis tangan di test itu sendiri. Sekarang:
+
+- `tidakAdaFungsiKatalogYangBelumDiperiksa` membaca seluruh sumber kode utama dan gagal bila ada
+  fungsi katalog yang belum diperiksa sama sekali.
+- `daftarPemeriksaSesuaiKenyataanKode` mengunci daftar tangan agar tidak menyimpang dari kode.
+- `setiapTitikJagaFungsiMasihAdaDiStore` menghitung titik jaga per fungsi, bukan sekadar mencari
+  keberadaan teks, dengan angka yang diukur langsung.
+
+Terbukti menangkap bug: menghapus penjaga `queue.status` menggagalkan 4 test, menghapus penjaga
+`owner.manage` pada `addStaff` menggagalkan 2 test.
+
+Gate: **202 test debug + 202 release lulus**, lint lulus, **53 test Worker lulus**.
+
+## 1.10.26 — 18 Sep 2026 (versionCode 45)
+
+### Centang fungsi di Kontrol Akses Role tidak berpengaruh penuh
+
+Layar Kontrol Akses Role menjanjikan "Fungsi tanpa centang berarti tidak diizinkan".
+Janji itu tidak sepenuhnya dipegang kode. Dari 17 fungsi di `AccessCatalog`, **8 yang
+diperiksa** dan **9 tidak**: `queue.status`, `queue.handover`, `service.create`,
+`stock.write`, `inventory.write`, `whatsapp.send`, `owner.manage`, `analytics.view`,
+`audit.view`. Modul sendiri lebih baik: 11 dari 12 diperiksa lewat `RouteAccess`, sisanya
+(`stock`) lewat katalog tab di `NavTabs`.
+
+Catatan koreksi: catatan versi ini sempat menulis "hanya 2 dari 17 fungsi diperiksa".
+Angka itu salah dan sudah diganti dengan hasil pengukuran ulang langsung ke kode.
+
+Akibatnya bisa dibuktikan dari alur nyata di perangkat:
+
+1. Owner membuka **Kontrol Akses Role**, mencabut centang **Koreksi Service** pada sebuah role,
+   lalu menyimpan.
+2. Owner menetapkan role itu kepada seorang Kasir di **Daftar User**.
+3. Kasir login, kartu **Koreksi Service** tetap muncul, dan ia tetap bisa mengoreksi sekaligus
+   menghapus Service.
+
+Penyebabnya jalur uang itu dijaga dengan peran lama `Role != Supervisor`, bukan dengan fungsi
+katalog. Pencabutan centang tidak pernah sampai ke sana.
+
+Perbaikan:
+
+- `CuciinStore` punya helper `boleh(modul, fungsi)` dan `tolak(fungsi, pesan)` yang menanyakan
+  `AccessPolicy` pada `AccessCatalog` untuk role yang melekat pada sesi.
+- Jalur yang kini dijaga fungsi, bukan peran: koreksi Service (`service.correct`), hapus Service
+  (`service.correct`), catat pembayaran (`service.payment`), tambah dan hapus biaya
+  (`expense.write`), absen masuk dan keluar (`attendance.write`), tutup kas (`cash.close`),
+  hapus pelanggan (`customer.write`), dan ubah role pengguna (`owner.access`).
+- Kartu **Koreksi Service** di layar detail Service ikut memakai `canAccess`, sehingga tombolnya
+  hilang bersamaan dengan penolakan di store.
+- Pesan penolakan menyebut fungsi yang dicabut, misalnya "Akun ini tidak dapat mengoreksi
+  Service tersebut (service.correct)".
+
+### Layar Tutup kas buntu saat melihat semua cabang
+
+Layar **Tutup kas** meminta "Pilih satu cabang" tetapi tidak menyediakan pemilih cabang.
+`viewBranch` hanya di-set dari filter tab Antrian, dan kembali ke "semua cabang" setiap aplikasi
+dibuka ulang. Owner yang melihat semua cabang tidak punya cara memenuhi permintaan layarnya
+sendiri. Kini layar Tutup kas punya pemilih cabang sendiri.
+
+### Pengunci regresi
+
+`AccessFunctionEnforcementTest` memeriksa dua hal: setiap fungsi di `AccessCatalog` punya
+pemeriksa di kode utama, dan setiap titik penjagaan yang sudah ada tetap ada dengan jumlah yang
+diharapkan. Jumlah diperiksa, bukan sekadar keberadaan teks, karena koreksi dan hapus memakai
+fungsi yang sama dan satu di antaranya pernah lolos. Test ini terbukti gagal ketika tiga
+penjagaan berbeda (`service.correct`, `service.payment`, `cash.close`) dihapus satu per satu.
+
+## 1.10.25 — 18 Sep 2026 (versionCode 44)
+
+### Antrean sinkronisasi macet permanen karena satu perubahan bermasalah
+
+Ditemukan saat menguji alur tulis end-to-end di emulator: mencatat biaya operasional
+berhasil tersimpan di perangkat, tetapi **tidak pernah sampai ke server**. Log perangkat
+menampilkan `Sinkronisasi ditolak server (422)` berulang, dan antrean berisi 11 perintah
+tidak berkurang sama sekali.
+
+Tiga sebabnya bertumpuk, semuanya di `cloudflare/src/command-sync.ts`:
+
+1. **`payment.delete` tidak ada di `KNOWN_COMMANDS`.** Perangkat membentuk command
+   `delete` untuk setiap entitas yang hilang dari snapshot (`SyncProjection`), termasuk
+   `payment` ketika sebuah Service dihapus. Worker hanya mengenal `payment.upsert`, jadi
+   setiap penghapusan pembayaran ditolak `422 Tipe command tidak didukung`.
+2. **Satu command yang gagal di-parse membatalkan SELURUH batch.** `pushCommands`
+   memakai `raw.commands.map(parseCommand)` di dalam satu `try`; satu command rusak
+   membuat seluruh request dijawab 422 **tanpa `results`**. Sisi perangkat hanya bisa
+   memindahkan command ke daftar `rejected` kalau `results` ada, sehingga tidak ada satu
+   pun command yang bisa dibuang dan antreannya macet selamanya.
+3. **Command yang ditolak permanen menahan command sesudahnya.** Setelah satu command
+   gagal, sisa batch diberi status `retryable` supaya urutan terjaga. Untuk penolakan
+   permanen (4xx) ini salah: command berikutnya ikut `retryable` selamanya.
+
+Perbaikan:
+
+- `payment.delete` ditambahkan ke `KNOWN_COMMANDS` beserta `planPayment` untuk operasi
+  hapus. Pembayaran yang sudah tidak ada dianggap selesai (idempoten), bukan ditolak,
+  karena command bisa terkirim ulang setelah barisnya hilang.
+- `order.delete` juga dibuat idempoten: menghapus Service yang belum pernah sampai ke
+  server (dibuat lalu dihapus saat offline) sekarang dianggap selesai, bukan dijawab
+  `404 Service tidak ditemukan`. Command yang ditolak 404 akan disimpan perangkat dan
+  tidak pernah berhasil. Aturan "Service yang sudah menerima pembayaran tidak dapat
+  dihapus" **tetap** berlaku dan dikunci test.
+- `pushCommands` mem-parse command satu per satu. Command yang sah tetap dijalankan;
+  yang rusak dilaporkan `rejected` dengan `commandId`-nya supaya perangkat bisa
+  membuangnya dari antrean.
+- Rantai hanya dihentikan oleh gangguan sementara (`>= 500` atau galat non-CommandError),
+  bukan oleh penolakan permanen.
+
+Bukti di emulator: antrean 11 perintah yang macet menjadi `pending 0, rejected 0`;
+revisi perangkat naik 670 ke 674; biaya `cost-5caba443-d84f` (Rp 15.000) muncul di D1
+debug; audit `Menghapus pembayaran` tercatat di server.
+
+Bukti alur uang: nota `SHL-2609-0001-A34F8` dilunasi lewat UI (sisa Rp 45.000, Tunai).
+Perangkat `paid` 30.000 ke 75.000; D1 `payments` menerima `pay-fa4ead29` Rp 45.000,
+`orders.paid` 75.000, dan audit `SHL-2609-0001-A34F8 menerima Rp 45.000 · Tunai`.
+
+Dikunci oleh `cloudflare/tests/queue-stall.test.mjs` (6 test) dan
+`cloudflare/tests/wire-contract.test.mjs` (3 test). Kesembilannya **terbukti gagal** saat
+perilaku lama dikembalikan satu per satu. Gate Worker naik 44 menjadi 53 test.
+
 ## 1.10.23 — 18 Sep 2026 (versionCode 42)
 
 ### Perbaikan izin: dua menu Laporan memakai modul izin yang salah

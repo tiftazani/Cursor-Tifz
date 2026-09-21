@@ -1,0 +1,272 @@
+[
+  {
+    "menu": "Antrian laundry",
+    "berkas": "01-antrian-laundry.png",
+    "terbuka": true,
+    "judul": [
+      "Antrian laundry",
+      "Minggu, 20 September 2026",
+      "Periode",
+      "Hari ini",
+      "Cabang",
+      "Semua cabang"
+    ]
+  },
+  {
+    "menu": "Service baru",
+    "berkas": "02-service-baru.png",
+    "terbuka": true,
+    "judul": [
+      "Service baru",
+      "Bunayya",
+      "1",
+      "Pelanggan",
+      "2",
+      "Service"
+    ]
+  },
+  {
+    "menu": "Absensi karyawan",
+    "berkas": "03-absensi-karyawan.png",
+    "terbuka": true,
+    "judul": [
+      "Absensi karyawan",
+      "Jam masuk dan pulang tercatat per cabang",
+      "Absensi saya hari ini",
+      "Belum absen masuk",
+      "Pilih cabang tempat bekerja, lalu tekan Absen masuk.",
+      "Lokasi kerja"
+    ]
+  },
+  {
+    "menu": "Daftar Aset Cabang",
+    "berkas": "04-daftar-aset-cabang.png",
+    "terbuka": true,
+    "judul": [
+      "Daftar Aset Cabang",
+      "Mesin dan peralatan operasional per cabang",
+      "Cabang",
+      "Bunayya",
+      "Jenis aset",
+      "Semua jenis"
+    ]
+  },
+  {
+    "menu": "Biaya operasional",
+    "berkas": "05-biaya-operasional.png",
+    "terbuka": true,
+    "judul": [
+      "Biaya operasional",
+      "Semua pengeluaran tercatat per cabang",
+      "Cabang",
+      "Bunayya",
+      "Total biaya cabang",
+      "Rp 0"
+    ]
+  },
+  {
+    "menu": "Tutup kas",
+    "berkas": "06-tutup-kas.png",
+    "terbuka": true,
+    "judul": [
+      "Tutup kas",
+      "Cuciin · semua cabang",
+      "Cabang",
+      "Belum dipilih",
+      "Tunai hari ini",
+      "Rp 0"
+    ]
+  },
+  {
+    "menu": "Pelanggan",
+    "berkas": "07-pelanggan.png",
+    "terbuka": true,
+    "judul": [
+      "Pelanggan",
+      "Kontak pelanggan laundry Anda",
+      "Pelanggan baru",
+      "Cari nama atau nomor telepon",
+      "TIF",
+      "Tifta"
+    ]
+  },
+  {
+    "menu": "WA menunggu",
+    "berkas": "08-wa-menunggu.png",
+    "terbuka": true,
+    "judul": [
+      "WA menunggu",
+      "Tetap di list sampai dikirim",
+      "Menunggu",
+      "Arsip",
+      "TIF",
+      "BNY-2609-0004-78B1E · Tifta"
+    ]
+  },
+  {
+    "menu": "Arsip WA",
+    "berkas": "09-arsip-wa.png",
+    "terbuka": true,
+    "judul": [
+      "Arsip WA",
+      "Sudah dikirim",
+      "Menunggu",
+      "Arsip",
+      "TIF",
+      "LPK-2609-0001-63CDE · Tifta"
+    ]
+  },
+  {
+    "menu": "Laporan transaksi",
+    "berkas": "10-laporan-transaksi.png",
+    "terbuka": true,
+    "judul": [
+      "Laporan transaksi",
+      "PDF",
+      "20 Sep 2026",
+      "0 Service · 7 cabang",
+      "Periode",
+      "Hari"
+    ]
+  },
+  {
+    "menu": "Laporan analitik",
+    "berkas": "11-laporan-analitik.png",
+    "terbuka": true,
+    "judul": [
+      "Laporan analitik",
+      "Seluruh data operasional",
+      "PDF",
+      "Excel",
+      "Seluruh riwayat tercatat",
+      "8 Service · Semua cabang · Semua kasir · Semua jenis data"
+    ]
+  },
+  {
+    "menu": "Riwayat aktivitas",
+    "berkas": "12-riwayat-aktivitas.png",
+    "terbuka": true,
+    "judul": [
+      "Riwayat aktivitas",
+      "Semua transaksi",
+      "Ekspor riwayat perubahan",
+      "AID",
+      "Absen masuk aidanurita25",
+      "16 Sep 2026, 20.56 · aidanurita25"
+    ]
+  },
+  {
+    "menu": "Cabang",
+    "berkas": "13-cabang.png",
+    "terbuka": true,
+    "judul": [
+      "Cabang",
+      "Master data",
+      "7 cabang terdaftar",
+      "Cari nama, kode, atau alamat",
+      "LPK",
+      "Laupay Kirab"
+    ]
+  },
+  {
+    "menu": "Daftar User",
+    "berkas": "14-daftar-user.png",
+    "terbuka": true,
+    "judul": [
+      "Daftar User",
+      "Owner, kasir, SPV, dan akses cabang",
+      "Tambah user",
+      "Cari nama atau email",
+      "Filter peran",
+      "Semua peran"
+    ]
+  },
+  {
+    "menu": "Layanan & harga",
+    "berkas": "15-layanan-harga.png",
+    "terbuka": true,
+    "judul": [
+      "Layanan & harga",
+      "Atur layanan dan tarif laundry",
+      "Layanan baru",
+      "KER",
+      "Kering",
+      "Rp 10.000 / Load · mandiri"
+    ]
+  },
+  {
+    "menu": "Produk stok",
+    "berkas": "16-produk-stok.png",
+    "terbuka": true,
+    "judul": [
+      "Produk stok & bahan",
+      "Barang dijual dan bahan habis pakai per cabang",
+      "Kelola aset & mesin cabang",
+      "Produk baru",
+      "SOF",
+      "Softener"
+    ]
+  },
+  {
+    "menu": "Kontrol Akses Role",
+    "berkas": "17-kontrol-akses-role.png",
+    "terbuka": true,
+    "judul": [
+      "Kontrol Akses Role",
+      "GUD",
+      "Gudang",
+      "1 modul · 2 fungsi · belum dipakai",
+      "KAS",
+      "Kasir"
+    ]
+  },
+  {
+    "menu": "Pengaturan Owner",
+    "berkas": "18-pengaturan-owner.png",
+    "terbuka": true,
+    "judul": [
+      "Pengaturan Owner",
+      "Pesan WhatsApp dan pengaturan operasional",
+      "Template WhatsApp"
+    ]
+  },
+  {
+    "menu": "Akun & profil",
+    "berkas": "19-akun-profil.png",
+    "terbuka": true,
+    "judul": [
+      "Akun & profil",
+      "CUC",
+      "Cuciin",
+      "tiftazani.khara@gmail.com",
+      "Owner",
+      "Cabang penugasan"
+    ]
+  },
+  {
+    "menu": "Theme Aplikasi",
+    "berkas": "20-theme-aplikasi.png",
+    "terbuka": true,
+    "judul": [
+      "Theme Aplikasi",
+      "Warna tampilan di HP ini",
+      "Mode tema",
+      "Light",
+      "Latar biru langit dengan aksen biru dan header biru tua",
+      "Dark"
+    ]
+  },
+  {
+    "menu": "Riwayat versi",
+    "berkas": "21-riwayat-versi.png",
+    "terbuka": true,
+    "judul": [
+      "Riwayat versi",
+      "Sekarang 1.10.30-debug",
+      "Cuciin Android",
+      "v1.10.30-debug · build 49",
+      "v1.10.30",
+      "build 49"
+    ]
+  }
+]

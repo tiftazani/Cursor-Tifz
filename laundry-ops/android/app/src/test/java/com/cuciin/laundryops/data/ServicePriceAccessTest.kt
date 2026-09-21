@@ -95,16 +95,41 @@ class ServicePriceAccessTest {
 
     @Test
     fun penambalanRoleBawaanTidakMenghidupkanFungsiYangDicabut() {
-        // Role bawaan yang sudah tersimpan di server dibekukan isinya. Penambalan hanya boleh
-        // menambahkan fungsi yang memang ditandai bawaan untuk role itu, dan hanya bila modulnya
-        // sudah dimiliki. Untuk versi ini daftarnya kosong, jadi tidak ada yang ditambahkan.
-        assertTrue(
-            "Belum ada fungsi bawaan baru untuk Kasir",
-            AccessCatalog.builtInFunctionsFor("role-kasir").isEmpty(),
+        // Role bawaan yang sudah tersimpan di server dibekukan isinya, jadi fungsi baru dari
+        // katalog harus ditambal. Yang dijaga test ini: penambalan hanya terjadi SEKALI per versi
+        // katalog, ditandai `catalogVersion`. Tanpa penanda itu, fungsi yang sengaja dicabut Owner
+        // akan hidup kembali setiap aplikasi dibuka.
+        val kasir = AccessCatalog.builtInRoles().first { it.id == "role-kasir" }
+        assertEquals("Role bawaan baru harus sudah bertanda versi katalog", AccessCatalog.VERSION, kasir.catalogVersion)
+
+        // Role lama dari server: belum bertanda versi, fungsinya masih versi katalog sebelumnya.
+        val lama = kasir.copy(
+            functions = setOf("queue.status", "service.create"),
+            catalogVersion = 0,
         )
-        assertTrue(
-            "Belum ada fungsi bawaan baru untuk Supervisor",
-            AccessCatalog.builtInFunctionsFor("role-supervisor").isEmpty(),
+        val ditambal = AccessCatalog.patchBuiltIn(lama)
+        assertTrue("Fungsi kasir baru harus ikut ditambal", "service.payment" in ditambal.functions)
+        assertEquals("Setelah ditambal, versinya harus naik", AccessCatalog.VERSION, ditambal.catalogVersion)
+
+        // Owner mencabut satu fungsi SETELAH penambalan. Membuka aplikasi lagi tidak boleh
+        // menghidupkannya kembali, karena versinya sudah tercatat.
+        val dicabut = ditambal.copy(functions = ditambal.functions - "service.payment")
+        val lagi = AccessCatalog.patchBuiltIn(dicabut)
+        assertFalse(
+            "Fungsi yang sengaja dicabut tidak boleh hidup kembali",
+            "service.payment" in lagi.functions,
+        )
+    }
+
+    @Test
+    fun penambalanHanyaMenambahkanFungsiDariModulYangDimiliki() {
+        // Fungsi dari modul yang tidak dimiliki role tidak boleh diselundupkan lewat penambalan.
+        val kasir = AccessCatalog.builtInRoles().first { it.id == "role-kasir" }
+        val tanpaModulKas = kasir.copy(modules = kasir.modules - "cash", functions = emptySet(), catalogVersion = 0)
+        val ditambal = AccessCatalog.patchBuiltIn(tanpaModulKas)
+        assertFalse(
+            "Fungsi modul cash tidak boleh ditambal bila modulnya tidak dimiliki",
+            "cash.close" in ditambal.functions,
         )
     }
 }

@@ -61,7 +61,7 @@ internal fun AccessRolesScreen(nav: NavHostController, toast: (String) -> Unit) 
                         mark = role.name,
                         title = role.name,
                         detail = buildString {
-                            append("${role.modules.size} modul · ${role.functions.size} fungsi")
+                            append("${AccessCatalog.berlaku(role).first.size} modul · ${AccessCatalog.berlaku(role).second.size} fungsi")
                             append(if (members == 0) " · belum dipakai" else " · $members pengguna")
                             if (role.builtIn) append(" · bawaan")
                         },
@@ -137,6 +137,7 @@ internal fun AccessRoleEditScreen(nav: NavHostController, roleId: String, toast:
     var modules by rememberSaveable(roleId) { mutableStateOf(stored?.modules ?: emptySet()) }
     var functions by rememberSaveable(roleId) { mutableStateOf(stored?.functions ?: emptySet()) }
     var showModuleSheet by rememberSaveable { mutableStateOf(false) }
+    var showPresetSheet by rememberSaveable { mutableStateOf(false) }
     var expandedModule by rememberSaveable { mutableStateOf("") }
 
     if (stored == null) {
@@ -152,6 +153,18 @@ internal fun AccessRoleEditScreen(nav: NavHostController, roleId: String, toast:
     ) {
         item { ScreenHeader("Role ${stored.name}", "Atur modul dan fungsi yang dapat diakses role ini", onBack = { nav.popBackStack() }) }
         item { Field(name, { name = it }, "Nama role") }
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SectionLabel("Preset peran")
+                Text(
+                    "Preset mengisi centang sekaligus sebagai titik awal. Setelah diterapkan, centangnya tetap bisa diubah satu per satu.",
+                    color = Muted,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                )
+                GhostBtn("Terapkan preset peran", icon = Icons.Outlined.Bolt) { showPresetSheet = true }
+            }
+        }
         item {
             FilterBar(
                 label = "Modul yang dapat diakses",
@@ -203,12 +216,17 @@ internal fun AccessRoleEditScreen(nav: NavHostController, roleId: String, toast:
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             module.functions.forEach { fn ->
                                 val on = fn.key in functions
+                                // Fungsi yang SERVER tolak untuk non-Owner tidak bisa dicentang:
+                                // centangnya tidak akan pernah tersinkron, dan pengguna hanya
+                                // melihat kegagalan yang tidak dapat dipahami.
+                                val terkunci = fn.key in AccessCatalog.ownerLocked
                                 Row(
                                     Modifier.fillMaxWidth().padding(vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
-                                    CheckBoxMark(on && moduleOn) {
+                                    CheckBoxMark(on && moduleOn && !terkunci) {
+                                        if (terkunci) return@CheckBoxMark
                                         if (!moduleOn) {
                                             // Menyalakan fungsi otomatis menyalakan modulnya.
                                             modules = modules + module.key
@@ -218,8 +236,16 @@ internal fun AccessRoleEditScreen(nav: NavHostController, roleId: String, toast:
                                         }
                                     }
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text(fn.label, color = if (moduleOn) Ink else Muted, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                        Text(fn.detail, color = Muted, fontSize = 12.sp, lineHeight = 16.sp)
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Text(fn.label, color = if (moduleOn) Ink else Muted, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                            if (terkunci) Chip("Khusus Owner", Amber)
+                                        }
+                                        Text(
+                                            if (terkunci) "${fn.detail}. Hanya Owner: server menolak fungsi ini untuk role lain." else fn.detail,
+                                            color = Muted,
+                                            fontSize = 12.sp,
+                                            lineHeight = 16.sp,
+                                        )
                                     }
                                 }
                             }
@@ -253,6 +279,28 @@ internal fun AccessRoleEditScreen(nav: NavHostController, roleId: String, toast:
         }
         if (stored.builtIn) item {
             Text("Role bawaan tidak dapat dihapus. Hak aksesnya tetap dapat diubah.", color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
+        }
+    }
+    if (showPresetSheet) ModalBottomSheet(onDismissRequest = { showPresetSheet = false }) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Preset peran", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            Text(
+                "Preset mengisi modul dan fungsi sekaligus. Sesudahnya centangnya tetap bisa diubah satu per satu.",
+                color = Muted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            AccessCatalog.presets.forEach { preset ->
+                FilterSheetRow(
+                    modules == preset.modules && functions == preset.functions,
+                    preset.label,
+                    "${preset.modules.size} modul · ${preset.functions.size} fungsi · ${preset.detail}",
+                ) {
+                    modules = preset.modules
+                    functions = preset.functions
+                    showPresetSheet = false
+                }
+            }
         }
     }
     if (showModuleSheet) ModalBottomSheet(onDismissRequest = { showModuleSheet = false }) {
@@ -321,7 +369,7 @@ internal fun AccessRoleUserScreen(nav: NavHostController, email: String, toast: 
             FilterBar(
                 label = "Role pengguna",
                 value = current.name,
-                detail = "${current.modules.size} modul · ${current.functions.size} fungsi",
+                detail = "${AccessCatalog.berlaku(current).first.size} modul · ${AccessCatalog.berlaku(current).second.size} fungsi",
                 icon = Icons.Outlined.Badge,
                 onClick = { if (person.role != Role.Owner) showSheet = true },
             )
@@ -346,7 +394,7 @@ internal fun AccessRoleUserScreen(nav: NavHostController, email: String, toast: 
             Text("Pilih role", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             Text("Pengguna mengikuti modul dan fungsi dari role yang dipilih.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp))
             roles.forEach { role ->
-                FilterSheetRow(role.id == current.id, role.name, "${role.modules.size} modul · ${role.functions.size} fungsi") {
+                FilterSheetRow(role.id == current.id, role.name, "${AccessCatalog.berlaku(role).first.size} modul · ${AccessCatalog.berlaku(role).second.size} fungsi") {
                     accessStore.assignAccessRole(person.email, role.id)?.let(toast) ?: toast("${person.name} memakai role ${role.name}")
                     showSheet = false
                 }

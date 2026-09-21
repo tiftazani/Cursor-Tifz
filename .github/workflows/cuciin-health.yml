@@ -13,9 +13,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Check Cloudflare Worker
+      - name: Baca health dan buktikan jalur tulis D1 hidup
         env:
           HEALTH_URL: https://cuciin-api.tiftazani-cuciin.workers.dev/health
+          API_URL: https://cuciin-api.tiftazani-cuciin.workers.dev/v1/registration
         run: |
+          # /health hanya MEMBACA, jadi ia tetap 200 saat tulis D1 ditolak.
+          # 21 Sep 2026 kuota tulis D1 habis, semua login balas 500, dan
+          # health tetap hijau sepanjang gangguan. Karena itu health harus
+          # MEMBUKTIKAN jalur tulis hidup, bukan hanya jalur baca.
           response="$(curl --fail --silent --show-error --max-time 20 "$HEALTH_URL")"
           python3 -c 'import json,sys; data=json.loads(sys.argv[1]); assert data.get("ok") is True' "$response"
+          echo "baca OK: $response"
+
+          # Pendaftaran dengan token kosong menyentuh jalur tulis D1, tetapi
+          # tidak pernah membuat akun karena authorize() menolak lebih dulu.
+          # 401/400 = tulis hidup (yang benar). 500 = tulis mati (kuota habis,
+          # skema rusak, database terkunci). 403 = WAF memblokir tanpa
+          # User-Agent, jadi header itu wajib ada.
+          # Format --write-out ditulis tanpa tanda kutip: shell mengembangkan
+          # %{http_code} lebih dulu sehingga curl menerima format kosong.
+          status=$(curl --silent --output /dev/null --write-out %{http_code} \
+            --max-time 20 \
+            -H 'User-Agent: cuciin-health/1' \
+            -H 'Content-Type: application/json' \
+            --request POST \
+            --data '{"idToken":""}' \
+            "$API_URL")
+          echo "status jalur tulis: $status"
+          case "$status" in
+            401|400) echo "jalur tulis hidup" ;;
+            *)
+              echo "JALUR TULIS D1 BERMASALAH: HTTP $status" >&2
+              echo "500 biasanya berarti kuota tulis D1 harian habis (code 7500) atau database rusak." >&2
+              exit 1
+              ;;
+          esac

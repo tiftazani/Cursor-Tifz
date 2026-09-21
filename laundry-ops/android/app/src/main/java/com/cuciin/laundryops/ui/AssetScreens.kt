@@ -32,6 +32,7 @@ import androidx.navigation.NavHostController
 import android.graphics.BitmapFactory
 import com.cuciin.laundryops.data.*
 import com.cuciin.laundryops.ui.components.*
+import com.cuciin.laundryops.ui.components.SyncNotice
 import com.cuciin.laundryops.ui.theme.*
 import java.io.File
 import java.time.LocalDateTime
@@ -48,7 +49,7 @@ internal fun AssetListScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val session = assetStore.session.value ?: return
     assetStore.revision.intValue
-    val allowedBranches = if (session.role == Role.Owner) assetStore.branches.toList() else assetStore.branches.filter { it.id == session.branchId }
+    val allowedBranches = if (canViewAllBranches(session)) assetStore.branches.toList() else assetStore.branches.filter { it.id == session.branchId }
     var branchId by rememberSaveable { mutableStateOf(session.branchId) }
     var typeFilter by rememberSaveable { mutableStateOf("") }
     var showBranchSheet by rememberSaveable { mutableStateOf(false) }
@@ -74,6 +75,9 @@ internal fun AssetListScreen(nav: NavHostController, toast: (String) -> Unit) {
                 onClick = { if (allowedBranches.size > 1) showBranchSheet = true },
             )
         }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         item {
             FilterBar(
                 label = "Jenis aset",
@@ -85,7 +89,13 @@ internal fun AssetListScreen(nav: NavHostController, toast: (String) -> Unit) {
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrimaryBtn("Daftarkan aset", Modifier.weight(1f), icon = Icons.Outlined.Add) { nav.navigate("assetNew") }
+                // Tombol ini membuka formulir yang MENYIMPAN aset, jadi izinnya diperiksa di sini.
+                // Sebelumnya ia selalu tampil: role yang hanya memegang modul `inventory` tanpa
+                // fungsi `inventory.write` (mis. Supervisor bawaan) bisa membuka dan mengisi
+                // formulirnya, lalu ditolak saat menyimpan.
+                if (assetStore.canWriteInventory()) {
+                    PrimaryBtn("Daftarkan aset", Modifier.weight(1f), icon = Icons.Outlined.Add) { nav.navigate("assetNew") }
+                }
                 GhostBtn("Ekspor", Modifier.weight(.6f), icon = Icons.Outlined.FileDownload) { FileExports.shareInventory(nav.context, rows) }
             }
         }
@@ -93,7 +103,12 @@ internal fun AssetListScreen(nav: NavHostController, toast: (String) -> Unit) {
         if (rows.isNotEmpty()) item {
             ListCard {
                 rows.forEachIndexed { index, row ->
-                    AssetRow(row, assetStore.assetTypeName(row.assetTypeId).ifBlank { row.category.label }) { nav.navigate("assetEdit/${row.id}") }
+                    // Membuka baris berarti membuka formulir yang MENYIMPAN, jadi pintunya
+                    // diperiksa; tanpa itu role yang hanya boleh membaca tetap bisa mengubah.
+                    AssetRow(row, assetStore.assetTypeName(row.assetTypeId).ifBlank { row.category.label }) {
+                        if (assetStore.canWriteInventory()) nav.navigate("assetEdit/${row.id}")
+                        else toast("Akses ubah aset dicabut untuk role akun ini")
+                    }
                     if (index < rows.lastIndex) RowDivider()
                 }
             }
@@ -118,7 +133,10 @@ internal fun AssetListScreen(nav: NavHostController, toast: (String) -> Unit) {
                 FilterSheetRow(type.id == typeFilter, type.name, "${type.code} · $count aset") { typeFilter = type.id; showTypeSheet = false }
             }
             ListDivider()
-            FilterSheetRow(false, "Kelola jenis aset", "Tambah atau nonaktifkan jenis") { showTypeSheet = false; nav.navigate("assetTypes") }
+            // "Kelola jenis aset" menulis data induk (owner.manage), bukan sekadar menyaring.
+            if (assetStore.canManageAssetTypes()) {
+                FilterSheetRow(false, "Kelola jenis aset", "Tambah atau nonaktifkan jenis") { showTypeSheet = false; nav.navigate("assetTypes") }
+            }
         }
     }
 }
@@ -165,7 +183,7 @@ internal fun AssetFormScreen(nav: NavHostController, assetId: String?, toast: (S
     val session = assetStore.session.value ?: return
     assetStore.revision.intValue
     val editing = remember(assetId) { assetStore.inventory.firstOrNull { it.id == assetId } }
-    val allowedBranches = if (session.role == Role.Owner) assetStore.branches.toList() else assetStore.branches.filter { it.id == session.branchId }
+    val allowedBranches = if (canViewAllBranches(session)) assetStore.branches.toList() else assetStore.branches.filter { it.id == session.branchId }
     var branchId by rememberSaveable { mutableStateOf(editing?.branchId ?: session.branchId) }
     var assetTypeId by rememberSaveable { mutableStateOf(editing?.assetTypeId ?: "") }
     var name by rememberSaveable { mutableStateOf(editing?.name.orEmpty()) }
@@ -313,11 +331,13 @@ internal fun AssetFormScreen(nav: NavHostController, assetId: String?, toast: (S
                 val type = assetTypes.firstOrNull { it.id == effectiveTypeId }
                 val category = legacyCategoryFor(type?.name.orEmpty())
                 if (editing == null) {
-                    assetStore.addInventory(branchId, name, category, brand, serial, qty, unit, status, purchaseAt, notes, sellable = false, assetTypeId = effectiveTypeId, photoPath = photoPath)
-                    toast("Aset ${previewCode} tersimpan")
+                    val row = assetStore.addInventory(branchId, name, category, brand, serial, qty, unit, status, purchaseAt, notes, sellable = false, assetTypeId = effectiveTypeId, photoPath = photoPath)
+                    if (row == null) { toast("Akses Ubah aset dicabut untuk role akun ini"); return@PrimaryBtn }
+                    toast("Aset ${row.assetCode.ifBlank { previewCode }} tersimpan")
                     nav.popBackStack()
                 } else {
-                    assetStore.updateInventory(editing.copy(name = name, category = category, brand = brand, serialNumber = serial, quantity = qty, unit = unit, status = status, purchaseAt = purchaseAt, notes = notes, assetTypeId = effectiveTypeId, photoPath = photoPath))
+                    val tolak = assetStore.updateInventory(editing.copy(name = name, category = category, brand = brand, serialNumber = serial, quantity = qty, unit = unit, status = status, purchaseAt = purchaseAt, notes = notes, assetTypeId = effectiveTypeId, photoPath = photoPath))
+                    if (tolak != null) { toast(tolak); return@PrimaryBtn }
                     toast("Perubahan aset tersimpan")
                     nav.popBackStack()
                 }
@@ -344,7 +364,10 @@ internal fun AssetFormScreen(nav: NavHostController, assetId: String?, toast: (S
                 FilterSheetRow(type.id == effectiveTypeId, type.name, "Kode ${type.code}") { assetTypeId = type.id; showTypeSheet = false }
             }
             ListDivider()
-            FilterSheetRow(false, "Tambah jenis aset baru", "Buka katalog jenis aset") { showTypeSheet = false; nav.navigate("assetTypes") }
+            // Menambah jenis aset menulis data induk (owner.manage), jadi pintunya diperiksa.
+            if (assetStore.canManageAssetTypes()) {
+                FilterSheetRow(false, "Tambah jenis aset baru", "Buka katalog jenis aset") { showTypeSheet = false; nav.navigate("assetTypes") }
+            }
         }
     }
 }
@@ -398,6 +421,9 @@ internal fun AssetTypesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 }
             }
         }
+        // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
+        // Profil: angka di layar ini bisa belum sama dengan server.
+        item { SyncNotice() }
         item { Text("Jenis yang sudah dipakai aset tidak dapat dihapus, hanya dinonaktifkan, agar kode aset lama tetap terbaca.", color = Muted, fontSize = 12.sp, lineHeight = 17.sp) }
         item { SectionLabel("Jenis aset baru") }
         item { Field(newName, { newName = it }, "Nama jenis aset") }

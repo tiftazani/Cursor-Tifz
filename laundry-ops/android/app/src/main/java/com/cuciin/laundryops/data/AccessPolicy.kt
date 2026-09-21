@@ -41,8 +41,12 @@ object AccessPolicy {
     fun grants(staff: Staff?, roles: List<AccessRole>, policy: UserAccessPolicy?): Pair<Set<String>, Set<String>> {
         if (staff != null && isOwner(staff.role)) return AccessCatalog.moduleKeys to AccessCatalog.allFunctionKeys()
         val role = effectiveRole(staff, roles)
-        var modules = role.modules
-        var functions = role.functions
+        // Role tersimpan bisa masih memakai kunci versi katalog lama (mis. `owner.manage` yang
+        // dulu menaungi cabang, user, layanan, produk, dan jenis aset sekaligus). Diterjemahkan
+        // saat dibaca supaya pembaruan aplikasi tidak mencabut akses yang sudah dimiliki.
+        val (modulBaru, fungsiBaru) = AccessCatalog.migrate(role.modules, role.functions)
+        var modules = modulBaru
+        var functions = fungsiBaru
         if (policy != null) {
             // Kebijakan pengguna hanya boleh mengurangi, tidak menambah, hak dari role.
             modules = modules.intersect(policy.modules)
