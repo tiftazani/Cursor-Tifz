@@ -1,5 +1,19 @@
 name: Cuciin D1 backup verification
 
+# Backup ini memvalidasi database produksi tiap hari: export penuh, enkripsi,
+# lalu restore ke SQLite untuk membuktikan isinya utuh. Kalau salah satu
+# langkah gagal, Owner dapat notifikasi GitHub.
+#
+# Salinan backup TIDAK disimpan di sini. Semua penyimpanan gratis yang bisa
+# dipakai tanpa kartu kredit sudah diuji dan mentok di batas penyedianya:
+#   - Cloudflare R2        -> wajib kartu kredit (code 10042)
+#   - Google Drive (SA)    -> service account berkuota 0, Google melarangnya
+#   - Google Drive (OAuth) -> butuh OAuth client, mentok di brand tanpa billing
+#   - GitHub artifact      -> hanya tersimpan kalau repo privat
+# Salinan cadangan manual disimpan Owner di:
+#   ~/Documents/ChatGPT/Laundry/firebase-migration/backup-d1/
+# Lihat laundry-ops/AGENT_STATUS.md bagian "Backup" untuk keadaan terbaru.
+
 on:
   workflow_dispatch:
   schedule:
@@ -18,46 +32,34 @@ jobs:
         working-directory: laundry-ops/cloudflare
     steps:
       - uses: actions/checkout@v7
+
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: laundry-ops/cloudflare/package-lock.json
+
       - run: npm ci
+
       - name: Export and encrypt D1
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CUCIIN_BACKUP_PASSPHRASE: ${{ secrets.CUCIIN_BACKUP_PASSPHRASE }}
         run: ./scripts/backup-d1.sh
+
       - name: Verify encrypted backup can be restored
         env:
           CUCIIN_BACKUP_PASSPHRASE: ${{ secrets.CUCIIN_BACKUP_PASSPHRASE }}
         run: ./scripts/verify-backup.sh backups/*.sql.enc
 
-      # Repo ini publik, jadi artifact GitHub akan menaruh salinan database
-      # produksi di tempat yang bisa diunduh siapa pun yang punya tautannya.
-      # R2 tidak dipakai karena mengaktifkannya menuntut kartu kredit.
-      # Service account Google dipakai karena gratis tanpa kartu, dan folder
-      # itu hanya dibagikan ke email Owner sehingga salinannya privat.
-      - name: Siapkan kredensial service account Google
-        env:
-          GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
+      - name: Laporkan hasil
+        if: always()
         run: |
-          : "${GDRIVE_SA_JSON:?GDRIVE_SA_JSON belum tersedia}"
-          mkdir -p "$HOME/.config/cuciin"
-          printf '%s' "$GDRIVE_SA_JSON" > "$HOME/.config/cuciin/gdrive-sa.json"
-          chmod 600 "$HOME/.config/cuciin/gdrive-sa.json"
-          python3 -c "import json,sys; d=json.load(open('$HOME/.config/cuciin/gdrive-sa.json')); print('service account:', d['client_email'])"
-
-      - name: Unggah backup terenkripsi ke Google Drive
-        env:
-          CUCIIN_GDRIVE_FOLDER: ${{ secrets.CUCIIN_GDRIVE_FOLDER }}
-          CUCIIN_GDRIVE_SA: /home/runner/.config/cuciin/gdrive-sa.json
-        run: python3 scripts/unggah-ke-drive.py
-
-      - name: Buktikan unggahan bisa dibaca kembali dan checksumnya cocok
-        env:
-          CUCIIN_GDRIVE_FOLDER: ${{ secrets.CUCIIN_GDRIVE_FOLDER }}
-          CUCIIN_GDRIVE_SA: /home/runner/.config/cuciin/gdrive-sa.json
-        run: python3 scripts/unggah-ke-drive.py --verifikasi
+          set -euo pipefail
+          for b in backups/*.sql.enc; do
+            [ -f "$b" ] || continue
+            echo "berkas : $b"
+            echo "ukuran : $(stat -c%s "$b") byte"
+            echo "sha256 : $(sha256sum "$b" | cut -d' ' -f1)"
+          done
