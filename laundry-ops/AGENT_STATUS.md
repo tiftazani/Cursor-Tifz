@@ -5,6 +5,63 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
+## 0k. Email reset sandi: teks "project-634935388002" berasal dari OAuth brand, bukan nama project
+
+**Status: akar masalah terbukti; perubahan template TIDAK bisa lewat API — harus dari Console.**
+
+Permintaan Owner: ubah teks "project-634935388002" di email reset sandi menjadi "Aplikasi Cuciin",
+termasuk "Tim project-634935388002 Anda", dan tambahkan keterangan bahwa email dikirim otomatis.
+
+### Apa yang terbukti
+
+`%APP_NAME%` di semua template email auth **tidak diambil dari nama project**. Dokumentasi resmi
+Firebase (Authentication FAQ) menyatakan `%APP_NAME%` diisi **OAuth brand name**; hanya jika brand
+belum ada barulah dipakai nama default Firebase Hosting site, dan paling akhir project ID.
+
+Keadaan project `cuciin-ops` yang dibaca langsung:
+
+| Pemeriksaan | Hasil |
+| --- | --- |
+| `displayName` di Cloud Resource Manager | `Cuciin Ops` (benar) |
+| `displayName` di Firebase v1beta1 | `Cuciin Ops` (benar) |
+| `npx firebase projects:list` | `Cuciin Ops` (benar) |
+| Site Firebase Hosting default | `cuciin-ops` |
+| Google Sign-in | **sudah aktif**: `defaultSupportedIdpConfigs/google.com enabled=True` |
+| Subject template reset sandi | `Reset sandi Anda untuk %APP_NAME%` |
+
+Jadi nama project sudah benar di semua tempat, dan yang tampil di email tetap
+`project-634935388002` — angka itu `projectNumber`, bukan `projectId`. Menaikkan/mengubah nama
+project **tidak akan pernah** memperbaikinya. Itu sebabnya percobaan sebelumnya sia-sia.
+
+### Mengapa tidak bisa dikerjakan dari sini
+
+Dua jalan ditutup, keduanya oleh Google, bukan oleh konfigurasi project:
+
+| Jalan | Hasil |
+| --- | --- |
+| `PATCH /admin/v2/projects/cuciin-ops/config?updateMask=notification.sendEmail` | **HTTP 400 `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`** |
+| Baca/tulis OAuth brand (`iap.googleapis.com/v1/projects/.../brands`) | **HTTP 403**, IAP API tidak aktif; brand hanya dikelola Console |
+
+Template email auth memang sengaja dikunci untuk mencegah penyalahgunaan sebagai alat spam.
+
+### Yang harus dikerjakan Owner di Console
+
+Buka **https://console.cloud.google.com/auth/branding** untuk project `cuciin-ops`, lalu setel
+**App name** menjadi `Aplikasi Cuciin`. Itu nilai yang mengisi `%APP_NAME%` di ketiga template
+(reset sandi, verifikasi email, perubahan email).
+
+Catatan penting: perubahan **App name** dan **Logo** pada brand yang sudah diverifikasi memerlukan
+peninjauan ulang Google. Tanpa persetujuan, `%APP_NAME%` tetap memakai nilai lama.
+
+Keterangan "email dikirim otomatis" juga tidak bisa ditambahkan lewat API karena alasan yang sama;
+harus disunting di Console pada Authentication lalu Templates.
+
+Skrip pemeriksa (read-only, aman dijalankan ulang):
+`cloudflare/scripts/cek_project_firebase.py`, `cloudflare/scripts/cek_appname_firebase.py`,
+`cloudflare/scripts/cek_oauth_brand_firebase.py`, `cloudflare/scripts/cek_brand_firebase.py`.
+`cloudflare/scripts/email_auth_firebase.py --tulis` sudah dicoba dan **ditolak Google**; simpan
+sebagai catatan, jangan diulang tanpa alasan baru.
+
 ## 0j. Data transaksi & keuangan produksi dibersihkan (21 Sep, Hermes)
 
 **Status: selesai dan terverifikasi pada D1 produksi `cuciin-db`.**
