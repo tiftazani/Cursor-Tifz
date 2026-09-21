@@ -34,46 +34,30 @@ jobs:
         env:
           CUCIIN_BACKUP_PASSPHRASE: ${{ secrets.CUCIIN_BACKUP_PASSPHRASE }}
         run: ./scripts/verify-backup.sh backups/*.sql.enc
-      # Repo ini publik, jadi upload-artifact akan menaruh salinan database
-      # produksi di tempat yang bisa diunduh siapa pun yang punya tautan
-      # artifact. Karena itu hasil backup dikirim ke Cloudflare R2 yang
-      # bersifat privat, bukan ke artifact GitHub. Isinya sudah terenkripsi
-      # AES-256-CBC, tetapi satu lapis saja tidak cukup untuk repo publik.
-      - name: Unggah backup terenkripsi ke R2 (privat)
+
+      # Repo ini publik, jadi artifact GitHub akan menaruh salinan database
+      # produksi di tempat yang bisa diunduh siapa pun yang punya tautannya.
+      # R2 tidak dipakai karena mengaktifkannya menuntut kartu kredit.
+      # Service account Google dipakai karena gratis tanpa kartu, dan folder
+      # itu hanya dibagikan ke email Owner sehingga salinannya privat.
+      - name: Siapkan kredensial service account Google
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
         run: |
-          : "${R2_ENDPOINT:?R2_ENDPOINT belum tersedia}"
-          : "${R2_BUCKET:?R2_BUCKET belum tersedia}"
-          berkas="$(ls -1 backups/*.sql.enc | head -1)"
-          checksum="${berkas}.sha256"
-          nama="$(basename "$berkas")"
-          echo "mengunggah $nama"
-          # --endpoint-url menunjuk R2; AWS CLI v2 sudah ada di runner.
-          aws s3 cp "$berkas" "s3://${R2_BUCKET}/d1/${nama}" \
-            --endpoint-url "$R2_ENDPOINT" --only-show-errors
-          aws s3 cp "$checksum" "s3://${R2_BUCKET}/d1/$(basename "$checksum")" \
-            --endpoint-url "$R2_ENDPOINT" --only-show-errors
-          echo "terunggah: s3://${R2_BUCKET}/d1/${nama}"
-      - name: Buktikan unggahan bisa dibaca kembali dan checksum cocok
+          : "${GDRIVE_SA_JSON:?GDRIVE_SA_JSON belum tersedia}"
+          mkdir -p "$HOME/.config/cuciin"
+          printf '%s' "$GDRIVE_SA_JSON" > "$HOME/.config/cuciin/gdrive-sa.json"
+          chmod 600 "$HOME/.config/cuciin/gdrive-sa.json"
+          python3 -c "import json,sys; d=json.load(open('$HOME/.config/cuciin/gdrive-sa.json')); print('service account:', d['client_email'])"
+
+      - name: Unggah backup terenkripsi ke Google Drive
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-        run: |
-          berkas="$(ls -1 backups/*.sql.enc | head -1)"
-          nama="$(basename "$berkas")"
-          mkdir -p /tmp/unduh
-          aws s3 cp "s3://${R2_BUCKET}/d1/${nama}" "/tmp/unduh/${nama}" \
-            --endpoint-url "$R2_ENDPOINT" --only-show-errors
-          # Membandingkan checksum lokal dengan yang diunduh membuktikan
-          # berkasnya benar-benar utuh di R2, bukan hanya terkirim.
-          (cd backups && shasum -a 256 -c "$(basename "$berkas").sha256")
-          cmp "$berkas" "/tmp/unduh/${nama}"
-          echo "backup di R2 terverifikasi utuh"
+          CUCIIN_GDRIVE_FOLDER: ${{ secrets.CUCIIN_GDRIVE_FOLDER }}
+          CUCIIN_GDRIVE_SA: /home/runner/.config/cuciin/gdrive-sa.json
+        run: python3 scripts/unggah-ke-drive.py
+
+      - name: Buktikan unggahan bisa dibaca kembali dan checksumnya cocok
+        env:
+          CUCIIN_GDRIVE_FOLDER: ${{ secrets.CUCIIN_GDRIVE_FOLDER }}
+          CUCIIN_GDRIVE_SA: /home/runner/.config/cuciin/gdrive-sa.json
+        run: python3 scripts/unggah-ke-drive.py --verifikasi
