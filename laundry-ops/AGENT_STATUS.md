@@ -5,6 +5,27 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
+## 0n. Keadaan lingkungan 21 Sep 2026 (baca ini sebelum menilai apa pun)
+
+Papan ini sempat salah melaporkan pada hari yang sama, jadi angka di bawah diukur, bukan dikutip.
+
+| Hal | Nilai nyata | Cara mengecek ulang |
+| --- | --- | --- |
+| Versi aplikasi | `1.10.35` / `versionCode 54` | `grep versionName laundry-ops/android/app/build.gradle.kts` |
+| Sumber versi (3) | `build.gradle.kts`, `data/VersionHistory.kt`, `android/CHANGELOG.md` — ketiganya `1.10.35`, sinkron | `grep 1.10 laundry-ops/android/CHANGELOG.md` (letaknya di `android/`, BUKAN di akar `laundry-ops/`) |
+| Gate Android | 285 debug + 285 release = 570, 0 gagal, lint bersih | `./gradlew clean testDebugUnitTest testReleaseUnitTest lintDebug`, baca `app/build/test-results/*/*.xml` |
+| Gate Worker | 64/64 lulus | `cd laundry-ops/cloudflare && npm run check` |
+| Worker produksi | `fd21cc8c-6f4b-4d47-b392-38fdf9b3f890` | `npx wrangler deployments list --name cuciin-api` |
+| `/health` | 200, `revision: 0` | `curl -s https://cuciin-api.tiftazani-cuciin.workers.dev/health` |
+| Tanda tangan rilis | `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee` (TIDAK berubah) | `apksigner verify --print-certs <apk>` |
+| Kandidat rilis | `releases/1.10.35-candidate/` — APK + APK debug + AAB + README + SHA256SUMS, ketiganya `OK` | `shasum -a 256 -c SHA256SUMS.txt` |
+| Kuota tulis D1 | **habis** sampai 2026-09-22 00:00 UTC (07:00 WIB) | `INSERT` ke tabel probe; `code: 7500` berarti habis |
+
+**Dua hal yang sempat salah dilaporkan pada 21 Sep, beserta koreksinya:**
+
+1. `CHANGELOG.md` dan AAB pernah dilaporkan "hilang". Keduanya **ada**: CHANGELOG di `laundry-ops/android/CHANGELOG.md`, AAB di `releases/1.10.35-candidate/cuciin-1.10.35-release.aab`. Kesalahannya mencari di akar `laundry-ops/`. Sebelum menyatakan sesuatu hilang, cari dengan `find . -iname` lebih dulu.
+2. `SHA256SUMS.txt` di akar `releases/` memang **benar-benar basi** (ditulis 00:12, APK diganti 01:21) sehingga `shasum -c` berbunyi `FAILED`. Sudah dihitung ulang di commit `511075f`.
+
 ## 0l. Bug: data transaksi tetap tampil di perangkat setelah server dibersihkan
 
 **Status: diperbaiki, teruji, dan sudah dipasang di produksi. Terbukti di perangkat.**
