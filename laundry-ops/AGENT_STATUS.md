@@ -1100,6 +1100,20 @@ File-file itu menyimpan aturan uang, stok, komisi, otorisasi, dan protokol sinkr
     `OK` beserta lulus `integrity_check`. Yang belum ada hanyalah passphrase asli; itu milik Owner
     (diatur sebagai `CUCIIN_BACKUP_PASSPHRASE`) dan tidak disimpan di repo. Seluruh berkas uji berisi
     data produksi sudah dihapus setelah pengujian.
+    **Koreksi 21 Sep:** `cuciin-backup.yml` sekarang **sudah terbukti jalan** — run `35575319046`
+    `completed/success`, semua langkah hijau: export `cuciin-db --remote` (berkas
+    `cuciin-20260921T075617Z.sql`), enkripsi, `verify-backup.sh` melaporkan `OK` + lulus
+    `integrity_check`, lalu melaporkan ukuran + sha256. Lima secret GitHub sudah dipasang
+    (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CUCIIN_BACKUP_PASSPHRASE`, plus
+    `GDRIVE_SA_JSON`/`CUCIIN_GDRIVE_FOLDER` yang kini tidak dipakai).
+    **Salinan backup tetap tidak disimpan otomatis.** Empat jalur penyimpanan gratis sudah diuji
+    sampai mentok di batas penyedianya, bukan karena bug: Cloudflare R2 menolak tanpa kartu
+    kredit (`code 10042`); Google Drive lewat service account ditolak Google karena service
+    account berkuota nol (`storageQuota limit: 0`, pesan resmi "Service Accounts do not have
+    storage quota"); Google Drive lewat OAuth butuh OAuth client, dan halaman Branding mentok
+    tanpa billing; artifact GitHub hanya tersimpan kalau repo privat, dan repo ini publik.
+    Backup manual Owner ada di `~/Documents/ChatGPT/Laundry/firebase-migration/backup-d1/`.
+    Cloudflare hanya menyimpan 30 hari, jadi cadangan lokal itu yang penting.
 
 ## 5. Urutan kerja yang disarankan
 
