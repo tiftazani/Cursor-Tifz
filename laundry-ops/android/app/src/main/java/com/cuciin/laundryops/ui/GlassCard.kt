@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Login
@@ -26,11 +27,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -100,6 +104,16 @@ fun GlassField(
     leading: Boolean = true,
 ) {
     var shown by rememberSaveable { mutableStateOf(false) }
+    // Tombol "Next"/"Done" di keyboard harus benar-benar memindahkan fokus.
+    // Tanpa ini, menekan Next di kolom email tidak melakukan apa pun, fokus
+    // tetap di email, dan apa pun yang diketik berikutnya (kata sandi) ikut
+    // masuk ke kolom email — kasir cabang menemukan emailnya menjadi
+    // "nama@gmail.comsandi" lalu gagal masuk tanpa tahu sebabnya.
+    val fokus = LocalFocusManager.current
+    val aksiKeyboard = KeyboardActions(
+        onNext = { fokus.moveFocus(FocusDirection.Down) },
+        onDone = { fokus.clearFocus() },
+    )
     Column(modifier.fillMaxWidth()) {
         Text(
             label.uppercase(),
@@ -123,7 +137,9 @@ fun GlassField(
                     label.contains("email", ignoreCase = true) -> KeyboardType.Email
                     else -> KeyboardType.Text
                 },
+                imeAction = if (password) ImeAction.Done else ImeAction.Next,
             ),
+            keyboardActions = aksiKeyboard,
             leadingIcon = if (leading) ({
                 Icon(
                     if (password) Icons.Outlined.Lock else Icons.Outlined.MailOutline,
