@@ -5,6 +5,67 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
+## 0j. Data transaksi & keuangan produksi dibersihkan (21 Sep, Hermes)
+
+**Status: selesai dan terverifikasi pada D1 produksi `cuciin-db`.**
+
+Perintah Owner: hapus semua data transaksi dan keuangan di database produksi (aplikasi release);
+pertahankan hanya data user (kasir, SPV, Owner) dan data cabang. Aplikasi debug tidak disentuh.
+
+Ini membersihkan **sisa yang tertinggal** dari pembersihan sebelumnya. Pembersihan terdahulu memakai
+`bersihkan-data-produksi.sql` dan terlihat berhasil, tetapi sebagian data sudah kembali terisi
+sesudahnya sehingga Owner masih melihat transaksi dan data keuangan. Keadaan nyata sebelum
+pembersihan ini, dibaca langsung dari produksi:
+
+| Tabel | Baris sebelum |
+| --- | ---: |
+| `processed_commands` | 50.411 |
+| `sync_changes` | 103 |
+| `audit_logs` | 59 |
+| `order_lines` | 11 |
+| `orders` | 7 |
+| `products` | 5 |
+| `branch_stocks` | 4 |
+| `payments` | 4 |
+| `stock_moves` | 4 |
+| `attendance` | 2 |
+| `cash_closes`, `customers`, `whatsapp_templates` | 1 masing-masing |
+
+Cadangan segar dibuat lebih dulu:
+`firebase-migration/backup-d1/cuciin-prod-preHapus2-20260921T022023Z.sql` (27.957.854 byte).
+Cadangan itu diuji bisa dipulihkan (`PRAGMA integrity_check` = `ok`, `orders` = 7) **sebelum**
+satu baris pun dihapus.
+
+Skrip: `cloudflare/scripts/bersihkan-transaksi-produksi.sql`. Skrip diuji dulu di SQLite lokal
+dari salinan cadangan produksi, baru dijalankan ke `--remote`. Urutan `DELETE` menghormati foreign
+key dan memakai `PRAGMA defer_foreign_keys` supaya urutan tidak bisa menggagalkan proses di tengah.
+
+Hasil di produksi: `success: true`, **50.623 baris terhapus**, ukuran basis data **25,76 MB → 0,32 MB**.
+
+| Dipertahankan | Baris |
+| --- | ---: |
+| `staff` (user: Owner, SPV, kasir) | 8 |
+| `staff_branches` | 14 |
+| `branches` | 4 |
+| `access_roles` | 3 |
+| `organizations` | 1 |
+
+Semua tabel transaksi, keuangan, katalog, dan jejak sinkronisasi: **0**. Termasuk `services` dan
+`asset_types`, atas keputusan Owner. Tabel `access_policies`, `asset_types`, `attendance`,
+`audit_logs`, `branch_stocks`, `cash_closes`, `customers`, `expenses`, `inventory_items`,
+`order_lines`, `orders`, `payments`, `processed_commands`, `products`, `services`, `stock_moves`,
+`sync_changes`, `sync_command_guards`, `sync_snapshots`, `whatsapp_templates` semuanya kosong.
+
+Data lama tidak bisa hidup kembali: `/health` produksi menjawab **200**
+`{"ok":true,"database":"ready","revision":0}`. Kursor revisi 0 berarti perangkat menarik dari
+keadaan bersih, bukan menyisir riwayat lama.
+
+**Efek yang perlu diketahui:** karena `processed_commands` ikut dikosongkan, perangkat yang masih
+menyimpan outbox akan mengirim ulang command lamanya dan command itu **diterima sebagai baru**.
+Perangkat 1.10.29 yang masih dipakai 20 cabang harus diuji ulang setelah pembersihan ini.
+
+`cuciin-debug-db` tidak disentuh sama sekali, sesuai perintah Owner.
+
 ## 0i. Pekerjaan terbaru (21 Sep, Hermes) — kegagalan masuk akhirnya terlihat, rilis 1.10.35/v54
 
 **Status: selesai di working tree, rilis 1.10.35 dibangun & terverifikasi di perangkat. Belum di-commit.**
