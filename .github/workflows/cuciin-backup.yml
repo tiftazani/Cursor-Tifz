@@ -1,5 +1,19 @@
 name: Cuciin D1 backup verification
 
+# Backup ini memvalidasi database produksi tiap hari: export penuh, enkripsi,
+# lalu restore ke SQLite untuk membuktikan isinya utuh. Kalau salah satu
+# langkah gagal, Owner dapat notifikasi GitHub.
+#
+# Salinan backup TIDAK disimpan di sini. Semua penyimpanan gratis yang bisa
+# dipakai tanpa kartu kredit sudah diuji dan mentok di batas penyedianya:
+#   - Cloudflare R2        -> wajib kartu kredit (code 10042)
+#   - Google Drive (SA)    -> service account berkuota 0, Google melarangnya
+#   - Google Drive (OAuth) -> butuh OAuth client, mentok di brand tanpa billing
+#   - GitHub artifact      -> hanya tersimpan kalau repo privat
+# Salinan cadangan manual disimpan Owner di:
+#   ~/Documents/ChatGPT/Laundry/firebase-migration/backup-d1/
+# Lihat laundry-ops/AGENT_STATUS.md bagian "Backup" untuk keadaan terbaru.
+
 on:
   workflow_dispatch:
   schedule:
@@ -18,62 +32,34 @@ jobs:
         working-directory: laundry-ops/cloudflare
     steps:
       - uses: actions/checkout@v7
+
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: laundry-ops/cloudflare/package-lock.json
+
       - run: npm ci
+
       - name: Export and encrypt D1
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CUCIIN_BACKUP_PASSPHRASE: ${{ secrets.CUCIIN_BACKUP_PASSPHRASE }}
         run: ./scripts/backup-d1.sh
+
       - name: Verify encrypted backup can be restored
         env:
           CUCIIN_BACKUP_PASSPHRASE: ${{ secrets.CUCIIN_BACKUP_PASSPHRASE }}
         run: ./scripts/verify-backup.sh backups/*.sql.enc
-      # Repo ini publik, jadi upload-artifact akan menaruh salinan database
-      # produksi di tempat yang bisa diunduh siapa pun yang punya tautan
-      # artifact. Karena itu hasil backup dikirim ke Cloudflare R2 yang
-      # bersifat privat, bukan ke artifact GitHub. Isinya sudah terenkripsi
-      # AES-256-CBC, tetapi satu lapis saja tidak cukup untuk repo publik.
-      - name: Unggah backup terenkripsi ke R2 (privat)
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+
+      - name: Laporkan hasil
+        if: always()
         run: |
-          : "${R2_ENDPOINT:?R2_ENDPOINT belum tersedia}"
-          : "${R2_BUCKET:?R2_BUCKET belum tersedia}"
-          berkas="$(ls -1 backups/*.sql.enc | head -1)"
-          checksum="${berkas}.sha256"
-          nama="$(basename "$berkas")"
-          echo "mengunggah $nama"
-          # --endpoint-url menunjuk R2; AWS CLI v2 sudah ada di runner.
-          aws s3 cp "$berkas" "s3://${R2_BUCKET}/d1/${nama}" \
-            --endpoint-url "$R2_ENDPOINT" --only-show-errors
-          aws s3 cp "$checksum" "s3://${R2_BUCKET}/d1/$(basename "$checksum")" \
-            --endpoint-url "$R2_ENDPOINT" --only-show-errors
-          echo "terunggah: s3://${R2_BUCKET}/d1/${nama}"
-      - name: Buktikan unggahan bisa dibaca kembali dan checksum cocok
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-        run: |
-          berkas="$(ls -1 backups/*.sql.enc | head -1)"
-          nama="$(basename "$berkas")"
-          mkdir -p /tmp/unduh
-          aws s3 cp "s3://${R2_BUCKET}/d1/${nama}" "/tmp/unduh/${nama}" \
-            --endpoint-url "$R2_ENDPOINT" --only-show-errors
-          # Membandingkan checksum lokal dengan yang diunduh membuktikan
-          # berkasnya benar-benar utuh di R2, bukan hanya terkirim.
-          (cd backups && shasum -a 256 -c "$(basename "$berkas").sha256")
-          cmp "$berkas" "/tmp/unduh/${nama}"
-          echo "backup di R2 terverifikasi utuh"
+          set -euo pipefail
+          for b in backups/*.sql.enc; do
+            [ -f "$b" ] || continue
+            echo "berkas : $b"
+            echo "ukuran : $(stat -c%s "$b") byte"
+            echo "sha256 : $(sha256sum "$b" | cut -d' ' -f1)"
+          done

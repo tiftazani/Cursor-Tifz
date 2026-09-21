@@ -69,8 +69,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -111,6 +115,12 @@ internal fun Field(
     number: Boolean = false,
 ) {
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    // Tombol Next/Done di keyboard harus benar-benar memindahkan fokus. Tanpa
+    // ini, menekan Next tidak melakukan apa pun, fokus tetap di kolom yang
+    // sama, dan apa pun yang diketik berikutnya masuk ke kolom yang salah.
+    // Di form buat akun kasir, kata sandi ikut menempel ke email, akunnya lalu
+    // dibuat dengan email yang salah dan tidak ada yang tahu kenapa.
+    val fokus = LocalFocusManager.current
     OutlinedTextField(
         value = value,
         onValueChange = on,
@@ -132,6 +142,11 @@ internal fun Field(
                 label.contains("email", ignoreCase = true) -> KeyboardType.Email
                 else -> KeyboardType.Text
             },
+            imeAction = if (password) ImeAction.Done else ImeAction.Next,
+        ),
+        keyboardActions = KeyboardActions(
+            onNext = { fokus.moveFocus(FocusDirection.Down) },
+            onDone = { fokus.clearFocus() },
         ),
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
