@@ -6,7 +6,7 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
 **Keadaan `main` per 21 Sep malam: branch `codex/cuciin-1-8-1` sudah di-merge** (merge commit `28e8f5b`,
-0 konflik, 0 regresi), lalu ditambah tiga commit perbaikan di atasnya. `main` sekarang `efafa45`.
+0 konflik, 0 regresi), lalu ditambah lima commit perbaikan di atasnya. `main` sekarang `2ba1172`.
 
 | Commit | Isi |
 | --- | --- |
@@ -14,17 +14,27 @@ Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **
 | `5efa382` | Perbaiki workflow mirror D1 (Node 22, `npm ci`, cegah run paralel) |
 | `5dac080` | Perbarui APK release dan debug dari `main` |
 | `efafa45` | Perbaiki login gagal 500 saat kuota tulis D1 habis (lihat `0o`) |
+| `c915e62` | Koreksi papan status: kegagalan login 500 memang bug Worker |
+| `2ba1172` | Rilis 1.10.36 (versionCode 55), kandidat baru |
 
-Yang **sudah** hidup: workflow mirror D1 berjadwal `0 18 * * *` (01:00 WIB) — sudah terbukti
+Yang **sudah** hidup: workflow mirror D1 berjadwal `0 18 * * *` (01:00 WIB) — terbukti
 `completed/success` di `main`, cadangan `cuciin-backup-db` terisi 8 staff / 26 tabel.
-Yang **belum**: Worker produksi masih `fd21cc8c`, jadi perbaikan login di `0o` belum berlaku di server.
+Worker produksi **sudah** memuat perbaikan login: versi `5ec0843c-714a-4ca1-bbe3-1294f774df21`
+(di-deploy 21 Sep 10:41 UTC), terbukti lewat log `wrangler tail` dan `/v1/me` 200 untuk akun
+ber-`firebase_uid` NULL.
+
+**Kuota tulis D1 masih jadi batas nyata.** Per 21 Sep: 126.199 baris tulis, didominasi
+`INSERT OR IGNORE INTO processed_commands` (167.226 tulis / 55.742 kali, dari pengiriman ulang
+antrean perangkat). Selama kuota habis, transaksi kasir gagal tersimpan ke server dan menumpuk di
+antrean lokal perangkat sampai kuota pulih 07:00 WIB. Perbaikan `0o` hanya membuat **login** tetap
+jalan; ia tidak menambah kuota.
 
 ## 0o. Perbaikan: login gagal 500 saat kuota tulis D1 habis (21 Sep, Hermes)
 
-**Status: bug ditemukan, diperbaiki, teruji, dan sudah masuk `main`. Worker produksi BELUM di-deploy.**
+**Status: SELESAI dan TERBUKTI DI PRODUKSI.** Worker produksi sudah di-deploy `5ec0843c-714a-4ca1-bbe3-1294f774df21`.
 
-Bagian `0m` di bawah menyimpulkan kegagalan login ini "bukan bug aplikasi". **Kesimpulan itu salah** dan
-sudah dikoreksi di sini. Kuota habis memang pemicunya, tetapi yang mengubahnya jadi 500 adalah cacat
+Bagian `0m` di bawah menyimpulkan kegagalan login ini "bukan bug aplikasi". **Kesimpulan itu salah**
+dan sudah dikoreksi di sini. Kuota habis memang pemicunya, tetapi yang mengubahnya jadi 500 adalah cacat
 nyata di kode Worker: satu `UPDATE` kecil yang kegagalannya dibiarkan menjalar ke atas.
 
 Akar tepatnya, `cloudflare/src/index.ts` baris 94 saat itu:
@@ -37,20 +47,26 @@ Ini dijalankan hanya saat login **pertama** (baris staff belum punya `firebase_u
 tulis itu (`code: 7500`), exception naik ke `authorize()`, Worker menjawab **500 code 1101**, dan app
 menerjemahkannya jadi "Server identitas belum tersedia". Login kedua dan seterusnya berhasil karena tidak
 butuh tulis, sehingga gejalanya tampak seperti "akun Owner rusak" padahal servernya yang menutup pintu.
-Terbukti dari tiga percobaan langsung ke REST:
-
-```
-A. Kasir Aida (firebase_uid sudah ada)   -> /v1/me 200 OK
-B. Owner kedua (firebase_uid NULL)       -> /v1/me 500 code 1101
-C. Tulis kecil ke D1                     -> code 7500 (kuota tulis harian habis)
-```
 
 **Perbaikan.** `authorize()` dipecah menjadi `resolveStaff()` dan `linkFirebaseUid()`.
 `linkFirebaseUid()` menyerap kegagalan tulis dan melaporkannya lewat nilai balik, bukan exception.
 Pencarian lewat email sudah membuktikan identitasnya sah, jadi login tetap dilanjutkan dan penyambungan
 `firebase_uid` diulang pada login berikutnya. Akun yang tidak terdaftar tetap ditolak.
 
-**Bukti.** `cloudflare/tests/login-quota.test.mjs`, 5 tes, dan terbukti **merah saat perbaikan dikembalikan**:
+**Bukti di produksi (log Worker, `wrangler tail`, saat kuota tulis memang habis):**
+
+```
+[warn]  'Gagal menyambungkan firebase_uid, login tetap dilanjutkan'
+        Error: D1_ERROR: exceeded D1's free tier daily row write limit
+outcome=ok                      <- permintaan TETAP sukses
+/v1/me -> HTTP 200  {"role":"Owner","branchIds":[4 cabang]}
+```
+
+String `Gagal menyambungkan firebase_uid` hanya ada di kode baru, jadi log ini membuktikan versi
+`5ec0843c` benar-benar yang melayani. Dua akun ber-`firebase_uid` NULL (Owner kedua) lolos `/v1/me` 200
+lewat REST **dan** lewat app di emulator (masuk ke layar Antrian laundry).
+
+**Bukti tes.** `cloudflare/tests/login-quota.test.mjs`, 5 tes, terbukti **merah saat perbaikan dikembalikan**:
 
 ```
 perbaikan aktif        -> 5 lulus, 0 gagal
@@ -66,6 +82,10 @@ sifatnya opsional (percepatan, cache, penanda) bisa menggagalkan seluruh permint
 100.000 tulis/hari **per akun** dan bisa habis kapan saja, termasuk karena pekerjaan agen sendiri.
 Tulis opsional harus dibungkus, dan keputusan sah/tidaknya pemakai diambil dari baca.
 
+**Yang TIDAK diperbaiki oleh ini:** saat kuota tulis habis, **transaksi kasir tetap gagal tersimpan ke
+server** (`command_retryable` muncul di log dengan `7500`). Antrean lokal perangkat menahannya, jadi
+tidak ada data hilang, dan terkirim saat kuota pulih 07:00 WIB. Ini batas free tier, bukan bug.
+
 ## 0n. Keadaan lingkungan 21 Sep 2026 (baca ini sebelum menilai apa pun)
 
 Papan ini sempat salah melaporkan pada hari yang sama, jadi angka di bawah diukur, bukan dikutip.
@@ -79,8 +99,8 @@ Papan ini sempat salah melaporkan pada hari yang sama, jadi angka di bawah diuku
 | Worker produksi | `fd21cc8c-6f4b-4d47-b392-38fdf9b3f890` | `npx wrangler deployments list --name cuciin-api` |
 | `/health` | 200, `revision: 0` | `curl -s https://cuciin-api.tiftazani-cuciin.workers.dev/health` |
 | Tanda tangan rilis | `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee` (TIDAK berubah) | `apksigner verify --print-certs <apk>` |
-| Kandidat rilis | `releases/1.10.35-candidate/` — APK + APK debug + AAB + README + SHA256SUMS, ketiganya `OK` | `shasum -a 256 -c SHA256SUMS.txt` |
-| Kuota tulis D1 | **habis** sampai 2026-09-22 00:00 UTC (07:00 WIB) | `INSERT` ke tabel probe; `code: 7500` berarti habis |
+| Kandidat rilis | `releases/1.10.36-candidate/` — APK + APK debug + AAB + README + SHA256SUMS, ketiganya `OK`, `verify_release.py` PASS | `shasum -a 256 -c SHA256SUMS.txt` |
+| Kuota tulis D1 | **habis lagi** per 21 Sep (126.199 baris tulis; batas 100.000/hari). Reset 2026-09-22 00:00 UTC (07:00 WIB) | `INSERT` ke tabel probe; `code: 7500` berarti habis |
 
 **Dua hal yang sempat salah dilaporkan pada 21 Sep, beserta koreksinya:**
 
