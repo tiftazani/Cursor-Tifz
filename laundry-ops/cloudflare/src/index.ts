@@ -85,14 +85,39 @@ async function authenticatedFirebaseUser(request: Request, env: Env): Promise<{ 
   return null;
 }
 
+/**
+ * Menyambungkan firebase_uid ke baris staff yang cocok.
+ *
+ * Ini hanyalah percepatan untuk login berikutnya, bukan syarat sahnya login.
+ * Kalau kuota tulis D1 sedang habis, Cloudflare menolak UPDATE ini; dulu
+ * kegagalan itu menjalar ke atas dan membuat SELURUH login gagal 500 padahal
+ * email dan sandinya benar. Sekarang kegagalannya diserap di sini dan
+ * pencobaannya diulang pada login berikutnya.
+ */
+export async function linkFirebaseUid(env: Env, sub: string, email: string): Promise<boolean> {
+  try {
+    await env.DB.prepare("UPDATE staff SET firebase_uid=? WHERE email=? AND firebase_uid IS NULL").bind(sub, email).run();
+    return true;
+  } catch (error) {
+    console.warn("Gagal menyambungkan firebase_uid, login tetap dilanjutkan", error);
+    return false;
+  }
+}
+
+/** Mencari baris staff yang sah untuk pemakai Firebase yang tokennya sudah diverifikasi. */
+export async function resolveStaff(env: Env, firebaseUser: { sub: string; email: string }): Promise<{ email: string; name: string; role: string } | null> {
+  let staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE firebase_uid=? AND approved=1 AND active=1").bind(firebaseUser.sub).first<{email:string;name:string;role:string}>();
+  if (!staff) {
+    staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE lower(email)=lower(?) AND approved=1 AND active=1").bind(firebaseUser.email).first<{email:string;name:string;role:string}>();
+    if (staff) await linkFirebaseUid(env, firebaseUser.sub, staff.email);
+  }
+  return staff ?? null;
+}
+
 async function authorize(request: Request, env: Env): Promise<Identity | null> {
   const firebaseUser = await authenticatedFirebaseUser(request, env);
   if (firebaseUser) {
-    let staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE firebase_uid=? AND approved=1 AND active=1").bind(firebaseUser.sub).first<{email:string;name:string;role:string}>();
-    if (!staff) {
-      staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE lower(email)=lower(?) AND approved=1 AND active=1").bind(firebaseUser.email).first<{email:string;name:string;role:string}>();
-      if (staff) await env.DB.prepare("UPDATE staff SET firebase_uid=? WHERE email=? AND firebase_uid IS NULL").bind(firebaseUser.sub, staff.email).run();
-    }
+    const staff = await resolveStaff(env, firebaseUser);
     if (staff && ["Owner","Kasir","Supervisor"].includes(staff.role)) {
       const branches = await env.DB.prepare("SELECT branch_id FROM staff_branches WHERE staff_email=? ORDER BY branch_id").bind(staff.email).all<{branch_id:string}>();
       return { uid: firebaseUser.sub, email: firebaseUser.email, name: staff.name, role: staff.role as Identity["role"], branchIds: branches.results.map((row) => row.branch_id), bootstrap: false };
