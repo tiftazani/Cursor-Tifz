@@ -12,10 +12,17 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.36"
-    val currentCode: Int = 55
+    val currentName: String = "1.10.37"
+    val currentCode: Int = 56
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.37", code = 56, date = "22 Sep 2026",
+            notes = listOf(
+                "Penyamaan hak akses dari server kini berjalan nyata. Sebelumnya permintaan memakai alamat dasar Worker, server menjawab 404, dan perangkat terus memakai peran lama meskipun perannya sudah diturunkan atau akunnya sudah dihapus. Sekarang permintaannya ke endpoint snapshot yang benar, jadi peran yang baru langsung terlihat di aplikasi.",
+                "Akun yang sudah dihapus dari server tidak lagi muncul di layar Daftar User setelah sinkronisasi.",
+            ),
+        ),
         AppRelease(
             name = "1.10.36", code = 55, date = "21 Sep 2026",
             notes = listOf(

@@ -2,6 +2,20 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.37 — 22 Sep 2026 (versionCode 56)
+
+### Perubahan peran dari server langsung berlaku
+
+Penyamaan hak akses pada perangkat yang sudah pernah sinkron kini meminta endpoint
+`/v1/snapshot`. Sebelumnya aplikasi meminta alamat dasar Worker, menerima 404, lalu diam-diam
+mempertahankan data lokal. Akibatnya peran yang sudah diturunkan di server, seperti Supervisor
+menjadi Kasir, tetap tampil sebagai peran lama di perangkat. Akun yang dihapus juga dapat tetap
+muncul di Daftar User.
+
+Perbaikan ini mengarahkan permintaan ke endpoint yang benar. Perangkat menarik peran dan daftar
+staf terbaru dari server saat sinkronisasi. Pengujian pada emulator membuktikan akun Aida berubah
+dari Supervisor menjadi Kasir setelah masuk ulang.
+
 ## 1.10.36 — 21 Sep 2026 (versionCode 55)
 
 ### Login akun baru tidak lagi ditolak, dan isian papan ketik diperbaiki

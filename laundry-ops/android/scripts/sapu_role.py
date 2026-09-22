@@ -185,6 +185,20 @@ def tab_modul(x=None):
     return t[0]
 
 
+def di_layar_login(x=None):
+    """Apakah layar sekarang adalah form masuk (email + kata sandi).
+
+    Penanda ini dipakai untuk MENAHAN Back. Layar masuk tidak punya tab bawah, jadi
+    `ke_modul()` menekan Back tiga kali, aplikasi pindah ke latar, dan pembacaan layar
+    berikutnya menampilkan peluncur Android. Akibatnya login dilaporkan "login gagal"
+    padahal formnya ada dan tidak ada yang rusak. Terbukti 21 Sep pada 1.10.36-debug.
+    """
+    x = x or dump("login")
+    simp = simpul(x)
+    return sum(1 for s in simp if s["cls"].endswith("EditText")) >= 2 and any(
+        "Masuk ke akun" in s["text"] for s in simp)
+
+
 def ke_modul():
     """Pulang ke layar Modul dari mana pun.
 
@@ -192,10 +206,15 @@ def ke_modul():
     tab "Modul" tidak ada di layar dan penekanan tab mustahil. Karena itu bila tab tidak terlihat,
     tekan Back beberapa kali lebih dulu sampai kerangka bertab kembali. Tanpa langkah ini, semua
     menu sesudah layar penuh dilaporkan "tap gagal" padahal tidak ada yang rusak.
+
+    Layar masuk dikecualikan: di sana Back tidak menaikkan apa pun, ia hanya menaruh aplikasi
+    ke latar. Tanpa pengecualian ini, sapu tidak pernah bisa login.
     """
     for putaran in range(3):
         if di_modul():
             return True
+        if di_layar_login():
+            return False
         m = tab_modul()
         if not m:
             sh("input", "keyevent", "4")

@@ -382,9 +382,16 @@ object CloudSync {
      * Dipakai `pullChanges` pada perangkat yang sudah bootstrap. Kegagalan di sini tidak menghentikan
      * sinkronisasi: pemanggilnya memakai snapshot hasil tarikan bertahap apa adanya, sehingga hanya
      * hak akses yang tertunda penyamaannya, bukan seluruh sinkronisasi.
+     *
+     * Alamatnya harus endpoint snapshot, bukan alamat dasar Worker. Worker tidak punya rute di akar
+     * (`/`), jadi permintaan ke alamat dasar selalu dijawab 404 dan fungsi ini diam-diam selalu
+     * mengembalikan null. Akibatnya penyamaan hak akses TIDAK PERNAH berjalan: perangkat yang sudah
+     * `bootstrapped` terus memakai peran lama. Terbukti 21 Sep pada 1.10.36-debug —
+     * `aidanurita25@gmail.com` masih "Aida · SPV" di HP padahal D1 sudah menyimpannya sebagai Kasir,
+     * dan akun yang sudah dihapus dari server masih muncul di layar Daftar User.
      */
     private fun hakAksesDariServer(): Snapshot? = runCatching {
-        val conn = open("GET")
+        val conn = open("GET", apiUrl("/v1/snapshot"))
         val code = conn.responseCode
         val body = readBody(conn, code)
         conn.disconnect()
