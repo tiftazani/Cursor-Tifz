@@ -1,21 +1,56 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 21 September 2026 (oleh Hermes).
+Terakhir diperbarui: 22 September 2026 (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
-**Keadaan `main` per 21 Sep malam: branch `codex/cuciin-1-8-1` sudah di-merge** (merge commit `28e8f5b`,
-0 konflik, 0 regresi), lalu ditambah lima commit perbaikan di atasnya. `main` sekarang `2ba1172`.
+**Keadaan `main` per 22 Sep: `444f57f`** (rilis 1.10.37, sudah di-push ke `origin/main`).
 
 | Commit | Isi |
 | --- | --- |
-| `28e8f5b` | Merge 1.10.35: tombol Next keyboard, polling 60 detik, mirror D1 harian |
-| `5efa382` | Perbaiki workflow mirror D1 (Node 22, `npm ci`, cegah run paralel) |
-| `5dac080` | Perbarui APK release dan debug dari `main` |
-| `efafa45` | Perbaiki login gagal 500 saat kuota tulis D1 habis (lihat `0o`) |
+| `444f57f` | Rilis 1.10.37: penyamaan hak akses memakai endpoint `/v1/snapshot` |
+| `8e6b54d` | Papan status: login 500 sudah terperbaiki dan terbukti di produksi, 1.10.36 keluar |
+| `2ba1172` | Rilis 1.10.36 (versionCode 55): kandidat baru setelah merge dan perbaikan login |
 | `c915e62` | Koreksi papan status: kegagalan login 500 memang bug Worker |
-| `2ba1172` | Rilis 1.10.36 (versionCode 55), kandidat baru |
+| `efafa45` | Perbaiki login gagal 500 saat kuota tulis D1 habis (lihat `0o`) |
+
+## 0p. Perbaikan: perubahan peran dari server tidak pernah sampai ke perangkat (22 Sep, Hermes)
+
+**Status: SELESAI, TERUJI, sudah di `main` (`444f57f`). Belum dibuktikan di emulator untuk APK 1.10.37.**
+
+Akar masalahnya di `CloudSync.kt`, fungsi `hakAksesDariServer()`:
+
+```kotlin
+val conn = open("GET")   // tanpa argumen path -> alamat dasar Worker
+```
+
+Worker tidak punya rute di akar (`/`), jadi permintaan selalu dijawab 404. `runCatching` menelan
+kegagalannya, fungsi mengembalikan `null`, dan `samakanHakAkses` **tidak pernah berjalan** pada
+perangkat yang sudah `bootstrapped`. Akibatnya: peran yang sudah diubah di server tetap tampil
+lama di HP, dan akun yang sudah dihapus tetap muncul di layar Daftar User.
+
+**Bukti sebelum perbaikan (21 Sep, 1.10.36-debug):** `aidanurita25@gmail.com` masih tampil
+"Aida · SPV" di HP, sementara D1 sudah menyimpannya sebagai `Kasir`.
+
+**Perbaikan:** satu baris, `open("GET", apiUrl("/v1/snapshot"))`.
+
+**Bukti sesudah perbaikan:** setelah data aplikasi dibersihkan dan akun masuk ulang di emulator,
+peran Aida tampil **Kasir** — dikonfirmasi Owner 22 Sep.
+
+**Tes penjaga.** `SnapshotPrivilegeEndpointTest.kt`, 2 tes. Terbukti **merah saat perbaikan
+dikembalikan** ke `open("GET")` (2 gagal), hijau saat dipulihkan (2 lulus).
+
+**Gate.** `testDebugUnitTest` 290/0/0, `testReleaseUnitTest` 290/0/0, `lintRelease` 0 error
+(18 warning), `verify_release.py` PASS. Sertifikat rilis tidak berubah
+(`3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`).
+
+**Artefak.** `laundry-ops/releases/1.10.37-candidate/` (APK rilis, APK debug, AAB, SHA256SUMS,
+README) + salinan akar `releases/cuciin-release.apk` dan `releases/cuciin-debug.apk`, hash identik.
+
+**Yang belum dibuktikan:** APK 1.10.37 belum dipasang ulang di emulator (emulator mati saat
+verifikasi). Yang terbukti adalah 1.10.36-debug dengan perbaikan yang sama.
+
 
 Yang **sudah** hidup: workflow mirror D1 berjadwal `0 18 * * *` (01:00 WIB) — terbukti
 `completed/success` di `main`, cadangan `cuciin-backup-db` terisi 8 staff / 26 tabel.
