@@ -165,8 +165,7 @@ async function sendEmail(env: Env, subject: string, text: string): Promise<void>
   if (!env.RESEND_API_KEY) {
     throw new Error(
       'OTP email belum aktif di server ini: secret RESEND_API_KEY kosong. ' +
-        'Ambil key di resend.com/api-keys, lalu jalankan: ' +
-        "printf '%s' \"re_xxx\" | npx wrangler secret put RESEND_API_KEY",
+        'Bikin key di resend.com/api-keys, copy, lalu di folder kunci jalankan: npm run set-resend-key',
     )
   }
   const res = await fetch('https://api.resend.com/emails', {

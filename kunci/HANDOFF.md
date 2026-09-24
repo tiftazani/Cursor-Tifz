@@ -59,7 +59,7 @@ Cek cepat: `npx wrangler secret list` — kalau `RESEND_API_KEY` tidak ada di da
 | Variabel | Isi |
 | --- | --- |
 | `KUNCI_SESSION_SECRET` | String acak ≥ 16 karakter (`openssl rand -base64 32`) |
-| `RESEND_API_KEY` | API key Resend untuk OTP. **Belum di-set** per commit `8bf343a` — nilai lama ada di Netlify tapi ter-mask (hanya 20 karakter pertama yang bisa dibaca), jadi harus dibuat ulang di dashboard Resend |
+| `RESEND_API_KEY` | API key Resend untuk OTP. **Kosong** — key lama hanya ada di Netlify dalam bentuk ter-mask, jadi harus dibuat ulang di resend.com/api-keys, lalu `npm run set-resend-key` (baca dari papan klip, tidak lewat shell history) |
 | `KUNCI_FROM_EMAIL` | Opsional. Default `Kunci <onboarding@resend.dev>` |
 
 Deploy: `npm run deploy` (= build + `wrangler deploy`). Lihat secret: `npx wrangler secret list`. Storage = Durable Object `KunciStore` (konsisten kuat, jadi cap percobaan OTP tidak bisa diakali).

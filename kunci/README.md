@@ -28,7 +28,7 @@ Bisa dibuka di `localhost` atau di **URL HTTPS publik** (Cloudflare Workers). Ti
    ```bash
    cd kunci
    npx wrangler secret put KUNCI_SESSION_SECRET   # string acak ≥ 16 karakter
-   npx wrangler secret put RESEND_API_KEY         # API key Resend untuk OTP masuk
+   npm run set-resend-key                         # baca API key Resend dari papan klip
    # Opsional: npx wrangler secret put KUNCI_FROM_EMAIL
    ```
 

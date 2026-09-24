@@ -22,6 +22,7 @@
     "sync-branch": "node scripts/sync-branch.mjs",
     "refresh-local": "node scripts/sync-branch.mjs && node helper/install-service.mjs",
     "extension-status": "node scripts/extension-status.mjs",
+    "set-resend-key": "node scripts/set-resend-key.mjs",
     "deploy": "npm run build && wrangler deploy",
     "deploy:secrets": "wrangler secret put KUNCI_SESSION_SECRET && wrangler secret put RESEND_API_KEY"
   },
