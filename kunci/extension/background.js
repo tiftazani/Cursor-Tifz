@@ -101,18 +101,34 @@ async function writeVault(vault, dekB64, blob) {
   return nextBlob
 }
 
+// Two tabs finishing a login at the same moment both read pendingSaves, both write
+// it back, and the second write wins: one captured login is silently lost. Every
+// read-modify-write of this map goes through one chain instead.
+let pendingChain = Promise.resolve()
+
+function withPendingSaves(mutate) {
+  const run = pendingChain.then(async () => {
+    const pendingSaves = (await session.get('pendingSaves')).pendingSaves || {}
+    mutate(pendingSaves)
+    await session.set({ pendingSaves })
+  })
+  // Keep the chain alive after a failure, or every later save becomes a no-op.
+  pendingChain = run.catch(() => undefined)
+  return run
+}
+
 async function clearPendingSave(tabId) {
   if (!tabId) return
-  const pendingSaves = (await session.get('pendingSaves')).pendingSaves || {}
-  delete pendingSaves[String(tabId)]
-  await session.set({ pendingSaves })
+  await withPendingSaves((pendingSaves) => {
+    delete pendingSaves[String(tabId)]
+  })
 }
 
 async function storePending(tabId, pending) {
   if (!tabId) return
-  const pendingSaves = (await session.get('pendingSaves')).pendingSaves || {}
-  pendingSaves[String(tabId)] = pending
-  await session.set({ pendingSaves })
+  await withPendingSaves((pendingSaves) => {
+    pendingSaves[String(tabId)] = pending
+  })
 }
 
 async function queueSave(capture, tabId) {
@@ -143,16 +159,22 @@ async function broadcastToHttpTabs(message) {
 async function onVaultUnlocked() {
   const { vault } = await sessionState()
   const { neverHosts = [] } = await chrome.storage.local.get('neverHosts')
-  const pendingSaves = (await session.get('pendingSaves')).pendingSaves || {}
-  const next = {}
-  for (const [tabId, pending] of Object.entries(pendingSaves)) {
-    if (!pending?.capture || !vault) continue
-    const decision = decideLoginSave(vault.entries || [], pending.capture, neverHosts)
-    if (decision.action === 'create' || decision.action === 'update') {
-      next[tabId] = { capture: pending.capture, action: decision.action }
+  // Through the same chain: a save landing at this moment must not be overwritten by
+  // this consolidation pass, which rebuilds the whole map.
+  await withPendingSaves((pendingSaves) => {
+    for (const [tabId, pending] of Object.entries(pendingSaves)) {
+      if (!pending?.capture || !vault) {
+        delete pendingSaves[tabId]
+        continue
+      }
+      const decision = decideLoginSave(vault.entries || [], pending.capture, neverHosts)
+      if (decision.action === 'create' || decision.action === 'update') {
+        pendingSaves[tabId] = { capture: pending.capture, action: decision.action }
+      } else {
+        delete pendingSaves[tabId]
+      }
     }
-  }
-  await session.set({ pendingSaves: next })
+  })
   await broadcastToHttpTabs({ type: 'VAULT_UNLOCKED' })
 }
 

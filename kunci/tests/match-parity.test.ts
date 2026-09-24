@@ -4,9 +4,11 @@ import { isUsernameOnlyLoginStep, type FormSnapshot } from '../src/lib/login-int
 import {
   domainsMatch as extDomainsMatch,
   hostFromUrl as extHostFromUrl,
+  isKunciAppUrl as extIsKunciAppUrl,
   layerFromUrl as extLayerFromUrl,
   matchesForUrl,
 } from '../extension/crypto.js'
+import { isKunciAppUrl } from '../src/lib/capture'
 
 // extension/login-intent.js is an IIFE that parks its API on globalThis, not a module.
 // Importing it for the side effect is the only way to compare the two copies.
@@ -103,6 +105,29 @@ describe('extension and web matching agree', () => {
     ]
     for (const u of urls) {
       expect(extLayerFromUrl(u), u).toBe(layerFromUrl(u))
+    }
+  })
+
+  it('isKunciAppUrl is identical in both copies', () => {
+    // The extension must not offer to save a login it captured on Kunci's own pages,
+    // and the web app must agree on which URLs those are.
+    const urls = [
+      'https://kunci.tiftazani-cuciin.workers.dev/',
+      'https://kunci.tiftazani-cuciin.workers.dev/apps',
+      'http://127.0.0.1:8780/',
+      'http://localhost:8780/x',
+      'http://127.0.0.1:5173/',
+      'http://localhost:4173/',
+      'http://localhost:3000/',
+      'http://127.0.0.1:9999/',
+      'https://bank.example.com/login',
+      // A lookalike host must not be treated as the app.
+      'https://kunci.tiftazani-cuciin.workers.dev.evil.com/',
+      'not a url',
+      '',
+    ]
+    for (const u of urls) {
+      expect(extIsKunciAppUrl(u), u).toBe(isKunciAppUrl(u))
     }
   })
 
