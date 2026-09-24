@@ -35,6 +35,10 @@ const entries = [
   { id: 'e', type: 'note', name: 'Catatan', url: 'https://github.com' },
   { id: 'f', type: 'login', name: 'Local', url: 'http://localhost:3000' },
   { id: 'g', type: 'login', name: 'Google', url: 'https://google.com', urls: ['https://mail.google.com'] },
+  // appName is a second name field. The web matcher reads it; the extension copy
+  // did not, so the popup offered less than the app did.
+  { id: 'h', type: 'login', name: 'Nomor', appName: 'github' },
+  { id: 'i', type: 'login', name: 'Aplikasi', appName: 'netflix.com' },
 ]
 
 describe('extension and web matching agree', () => {
@@ -51,7 +55,7 @@ describe('extension and web matching agree', () => {
   it('matchesForUrl offers exactly what entryMatchesPage offers', () => {
     for (const p of pages) {
       const web = entries.filter((e) => e.type !== 'note' && entryMatchesPage(e, p)).map((e) => e.id)
-      const ext = matchesForUrl(entries, p).map((e) => e.id)
+      const ext = matchesForUrl(entries, p).map((e: { id: string }) => e.id)
       expect(ext).toEqual(web)
     }
   })
