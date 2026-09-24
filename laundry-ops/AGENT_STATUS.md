@@ -54,12 +54,12 @@ Persediaan, dan Riwayat mutasi stok.
 - Android **313 tes lulus**, 0 gagal, di varian debug dan release.
 - `AttendanceMultiBranchTest` — **6 merah** saat aturan lama dipasang kembali.
 - `SessionBranchRefreshTest` — **4 merah** saat penyegaran sesi dimatikan.
-- Worker **74 tes lulus**; tes "absensi satu karyawan dicatat per cabang" merah saat migrasi 0009
-  dikeluarkan dari daftar migrasi harness.
+- Worker **77 tes lulus**; tes "absensi satu karyawan dicatat per cabang" merah saat migrasi 0009
+  dikeluarkan dari daftar migrasi harness, dan tes dedupe jurnal merah sebelum perbaikan (2 !== 1).
 - Migrasi diterapkan ke D1 produksi `cuciin-db`. Kunci `UNIQUE (staff_email, work_date, branch_id)`
   diverifikasi langsung pada `sqlite_master`. Tabel `attendance` produksi berisi **0 baris** saat
   migrasi jalan, jadi tidak ada data yang tersentuh.
-- Worker ter-deploy: `888c2844-0327-400e-8e66-98d5134d5f26`, `/health` menjawab 200.
+- Worker ter-deploy: `2f033fb6-096d-44df-a965-90c52e7bb4f3`, `/health` menjawab 200.
 
 **Belum terbukti:** absen nyata dua cabang oleh kasir asli di HP cabang. Verifikasi emulator
 tertahan di layar login karena sandi tidak dipakai dari chat. Migrasi pada perangkat 1.10.37 asli

@@ -49,6 +49,10 @@ Server:
   `UNIQUE(staff_email, work_date, branch_id)`.
 - Penulisan absensi menjaga dua kunci sekaligus (`id` dan tuple staff/tanggal/cabang) agar perangkat
   versi lama yang masih mengirim id acak tetap diterima, bukan ditolak 409 lalu antreannya macet.
+- Jurnal absensi dicocokkan lewat (karyawan, tanggal, cabang), bukan lewat `id`. Tanpa ini, satu
+  catatan yang sama bisa muncul dua kali di perangkat: perangkat lama menulis dengan id acak,
+  perangkat baru dengan id deterministik. Hapus absensi juga membawa tanggal dan cabangnya supaya
+  baris kembaran ikut terbersihkan.
 
 ## Bukti
 
@@ -61,14 +65,15 @@ Tes penjaga yang dibuktikan merah sebelum perbaikan:
 - `AttendanceSnapshotMergeTest` — mengunci agar perubahan satu cabang tidak menghapus absensi cabang lain.
 - `cloudflare/tests/command-sync.test.mjs` — "absensi satu karyawan dicatat per cabang, bukan satu per
   hari"; merah saat migrasi 0009 dikeluarkan dari daftar migrasi harness.
+- `cloudflare/tests/attendance-journal-dedupe.test.mjs` — merah sebelum dedupe dipasang (2 !== 1).
 
-Tes Worker: 74 lulus, 0 gagal.
+Tes Worker: 77 lulus, 0 gagal. `tsc --noEmit` bersih.
 
 Migrasi diterapkan ke D1 produksi `cuciin-db`; kunci `UNIQUE (staff_email, work_date, branch_id)`
 diverifikasi langsung pada `sqlite_master`. Tabel `attendance` produksi berisi 0 baris saat migrasi
 dijalankan, jadi tidak ada data yang tersentuh.
 
-Worker ter-deploy: versi `888c2844-0327-400e-8e66-98d5134d5f26`, `/health` menjawab 200.
+Worker ter-deploy: versi `2f033fb6-096d-44df-a965-90c52e7bb4f3`, `/health` menjawab 200.
 
 ## Artefak
 
