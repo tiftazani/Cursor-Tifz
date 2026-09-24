@@ -1,3 +1,9 @@
+// Marks this isolated world as already having the Kunci content scripts. background.js
+// probes it before re-injecting: a second injection is a SyntaxError (both copies
+// declare the same top-level consts), and the discarded batch leaves the tab running
+// the old, orphaned script until it is reloaded.
+globalThis.kunciContentLoaded = true
+
 function send(msg) {
   try {
     if (!chrome.runtime?.id) return Promise.resolve(null)

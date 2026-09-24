@@ -163,6 +163,16 @@ async function injectContentScripts() {
       tabs.map(async (tab) => {
         if (!tab.id) return
         try {
+          // The manifest already injects these at document_idle. Injecting them a
+          // second time into a tab that still has them is a SyntaxError: both copies
+          // declare the same top-level consts, so the whole batch is discarded. The
+          // page keeps running the old, now-orphaned content script and autofill
+          // quietly stops working until the tab is reloaded. Reload is the fix.
+          const [probe] = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => Boolean(globalThis.kunciContentLoaded),
+          })
+          if (probe?.result) return
           await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ['content.css'] })
           await chrome.scripting.executeScript({
             target: { tabId: tab.id },
