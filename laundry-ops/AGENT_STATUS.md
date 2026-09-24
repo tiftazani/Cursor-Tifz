@@ -1,19 +1,69 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 22 September 2026 (oleh Hermes).
+Terakhir diperbarui: 24 September 2026 (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
-**Keadaan `main` per 22 Sep: `444f57f`** (rilis 1.10.37, sudah di-push ke `origin/main`).
+**Keadaan `main` per 24 Sep: `f63b779`** (rilis 1.10.38, sudah di-push ke `origin/main`).
 
 | Commit | Isi |
 | --- | --- |
+| `f63b779` | Rilis 1.10.38: absensi per cabang untuk kasir multi-cabang |
+| `2f7438d` | Papan status: rilis 1.10.37 dan akar masalah hak akses peran |
 | `444f57f` | Rilis 1.10.37: penyamaan hak akses memakai endpoint `/v1/snapshot` |
 | `8e6b54d` | Papan status: login 500 sudah terperbaiki dan terbukti di produksi, 1.10.36 keluar |
 | `2ba1172` | Rilis 1.10.36 (versionCode 55): kandidat baru setelah merge dan perbaikan login |
-| `c915e62` | Koreksi papan status: kegagalan login 500 memang bug Worker |
-| `efafa45` | Perbaiki login gagal 500 saat kuota tulis D1 habis (lihat `0o`) |
+
+## 0q. Perbaikan: kasir multi-cabang hanya bisa absen di satu cabang (24 Sep, Hermes)
+
+**Status: SELESAI di kode dan server, TERUJI, sudah di `main` (`f63b779`). BELUM dibuktikan dengan absen nyata di HP cabang.**
+
+Laporan lapangan: Aida (`aidanurita25@gmail.com`) ditugaskan ke dua cabang, tetapi di layar Absensi
+hanya muncul Bunayya dan absen di cabang kedua selalu ditolak. Pemeriksaan D1 produksi menunjukkan
+**empat kasir terdampak**, bukan hanya Aida:
+
+| Kasir | Cabang penugasan |
+| --- | --- |
+| Aida (`aidanurita25@gmail.com`) | laupay-kirab, bunayya |
+| alfin (`alfinhumendru@gmail.com`) | laupay-dayeuh, laupay-kirab, bunayya |
+| febri (`febriansyah.atmaja98@gmail.com`) | laupay-kirab, shelly |
+| ihsan (`ihsanibnuabdurrauf@gmail.com`) | bunayya, laupay-dayeuh, laupay-kirab, shelly |
+
+**Akar masalah ada di aplikasi, bukan di data.** `Session` hanya menyimpan satu `branchId`, yaitu
+cabang pertama penugasan, dan seluruh layar menyaring dengan `it.id == session.branchId`. `checkOut`
+juga menutup baris pertama hari itu tanpa melihat cabang, sehingga absen pulang di cabang kedua
+justru menutup catatan cabang pertama.
+
+**Lubang kedua yang ditemukan saat perbaikan:** sesi yang sudah login tidak pernah disegarkan saat
+daftar cabang berubah di server. Aida ditambahkan Owner ke cabang kedua 24 Sep 13:19 WIB, tetapi
+sesi yang sudah terbuka tetap memegang satu cabang sampai aplikasi dimulai ulang.
+
+**Perbaikan:** `Session` menyimpan seluruh `branchIds`; aturan absensi dipindah ke `AttendanceScope`
+dan penyegaran sesi ke `SessionScope` (keduanya baru, bisa diuji tanpa layar); `checkIn`/`checkOut`/
+`todayAttendance` menerima cabang eksplisit; migrasi `0009_attendance_per_branch.sql` mengganti
+`UNIQUE(staff_email, work_date)` menjadi `UNIQUE(staff_email, work_date, branch_id)`. Penulisan
+absensi di Worker menjaga **dua** kunci unik sekaligus agar perangkat versi lama yang masih mengirim
+id acak tetap diterima, bukan ditolak 409 lalu antreannya macet.
+
+Layar lain yang sebelumnya juga terkurung satu cabang ikut diperbaiki: Nota, Biaya, Aset, Kas,
+Persediaan, dan Riwayat mutasi stok.
+
+**Bukti:**
+
+- Android **313 tes lulus**, 0 gagal, di varian debug dan release.
+- `AttendanceMultiBranchTest` — **6 merah** saat aturan lama dipasang kembali.
+- `SessionBranchRefreshTest` — **4 merah** saat penyegaran sesi dimatikan.
+- Worker **74 tes lulus**; tes "absensi satu karyawan dicatat per cabang" merah saat migrasi 0009
+  dikeluarkan dari daftar migrasi harness.
+- Migrasi diterapkan ke D1 produksi `cuciin-db`. Kunci `UNIQUE (staff_email, work_date, branch_id)`
+  diverifikasi langsung pada `sqlite_master`. Tabel `attendance` produksi berisi **0 baris** saat
+  migrasi jalan, jadi tidak ada data yang tersentuh.
+- Worker ter-deploy: `888c2844-0327-400e-8e66-98d5134d5f26`, `/health` menjawab 200.
+
+**Belum terbukti:** absen nyata dua cabang oleh kasir asli di HP cabang. Verifikasi emulator
+tertahan di layar login karena sandi tidak dipakai dari chat. Migrasi pada perangkat 1.10.37 asli
+juga belum diuji langsung; jalur kompatibilitasnya baru diuji di harness Worker.
 
 ## 0p. Perbaikan: perubahan peran dari server tidak pernah sampai ke perangkat (22 Sep, Hermes)
 
