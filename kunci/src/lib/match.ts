@@ -43,6 +43,16 @@ export function layerFromUrl(raw: string): string {
   }
 }
 
+/**
+ * Whether a url is an Android app login, which Chrome's Android export writes as
+ *   android://<credential>@<package>/
+ * The credential is base64, so the whole url is never a usable label, and the
+ * row is not a website: it cannot be autofilled or opened. Dropped everywhere.
+ */
+export function isAndroidAppUrl(raw: string): boolean {
+  return /^android:/i.test((raw || '').trim())
+}
+
 export function domainsMatch(entryUrl: string, pageUrl: string): boolean {
   const a = hostFromUrl(entryUrl)
   const b = hostFromUrl(pageUrl)

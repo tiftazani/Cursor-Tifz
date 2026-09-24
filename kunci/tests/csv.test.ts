@@ -2,40 +2,35 @@ import { describe, expect, it } from 'vitest'
 import { entriesFromCsv, entriesToCsv, parseCsv } from '../src/lib/csv'
 
 describe('csv', () => {
-  it('names an android:// row by its site, not by the credential in the url', () => {
+  it('drops an android:// row instead of importing it', () => {
     // Chrome's Android password export writes app logins as
-    //   android://<credential>@<package>/
-    // and puts the site in the NAME column ("android.quora.com"). That name is
-    // good, so it must be kept exactly as written.
+    //   android://<base64 credential>@<package>/
+    // These are not websites: no autofill, no open, and the base64 blob buried
+    // the account when it landed in the name column. They are dropped.
     const csv = [
       'name,url,username,password,note',
       'android.quora.com,android://pbTt1KmSWiizwy2adE-D3WearPMqqj2Z19iepKP6e9_ZymMYYZHfdV1FqUaYo4SbuSLK7Z36vGc3eCMUVVfckw==@com.quora.android/,tiftazani.khara@gmail.com,sandi-1,',
     ].join('\n')
-    const [entry] = entriesFromCsv(csv, 1)
-    expect(entry?.name).toBe('android.quora.com')
-    expect(entry?.url).toBe('android://pbTt1KmSWiizwy2adE-D3WearPMqqj2Z19iepKP6e9_ZymMYYZHfdV1FqUaYo4SbuSLK7Z36vGc3eCMUVVfckw==@com.quora.android/')
-    expect(entry?.name).not.toContain('==')
+    expect(entriesFromCsv(csv, 1)).toHaveLength(0)
   })
 
-  it('uses the package name when an android row has no name column', () => {
+  it('keeps the website rows around an android row', () => {
+    // The row above and below a dropped one must still come through, and the
+    // import must not be thrown off by the android url being skipped.
     const csv = [
       'name,url,username,password,note',
-      ',android://abc123@com.traveloka.android/,t@x.com,sandi-1,',
+      'Amazon,https://www.amazon.com,t@x.com,sandi-1,',
+      ',android://abc123@com.traveloka.android/,t@x.com,sandi-2,',
+      'Google,https://accounts.google.com,t@x.com,sandi-3,',
     ].join('\n')
-    const [entry] = entriesFromCsv(csv, 1)
-    expect(entry?.name).toBe('com.traveloka.android')
+    const entries = entriesFromCsv(csv, 1)
+    expect(entries.map((e) => e.name)).toEqual(['Amazon', 'Google'])
+    expect(entries.map((e) => e.password)).toEqual(['sandi-1', 'sandi-3'])
   })
 
-  it('falls back to the site for an android row with no name, never the url', () => {
-    // A url that is one long credential is never a usable display name. The
-    // summary showed the whole base64 blob, with the account buried inside it.
-    const csv = [
-      'name,url,username,password,note',
-      ',android://pbTt1KmSWiizwy2adE-D3WearPMqqj2Z19iepKP6e9_ZymMYYZHfdV1FqUaYo4SbuSLK7Z36vGc3eCMUVVfckw==@com.quora.android/,t@x.com,sandi-1,',
-    ].join('\n')
-    const [entry] = entriesFromCsv(csv, 1)
-    expect(entry?.name).toBe('com.quora.android')
-    expect(entry?.name).not.toContain('==')
+  it('drops an android row written in a different case', () => {
+    const csv = ['name,url,username,password', 'App,ANDROID://abc@com.x.android/,t@x.com,sandi-1'].join('\n')
+    expect(entriesFromCsv(csv, 1)).toHaveLength(0)
   })
 
   it('never uses a raw URL as the display name', () => {

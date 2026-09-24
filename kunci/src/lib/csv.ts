@@ -1,6 +1,6 @@
 import type { Entry } from '../types'
 import { newId } from './id'
-import { hostFromUrl } from './match'
+import { hostFromUrl, isAndroidAppUrl } from './match'
 
 export const SHEET_HEADERS = ['name', 'type', 'url', 'username', 'password', 'app', 'notes', 'totp', 'tags'] as const
 
@@ -61,21 +61,6 @@ function at(row: string[], index: number): string {
   return (row[index] ?? '').trim()
 }
 
-/**
- * The host part of an android:// url, which Chrome's Android export writes as
- *   android://<credential>@<package>/
- * The credential is base64, so the whole url is never a usable name: it buried
- * the account inside a wall of base64 in the summary. Falls back to the host of
- * the url, then to the account, so a name is always short and readable.
- */
-export function androidPackage(url: string): string | null {
-  if (!/^android:/i.test(url)) return null
-  const at = url.lastIndexOf('@')
-  const after = (at >= 0 ? url.slice(at + 1) : url.replace(/^android:\/\//i, '')).replace(/\/+$/, '')
-  const host = hostFromUrl(`https://${after}`)
-  return host || after || null
-}
-
 /** A name that is one long credential or a raw url is never usable as a label. */
 function unusableName(raw: string): boolean {
   if (!raw) return true
@@ -88,15 +73,12 @@ function unusableName(raw: string): boolean {
  * A readable name for a row.
  *
  * Most rows already have a good name and must keep it exactly. Only a name that
- * is unusable gets replaced: Chrome's Android export writes app logins as
- *   android://<credential>@<package>/
- * and when the name column is empty the whole base64 url was used instead, so
- * the summary showed a wall of base64 with the account buried in the middle.
+ * is unusable gets replaced. Chrome's Android export writes the whole base64
+ * login url into the name column when the name is empty, which showed up as a
+ * wall of base64 with the account buried in the middle.
  */
 function displayName(rawName: string, url: string): string {
   if (!unusableName(rawName)) return rawName
-  const pkg = androidPackage(url)
-  if (pkg) return pkg
   const host = hostFromUrl(rawName) ?? hostFromUrl(url)
   if (host) return host
   return rawName
@@ -133,6 +115,11 @@ export function entriesFromRows(rows: string[][], now = Date.now()): Entry[] {
   for (const row of rows.slice(1)) {
     const name = displayName(at(row, nameI), at(row, urlI)) || at(row, appI) || 'Tanpa nama'
     const url = at(row, urlI)
+    // Android app logins are dropped, not imported. Chrome's Android export
+    // writes them as android://<base64 credential>@<package>/, which is not a
+    // website: it cannot be autofilled, opened, or grouped. They were the bulk
+    // of the unreadable entries in the summary.
+    if (isAndroidAppUrl(url)) continue
     const username = at(row, userI)
     const password = at(row, passI)
     const notes = at(row, notesI)

@@ -26,6 +26,7 @@ import { localToken } from '../lib/recovery-api'
 import { cloudGetVault, cloudPutVault, emailRecoveryKey, isPublicHost, logoutSession } from '../lib/cloud'
 import { resolveAutoLockSeconds } from '../lib/autolock'
 import { matchAppName } from '../lib/capture'
+import { moveAndroidToTrash } from '../lib/cleanup'
 import { isPreviewUi, previewVault } from '../lib/preview-vault'
 
 interface VaultApi {
@@ -61,6 +62,8 @@ interface VaultApi {
   restoreEntry: (id: string) => Promise<void>
   purgeEntry: (id: string) => Promise<void>
   emptyTrash: () => Promise<void>
+  /** Move every Android app login to the trash. Returns how many moved. */
+  removeAndroidEntries: () => Promise<number>
   touchEntry: (id: string) => Promise<void>
   updateSettings: (patch: Partial<VaultSettings>) => Promise<void>
   changeMasterPassword: (current: string, next: string) => Promise<void>
@@ -434,6 +437,21 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     const next = { ...current, trash: [] }
     setVault(next)
     await persist(next)
+  }, [persist])
+
+  /**
+   * Remove every entry saved from an Android app, in one go.
+   * They go to the trash, not straight out, so a mistake is recoverable.
+   * Returns how many were moved.
+   */
+  const removeAndroidEntries = useCallback(async (): Promise<number> => {
+    const current = vaultRef.current
+    if (!current) return 0
+    const { vault: next, moved } = moveAndroidToTrash(current)
+    if (!moved) return 0
+    setVault(next)
+    await persist(next)
+    return moved
   }, [persist])
 
   const touchEntry = useCallback(
@@ -875,6 +893,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       restoreEntry,
       purgeEntry,
       emptyTrash,
+      removeAndroidEntries,
       touchEntry,
       updateSettings,
       changeMasterPassword,
@@ -923,6 +942,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       restoreEntry,
       purgeEntry,
       emptyTrash,
+      removeAndroidEntries,
       touchEntry,
       updateSettings,
       changeMasterPassword,

@@ -4,6 +4,7 @@ import { isStrongMaster } from '../lib/strength'
 import { AUTO_LOCK_OPTIONS, resolveAutoLockSeconds } from '../lib/autolock'
 import { IosInstallGuide } from '../components/IosInstallCard'
 import { cloudHasSession, requestCloudGate } from '../lib/cloud'
+import { isAndroidEntry } from '../lib/cleanup'
 import { useVault } from '../state/VaultContext'
 
 export function SettingsView() {
@@ -19,12 +20,14 @@ export function SettingsView() {
     logoutPublic,
     hasRecoveryWrap,
     recoveryEmail,
+    removeAndroidEntries,
   } = useVault()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [next2, setNext2] = useState('')
   const [hintDraft, setHintDraft] = useState(hint)
   const [msg, setMsg] = useState('')
+  const [cleanMsg, setCleanMsg] = useState('')
   const [cloudSession, setCloudSession] = useState(false)
   useEffect(() => {
     let live = true
@@ -37,6 +40,8 @@ export function SettingsView() {
   }, [])
   if (!vault) return null
   const s = vault.settings
+  const androidCount = vault.entries.filter(isAndroidEntry).length
+  const trashCount = vault.trash.length
 
   async function onChangeMaster() {
     setMsg('')
@@ -166,6 +171,44 @@ export function SettingsView() {
         <button type="button" className="btn" onClick={() => void onChangeMaster()}>
           Ganti kata sandi induk
         </button>
+      </div>
+
+      <div className="card stack">
+        <h3>Bersihkan</h3>
+        <p className="muted">
+          Login aplikasi Android dari impor Chrome tidak lagi didukung. Baris baru tidak akan diimpor lagi. Entri lama
+          yang masih ada bisa dipindahkan ke Sampah di sini, jadi masih bisa dikembalikan.
+        </p>
+        {androidCount > 0 ? (
+          <>
+            <p className="muted">
+              Ada {androidCount} entri aplikasi Android di brankas ini.
+              {trashCount > 0 ? ` Sampah saat ini berisi ${trashCount} entri, tidak ikut terhapus.` : ''}
+            </p>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Pindahkan ${androidCount} entri aplikasi Android ke Sampah? Kamu masih bisa mengembalikannya dari Sampah.`,
+                  )
+                ) {
+                  void removeAndroidEntries().then((moved) => {
+                    setCleanMsg(
+                      moved ? `${moved} entri aplikasi Android dipindahkan ke Sampah.` : 'Tidak ada yang dipindahkan.',
+                    )
+                  })
+                }
+              }}
+            >
+              Pindahkan {androidCount} entri Android ke Sampah
+            </button>
+          </>
+        ) : (
+          <p className="muted">Tidak ada entri aplikasi Android di brankas ini.</p>
+        )}
+        {cleanMsg ? <p className="muted">{cleanMsg}</p> : null}
       </div>
 
       <div className="card stack">
