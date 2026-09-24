@@ -239,17 +239,65 @@ function journalEntityId(dataset:string,row:JsonRecord):string {
   return str(row,"id");
 }
 
+/**
+ * Identitas absensi: (karyawan, tanggal, cabang). `null` bila salah satunya kosong.
+ *
+ * Absensi sengaja tidak dikenali dari `id`. Dua perangkat bisa memakai skema id berbeda untuk
+ * catatan yang sama: perangkat 1.10.37 ke bawah memakai id acak, perangkat 1.10.38 memakai id
+ * deterministik per (cabang, tanggal, karyawan). Di tabel keduanya menjadi satu baris karena
+ * `UNIQUE(staff_email, work_date, branch_id)` menangkap yang kedua, tetapi di jurnal tercatat
+ * sebagai dua `entity_id` berbeda.
+ */
+function attendanceIdentity(row:JsonRecord):string|null {
+  const email=str(row,"staffEmail").toLowerCase();
+  const workDate=str(row,"workDate");
+  const branchId=str(row,"branchId");
+  if(!email || !workDate || !branchId) return null;
+  return `${email}|${workDate}|${branchId}`;
+}
+
+/**
+ * Menyisakan satu baris per (karyawan, tanggal, cabang).
+ *
+ * Dipakai sebagai jaring pengaman: snapshot lama yang sudah telanjur memuat baris kembar dari
+ * jurnal dengan dua skema id dibersihkan saat dibaca. Yang dipertahankan adalah catatan paling
+ * lengkap: baris yang sudah punya jam pulang menang atas yang belum, dan bila keduanya sama
+ * lengkap, yang jam masuknya paling akhir.
+ */
+function dedupeAttendance(rows:JsonRecord[]):JsonRecord[] {
+  const best=new Map<string,JsonRecord>();
+  const passthrough:JsonRecord[]=[];
+  const lebihLengkap=(baru:JsonRecord,lama:JsonRecord):boolean=>{
+    const pulangBaru=num(baru,"checkOutAtMs") > 0;
+    const pulangLama=num(lama,"checkOutAtMs") > 0;
+    if(pulangBaru!==pulangLama) return pulangBaru;
+    return num(baru,"checkInAtMs") >= num(lama,"checkInAtMs");
+  };
+  for(const row of rows) {
+    const key=attendanceIdentity(row);
+    if(!key) { passthrough.push(row); continue; }
+    const previous=best.get(key);
+    if(!previous || lebihLengkap(row,previous)) best.set(key,row);
+  }
+  return [...passthrough,...best.values()];
+}
+
 export function applyJournalToSnapshot(base:JsonRecord,changes:SnapshotJournalChange[],revision:number):JsonRecord {
   const snapshot:JsonRecord={...base};
   for(const change of changes) {
     const dataset=CHANGE_DATASETS[change.entity_type];
     if(!dataset) continue;
-    const rows=list(snapshot,dataset).filter(row=>journalEntityId(dataset,row)!==change.entity_id);
-    if(change.operation!=="delete" && change.payload_json) {
-      const payload=JSON.parse(change.payload_json) as unknown;
-      if(payload && typeof payload==="object" && !Array.isArray(payload)) rows.push(payload as JsonRecord);
-    }
-    snapshot[dataset]=rows;
+    const parsed=change.payload_json ? JSON.parse(change.payload_json) as unknown : null;
+    const incoming=parsed && typeof parsed==="object" && !Array.isArray(parsed) ? parsed as JsonRecord : null;
+    const attendanceKey=dataset==="attendance" && incoming ? attendanceIdentity(incoming) : null;
+    const rows=list(snapshot,dataset).filter(row=>{
+      if(journalEntityId(dataset,row)===change.entity_id) return false;
+      // Id berbeda, catatan sama: jangan sisakan baris kembar.
+      if(attendanceKey && attendanceIdentity(row)===attendanceKey) return false;
+      return true;
+    });
+    if(change.operation!=="delete" && incoming) rows.push(incoming);
+    snapshot[dataset]=dataset==="attendance" ? dedupeAttendance(rows) : rows;
     if(change.entity_type==="nota" || change.entity_type==="order") {
       const deleted=new Set(listOfStrings(snapshot.deletedNotaIds));
       if(change.operation==="delete") deleted.add(change.entity_id); else deleted.delete(change.entity_id);
@@ -274,6 +322,10 @@ export async function materializedSnapshot(env:Env,row?:{payload_json:string}|nu
     if(changes.length<500) break;
   }
   snapshot.syncRevision=revision;
+  // Snapshot tersimpan bisa memuat baris absensi kembar dari jurnal dengan dua skema id
+  // (lama: acak, baru: deterministik per cabang/tanggal). Bila jurnalnya tidak lagi bertambah,
+  // dedupe di jalur perubahan tidak pernah berjalan, jadi pembersihannya dilakukan di sini.
+  snapshot.attendance=dedupeAttendance(list(snapshot,"attendance"));
   // Snapshot hasil rekonstruksi belum tentu punya updatedAt: kalau baris sync_snapshots
   // kosong, snapshot dibangun dari {} sehingga updatedAt bernilai 0. Perangkat menolak
   // snapshot dengan updatedAt lebih tua daripada state lokalnya (CuciinStore.applyCloud),
