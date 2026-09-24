@@ -121,7 +121,10 @@ function usernameFieldNear(password) {
   const scope = form ? [...form.querySelectorAll('input')] : [...document.querySelectorAll('input')]
   const candidates = scope.filter(isUsernameInput)
   const idx = scope.indexOf(password)
-  return candidates.reverse().find((el) => scope.indexOf(el) < idx) || candidates[0] || null
+  // reverse() mutates, so the fallback below used to return the LAST username box on
+  // the page instead of the nearest one. Search a copy, and fall back to the first
+  // candidate in document order, which is the one closest to the top of the form.
+  return [...candidates].reverse().find((el) => scope.indexOf(el) < idx) || candidates[0] || null
 }
 
 function kindAround(el) {
