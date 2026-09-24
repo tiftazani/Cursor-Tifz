@@ -29,6 +29,30 @@
     return `${field.type} ${field.name} ${field.id} ${field.autocomplete} ${field.placeholder} ${field.ariaLabel} ${field.inputMode || ''}`.toLowerCase()
   }
 
+  /** Field text as written, before lowercasing, so camelCase can be split. */
+  function rawBlob(field) {
+    return `${field.type} ${field.name} ${field.id} ${field.autocomplete} ${field.placeholder} ${field.ariaLabel} ${field.inputMode || ''}`
+  }
+
+  /**
+   * Field text with word separators restored and lowercased, so \b can match.
+   *
+   * "new_password", "newPassword" and "confirmPassword" are single "words" to a
+   * regex: underscore is a word character and a capital letter does not break \b.
+   * Only the hyphenated spelling matched, so a signup form's new-password box read
+   * as a CURRENT password box and the account's existing password was offered for
+   * it. Split BEFORE lowercasing: "newPassword" is already "newpassword" after.
+   *
+   * Mirrors words() in src/lib/login-intent.ts.
+   */
+  function words(text) {
+    return text
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/[_\-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .toLowerCase()
+  }
+
   function ac(field) {
     return (field.autocomplete || '').toLowerCase().replace(/[\s_]+/g, '-')
   }
@@ -89,8 +113,8 @@
     const auto = ac(field)
     if (auto === 'new-password') return false
     if (auto === 'current-password') return true
-    const text = blob(field)
-    if (/\b(new|baru|confirm|konfirmasi|ulang|repeat)\b/.test(text)) return false
+    const text = words(rawBlob(field))
+    if (/\b(new|baru|confirm|confirmation|konfirmasi|ulang|ulangi|repeat|retype|verifikasi)\b/.test(text)) return false
     return true
   }
 
@@ -98,7 +122,7 @@
     if ((field.type || '').toLowerCase() !== 'password') return false
     const auto = ac(field)
     if (auto === 'new-password') return true
-    return /\b(new|baru|confirm|konfirmasi|ulang|repeat|create)\b/.test(blob(field))
+    return /\b(new|baru|confirm|confirmation|konfirmasi|ulang|ulangi|repeat|retype|create|buat)\b/.test(words(rawBlob(field)))
   }
 
   function classifyCredentialForm(form) {
