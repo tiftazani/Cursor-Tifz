@@ -30,6 +30,24 @@ export interface StrengthResult {
   reasons: string[]
 }
 
+/**
+ * Whether the password is built from a commonly leaked one.
+ *
+ * An exact match is always a hit. A substring only counts when the common word makes
+ * up most of the password: `monkey` inside `monkey123` is the whole password plus a
+ * tail, but `password` inside `MyPasswordIsLong-2026!` is 8 characters of a 23
+ * character password, and calling that "commonly used" is wrong. Length is the guard
+ * because the score already rewards it.
+ */
+export function isCommonPassword(password: string): boolean {
+  const p = password.toLowerCase()
+  return COMMON.some((c) => {
+    if (p === c) return true
+    if (!p.includes(c)) return false
+    return c.length * 2 >= p.length
+  })
+}
+
 export function passwordStrength(password: string): StrengthResult {
   const reasons: string[] = []
   if (!password) return { score: 0, label: 'Kosong', reasons: ['Belum ada kata sandi'] }
@@ -56,7 +74,7 @@ export function passwordStrength(password: string): StrengthResult {
   if (/0123|1234|2345|abcd|qwer|asdf/i.test(password)) reasons.push('Pola berurutan terdeteksi')
 
   const lowered = password.toLowerCase()
-  if (COMMON.some((c) => lowered === c || lowered.includes(c))) {
+  if (isCommonPassword(lowered)) {
     reasons.push('Termasuk kata sandi yang umum dipakai')
     score -= 2
   }
