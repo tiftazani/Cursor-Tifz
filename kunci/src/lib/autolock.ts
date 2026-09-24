@@ -12,6 +12,9 @@ export const AUTO_LOCK_OPTIONS = [
 
 const ALLOWED = new Set<number>(AUTO_LOCK_OPTIONS.map((o) => o.seconds))
 
+/** The longest "auto-lock after being idle" option, used to snap anything bigger. */
+const LONGEST_IDLE = Math.max(...AUTO_LOCK_OPTIONS.map((o) => o.seconds).filter((s) => s > 0))
+
 export function resolveAutoLockSeconds(settings: {
   autoLockSeconds?: number
   autoLockMinutes?: number
@@ -34,6 +37,9 @@ function snapLegacySeconds(value: number): number {
   if (value <= 22) return 15
   if (value <= 45) return 30
   if (value <= 180) return 60
-  if (value <= 600) return 300
-  return AUTO_LOCK_NEVER
+  // Anything longer snaps DOWN to the longest idle option. It used to return
+  // AUTO_LOCK_NEVER, so a vault saved with "10 minutes" (a very common legacy
+  // value, stored as autoLockMinutes: 10) came back as "never lock" — the exact
+  // opposite of what was chosen. Only an explicit 0 means never.
+  return LONGEST_IDLE
 }

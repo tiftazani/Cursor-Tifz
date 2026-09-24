@@ -40,4 +40,14 @@ describe('search', () => {
     expect(searchEntries(sample, 'mail').map((e) => e.id)).toEqual(['2'])
     expect(searchEntries(sample, '')).toHaveLength(2)
   })
+
+  it('hands back a copy so sorting cannot reorder the vault', () => {
+    // The vault list sorts whatever searchEntries returns. Returning the vault's
+    // own array meant every render sorted the saved data in place, and the new
+    // order was then persisted.
+    const result = searchEntries(sample, '')
+    expect(result).not.toBe(sample)
+    result.sort((a, b) => (a.id < b.id ? 1 : -1))
+    expect(sample.map((e) => e.id)).toEqual(['1', '2'])
+  })
 })

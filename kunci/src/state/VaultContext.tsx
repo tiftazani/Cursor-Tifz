@@ -185,50 +185,62 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     const key = keyRef.current
     const blob = blobRef.current
     if (!key || !blob) throw new Error('Brankas terkunci')
-    persistChain.current = persistChain.current.then(async () => {
-      const updated = await persistWithKey(next, key, blob)
-      blobRef.current = updated
-      await vaultDb.setBlob(updated)
-      syncExtension(updated)
-      try {
-        await cloudPutVault(updated)
-      } catch (err) {
-        toast.push(err instanceof Error ? err.message : 'Gagal sinkron cloud', 'warn')
-      }
-      const mode = next.settings.autoBackup
-      const shouldSnap =
-        reason === 'manual' ||
-        reason === 'hourly' ||
-        reason === 'daily' ||
-        (reason === 'auto' && mode === 'on-change')
-      if (shouldSnap) {
-        const snapReason: StoredBackup['reason'] =
-          reason === 'manual' || reason === 'hourly' || reason === 'daily' ? reason : 'auto'
-        const list = await pushIdbBackup(updated, snapReason, next.settings.backupKeep)
-        setBackups(list)
-        const dir = await vaultDb.getBackupDir()
-        if (dir) {
-          try {
-            await writeFolderBackup(dir, updated, next.settings.backupKeep)
-          } catch {
-            /* folder optional */
-          }
-        }
-        const stamped = {
-          ...next,
-          settings: { ...next.settings, lastAutoBackupAt: Date.now() },
-        }
-        const again = await persistWithKey(stamped, key, updated)
-        blobRef.current = again
-        await vaultDb.setBlob(again)
-        syncExtension(again)
+    persistChain.current = persistChain.current
+      .then(async () => {
+        const updated = await persistWithKey(next, key, blob)
+        blobRef.current = updated
+        await vaultDb.setBlob(updated)
+        syncExtension(updated)
         try {
-          await cloudPutVault(again)
+          await cloudPutVault(updated)
         } catch (err) {
           toast.push(err instanceof Error ? err.message : 'Gagal sinkron cloud', 'warn')
         }
-      }
-    })
+        const mode = next.settings.autoBackup
+        const shouldSnap =
+          reason === 'manual' ||
+          reason === 'hourly' ||
+          reason === 'daily' ||
+          (reason === 'auto' && mode === 'on-change')
+        if (shouldSnap) {
+          const snapReason: StoredBackup['reason'] =
+            reason === 'manual' || reason === 'hourly' || reason === 'daily' ? reason : 'auto'
+          const list = await pushIdbBackup(updated, snapReason, next.settings.backupKeep)
+          setBackups(list)
+          const dir = await vaultDb.getBackupDir()
+          if (dir) {
+            try {
+              await writeFolderBackup(dir, updated, next.settings.backupKeep)
+            } catch {
+              /* folder optional */
+            }
+          }
+          const stamped = {
+            ...next,
+            settings: { ...next.settings, lastAutoBackupAt: Date.now() },
+          }
+          const again = await persistWithKey(stamped, key, updated)
+          blobRef.current = again
+          await vaultDb.setBlob(again)
+          syncExtension(again)
+          try {
+            await cloudPutVault(again)
+          } catch (err) {
+            toast.push(err instanceof Error ? err.message : 'Gagal sinkron cloud', 'warn')
+          }
+          // The stamp has to reach the React state too. The auto-backup scheduler
+          // reads it from vaultRef, so writing it to storage alone meant the
+          // guard never saw it: "hourly" took a snapshot every 60 seconds.
+          vaultRef.current = stamped
+          setVault(stamped)
+        }
+      })
+      .catch((err) => {
+        // Without this the chain stayed rejected forever: one failure (a full
+        // IndexedDB quota, a write during a page clear) made every later save a
+        // no-op while the UI kept showing the change as saved.
+        toast.push(err instanceof Error ? `Gagal menyimpan: ${err.message}` : 'Gagal menyimpan', 'danger')
+      })
     await persistChain.current
   }, [toast])
 
@@ -237,26 +249,40 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       void (async () => {
         const current = blobRef.current
         if (current && (current.savedAt ?? 0) >= (incoming.savedAt ?? 0)) return
+        const key = keyRef.current
+        // Decrypt BEFORE adopting anything. This used to write the incoming blob to
+        // IndexedDB and the cloud first and only then try the key, swallowing the
+        // failure. When the two sides held different DEKs (a second browser did the
+        // v1→v2 migration), that left blobRef pointing at a blob this key cannot
+        // open while `vault` still held the old plaintext — and the next save wrote
+        // the old key's ciphertext into the new blob's salt/wrap, producing a vault
+        // that opened with NEITHER password. The blob is now only adopted once this
+        // key has proven it can read it.
+        if (key) {
+          try {
+            const next = normalizeVault(await unlockWithDek(incoming, key))
+            blobRef.current = incoming
+            setRecoveryWrapReady(hasRecoveryWrap(incoming))
+            vaultRef.current = next
+            setVault(next)
+            await vaultDb.setBlob(incoming)
+            await cloudPutVault(incoming).catch(() => undefined)
+          } catch {
+            // A different key owns this blob. Keep the local copy as the source of
+            // truth rather than overwriting it with something we cannot read.
+            toast.push('Brankas di cloud diubah dari perangkat lain. Buka ulang dengan kata sandi induk yang baru.', 'warn')
+          }
+          return
+        }
         blobRef.current = incoming
         setRecoveryWrapReady(hasRecoveryWrap(incoming))
         await vaultDb.setBlob(incoming)
         await cloudPutVault(incoming).catch(() => undefined)
-        const key = keyRef.current
-        if (key) {
-          try {
-            const next = normalizeVault(await unlockWithDek(incoming, key))
-            vaultRef.current = next
-            setVault(next)
-          } catch {
-            /* dek changed */
-          }
-        } else {
-          setStatus((prev) => (prev === 'setup' ? 'locked' : prev))
-        }
+        setStatus((prev) => (prev === 'setup' ? 'locked' : prev))
       })()
     })
     return stop
-  }, [])
+  }, [toast])
 
   const setup = useCallback(
     async (password: string, newHint: string) => {

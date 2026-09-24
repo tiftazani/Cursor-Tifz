@@ -83,8 +83,8 @@ function json(body: unknown, status = 200, extraHeaders: Record<string, string> 
 
 function originAllowed(req: Request): boolean {
   const origin = req.headers.get('origin')
-  const ua = req.headers.get('user-agent') || ''
-  if (ua.startsWith('Kunci-local/')) return true
+  // A missing Origin means a non-browser caller: curl, the helper daemon, or the
+  // extension's own service worker. A web page cannot omit it.
   if (!origin) return req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
   return isAllowedKunciOrigin(origin, req.headers.get('host') || '')
 }

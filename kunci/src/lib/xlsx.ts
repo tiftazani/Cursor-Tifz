@@ -221,11 +221,16 @@ function parseSharedStrings(xml: string): string[] {
   return out
 }
 
-function parseSheetRows(xml: string, shared: string[]): string[][] {
+export function parseSheetRows(xml: string, shared: string[]): string[][] {
   const grid = new Map<string, string>()
   let maxRow = 0
   let maxCol = 0
-  const cells = xml.match(/<c\b[^>]*>[\s\S]*?<\/c>/g) || []
+  // A styled-but-empty cell is written self-closing: <c r="E3" s="7"/>. Matching
+  // only <c ...>...</c> skipped past it and consumed the NEXT cell's closing tag,
+  // which shifted every following value one column left: the "Title" header landed
+  // under "URL" and the file's own column names stopped being found, so the whole
+  // import silently produced 0 entries. Both forms are matched here.
+  const cells = xml.match(/<c\b[^>]*\/>|<c\b[^>]*>[\s\S]*?<\/c>/g) || []
   for (const cell of cells) {
     const ref = cell.match(/\br="([A-Z]+\d+)"/)?.[1]
     if (!ref) continue

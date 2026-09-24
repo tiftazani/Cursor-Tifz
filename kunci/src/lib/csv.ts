@@ -98,13 +98,41 @@ export function sheetRowFromEntry(entry: Entry): string[] {
   ]
 }
 
+const NAME_COLS = ['name', 'title', 'nama']
+const URL_COLS = ['url', 'uri', 'website', 'situs', 'login_uri', 'login uri']
+const USER_COLS = ['username', 'user', 'pengguna', 'login_username', 'login username']
+const PASS_COLS = ['password', 'pass', 'kata sandi', 'katasandi', 'login_password', 'login password']
+
+/**
+ * Finds the real header row.
+ *
+ * Exports from Excel and Google Sheets often put a title row above the header:
+ * a real file of the user's had "Passwords-data" in A1 and the actual header on
+ * row 2. Assuming row 1 was the header found no columns at all, so every data row
+ * failed the "is this row empty" check and the import returned 0 entries with no
+ * error — the file looked imported and nothing arrived.
+ *
+ * A header is recognised by naming at least one identity column and one secret
+ * column, so a title row or a block of notes cannot be mistaken for it.
+ */
+export function headerRowIndex(rows: string[][]): number {
+  const limit = Math.min(rows.length, 10)
+  for (let i = 0; i < limit; i++) {
+    const header = rows[i]!.map((h) => h.trim().toLowerCase())
+    const has = (names: string[]) => header.some((h) => names.includes(h))
+    if (has(NAME_COLS) && (has(URL_COLS) || has(USER_COLS) || has(PASS_COLS))) return i
+  }
+  return -1
+}
+
 export function entriesFromRows(rows: string[][], now = Date.now()): Entry[] {
-  if (rows.length < 2) return []
-  const header = rows[0]!.map((h) => h.trim())
-  const nameI = col(header, ['name', 'title', 'nama'])
-  const urlI = col(header, ['url', 'uri', 'website', 'situs', 'login_uri', 'login uri'])
-  const userI = col(header, ['username', 'user', 'pengguna', 'login_username', 'login username'])
-  const passI = col(header, ['password', 'pass', 'kata sandi', 'katasandi', 'login_password', 'login password'])
+  const headerAt = headerRowIndex(rows)
+  if (headerAt < 0) return []
+  const header = rows[headerAt]!.map((h) => h.trim())
+  const nameI = col(header, NAME_COLS)
+  const urlI = col(header, URL_COLS)
+  const userI = col(header, USER_COLS)
+  const passI = col(header, PASS_COLS)
   const notesI = col(header, ['notes', 'note', 'catatan'])
   const totpI = col(header, ['totp', 'login_totp', 'otp'])
   const appI = col(header, ['app', 'application', 'aplikasi', 'appname'])
@@ -112,7 +140,7 @@ export function entriesFromRows(rows: string[][], now = Date.now()): Entry[] {
   const tagsI = col(header, ['tags', 'tag', 'label'])
 
   const out: Entry[] = []
-  for (const row of rows.slice(1)) {
+  for (const row of rows.slice(headerAt + 1)) {
     const name = displayName(at(row, nameI), at(row, urlI)) || at(row, appI) || 'Tanpa nama'
     const url = at(row, urlI)
     // Android app logins are dropped, not imported. Chrome's Android export

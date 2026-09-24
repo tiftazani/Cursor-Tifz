@@ -2,7 +2,9 @@ import type { Entry } from '../types'
 
 export function searchEntries(entries: Entry[], query: string): Entry[] {
   const q = query.trim().toLowerCase()
-  if (!q) return entries
+  // A copy, always: callers sort the result, and sorting the vault's own array in
+  // place reordered the saved data on every render of the vault list.
+  if (!q) return [...entries]
   const parts = q.split(/\s+/).filter(Boolean)
   return entries.filter((e) => {
     const hay = [

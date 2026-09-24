@@ -41,11 +41,50 @@ const MIME = {
   '.ico': 'image/x-icon',
 }
 
+/** Origins that may talk to this daemon. Anything else is a web page, not Kunci. */
+const LOOPBACK_ORIGINS = new Set([
+  'http://127.0.0.1:8780',
+  'http://localhost:8780',
+  'http://127.0.0.1:5173',
+  'http://localhost:5173',
+  'http://127.0.0.1:4173',
+  'http://localhost:4173',
+  'http://[::1]:8780',
+  // The unpacked extension polls /health. Its id is fixed by the key in
+  // manifest.json, so this stays stable across reloads.
+  'chrome-extension://djiblgfjmjhjebgacdljbdoibbancniad',
+])
+
+/**
+ * Whether an Origin header belongs to the local Kunci app.
+ *
+ * Reflecting whatever Origin arrives let any website the user visited read
+ * /api/local-token (the helper token, which then opens POST /fill) and drive the
+ * cloud proxy. Only loopback origins are echoed back; everything else gets no
+ * CORS headers at all, so the browser refuses to hand the response to the page.
+ */
+function localOrigin(req) {
+  const origin = req.headers.origin
+  if (!origin) return null
+  if (LOOPBACK_ORIGINS.has(origin)) return origin
+  try {
+    const o = new URL(origin)
+    if (o.protocol === 'http:' && (o.hostname === '127.0.0.1' || o.hostname === 'localhost' || o.hostname === '[::1]')) {
+      return origin
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
 function cors(req, res) {
-  const origin = req.headers.origin || '*'
+  const origin = localOrigin(req)
+  if (!origin) return
   res.setHeader('Access-Control-Allow-Origin', origin)
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Kunci-Token')
+  // Only a verified loopback origin may skip the Private Network Access preflight.
   res.setHeader('Access-Control-Allow-Private-Network', 'true')
   res.setHeader('Vary', 'Origin')
 }
@@ -62,10 +101,29 @@ async function loadToken() {
   return token
 }
 
+/** The largest body any Kunci endpoint sends or forwards: a vault blob, not a file upload. */
+const MAX_BODY_BYTES = 2 * 1024 * 1024
+
+/**
+ * Reads a request body, refusing anything oversized.
+ *
+ * The daemon listens on loopback, so without a cap a single POST (or a few in
+ * parallel) can push it into swap and let launchd restart it mid-write. Measured
+ * before this cap: one 64 MB body took RSS from 64 MB to 403 MB and it stayed.
+ */
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = []
-    req.on('data', (c) => chunks.push(c))
+    let size = 0
+    req.on('data', (c) => {
+      size += c.length
+      if (size > MAX_BODY_BYTES) {
+        reject(new Error('Body terlalu besar'))
+        req.destroy()
+        return
+      }
+      chunks.push(c)
+    })
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
     req.on('error', reject)
   })
@@ -106,11 +164,15 @@ function workerError(status, body) {
 async function proxyCloud(req, res, url) {
   try {
     const dest = `${CLOUD_ORIGIN}${url.pathname}${url.search}`
+    // Forward the caller's real Origin. Rewriting it to the cloud origin made the
+    // worker's allowlist meaningless for anything routed through the daemon.
+    // A missing Origin means a non-browser caller (curl, a script); those cannot
+    // be a web page, so the cloud origin stands in for them.
+    const realOrigin = req.headers.origin
     const headers = {
-      Origin: CLOUD_ORIGIN,
-      Referer: `${CLOUD_ORIGIN}/`,
+      Origin: realOrigin || CLOUD_ORIGIN,
+      Referer: `${realOrigin || CLOUD_ORIGIN}/`,
       Accept: 'application/json',
-      'User-Agent': 'Kunci-local/1',
     }
     if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type']
     if (req.headers.authorization) headers.Authorization = req.headers.authorization
