@@ -128,6 +128,13 @@ export function loginTitleFromUrl(raw) {
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
+/** Mirrors samePrimaryHost in src/lib/capture.ts. */
+function samePrimaryHost(entry, host) {
+  if (!host) return true
+  const own = hostFromUrl(entry.url || (entry.urls || [])[0] || '')
+  return own === host
+}
+
 export function decideLoginSave(entries, capture, neverHosts = []) {
   const username = (capture.username || '').trim()
   const password = capture.password || ''
@@ -135,7 +142,11 @@ export function decideLoginSave(entries, capture, neverHosts = []) {
   if (isKunciAppUrl(capture.url)) return { action: 'skip', reason: 'kunci-app' }
   const host = hostFromUrl(capture.url)
   if (host && neverHosts.includes(host)) return { action: 'skip', reason: 'never' }
-  const siteLogins = (entries || []).filter((e) => e.type !== 'note' && matchesForUrl([e], capture.url).length)
+  // Mirrors decideLoginSave in src/lib/capture.ts: identity comes from the
+  // entry's own host, never from its whole urls list.
+  const siteLogins = (entries || []).filter(
+    (e) => e.type !== 'note' && matchesForUrl([e], capture.url).length && samePrimaryHost(e, host),
+  )
   // One site can ask for a password in more than one place. Prefer entries saved
   // from this same path, or saving a payment PIN would overwrite the site login.
   const layer = layerFromUrl(capture.url)

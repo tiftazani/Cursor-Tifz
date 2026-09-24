@@ -1,6 +1,6 @@
 import type { Entry } from '../types'
 import { newId } from './id'
-import { hostFromUrl, layerFromUrl } from './match'
+import { hostFromUrl, layerFromUrl, nameMatchesHost } from './match'
 
 export type DuplicateReason = 'same-site' | 'same-login' | 'same-name'
 
@@ -49,14 +49,18 @@ export function normEntryName(entry: Entry): string {
     .replace(/[^a-z0-9]+/g, '')
 }
 
-export function hostsOf(entry: Entry): string[] {
-  const out = new Set<string>()
-  for (const raw of [entry.url, ...(entry.urls ?? []), entry.name, entry.appName]) {
-    if (!raw) continue
-    const host = hostFromUrl(raw)
-    if (host) out.add(host)
-  }
-  return [...out]
+/**
+ * The host the entry was actually saved for.
+ *
+ * Only `url`, or the first entry of `urls`, counts. Reading the whole `urls`
+ * list as identity was a bug: `urls` is a merge history, so one entry that
+ * once picked up a foreign url (a merge, or a save on a shared login page)
+ * became a bridge between two unrelated sites. Reading `name` as a host was the
+ * same bug one step smaller: two rows both called "amazon" that point at
+ * different sites looked like one site.
+ */
+export function entryHost(entry: Entry): string {
+  return hostFromUrl(entry.url || entry.urls?.[0] || '') || ''
 }
 
 /**
@@ -70,13 +74,19 @@ export function layerOf(entry: Entry): string {
 }
 
 function shareHost(a: Entry, b: Entry): boolean {
-  const ha = hostsOf(a)
-  const hb = hostsOf(b)
-  if (!ha.length || !hb.length) return false
-  // Exact host only. accounts.google.com, mail.google.com and myaccount.google.com
-  // are different services that usually hold different accounts; grouping them by
-  // domain family is what buried the summary in one 14-entry cluster.
-  return ha.some((h) => hb.includes(h))
+  const ha = entryHost(a)
+  const hb = entryHost(b)
+  if (ha && hb) return ha === hb
+  if (ha || hb) {
+    // One side has no URL at all: the other side's host may still match this
+    // entry's name, and only as a whole domain label.
+    const named = ha ? b : a
+    return nameMatchesHost((named.name || named.appName || '').toLowerCase(), ha || hb)
+  }
+  // Neither side has a URL, so the name is the only thing left to compare.
+  const na = hostFromUrl((a.name || a.appName || '').trim())
+  const nb = hostFromUrl((b.name || b.appName || '').trim())
+  return Boolean(na && nb && na === nb)
 }
 
 function shareLayer(a: Entry, b: Entry): boolean {
@@ -132,7 +142,7 @@ function memberOf(entry: Entry): DuplicateMember {
     id: entry.id,
     name: entry.name || entry.appName || 'Tanpa nama',
     username: entry.username ?? '',
-    host: hostsOf(entry)[0] || '',
+    host: entryHost(entry),
     updatedAt: entry.updatedAt,
     createdAt: entry.createdAt,
   }

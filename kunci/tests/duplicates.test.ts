@@ -133,6 +133,55 @@ describe('duplicate clusters', () => {
     expect(findDuplicateClusters([otp, same])).toHaveLength(0)
   })
 
+  it('keeps unrelated sites apart even when an entry carries a foreign url', () => {
+    // Straight from the summary: Spotify, Sony, Google, Amazon, Dekkoo and
+    // Gagaoolala are six different sites that were shown as one "same site"
+    // cluster. Every entry also carried one shared url, and reading the whole
+    // urls list as identity let that one url bridge all of them together.
+    const shared = 'https://www.amazon.com'
+    const rows = [
+      login('sp', { name: 'accounts.spotify.com', url: 'https://accounts.spotify.com/en-us/login', username: 't@x.com', password: 'p1', urls: [shared] }),
+      login('sn', { name: 'my.account.sony.com', url: 'https://my.account.sony.com', username: 't@x.com', password: 'p2', urls: [shared] }),
+      login('go', { name: 'myaccount.google.com', url: 'https://myaccount.google.com', username: 't@x.com', password: 'p3', urls: [shared] }),
+      login('az', { name: 'www.amazon.com', url: shared, username: 't@x.com', password: 'p4', urls: [shared] }),
+      login('dk', { name: 'www.dekkoo.com', url: 'https://www.dekkoo.com', username: 't@x.com', password: 'p5', urls: [shared] }),
+      login('gl', { name: 'www.gagaoolala.com', url: 'https://www.gagaoolala.com', username: 't@x.com', password: 'p6', urls: [shared] }),
+      login('az2', { name: 'www.amazon.com (t@x.com)', url: shared, username: 't@x.com', password: 'p7', urls: [shared] }),
+    ]
+    const clusters = findDuplicateClusters(rows)
+    // Only the two Amazon rows are the same site.
+    expect(clusters).toHaveLength(1)
+    expect(clusters[0].memberIds.sort()).toEqual(['az', 'az2'])
+    for (const c of clusters) {
+      expect(new Set(c.members.map((m) => m.host)).size, `cluster ${c.title}`).toBe(1)
+    }
+  })
+
+  it('does not read an entry name as a second host', () => {
+    // Both rows are called "amazon" but they are two different sites. Treating
+    // the name as a host made the two rows share a host and cluster.
+    const a = login('a', { name: 'amazon', url: 'https://www.amazon.com', username: 't@x.com', password: 'p1' })
+    const b = login('b', { name: 'amazon', url: 'https://www.dekkoo.com', username: 't@x.com', password: 'p2' })
+    expect(relatedDuplicate(a, b)).toBeNull()
+    expect(findDuplicateClusters([a, b])).toHaveLength(0)
+  })
+
+  it('does not let a merged url list bridge two different sites', () => {
+    // mergeEntriesInto keeps every url it has seen so autofill still works at
+    // both addresses. That history must not become identity: after a merge the
+    // Amazon row carries a foreign url, and reading the whole list pulled that
+    // foreign site into the cluster.
+    const amazon = login('az', { name: 'www.amazon.com', url: 'https://www.amazon.com', username: 't@x.com', password: 'p1' })
+    const merged = mergeEntriesInto(amazon, [
+      login('x', { name: 'www.dekkoo.com', url: 'https://www.dekkoo.com', username: 't@x.com', password: 'p1' }),
+    ])
+    const other = login('az2', { name: 'www.amazon.com (t@x.com)', url: 'https://www.amazon.com', username: 't@x.com', password: 'p2' })
+    const clusters = findDuplicateClusters([merged, other])
+    expect(clusters).toHaveLength(1)
+    expect(clusters[0].memberIds.sort()).toEqual(['az', 'az2'])
+    expect(merged.urls).toContain('https://www.dekkoo.com')
+  })
+
   it('still clusters entries that carry no URL, using the site name', () => {
     const a = login('1', { name: 'agoda.com', username: 'me', password: 'p1' })
     const b = login('2', { name: 'agoda.com', username: 'me', password: 'p2' })

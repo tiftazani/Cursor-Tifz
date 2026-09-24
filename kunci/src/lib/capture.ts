@@ -29,6 +29,16 @@ export function loginTitleFromUrl(raw: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
+/**
+ * Whether this entry belongs to `host` on its own, ignoring its url history.
+ * A capture on host X may only update an entry that lives on X.
+ */
+function samePrimaryHost(entry: Entry, host: string | null): boolean {
+  if (!host) return true
+  const own = hostFromUrl(entry.url || entry.urls?.[0] || '')
+  return own === host
+}
+
 export function decideLoginSave(
   entries: Entry[],
   capture: LoginCapture,
@@ -41,7 +51,12 @@ export function decideLoginSave(
   const host = hostFromUrl(capture.url)
   if (host && neverHosts.includes(host)) return { action: 'skip', reason: 'unchanged' }
 
-  const siteLogins = entries.filter((entry) => entry.type !== 'note' && entryMatchesPage(entry, capture.url))
+  // Identity comes from the entry's own host, never from its whole urls list.
+  // urls is merge history, so a foreign url in there used to make an unrelated
+  // entry look like "this page's login" and get overwritten by a save here.
+  const siteLogins = entries.filter(
+    (entry) => entry.type !== 'note' && entryMatchesPage(entry, capture.url) && samePrimaryHost(entry, host),
+  )
   // One site can ask for a password in more than one place. Prefer entries saved
   // from this same path, or saving a payment PIN would overwrite the site login.
   const layer = layerFromUrl(capture.url)

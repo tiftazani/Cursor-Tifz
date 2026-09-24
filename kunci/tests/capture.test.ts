@@ -64,6 +64,26 @@ describe('login capture', () => {
     expect(next.entries.find((e) => e.id === 'site')?.password).toBe('situs')
   })
 
+  it('does not overwrite a login just because it carries another site in urls', () => {
+    // urls is merge history, not identity. An entry that once picked up a
+    // foreign url must not be treated as "this page's login", or saving on
+    // amazon would overwrite the Dekkoo entry and grow the mess.
+    const dekkoo = login({
+      id: 'dk',
+      name: 'Dekkoo',
+      url: 'https://www.dekkoo.com',
+      urls: ['https://www.dekkoo.com', 'https://www.amazon.com'],
+      username: 't@x.com',
+      password: 'lama',
+    })
+    const decision = decideLoginSave([dekkoo], { url: 'https://www.amazon.com', username: 't@x.com', password: 'baru' })
+    expect(decision.action).toBe('create')
+
+    // The same entry still autofills on its own host.
+    const own = decideLoginSave([dekkoo], { url: 'https://www.dekkoo.com', username: 't@x.com', password: 'baru' })
+    expect(own).toEqual({ action: 'update', entryId: 'dk' })
+  })
+
   it('titles a host and matches a Mac app name', () => {
     expect(loginTitleFromUrl('https://accounts.google.com')).toBe('Accounts')
     const entries = [
