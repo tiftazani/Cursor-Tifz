@@ -6,6 +6,32 @@ import { hasLocalVault } from '../db/idb'
 
 const TOKEN_KEY = 'kunci_cloud_token'
 
+/** Set once when the user asks for the email gate; consumed by sessionStatus. */
+const FORCE_GATE_KEY = 'kunci_force_gate'
+
+/**
+ * Ask for the email code on the next load even though a local vault exists.
+ * Settings uses it so the gate is still reachable: without this, localhost would
+ * open straight into the vault and there would be no way back to the code screen.
+ */
+export function requestCloudGate(): void {
+  try {
+    window.sessionStorage.setItem(FORCE_GATE_KEY, '1')
+  } catch {
+    /* private mode */
+  }
+}
+
+function takeGateRequest(): boolean {
+  try {
+    const on = window.sessionStorage.getItem(FORCE_GATE_KEY) === '1'
+    if (on) window.sessionStorage.removeItem(FORCE_GATE_KEY)
+    return on
+  } catch {
+    return false
+  }
+}
+
 export function isPublicHost(): boolean {
   const host = window.location.hostname
   return host !== 'localhost' && host !== '127.0.0.1' && host !== '[::1]'
@@ -86,6 +112,8 @@ export async function probeCloudSession(opts: {
   cloudUrl?: string
   /** Localhost only: a decrypted-able vault already exists in IndexedDB. */
   localVault?: boolean
+  /** The user asked for the code screen, so skip the localOnly shortcut. */
+  requireGate?: boolean
 }): Promise<SessionState> {
   const cloud = (opts.cloudUrl || DEFAULT_CLOUD_URL).replace(/\/$/, '')
   const origins = opts.publicHost ? [''] : ['', cloud]
@@ -145,7 +173,9 @@ export async function probeCloudSession(opts: {
       // A vault on this machine is enough for localhost: the code only buys
       // cloud sync, and blocking on it locked people out of their own data
       // whenever the mail key was missing.
-      if (opts.localVault && !opts.publicHost) return { signedIn: false, configured: true, localOnly: true }
+      if (opts.localVault && !opts.publicHost && !opts.requireGate) {
+        return { signedIn: false, configured: true, localOnly: true }
+      }
       return { signedIn: false, configured: true }
     }
   }
@@ -161,6 +191,8 @@ export async function sessionStatus(): Promise<SessionState> {
     publicHost: isPublicHost(),
     token: readToken(),
     localVault,
+    // The user explicitly asked for the code screen, so do not skip it.
+    requireGate: takeGateRequest(),
   })
 }
 

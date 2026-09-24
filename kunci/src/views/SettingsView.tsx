@@ -3,7 +3,7 @@ import { Field, SecretInput, TextInput } from '../components/Field'
 import { isStrongMaster } from '../lib/strength'
 import { AUTO_LOCK_OPTIONS, resolveAutoLockSeconds } from '../lib/autolock'
 import { IosInstallGuide } from '../components/IosInstallCard'
-import { cloudHasSession } from '../lib/cloud'
+import { cloudHasSession, requestCloudGate } from '../lib/cloud'
 import { useVault } from '../state/VaultContext'
 
 export function SettingsView() {
@@ -208,7 +208,14 @@ export function SettingsView() {
               Belum ada sesi cloud di browser ini, jadi perubahan hanya tersimpan di perangkat ini. Buka gerbang kode
               email untuk menyalakan sinkron.
             </p>
-            <button type="button" className="btn" onClick={() => window.location.reload()}>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                requestCloudGate()
+                window.location.reload()
+              }}
+            >
               Buka gerbang kode email
             </button>
           </>

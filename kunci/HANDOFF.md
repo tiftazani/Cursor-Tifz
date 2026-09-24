@@ -59,7 +59,7 @@ Cek cepat: `npx wrangler secret list` — kalau `RESEND_API_KEY` tidak ada di da
 | Variabel | Isi |
 | --- | --- |
 | `KUNCI_SESSION_SECRET` | String acak ≥ 16 karakter (`openssl rand -base64 32`) |
-| `RESEND_API_KEY` | API key Resend untuk OTP. **Kosong** — key lama hanya ada di Netlify dalam bentuk ter-mask, jadi harus dibuat ulang di resend.com/api-keys, lalu `npm run set-resend-key` (baca dari papan klip, tidak lewat shell history) |
+| `RESEND_API_KEY` | API key Resend untuk OTP. **Terisi** (dipasang lewat `npm run set-resend-key`, dibaca dari papan klip). Kalau kosong lagi: buat di resend.com/api-keys lalu jalankan perintah yang sama |
 | `KUNCI_FROM_EMAIL` | Opsional. Default `Kunci <onboarding@resend.dev>` |
 
 Kalau `RESEND_API_KEY` kosong, gerbang OTP **tidak** memblokir localhost: kalau brankas sudah ada di IndexedDB `127.0.0.1:8780`, app langsung jalan dan perubahan hanya tersimpan lokal. Situs publik tetap butuh kode. Tombol "Buka gerbang kode email" ada di Pengaturan → Sesi.

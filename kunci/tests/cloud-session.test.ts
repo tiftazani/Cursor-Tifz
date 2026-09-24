@@ -164,4 +164,24 @@ describe('probeCloudSession', () => {
     expect(state).toEqual({ signedIn: false, configured: true })
     expect(state.localOnly).toBeUndefined()
   })
+
+  it('asks for the code when the user explicitly opened the gate', async () => {
+    // Settings has a button for this. Without it, localhost would jump straight
+    // into the vault and the code screen would be unreachable.
+    const state = await probeCloudSession({
+      publicHost: false,
+      token: null,
+      localVault: true,
+      requireGate: true,
+      cloudUrl: 'https://kunci.tiftazani-cuciin.workers.dev',
+      fetch: async (url) => {
+        if (url.startsWith('/')) return htmlRes()
+        if (url.endsWith('/api/ping')) return jsonRes(200, { ok: true })
+        if (url.endsWith('/api/me')) return jsonRes(401, { ok: false })
+        return htmlRes()
+      },
+    })
+    expect(state).toEqual({ signedIn: false, configured: true })
+    expect(state.localOnly).toBeUndefined()
+  })
 })
