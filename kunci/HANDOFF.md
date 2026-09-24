@@ -54,10 +54,12 @@ Sumber path disk (jangan hardcode `~/tifz-apps`): `kunci/helper/repo-paths.mjs`
 
 Sudah di-set via `npx wrangler secret put` (tidak di repo, tidak di git). Contoh: `kunci/.env.example`.
 
+Cek cepat: `npx wrangler secret list` — kalau `RESEND_API_KEY` tidak ada di daftar, OTP email akan jawab 500 `RESEND_API_KEY belum di-set`.
+
 | Variabel | Isi |
 | --- | --- |
 | `KUNCI_SESSION_SECRET` | String acak ≥ 16 karakter (`openssl rand -base64 32`) |
-| `RESEND_API_KEY` | API key Resend untuk OTP |
+| `RESEND_API_KEY` | API key Resend untuk OTP. **Belum di-set** per commit `8bf343a` — nilai lama ada di Netlify tapi ter-mask (hanya 20 karakter pertama yang bisa dibaca), jadi harus dibuat ulang di dashboard Resend |
 | `KUNCI_FROM_EMAIL` | Opsional. Default `Kunci <onboarding@resend.dev>` |
 
 Deploy: `npm run deploy` (= build + `wrangler deploy`). Lihat secret: `npx wrangler secret list`. Storage = Durable Object `KunciStore` (konsisten kuat, jadi cap percobaan OTP tidak bisa diakali).
