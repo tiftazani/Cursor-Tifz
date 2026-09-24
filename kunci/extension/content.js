@@ -683,7 +683,11 @@ function scan() {
     if (isKunciPage()) return
     keepSaveBar()
     const passwords = passwordFields()
-    passwords.forEach(ensureButton)
+    // Not `passwords.forEach(ensureButton)`: forEach passes the index as the second
+    // argument, which lands in `usernameOnly`. Every field after the first was then
+    // judged by the username-only-step rule instead of the normal autofill rule, so
+    // the icon went missing on the second password box of a page.
+    for (const pw of passwords) ensureButton(pw)
     // Agoda-style step: only the email box exists, so the icon has nowhere else to sit.
     const userOnly = usernameOnlyField()
     if (userOnly) ensureButton(userOnly, true)
