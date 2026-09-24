@@ -49,6 +49,28 @@ function readToken(): string | null {
   }
 }
 
+/**
+ * Whether this browser has a cloud session, as last observed.
+ *
+ * Localhost is allowed to run with no session at all (the code only buys cloud
+ * sync), but nothing used to tell the save path that. Every action therefore fired a
+ * doomed `PUT /api/vault`, got 401, and told the user "Sesi cloud habis" — on a
+ * browser that never had a session to begin with. The flag starts "unknown" so a
+ * public host, where the gate guarantees a session, still tries.
+ */
+let sessionKnown = false
+let sessionOn = false
+
+function noteSession(on: boolean): void {
+  sessionKnown = true
+  sessionOn = on
+}
+
+/** True while we have no reason to believe the cloud will reject the write. */
+export function cloudSyncPossible(): boolean {
+  return !sessionKnown || sessionOn
+}
+
 /** Exported for tests: whether this browser holds a cloud session token at all. */
 export function readCloudToken(): string | null {
   return readToken()
@@ -56,10 +78,12 @@ export function readCloudToken(): string | null {
 
 export function saveCloudToken(token: string): void {
   window.localStorage.setItem(TOKEN_KEY, token)
+  noteSession(true)
 }
 
 export function clearCloudToken(): void {
   window.localStorage.removeItem(TOKEN_KEY)
+  noteSession(false)
 }
 
 async function api(path: string, init: RequestInit = {}): Promise<Response> {
@@ -173,18 +197,24 @@ export async function probeCloudSession(opts: {
       break
     }
 
-    if (email) return { signedIn: true, email, configured: true }
+    if (email) {
+      noteSession(true)
+      return { signedIn: true, email, configured: true }
+    }
     if (contacted) {
       // A vault on this machine is enough for localhost: the code only buys
       // cloud sync, and blocking on it locked people out of their own data
       // whenever the mail key was missing.
       if (opts.localVault && !opts.publicHost && !opts.requireGate) {
+        noteSession(false)
         return { signedIn: false, configured: true, localOnly: true }
       }
+      noteSession(false)
       return { signedIn: false, configured: true }
     }
   }
 
+  noteSession(false)
   return { signedIn: false, configured: false, error: network ? 'network' : 'missing' }
 }
 
@@ -264,6 +294,10 @@ export async function cloudGetVault(): Promise<EncryptedBlob | null> {
 }
 
 export async function cloudPutVault(blob: EncryptedBlob): Promise<void> {
+  // Nothing to sync to. Localhost runs fine without a session; firing the request
+  // anyway produced a 401 on every single save and warned "Sesi cloud habis" each
+  // time, which reads as a broken session rather than "this browser never signed in".
+  if (!cloudSyncPossible()) return
   const res = await api('/api/vault', { method: 'PUT', body: JSON.stringify({ blob }) })
   if (res.status === 401) {
     // The session is gone, so the token is dead weight. Dropping it means the

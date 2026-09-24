@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { isPingPath, isSessionPath, normalizeApiPath } from '../src/lib/api-path'
-import { cloudPutVault, probeCloudSession, readCloudToken, saveCloudToken } from '../src/lib/cloud'
+import { cloudPutVault, cloudSyncPossible, probeCloudSession, readCloudToken, saveCloudToken } from '../src/lib/cloud'
 
 function jsonRes(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -218,5 +218,72 @@ describe('a dead cloud session', () => {
     vi.stubGlobal('fetch', async () => jsonRes(500, { error: 'Server sedang error' }))
     await expect(cloudPutVault({ v: 1 } as never)).rejects.toThrow(/Server sedang error/)
     expect(readCloudToken()).toBe('good-token')
+  })
+})
+
+describe('localhost with no cloud session', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+    const store = new Map<string, string>()
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, v),
+        removeItem: (k: string) => void store.delete(k),
+      },
+      location: { hostname: '127.0.0.1', host: '127.0.0.1:8780' },
+    })
+  })
+
+  async function probeSignedOut(): Promise<void> {
+    await probeCloudSession({
+      publicHost: false,
+      token: null,
+      localVault: true,
+      cloudUrl: 'https://kunci.tiftazani-cuciin.workers.dev',
+      fetch: async (url) => {
+        if (url.startsWith('/')) return htmlRes()
+        if (url.endsWith('/api/ping')) return jsonRes(200, { ok: true })
+        if (url.endsWith('/api/me')) return jsonRes(401, { ok: false })
+        return htmlRes()
+      },
+    })
+  }
+
+  it('does not even attempt a vault write', async () => {
+    // Every action on Ringkasan fired a doomed PUT and reported "Sesi cloud habis",
+    // on a browser that had never signed in. A 401 from the live worker proves the
+    // request could only ever fail: PUT /api/vault -> {"error":"Sesi tidak valid"}.
+    let calls = 0
+    vi.stubGlobal('fetch', async () => {
+      calls++
+      return jsonRes(401, { error: 'Sesi tidak valid' })
+    })
+
+    await probeSignedOut()
+    expect(cloudSyncPossible()).toBe(false)
+
+    await expect(cloudPutVault({ v: 1 } as never)).resolves.toBeUndefined()
+    expect(calls).toBe(0)
+  })
+
+  it('still writes when a session is known to be live', async () => {
+    saveCloudToken('live-token')
+    expect(cloudSyncPossible()).toBe(true)
+    let called = false
+    vi.stubGlobal('fetch', async () => {
+      called = true
+      return jsonRes(200, { ok: true })
+    })
+    await cloudPutVault({ v: 1 } as never)
+    expect(called).toBe(true)
+  })
+
+  it('writes while the session state is still unknown', async () => {
+    // A public host never calls probeCloudSession before the vault loads, and the
+    // gate guarantees a session there, so the first write must still go out.
+    vi.resetModules()
+    const fresh = await import('../src/lib/cloud')
+    expect(fresh.cloudSyncPossible()).toBe(true)
   })
 })
