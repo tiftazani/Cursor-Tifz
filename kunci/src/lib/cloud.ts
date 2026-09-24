@@ -49,6 +49,11 @@ function readToken(): string | null {
   }
 }
 
+/** Exported for tests: whether this browser holds a cloud session token at all. */
+export function readCloudToken(): string | null {
+  return readToken()
+}
+
 export function saveCloudToken(token: string): void {
   window.localStorage.setItem(TOKEN_KEY, token)
 }
@@ -260,7 +265,13 @@ export async function cloudGetVault(): Promise<EncryptedBlob | null> {
 
 export async function cloudPutVault(blob: EncryptedBlob): Promise<void> {
   const res = await api('/api/vault', { method: 'PUT', body: JSON.stringify({ blob }) })
-  if (res.status === 401) throw new Error('Sesi cloud habis. Masuk lagi dengan kode email.')
+  if (res.status === 401) {
+    // The session is gone, so the token is dead weight. Dropping it means the
+    // next launch asks for the code once, instead of every single save warning
+    // "Sesi cloud habis" and failing.
+    clearCloudToken()
+    throw new Error('Sesi cloud habis. Buka Pengaturan → Sesi untuk masuk lagi dengan kode email.')
+  }
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string }
     throw new Error(body.error || 'Gagal sinkron ke cloud')

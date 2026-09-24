@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { isPingPath, isSessionPath, normalizeApiPath } from '../src/lib/api-path'
-import { probeCloudSession } from '../src/lib/cloud'
+import { cloudPutVault, probeCloudSession, readCloudToken, saveCloudToken } from '../src/lib/cloud'
 
 function jsonRes(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -183,5 +183,40 @@ describe('probeCloudSession', () => {
     })
     expect(state).toEqual({ signedIn: false, configured: true })
     expect(state.localOnly).toBeUndefined()
+  })
+})
+
+describe('a dead cloud session', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+    const store = new Map<string, string>()
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, v),
+        removeItem: (k: string) => void store.delete(k),
+      },
+      location: { hostname: '127.0.0.1', host: '127.0.0.1:8780' },
+    })
+  })
+
+  it('drops the dead token instead of warning on every save', async () => {
+    // A 12-hour session token stays in localStorage after it expires. Before
+    // this, every single save retried it, got 401, and pushed "Sesi cloud habis"
+    // — the user saw the warning again and again with no way to make it stop.
+    saveCloudToken('expired-token')
+    expect(readCloudToken()).toBe('expired-token')
+
+    vi.stubGlobal('fetch', async () => jsonRes(401, { error: 'Sesi tidak valid' }))
+    await expect(cloudPutVault({ v: 1 } as never)).rejects.toThrow(/Sesi cloud habis/)
+
+    expect(readCloudToken()).toBeNull()
+  })
+
+  it('keeps the token when the save fails for another reason', async () => {
+    saveCloudToken('good-token')
+    vi.stubGlobal('fetch', async () => jsonRes(500, { error: 'Server sedang error' }))
+    await expect(cloudPutVault({ v: 1 } as never)).rejects.toThrow(/Server sedang error/)
+    expect(readCloudToken()).toBe('good-token')
   })
 })

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { execSync } from 'node:child_process'
 import { EXTENSION_DIR, KUNCI_BRANCH, KUNCI_ROOT, REPO_ROOT, refreshCommands } from '../helper/repo-paths.mjs'
 
-const NEED = '1.4.1'
+const NEED = '1.4.2'
 const manifestPath = join(EXTENSION_DIR, 'manifest.json')
 
 function git(args) {
