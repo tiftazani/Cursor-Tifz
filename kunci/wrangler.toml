@@ -1,0 +1,24 @@
+name = "kunci"
+main = "worker/index.ts"
+compatibility_date = "2026-09-01"
+
+# Static SPA. The worker only runs first for the API paths, so /api/* is never
+# swallowed by the SPA fallback.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/kunci-status"]
+
+# Strongly consistent storage for OTP, rate limits and the vault blob. KV is
+# eventually consistent, which would weaken the OTP attempt cap.
+[[durable_objects.bindings]]
+name = "KUNCI"
+class_name = "KunciStore"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["KunciStore"]
+
+[observability]
+enabled = true

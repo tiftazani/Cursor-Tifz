@@ -180,23 +180,23 @@ export function DashboardView({
                   ) : null}
                   <ul className="dupe-members">
                     {c.members.map((m) => (
-                      <li key={m.id}>
-                        <label className="check">
-                          <input
-                            type="radio"
-                            name={`keep-${c.id}`}
-                            checked={keepId === m.id}
-                            onChange={() => setKeepByCluster((prev) => ({ ...prev, [c.id]: m.id }))}
-                          />
-                          <span>
-                            <button type="button" className="linkish" onClick={() => onOpenEntry(m.id)}>
-                              {m.name}
-                            </button>
-                            <em>
-                              {m.host || 'tanpa situs'} · {maskAccount(m.username)}
-                            </em>
-                          </span>
-                        </label>
+                      <li key={m.id} className={keepId === m.id ? 'dupe-member on' : 'dupe-member'}>
+                        {/* The radio and the open-entry button are siblings, not
+                            nested: a button inside a <label> would toggle the
+                            radio every time the user tried to open the entry. */}
+                        <input
+                          type="radio"
+                          name={`keep-${c.id}`}
+                          checked={keepId === m.id}
+                          onChange={() => setKeepByCluster((prev) => ({ ...prev, [c.id]: m.id }))}
+                          aria-label={`Simpan ${m.name}`}
+                        />
+                        <button type="button" className="linkish" onClick={() => onOpenEntry(m.id)}>
+                          {m.name}
+                        </button>
+                        <em>
+                          {m.host || 'tanpa situs'} · {maskAccount(m.username)}
+                        </em>
                       </li>
                     ))}
                   </ul>

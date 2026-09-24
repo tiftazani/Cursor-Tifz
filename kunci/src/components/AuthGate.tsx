@@ -84,7 +84,7 @@ export function AuthGate({ onAuthed }: { onAuthed: () => void }) {
         </div>
         <p className="lede">
           {local
-            ? `Localhost dan ${DEFAULT_CLOUD_URL} memakai ciphertext yang sama. Kode 8 karakter membuka sesi sinkron — server tetap tidak bisa membaca password. Site Netlify harus Public (bukan Private / Team login), kalau tidak helper tidak bisa kirim kode.`
+            ? `Localhost dan ${DEFAULT_CLOUD_URL} memakai ciphertext yang sama. Kode 8 karakter membuka sesi sinkron — server tetap tidak bisa membaca password.`
             : 'Cek address bar: harus HTTPS dan domain Kunci milikmu. Kode 8 karakter hanya membuka sesi. Kata sandi induk dimasukkan setelah ini.'}
         </p>
         <p className="hint-pill">Situs ini: {window.location.host}</p>
@@ -132,12 +132,12 @@ export function ApiMissingScreen({ reason }: { reason?: 'network' | 'missing' })
     ? 'Jaringan terputus, Safari menolak cek sesi, atau pemblokir iklan menahan API.'
     : local
       ? `Localhost harus bisa menghubungi ${DEFAULT_CLOUD_URL}.`
-      : 'Situs publik butuh fungsi Netlify + variabel lingkungan.'
+      : 'Situs publik butuh Worker Kunci + variabel lingkungan.'
   const lede = offline
-    ? `Matikan pemblokir iklan untuk ${typeof window !== 'undefined' ? window.location.host : 'situs ini'}, cek Wi-Fi, lalu coba lagi. Kalau masih gagal: di Netlify Base directory kunci, set KUNCI_SESSION_SECRET dan RESEND_API_KEY, lalu redeploy.`
+    ? `Matikan pemblokir iklan untuk ${typeof window !== 'undefined' ? window.location.host : 'situs ini'}, cek Wi-Fi, lalu coba lagi. Kalau masih gagal: set KUNCI_SESSION_SECRET dan RESEND_API_KEY sebagai secret Worker, lalu deploy ulang.`
     : local
-      ? `Pastikan ${DEFAULT_CLOUD_URL} Public di Netlify (Project visibility), lalu nyalakan helper: npm run install-service.`
-      : 'Di Netlify: Base directory kunci, lalu set KUNCI_SESSION_SECRET (min. 16 karakter acak) dan RESEND_API_KEY. Redeploy setelah itu.'
+      ? `Pastikan ${DEFAULT_CLOUD_URL} hidup, lalu nyalakan helper: npm run install-service.`
+      : 'Set KUNCI_SESSION_SECRET (min. 16 karakter acak) dan RESEND_API_KEY sebagai secret Worker, lalu deploy ulang.'
   return (
     <div className="gate">
       <div className="gate-card">

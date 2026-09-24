@@ -57,6 +57,12 @@ const intent = globalThis.kunciLoginIntent || {
   classifyAround() {
     return { kind: 'other' }
   },
+  shapeAround() {
+    return 'user-pass'
+  },
+  isUsernameOnlyStepAround() {
+    return false
+  },
   shouldAutofillKind() {
     return false
   },
@@ -116,6 +122,28 @@ function kindAround(el) {
   }
 }
 
+function shapeAround(el) {
+  try {
+    return intent.shapeAround ? intent.shapeAround(el) : 'user-pass'
+  } catch {
+    return 'user-pass'
+  }
+}
+
+function isUsernameOnlyStepAround(el) {
+  try {
+    return Boolean(intent.isUsernameOnlyStepAround?.(el))
+  } catch {
+    return false
+  }
+}
+
+/** The field the Kunci icon should sit next to on a step with no password box. */
+function usernameOnlyField() {
+  if (passwordFields().length) return null
+  return [...document.querySelectorAll('input')].filter(isUsernameInput).find((el) => isUsernameOnlyStepAround(el)) || null
+}
+
 function loginPasswordFields() {
   return passwordFields().filter((el) => intent.shouldAutofillKind(kindAround(el)) && intent.isCurrentPasswordField(fieldSnap(el)))
 }
@@ -123,15 +151,26 @@ function loginPasswordFields() {
 function fill(match) {
   const passwords = loginPasswordFields()
   const pw = passwords[0] || passwordFields().filter((el) => intent.isCurrentPasswordField(fieldSnap(el)))[0]
-  if (pw && match.password) setNativeValue(pw, match.password)
-  const user = pw ? usernameFieldNear(pw) : document.querySelector('input[type="email"], input[autocomplete="username"]')
-  if (user && match.username) setNativeValue(user, match.username)
+  if (pw) {
+    if (match.password) setNativeValue(pw, match.password)
+    // Password-only page: typing a username into the nearest text box would drop it in a
+    // search or promo-code field. Leave those pages alone.
+    if (match.username && shapeAround(pw) === 'user-pass') {
+      const user = usernameFieldNear(pw)
+      if (user) setNativeValue(user, match.username)
+    }
+  } else if (match.username) {
+    // Username-first step (Agoda): no password box yet, so only the email lands. Gated by
+    // isUsernameOnlyLoginStep, never a blind querySelector on any email box on the page.
+    const box = usernameOnlyField()
+    if (box) setNativeValue(box, match.username)
+  }
   if (match.id) void send({ type: 'TOUCH', id: match.id })
 }
 
 function isKunciPage() {
   const { hostname, port } = location
-  if (hostname === 'kunci-tifta.netlify.app') return true
+  if (hostname === 'kunci.tiftazani-cuciin.workers.dev') return true
   return (hostname === '127.0.0.1' || hostname === 'localhost') && ['8780', '5173', '4173'].includes(port)
 }
 
@@ -201,8 +240,11 @@ function repositionIcons() {
   }
 }
 
-function ensureButton(pw) {
-  if (!intent.shouldAutofillKind(kindAround(pw))) {
+function ensureButton(pw, usernameOnly = false) {
+  // A username box on a normal login page must not get its own icon: only password
+  // fields, or the explicit username-only step, are eligible.
+  const allowed = usernameOnly ? isUsernameOnlyStepAround(pw) : intent.shouldAutofillKind(kindAround(pw))
+  if (!allowed) {
     const stale = iconHosts.get(pw)
     if (stale) {
       stale.remove()
@@ -625,7 +667,20 @@ function scan() {
   try {
     if (isKunciPage()) return
     keepSaveBar()
-    passwordFields().forEach(ensureButton)
+    const passwords = passwordFields()
+    passwords.forEach(ensureButton)
+    // Agoda-style step: only the email box exists, so the icon has nowhere else to sit.
+    const userOnly = usernameOnlyField()
+    if (userOnly) ensureButton(userOnly, true)
+    // Step two arrived: drop the icon that was sitting on the email box.
+    if (passwords.length) {
+      for (const [el, host] of iconHosts) {
+        if (!passwords.includes(el)) {
+          host.remove()
+          iconHosts.delete(el)
+        }
+      }
+    }
     if (!saveOffer) void maybeAutofill()
     repositionIcons()
   } catch {

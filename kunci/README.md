@@ -2,13 +2,13 @@
 
 Manajer kata sandi **zero-knowledge** untuk Mac, berbentuk website. Brankas dienkripsi di perangkat (AES-256-GCM + PBKDF2 600.000 iterasi) **sebelum** disimpan. Kata sandi induk, DEK, dan recovery key **tidak pernah** disimpan di server.
 
-Bisa dibuka di `localhost` atau di **URL HTTPS publik** (Netlify). Tidak ada sistem yang “anti-hack 100%”: yang dikunci di sini adalah agar peretas server, Netlify, atau cadangan cloud **tidak bisa membaca** username/password tanpa kata sandi induk atau recovery key.
+Bisa dibuka di `localhost` atau di **URL HTTPS publik** (Cloudflare Workers). Tidak ada sistem yang “anti-hack 100%”: yang dikunci di sini adalah agar peretas server, Cloudflare, atau cadangan cloud **tidak bisa membaca** username/password tanpa kata sandi induk atau recovery key.
 
 ## Ancaman yang ditahan vs yang tidak
 
 **Ditahan**
 
-- Server / Netlify Blobs hanya menyimpan ciphertext. Bocornya blob cloud tidak membuka brankas.
+- Server / storage cloud hanya menyimpan ciphertext. Bocornya blob cloud tidak membuka brankas.
 - Gerbang publik: hanya email allowlist, OTP 8 karakter, cookie HttpOnly + SameSite=Strict, HTTPS, HSTS, CSP, rate limit.
 - Helper Mac tidak lagi menulis DEK ke `~/.kunci/recovery.json`.
 - Reset kata sandi memakai recovery key di klien, bukan “kode email yang mengeluarkan kunci enkripsi”.
@@ -20,26 +20,26 @@ Bisa dibuka di `localhost` atau di **URL HTTPS publik** (Netlify). Tidak ada sis
 - Gmail yang dikuasai orang lain: mereka bisa masuk gerbang OTP dan mengunduh ciphertext, **tetapi tidak bisa mendekripsi** kecuali recovery key juga ada di Gmail (jangan kirim, kecuali kamu sadar risikonya).
 - Malware di Mac yang membaca memori / menekan keylogger saat brankas terbuka.
 
-## URL publik (Netlify)
+## URL publik (Cloudflare Workers)
 
-1. Buat site Netlify, **Base directory** = `kunci`.
-2. Environment variables (Production + Deploy previews):
+1. Login: `npx wrangler login` (akun `tiftazani.khara@gmail.com`).
+2. Secret sekali (tidak masuk git):
 
-   | Variabel | Isi |
-   | --- | --- |
-   | `KUNCI_SESSION_SECRET` | String acak ≥ 16 karakter (`openssl rand -base64 32`) |
-   | `RESEND_API_KEY` | API key [Resend](https://resend.com) untuk OTP masuk |
-   | `KUNCI_FROM_EMAIL` | Opsional. Default `Kunci <onboarding@resend.dev>` |
+   ```bash
+   cd kunci
+   npx wrangler secret put KUNCI_SESSION_SECRET   # string acak ≥ 16 karakter
+   npx wrangler secret put RESEND_API_KEY         # API key Resend untuk OTP masuk
+   # Opsional: npx wrangler secret put KUNCI_FROM_EMAIL
+   ```
 
-3. Deploy. Buka URL `https://kunci-tifta.netlify.app` (atau domain sendiri + HTTPS).
-4. **Project visibility harus Public** (bukan Private / Team login). Private membuat URL publik hanya jalan di browser yang sudah login Netlify, sementara helper di `127.0.0.1:8780` tidak punya cookie itu — OTP dari localhost gagal. Kunci sudah punya gerbang kode Gmail sendiri.
-5. Minta kode masuk ke **tiftazani.khara@gmail.com**, lalu buka brankas dengan kata sandi induk.
+3. Deploy: `npm run deploy` (build + upload `dist` + worker). URL: `https://kunci.tiftazani-cuciin.workers.dev`.
+4. Minta kode masuk ke **tiftazani.khara@gmail.com**, lalu buka brankas dengan kata sandi induk.
 
-Localhost (`http://127.0.0.1:8780`) dan URL publik memakai **satu blob terenkripsi** di Netlify Blobs. Setelah kode Gmail di salah satu tampilan, simpan/ubah entri akan muncul di yang lain (butuh kata sandi induk di masing-masing browser). Server tetap tidak melihat password.
+Localhost (`http://127.0.0.1:8780`) dan URL publik memakai **satu blob terenkripsi** di Durable Object. Setelah kode Gmail di salah satu tampilan, simpan/ubah entri akan muncul di yang lain (butuh kata sandi induk di masing-masing browser). Server tetap tidak melihat password.
 
 Autofill aplikasi Mac tetap butuh helper lokal (`npm run install-service`) di laptop — browser di internet tidak bisa mengetik ke app desktop.
 
-## Chrome masih 1.2.4
+## Chrome masih versi lama
 
 Kartu `chrome://extensions` baca `kunci/extension/manifest.json` di disk. Di Mac folder clone-nya `/Users/tiftazani/Cursor-Tifz` — bukan `tifz-apps`.
 
@@ -59,7 +59,7 @@ cd kunci && npm install && npm run install-service
 
 `git branch --show-current` harus `cursor/kunci-password-manager-4eaf`. Sidebar localhost: **Ringkasan · 1.3**.
 
-Kalau `manifest` sudah `1.2.9`: Load unpacked ke `kunci/extension` **sekali**. Helper di `127.0.0.1:8780` akan menyuruh Chrome reload sendiri setelah git pull / `npm run install-service`. Errors → Clear all kalau badge lama masih nempel.
+Kalau `manifest` sudah `1.3.8`: Load unpacked ke `kunci/extension` **sekali**. Helper di `127.0.0.1:8780` akan menyuruh Chrome reload sendiri setelah git pull / `npm run install-service`. Errors → Clear all kalau badge lama masih nempel.
 
 Ekstensi hanya menawar simpan username/password **setelah login website terlihat berhasil**. Login gagal (form masih ada, kata sandi salah) tidak ditulis ke brankas.
 
@@ -77,7 +77,7 @@ Buka **http://127.0.0.1:8780**. Layanan ikut nyala setiap login Mac. Terminal bo
 
 Stop: `npm run uninstall-service`
 
-Localhost memakai gerbang OTP yang sama (kode ke Gmail) supaya sesi cloud bisa menulis ke blob yang sama. Helper mem-proxy `/api/*` ke URL publik. Kalau tombol kirim kode gagal dengan HTML login Netlify, site masih Private — ubah ke Public.
+Localhost memakai gerbang OTP yang sama (kode ke Gmail) supaya sesi cloud bisa menulis ke blob yang sama. Helper mem-proxy `/api/*` ke URL publik.
 
 ## Recovery key
 
@@ -98,7 +98,7 @@ npm run dev
 
 Buka [http://localhost:5173](http://localhost:5173). Mati kalau terminal ditutup.
 
-Untuk mengetes gerbang publik secara lokal: set env, lalu `npx netlify dev` di folder `kunci`.
+Untuk mengetes gerbang publik secara lokal: set secret lalu `npx wrangler dev` di folder `kunci`.
 
 ### Ekstensi browser (simpan + isi website)
 

@@ -14,6 +14,9 @@
   --danger: #ff6f7d;
   --warn: #f5c16c;
   --ok: #3ee0c3;
+  /* Text drawn on top of --warn. Dark theme warn is a light tan, so the label
+     is near-black; the light theme warn is a dark brown and needs white. */
+  --on-warn: #1a1408;
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.4);
   --radius: 12px;
   --radius-sm: 8px;
@@ -37,8 +40,18 @@
   --line: rgba(16, 24, 40, 0.1);
   --text: #122033;
   --muted: #5c6b7c;
-  --accent: #0f9d86;
+  /* White label text on this fill needs 4.5:1, so the light accent is darker
+     than the dark-theme one. #0f9d86 only reached 3.39. */
+  --accent: #0a7263;
   --accent-text: #ffffff;
+  /* These four are read by .linkish, .pill-*, .error/.ok and the strength
+     meter. Without them the dark-theme neon values leak onto white surfaces
+     and land at 1.5-2.7:1. */
+  --accent-2: #2563eb;
+  --danger: #be123c;
+  --warn: #8a5a00;
+  --ok: #0a7a68;
+  --on-warn: #ffffff;
   --shadow: 0 14px 36px rgba(16, 24, 40, 0.08);
 }
 
@@ -95,8 +108,8 @@ button {
 
 input[type='checkbox'],
 input[type='radio'] {
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
   margin: 0;
   flex: none;
   accent-color: var(--accent);
@@ -104,7 +117,7 @@ input[type='radio'] {
 
 input[type='range'] {
   width: 100%;
-  height: 22px;
+  height: 24px;
   margin: 0;
   accent-color: var(--accent);
 }
@@ -142,6 +155,9 @@ kbd {
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 0.08rem 0.38rem;
+  overflow-wrap: break-word;
+  word-break: break-all;
+  max-width: 100%;
 }
 
 .muted {
@@ -622,7 +638,7 @@ html[data-resizing='1'] * {
   padding: 0 5px;
   border-radius: 99px;
   background: var(--warn);
-  color: #1a1408;
+  color: var(--on-warn);
   font-size: 0.68rem;
   font-weight: 700;
   display: grid;
@@ -663,8 +679,8 @@ html:not([data-platform='mac']) .mac-only {
   border: 0;
   background: transparent;
   color: inherit;
-  padding: 0;
-  min-height: 0;
+  padding: 3px 0;
+  min-height: 24px;
   height: auto;
   width: auto;
   cursor: pointer;
@@ -753,6 +769,7 @@ html:not([data-platform='mac']) .mac-only {
 
 .list-toolbar {
   display: flex;
+  flex: none;
   gap: 8px;
   padding: 14px 12px 10px;
   align-items: center;
@@ -784,10 +801,16 @@ html:not([data-platform='mac']) .mac-only {
 
 .filter-row {
   display: flex;
+  /* overflow:auto zeroes the automatic min-size, so a long .entry-list would
+     squash this row and clip the chips. flex:none pins the 40px band. */
+  flex: none;
   gap: 6px;
   overflow: auto;
   padding: 0 12px 12px;
   scrollbar-width: none;
+  position: relative;
+  -webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 32px), transparent 100%);
+  mask-image: linear-gradient(to right, black 0%, black calc(100% - 32px), transparent 100%);
 }
 
 .filter-row::-webkit-scrollbar {
@@ -1131,6 +1154,33 @@ button.dash-stat {
   gap: 4px;
 }
 
+/* Radio, entry name and account line sit side by side. Not a <label>, so the
+   name button can be clicked without also moving the radio. */
+.dupe-member {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.dupe-member input[type='radio'] {
+  grid-row: 1 / span 2;
+}
+
+.dupe-member:hover {
+  background: color-mix(in srgb, var(--bg-3) 70%, transparent);
+}
+
+/* Selected row is marked with a bar, not a tinted fill: a fill strong enough
+   to read as "selected" drags the link and muted text below 4.5:1. */
+.dupe-member.on {
+  background: transparent;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
 .dupe-members em {
   display: block;
   font-style: normal;
@@ -1264,6 +1314,19 @@ button.dash-stat {
   border-bottom: 1px solid var(--line);
 }
 
+/* Username above the date, not run together on one line: as bare inline elements
+   "tifta" and "9 Sep 2026, 09.03" rendered as "tifta9 Sep 2026, 09.03". */
+.history-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.history-who .muted {
+  font-size: 0.85rem;
+}
+
 .sample-list code {
   background: transparent;
   border: 0;
@@ -1349,9 +1412,9 @@ button.dash-stat {
   border: 0;
   color: var(--accent-2);
   cursor: pointer;
-  padding: 0;
+  padding: 3px 0;
   text-align: left;
-  min-height: 0;
+  min-height: 24px;
   height: auto;
   font-weight: 600;
 }

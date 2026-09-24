@@ -1,6 +1,6 @@
 import type { Entry } from '../types'
 import { DEFAULT_CLOUD_URL, LOCAL_APP_ORIGINS } from './allowed-origins'
-import { entryMatchesPage, hostFromUrl } from './match'
+import { entryMatchesPage, hostFromUrl, layerFromUrl } from './match'
 import { withCredentialHistory } from './history'
 import { newId } from './id'
 
@@ -42,8 +42,13 @@ export function decideLoginSave(
   if (host && neverHosts.includes(host)) return { action: 'skip', reason: 'unchanged' }
 
   const siteLogins = entries.filter((entry) => entry.type !== 'note' && entryMatchesPage(entry, capture.url))
-  const sameUser = siteLogins.filter((entry) => (entry.username || '').trim() === username)
-  const pool = username ? sameUser : siteLogins
+  // One site can ask for a password in more than one place. Prefer entries saved
+  // from this same path, or saving a payment PIN would overwrite the site login.
+  const layer = layerFromUrl(capture.url)
+  const sameLayer = siteLogins.filter((entry) => layerFromUrl(entry.url || entry.urls?.[0] || '') === layer)
+  const candidates = sameLayer.length ? sameLayer : siteLogins
+  const sameUser = candidates.filter((entry) => (entry.username || '').trim() === username)
+  const pool = username ? sameUser : candidates
   const unchanged = pool.find((entry) => (entry.password || '') === password && (entry.username || '').trim() === username)
   if (unchanged) return { action: 'skip', reason: 'unchanged' }
   if (pool.length === 1) return { action: 'update', entryId: pool[0]!.id }

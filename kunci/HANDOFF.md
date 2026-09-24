@@ -14,30 +14,30 @@ Dokumen ini untuk memindahkan kerjaan Kunci ke agent harness lain. Paste atau at
 | PR | https://github.com/tiftazani/Cursor-Tifz/pull/6 (base `main`, **OPEN**, bukan draft) |
 | Mac clone | `/Users/tiftazani/Cursor-Tifz` — **bukan** `~/tifz-apps`, **bukan** folder Finder bernama Cursor (itu app Cursor) |
 | Extension path | `/Users/tiftazani/Cursor-Tifz/kunci/extension` |
-| Production URL | `https://kunci-tifta.netlify.app` |
-| Netlify site | `kunci-tifta` / id `8c8d1f64-3a3e-4e03-9b19-8e92dd67d473` |
-| Deploy preview | `https://deploy-preview-6--kunci-tifta.netlify.app` (sering **401** SSO non-production) |
+| Production URL | `https://kunci.tiftazani-cuciin.workers.dev` |
+| Cloudflare | Worker `kunci` (akun `tiftazani.khara@gmail.com`), storage Durable Object |
+| Deploy preview | Tidak ada (Workers deploy langsung; cek lokal via `npx wrangler dev`) |
 | Localhost helper UI | `http://127.0.0.1:8780` |
 | Dev Vite | `http://127.0.0.1:5173` (+ `#preview-ui` untuk preview tanpa OTP) |
 | OTP allowlist | `tiftazani.khara@gmail.com` |
 
 ## Apa itu Kunci
 
-Website-first password manager **zero-knowledge**: AES-256-GCM + PBKDF2 600k di klien. Server/Netlify Blobs cuma ciphertext. Gerbang publik = OTP Gmail + cookie sesi. Autofill: ekstensi Chrome (unpacked) + helper Mac (`Kunci Helper.app` + daemon LaunchAgent di `:8780`).
+Website-first password manager **zero-knowledge**: AES-256-GCM + PBKDF2 600k di klien. Server (Durable Object) cuma ciphertext. Gerbang publik = OTP Gmail + cookie sesi. Autofill: ekstensi Chrome (unpacked) + helper Mac (`Kunci Helper.app` + daemon LaunchAgent di `:8780`).
 
-Localhost dan URL publik memakai **satu blob terenkripsi** di Netlify Blobs. Setelah OTP Gmail di salah satu tampilan, simpan/ubah entri muncul di yang lain (butuh kata sandi induk di masing-masing browser). Server tetap tidak melihat password.
+Localhost dan URL publik memakai **satu blob terenkripsi** di Durable Object. Setelah OTP Gmail di salah satu tampilan, simpan/ubah entri muncul di yang lain (butuh kata sandi induk di masing-masing browser). Server tetap tidak melihat password.
 
 ## Struktur penting
 
 ```
 kunci/
   src/                 React UI (views, state/VaultContext, lib/)
-  extension/           Chrome MV3 unpacked (manifest 1.2.9)
+  extension/           Chrome MV3 unpacked (manifest 1.3.8)
   helper/              daemon.mjs, install-service, Mac AX fill, repo-paths.mjs
-  netlify/functions/   api.ts
+  worker/              index.ts (API + KunciStore Durable Object)
   scripts/             sync-branch, ambil-branch.sh, extension-status, gen-icons
   tests/               vitest
-  netlify.toml         build di folder kunci; publish dist
+  wrangler.toml        build di folder kunci; publish dist + worker
   README.md            dokumentasi produk
   HANDOFF.md           file ini
 ```
@@ -50,9 +50,9 @@ Sumber path disk (jangan hardcode `~/tifz-apps`): `kunci/helper/repo-paths.mjs`
 - `KUNCI_BRANCH` — `cursor/kunci-password-manager-4eaf`
 - `extensionOnDisk()` / `refreshCommands()` — path, versi, stamp untuk auto-reload ekstensi
 
-## Env Netlify
+## Env / secret Cloudflare
 
-Sudah di-set di site (Production + Deploy previews). Jangan hardcode secret. Contoh: `kunci/.env.example`.
+Sudah di-set via `npx wrangler secret put` (tidak di repo, tidak di git). Contoh: `kunci/.env.example`.
 
 | Variabel | Isi |
 | --- | --- |
@@ -60,9 +60,9 @@ Sudah di-set di site (Production + Deploy previews). Jangan hardcode secret. Con
 | `RESEND_API_KEY` | API key Resend untuk OTP |
 | `KUNCI_FROM_EMAIL` | Opsional. Default `Kunci <onboarding@resend.dev>` |
 
-Di Netlify Functions: pakai `Netlify.env.get("VAR")`, bukan `process.env` untuk secret.
+Deploy: `npm run deploy` (= build + `wrangler deploy`). Lihat secret: `npx wrangler secret list`. Storage = Durable Object `KunciStore` (konsisten kuat, jadi cap percobaan OTP tidak bisa diakali).
 
-Project visibility harus **Public** (bukan Private / Team login). Private membuat URL publik hanya jalan di browser yang sudah login Netlify; helper di `127.0.0.1:8780` tidak punya cookie itu — OTP dari localhost gagal.
+> Netlify sudah ditinggalkan (kredit akun habis, deploy diblokir). Jangan buat ulang `netlify.toml` / `.netlify`.
 
 ## Cara jalanin Mac (kritis)
 
@@ -96,7 +96,7 @@ Sukses lokal:
 - ada `kunci/src/views/DashboardView.tsx`
 - sidebar **Ringkasan · 1.3**
 - helper Mac hijau di `http://127.0.0.1:8780`
-- kartu Chrome **Versi 1.2.9** (bukan 1.2.6)
+- kartu Chrome **Versi 1.3.8**
 
 Stop helper: `npm run uninstall-service`.
 
@@ -109,13 +109,12 @@ Stop helper: `npm run uninstall-service`.
 5. **Stale dist** — daemon mendeteksi `dist/` tanpa “Ringkasan” / “Keadaan akun” dan menampilkan halaman rebuild.
 6. **DEV preview** — `#preview-ui` + `previewVault()` melewati OTP untuk cek layout.
 
-## Netlify / production
+## Cloudflare / production
 
-- Site: base directory `kunci`, production branch historically `cursor/kunci-password-manager-4eaf`.
-- Git production deploy sering **error**: `Skipped due to account credit usage exceeded` (plan Free / `nf_team_dev`). Deploy preview PR tetap ready.
-- Production pernah di-publish lewat `netlify api restoreSiteDeploy` dari preview siap → bundle `index-BYIugXV8.js` (ada Ringkasan · 1.3). Push berikutnya bisa lagi diskip credit.
-- SSO: `sso_login` non_production → preview 401; URL publik yang dipakai user = `https://kunci-tifta.netlify.app`.
-- Agent cloud sering **tidak** punya `NETLIFY_AUTH_TOKEN`; publish lewat CLI user yang sudah `netlify login`, atau Netlify UI / restore deploy.
+- Deploy: `npm run deploy` (build + `wrangler deploy`) → `https://kunci.tiftazani-cuciin.workers.dev`.
+- Storage: Durable Object `KunciStore` (migrasi `v1`, SQLite). Headers keamanan di `public/_headers`.
+- Secrets: `KUNCI_SESSION_SECRET`, `RESEND_API_KEY` (opsional `KUNCI_FROM_EMAIL`) via `wrangler secret put`.
+- Arsitektur: static SPA + `run_worker_first = ["/api/*", "/kunci-status"]`, jadi `/api/*` tidak pernah ditelan SPA fallback.
 
 ## Verifikasi
 
@@ -149,8 +148,8 @@ Lint: `npm run lint` (oxlint).
 - Prefer `osacompile` JXA lalu Swift; jangan wajibkan `swiftc` saja.
 - Jangan merge ke `main` kecuali diminta (Vercel Cuan Yuk Guys di `main`, root `cuan-yuk-guys`).
 - Jangan hardcode secrets.
-- Tambah `.netlify` ke gitignore (sudah).
-- Kalau update PR lewat tool: **baca body GitHub dulu** dan preserve edit manusia. Body PR bisa usang (masih menyebut 1.2.6 / `checkout origin/...`); fakta terkini: **1.2.9** + `FETCH_HEAD`.
+- Netlify sudah ditinggalkan; abaikan `.netlify` di gitignore (legacy).
+- Kalau update PR lewat tool: **baca body GitHub dulu** dan preserve edit manusia. Body PR bisa usang (masih menyebut versi lama / `checkout origin/...`); fakta terkini: **1.3.8** + `FETCH_HEAD`.
 
 ## Known issues / backlog
 
@@ -158,18 +157,45 @@ Lint: `npm run lint` (oxlint).
 | --- | --- |
 | Deteksi duplikat terlalu longgar (cluster besar lintas situs, e.g. Adguard↔Admedika) | Belum dikeraskan |
 | Skor kesehatan 0 wajar kalau ratusan password lemah | By design penalti |
-| Chrome masih 1.2.6 di Mac sampai Load unpacked 1.2.9 sekali | User action |
-| Production Netlify credit abis | Restore preview / tunggu credit / naik plan |
+| Chrome masih versi lama di Mac sampai Load unpacked sekali | User action |
 | PR description stale vs kode | Sync kalau sentuh PR lagi |
-| Tombol Errors di chrome://extensions | Sering bekas; Clear all. Sumber lama: `crypto.randomUUID()` di HTTP (sudah di-wrap di 1.2.8+) |
+| Tombol Errors di chrome://extensions | Sering bekas; Clear all. Sumber lama: `crypto.randomUUID()` di HTTP (sudah di-wrap) |
 
 ## Alur ekstensi (ringkas)
 
 1. Pertama kali: `chrome://extensions` → Load unpacked → `/Users/tiftazani/Cursor-Tifz/kunci/extension`.
 2. Helper harus nyala (`install-service`).
 3. Setelah git pull / file di `extension/` berubah, SW melihat stamp baru dari `/health` dan reload sendiri.
-4. Kartu harus **1.2.9**. Reload manual Chrome ≠ ganti file Git.
+4. Kartu harus **1.3.8**. Reload manual Chrome ≠ ganti file Git.
 5. Save login: tunggu outcome sukses; jangan simpan saat submit gagal.
+6. Ikon toolbar: `was_pinned_by_default: false`, jadi **tidak** muncul sendiri. Pin lewat puzzle-piece → pin. Ini bukan bug kode.
+
+### Aturan duplikat
+
+- Dua akun beda di host sama = bukan duplikat. Username beda selalu lolos.
+- Host harus **sama persis**. `accounts.google.com` ≠ `myaccount.google.com` ≠ `mail.google.com`. Jangan pakai domain family.
+- Layer URL (path) harus sama. `/login` dan `/transfer/confirm` = dua password berbeda.
+- Nama entri berisi email (`tiftazani@gmail.com`) **bukan** host. `hostFromUrl` menolak string tanpa scheme yang mengandung `@`; `nameMatchesHost` juga menolak nama ber-`@` supaya entri tidak ditawarkan di `gmail.com` hanya karena nama = alamat email.
+- Entri bernama OTP/TOTP/2FA/authenticator tidak pernah masuk cluster.
+- Cek: `npx vite-node .audit/dupe-ab.mjs`.
+
+### Layer password (satu situs, banyak prompt)
+
+- `layerFromUrl(url)` = path tanpa trailing slash, huruf kecil. Dipakai bersama oleh `src/lib/match.ts` dan `extension/crypto.js`.
+- `matchesForUrl` **tidak menyembunyikan** match, hanya mengurutkan: entri yang path-nya sama persis dengan halaman naik ke atas, entri tanpa path/root jadi cadangan.
+- Popup ekstensi menampilkan layer di baris kedua (`username · /transfer/confirm`) supaya dua kredensial di satu host terbaca beda.
+- Simpan login juga pakai layer: `decideLoginSave` pilih entri yang path-nya sama dulu. Kalau tidak, PIN di `/transfer/confirm` akan menimpa login `/login` yang username-nya sama.
+- Layer bukan filter: entri lain di host sama tetap ditawarkan, hanya turun urutan.
+- Cek: `tests/match-parity.test.ts` (parity + urutan), `tests/capture.test.ts`, `tests/extension-crypto.test.ts`.
+
+### Kapan ikon Kunci muncul
+
+- Ada field `password` + form terklasifikasi login → ikon di samping password.
+- Kotak kode sekali pakai (`autocomplete="one-time-code"`, `inputmode` numerik, nama `otp`/`totp`/`mfa`) → **tidak pernah**. Ini OTP, bukan password.
+- Satu field rahasia sendirian di halaman non-login (API key, token, webhook) → **tidak**. Aturan: `passwords.length === 1` + tanpa username yakin + tanpa sinyal login di tombol/URL. Contoh: modal OpenAI Compatible (Check/Create/Cancel).
+- Belum ada password tapi form jelas langkah login (tombol Continue/Next/Masuk, atau URL `/login` `/signin`) → ikon di samping kotak email. Contoh: `agoda.com/account/signin.html`.
+- Signup, reset, change-password, pencarian, pembayaran, newsletter → tidak pernah.
+- Cek: `node .audit/agoda-live.mjs`, `node .audit/modal-live.mjs`, `node .audit/otp-live.mjs`, dan `node .audit/ext-live.mjs` (Playwright, muat ekstensi sungguhan).
 
 ## Alur Mac helper (ringkas)
 
@@ -177,7 +203,7 @@ Lint: `npm run lint` (oxlint).
 - Token: `~/.kunci/helper-token`
 - App: `/Applications/Kunci Helper.app` (+ salinan `~/Applications`)
 - Accessibility: centang **Kunci Helper**. Jangan klik app di Dock (spawn dialog).
-- Daemon proxy `/api/*` ke `https://kunci-tifta.netlify.app`.
+- Daemon proxy `/api/*` ke `https://kunci.tiftazani-cuciin.workers.dev`.
 
 ## Prompt seed untuk harness baru
 
@@ -187,7 +213,7 @@ Kerjakan hanya di kunci/ pada branch cursor/kunci-password-manager-4eaf
 
 Mac path: /Users/tiftazani/Cursor-Tifz.
 Jangan sentuh cuan-yuk-guys. Jangan merge main. Zero-knowledge: jangan
-hardcode secrets. Extension unpacked: kunci/extension (1.2.9). Helper:
+hardcode secrets. Extension unpacked: kunci/extension (1.3.8). Helper:
 127.0.0.1:8780. Git Mac: fetch + checkout -B … FETCH_HEAD (bukan origin/branch).
 Bahasa chat: Indonesia natural.
 ```
@@ -205,9 +231,9 @@ Bahasa chat: Indonesia natural.
 | Daemon /health | `helper/daemon.mjs` |
 | Install Mac | `helper/install-service.mjs` |
 | Extension SW | `extension/background.js` |
-| Manifest | `extension/manifest.json` (`1.2.9`) |
-| Netlify API | `netlify/functions/api.ts` |
-| Netlify config | `netlify.toml` |
+| Manifest | `extension/manifest.json` (`1.3.8`) |
+| Cloudflare worker + API | `worker/index.ts` |
+| Cloudflare config | `wrangler.toml` |
 
 ## Catatan keamanan (produk)
 

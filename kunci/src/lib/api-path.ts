@@ -1,9 +1,25 @@
-const FUNCTION_PREFIX = '/.netlify/functions/api'
+/**
+ * Normalize the API path the server sees. Cloudflare Workers route /api/* straight
+ * to the worker, so the Netlify function prefix is only here for old bookmarks.
+ */
+const FUNCTION_PREFIXES = ['/.netlify/functions/api', '/api'] as const
 
+/**
+ * Normalize the API path the server sees. Cloudflare Workers route /api/* straight
+ * to the worker, so the Netlify function prefix is only here for old bookmarks.
+ */
 export function normalizeApiPath(pathname: string): string {
   let path = pathname || '/'
-  if (path === FUNCTION_PREFIX) path = '/api'
-  else if (path.startsWith(`${FUNCTION_PREFIX}/`)) path = `/api/${path.slice(FUNCTION_PREFIX.length + 1)}`
+  for (const prefix of FUNCTION_PREFIXES) {
+    if (path === prefix) {
+      path = '/api'
+      break
+    }
+    if (path.startsWith(`${prefix}/`)) {
+      path = `/api/${path.slice(prefix.length + 1)}`
+      break
+    }
+  }
   if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1)
   return path
 }

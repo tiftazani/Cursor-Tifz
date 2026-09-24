@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { IconShare } from './Icons'
-import { dismissIosInstall, isStandaloneDisplay, readInstallDismissed, shouldOfferIosInstall } from '../lib/pwa'
+import { dismissIosInstall, isIosDevice, isStandaloneDisplay, readInstallDismissed, shouldOfferIosInstall } from '../lib/pwa'
 
 function Steps() {
   return (
@@ -24,6 +24,7 @@ function Steps() {
 
 export function IosInstallCard() {
   const [open, setOpen] = useState(() =>
+    isIosDevice() &&
     shouldOfferIosInstall({
       standalone: isStandaloneDisplay(),
       dismissed: readInstallDismissed(),
@@ -32,7 +33,7 @@ export function IosInstallCard() {
   if (!open) return null
   return (
     <div className="install-card card stack">
-      <h3>Pasang di iPhone</h3>
+      <h3>Pasang di iPhone / iPad</h3>
       <p className="muted">Tidak lewat App Store. Sekali pasang, buka dari ikon di layar Utama seperti aplikasi biasa.</p>
       <Steps />
       <button
@@ -53,16 +54,16 @@ export function IosInstallGuide() {
   if (isStandaloneDisplay()) {
     return (
       <div className="card stack install-card">
-        <h3>Aplikasi iPhone</h3>
+        <h3>Aplikasi iPhone / iPad</h3>
         <p className="muted">Kunci sudah terpasang di layar Utama. Buka dari ikon Kunci supaya tidak ada bilah Safari.</p>
       </div>
     )
   }
   return (
     <div className="card stack install-card">
-      <h3>Pasang di iPhone</h3>
+      <h3>Pasang di iPhone / iPad</h3>
       <p className="muted">
-        Di iPhone 15 Pro Max: Safari → situs ini → Bagikan → Tambah ke Layar Utama. Tidak perlu App Store atau TestFlight.
+        Di Safari: buka situs ini → ketuk Bagikan → Tambah ke Layar Utama. Tidak perlu App Store atau TestFlight.
       </p>
       <Steps />
     </div>

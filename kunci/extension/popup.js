@@ -1,5 +1,8 @@
 import './ext-api.js'
-import { decryptVault, dekToB64, isEncryptedBlob, unlockErrorMessage } from './crypto.js'
+import { decryptVault, dekToB64, emptyListMessage, entriesToOffer, isEncryptedBlob, unlockErrorMessage } from './crypto.js'
+
+const offerEntries = entriesToOffer
+const emptyMessage = ({ query }) => emptyListMessage({ hasUrl: true, query })
 
 const status = document.getElementById('status')
 const unlock = document.getElementById('unlock')
@@ -57,13 +60,15 @@ async function render(query) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   const matches = tab?.url ? (await send({ type: 'MATCHES', url: tab.url })) || { matches: [] } : { matches: [] }
   const searched = (await send({ type: 'SEARCH', query })) || { entries: [] }
-  const entries = query ? searched.entries : matches.matches?.length ? matches.matches : searched.entries
+  const entries = offerEntries({ query, siteMatches: matches.matches || [], searchedEntries: searched.entries || [] })
   list.innerHTML = ''
   for (const e of entries || []) {
     const li = document.createElement('li')
     const btn = document.createElement('button')
     btn.type = 'button'
-    btn.innerHTML = `<strong>${escapeHtml(e.name)}</strong><span>${escapeHtml(e.username || e.url || '')}</span>`
+    const layer = e.layer && e.layer !== '/' ? e.layer : ''
+    const detail = [e.username || e.url || '', layer].filter(Boolean).join(' · ')
+    btn.innerHTML = `<strong>${escapeHtml(e.name)}</strong><span>${escapeHtml(detail)}</span>`
     btn.addEventListener('click', async () => {
       if (tab?.id) await chrome.tabs.sendMessage(tab.id, { type: 'FILL_ENTRY', entry: e }).catch(() => undefined)
       window.close()
@@ -72,7 +77,10 @@ async function render(query) {
     list.appendChild(li)
   }
   if (!list.children.length) {
-    list.innerHTML = '<li class="muted">Tidak ada hasil</li>'
+    const li = document.createElement('li')
+    li.className = 'muted'
+    li.textContent = emptyMessage({ query })
+    list.appendChild(li)
   }
 }
 

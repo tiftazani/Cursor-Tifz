@@ -1,4 +1,4 @@
-export const DEFAULT_CLOUD_URL = 'https://kunci-tifta.netlify.app'
+export const DEFAULT_CLOUD_URL = 'https://kunci.tiftazani-cuciin.workers.dev'
 
 export const LOCAL_APP_ORIGINS: readonly string[] = [
   'http://127.0.0.1:8780',

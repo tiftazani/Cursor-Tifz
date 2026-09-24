@@ -7,14 +7,14 @@ export default defineConfig({
     host: true,
     port: 5173,
     proxy: {
-      '/api': { target: 'https://kunci-tifta.netlify.app', changeOrigin: true, secure: true },
+      '/api': { target: 'https://kunci.tiftazani-cuciin.workers.dev', changeOrigin: true, secure: true },
     },
   },
   preview: {
     host: true,
     port: 4173,
     proxy: {
-      '/api': { target: 'https://kunci-tifta.netlify.app', changeOrigin: true, secure: true },
+      '/api': { target: 'https://kunci.tiftazani-cuciin.workers.dev', changeOrigin: true, secure: true },
     },
   },
   test: {

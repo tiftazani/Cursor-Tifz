@@ -8,6 +8,7 @@ import {
   dekToB64,
   hostFromUrl,
   isKunciAppUrl,
+  layerFromUrl,
   matchesForUrl,
   persistVault,
 } from './crypto.js'
@@ -35,7 +36,7 @@ const session = (() => {
   }
 })()
 
-const CLOUD = 'https://kunci-tifta.netlify.app'
+const CLOUD = 'https://kunci.tiftazani-cuciin.workers.dev'
 const KUNCI_TAB_URLS = [
   'http://127.0.0.1:8780/*',
   'http://localhost:8780/*',
@@ -59,6 +60,9 @@ async function publicMatches(vault, url) {
     password: e.password || '',
     totpSecret: e.totpSecret || '',
     url: e.url || '',
+    // Which prompt of the site this login belongs to, so the popup can show two
+    // credentials on one host as different layers instead of one blob.
+    layer: layerFromUrl(e.url || (e.urls || [])[0] || ''),
   }))
 }
 

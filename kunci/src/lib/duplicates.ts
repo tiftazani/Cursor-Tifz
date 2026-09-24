@@ -1,8 +1,11 @@
 import type { Entry } from '../types'
 import { newId } from './id'
-import { hostFromUrl } from './match'
+import { hostFromUrl, layerFromUrl } from './match'
 
 export type DuplicateReason = 'same-site' | 'same-login' | 'same-name'
+
+/** An entry that holds a one-time code, not a reusable password. */
+const OTP_NAME = /\b(otp|one[-_ ]?time|totp|2fa|mfa|authenticator|verification code|kode (otp|verifikasi))\b/i
 
 export interface DuplicateMember {
   id: string
@@ -56,31 +59,63 @@ export function hostsOf(entry: Entry): string[] {
   return [...out]
 }
 
+/**
+ * Which credential layer of a site an entry belongs to, taken from the URL path.
+ * One site can ask for a password in more than one place (site login, then a
+ * payment or transfer PIN), and those are separate credentials that must not be
+ * merged just because the host matches.
+ */
+export function layerOf(entry: Entry): string {
+  return layerFromUrl(entry.url || entry.urls?.[0] || '')
+}
+
 function shareHost(a: Entry, b: Entry): boolean {
   const ha = hostsOf(a)
   const hb = hostsOf(b)
   if (!ha.length || !hb.length) return false
+  // Exact host only. accounts.google.com, mail.google.com and myaccount.google.com
+  // are different services that usually hold different accounts; grouping them by
+  // domain family is what buried the summary in one 14-entry cluster.
   return ha.some((h) => hb.includes(h))
+}
+
+function shareLayer(a: Entry, b: Entry): boolean {
+  const la = layerOf(a)
+  const lb = layerOf(b)
+  if (la === lb) return true
+  // Only the site root is generic enough to stand in for a named layer. /login and
+  // /transfer/confirm are two different prompts, not the same credential.
+  const root = (p: string) => p === '' || p === '/'
+  return root(la) || root(lb)
 }
 
 export function relatedDuplicate(a: Entry, b: Entry): DuplicateReason | null {
   if (a.id === b.id) return null
   const skip = new Set(['note', 'totp'])
   if (skip.has(a.type) || skip.has(b.type)) return null
+  // An OTP code is not a saved password; it never belongs in a duplicate cluster.
+  if (OTP_NAME.test(`${a.name} ${a.appName ?? ''}`) || OTP_NAME.test(`${b.name} ${b.appName ?? ''}`)) return null
 
   const ua = normUser(a.username)
   const ub = normUser(b.username)
   const sameUser = Boolean(ua && ub && ua === ub)
   const bothEmptyUser = !ua && !ub
   const host = shareHost(a, b)
+  const layer = shareLayer(a, b)
+  const sameSite = host && layer
   const na = normEntryName(a)
   const nb = normEntryName(b)
   const sameName = Boolean(na && nb && na === nb && na.length >= 3)
   const samePass = Boolean(a.password && b.password && a.password === b.password)
 
-  if (host && (sameUser || bothEmptyUser)) return 'same-site'
-  if (sameUser && samePass && (host || sameName)) return 'same-login'
-  if (sameName && (sameUser || bothEmptyUser || !ua || !ub)) return 'same-name'
+  // Two accounts on the same site with different usernames are not duplicates.
+  if (sameSite && ua && ub && !sameUser) return null
+
+  if (sameSite && (sameUser || bothEmptyUser)) return 'same-site'
+  if (host && layer && sameUser && samePass) return 'same-login'
+  // A similar name alone is not enough: cross-host name matches used to chain
+  // unrelated services into one cluster.
+  if (sameSite && sameName) return 'same-name'
   return null
 }
 
@@ -142,11 +177,14 @@ export function findDuplicateClusters(entries: Entry[]): DuplicateCluster[] {
     const passwords = [...new Set(group.map((e) => e.password || '').filter(Boolean))]
     const passwordConflict = passwords.length > 1
     const host = members.find((m) => m.host)?.host || members[0].name
+    // Show the layer when it is not the site root, so two credentials on one host
+    // (site login vs payment PIN) are readable as different things.
+    const layer = group.map(layerOf).find((p) => p && p !== '/') || ''
     const reason = reasonByRoot.get(root) ?? 'same-name'
     clusters.push({
       id: `dup-${members.map((m) => m.id).sort().join('-')}`,
       reason,
-      title: host,
+      title: `${host}${layer}`,
       detail: `${group.length} entri · ${REASON_COPY[reason]}`,
       suggestion: passwordConflict ? 'delete' : 'merge',
       keepId,

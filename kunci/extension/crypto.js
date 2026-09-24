@@ -16,7 +16,7 @@ const KUNCI_PORTS = new Set(['8780', '5173', '4173'])
 export function isKunciAppUrl(raw) {
   try {
     const url = new URL(raw)
-    if (url.hostname === 'kunci-tifta.netlify.app') return true
+    if (url.hostname === 'kunci.tiftazani-cuciin.workers.dev') return true
     if ((url.hostname === '127.0.0.1' || url.hostname === 'localhost') && KUNCI_PORTS.has(url.port || '80')) return true
     return false
   } catch {
@@ -26,7 +26,13 @@ export function isKunciAppUrl(raw) {
 
 export function hostFromUrl(raw) {
   try {
-    const url = new URL(raw.includes('://') ? raw : `https://${raw}`)
+    const trimmed = String(raw ?? '').trim()
+    if (!trimmed) return null
+    const hasScheme = trimmed.includes('://')
+    // Bare strings with "@" are account names, not hosts: "tiftazani@gmail.com"
+    // would otherwise parse as host "gmail.com" and link unrelated entries.
+    if (!hasScheme && (trimmed.includes(' ') || trimmed.includes('@') || /%[0-9a-f]{2}/i.test(trimmed))) return null
+    const url = new URL(hasScheme ? trimmed : `https://${trimmed}`)
     return url.hostname.replace(/^www\./i, '').toLowerCase()
   } catch {
     return null
@@ -37,19 +43,82 @@ export function domainsMatch(a, b) {
   const ha = hostFromUrl(a)
   const hb = hostFromUrl(b)
   if (!ha || !hb) return false
-  return ha === hb || hb.endsWith(`.${ha}`) || ha.endsWith(`.${hb}`)
+  if (ha === hb) return true
+  const shorter = ha.length <= hb.length ? ha : hb
+  const longer = shorter === ha ? hb : ha
+  // A bare label ("com", "co", "io") is not a site; only a dotted name may be a suffix.
+  if (!shorter.includes('.')) return false
+  return longer.endsWith(`.${shorter}`)
 }
 
+function nameMatchesHost(name, host) {
+  if (!name || !host) return false
+  // A name holding an account ("tiftazani@gmail.com") is an account, not a site
+  // label. Without this, "gmail.com" leaks out of the address itself and the entry
+  // is offered on gmail.com wherever it is opened.
+  if (name.includes('@')) return false
+  if (name.includes(host)) return true
+  const token = name.replace(/\s+/g, '')
+  if (token.length < 4) return false
+  return host.split('.').includes(token)
+}
+
+/**
+ * What the popup may show. Without a query it is exactly the entries saved for this
+ * site, never the whole vault: the old fallback dumped 12 unrelated passwords into
+ * the popup on any site with no saved login.
+ */
+export function entriesToOffer({ query, siteMatches, searchedEntries }) {
+  return query ? searchedEntries : siteMatches
+}
+
+export function emptyListMessage({ hasUrl, query }) {
+  if (query) return 'Tidak ada hasil'
+  if (hasUrl) return 'Belum ada login tersimpan untuk situs ini'
+  return 'Buka tab situs, atau ketik untuk mencari'
+}
+
+/**
+ * The URL path an entry was saved from: which prompt of a site it belongs to.
+ * One host can ask for a password in more than one place (site login, then a
+ * transfer or payment PIN); those are separate credentials for the same site.
+ */
+export function layerFromUrl(raw) {
+  const trimmed = String(raw ?? '').trim()
+  if (!trimmed) return ''
+  try {
+    const url = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`)
+    return url.pathname.replace(/\/+$/, '').toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+// ponytail: Chrome loads extension/ as plain JS, so this mirrors src/lib/match.ts.
+// tests/match-parity.test.ts fails if the two copies drift.
 export function matchesForUrl(entries, pageUrl) {
-  return (entries || []).filter((e) => {
-    if (e.type === 'note') return false
-    const urls = [e.url, ...(e.urls || [])].filter(Boolean)
-    if (urls.some((u) => domainsMatch(u, pageUrl))) return true
-    const host = hostFromUrl(pageUrl)
-    if (!host) return false
-    const name = (e.name || '').toLowerCase()
-    return name.includes(host) || host.includes(name.replace(/\s+/g, ''))
-  })
+  const pageLayer = layerFromUrl(pageUrl)
+  const rank = (e) => {
+    const layer = layerFromUrl(e.url || (e.urls || [])[0] || '')
+    if (layer && pageLayer && layer === pageLayer) return 0
+    if (!layer || layer === '/') return 1
+    return 2
+  }
+  return (entries || [])
+    .filter((e) => {
+      if (e.type === 'note') return false
+      const urls = [e.url, ...(e.urls || [])].filter(Boolean)
+      if (urls.some((u) => domainsMatch(u, pageUrl))) return true
+      const host = hostFromUrl(pageUrl)
+      if (!host) return false
+      const name = (e.name || '').toLowerCase()
+      return nameMatchesHost(name, host)
+    })
+    // The entry saved from THIS path is the one the user wants at this prompt; the
+    // site-root login is the fallback. Never hide a match, only order them.
+    .map((e, i) => [e, rank(e), i])
+    .sort((a, b) => a[1] - b[1] || a[2] - b[2])
+    .map(([e]) => e)
 }
 
 export function loginTitleFromUrl(raw) {
@@ -67,8 +136,13 @@ export function decideLoginSave(entries, capture, neverHosts = []) {
   const host = hostFromUrl(capture.url)
   if (host && neverHosts.includes(host)) return { action: 'skip', reason: 'never' }
   const siteLogins = (entries || []).filter((e) => e.type !== 'note' && matchesForUrl([e], capture.url).length)
-  const sameUser = siteLogins.filter((e) => (e.username || '').trim() === username)
-  const pool = username ? sameUser : siteLogins
+  // One site can ask for a password in more than one place. Prefer entries saved
+  // from this same path, or saving a payment PIN would overwrite the site login.
+  const layer = layerFromUrl(capture.url)
+  const sameLayer = siteLogins.filter((e) => layerFromUrl(e.url || (e.urls || [])[0] || '') === layer)
+  const candidates = sameLayer.length ? sameLayer : siteLogins
+  const sameUser = candidates.filter((e) => (e.username || '').trim() === username)
+  const pool = username ? sameUser : candidates
   if (pool.find((e) => (e.password || '') === password && (e.username || '').trim() === username)) {
     return { action: 'skip', reason: 'unchanged' }
   }

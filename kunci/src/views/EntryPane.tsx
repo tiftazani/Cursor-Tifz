@@ -339,7 +339,7 @@ export function EntryPane({
           <ul>
             {draft.history.map((h) => (
               <li key={h.id}>
-                <div>
+                <div className="history-who">
                   <strong>{h.username || '—'}</strong>
                   <span className="muted">{formatDateTime(h.changedAt)}</span>
                 </div>

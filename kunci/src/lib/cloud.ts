@@ -2,7 +2,6 @@ import { isEncryptedBlob } from './crypto'
 import type { EncryptedBlob } from '../types'
 import { RECOVERY_EMAIL } from './account'
 import { DEFAULT_CLOUD_URL } from './allowed-origins'
-import { isNetlifyAccessGate, NETLIFY_PRIVATE_SITE_HELP } from './netlify-gate'
 
 const TOKEN_KEY = 'kunci_cloud_token'
 
@@ -155,8 +154,7 @@ function parseApiError(text: string, status: number, fallback: string): string {
   } catch {
     /* not json */
   }
-  if (isNetlifyAccessGate(status, text)) return NETLIFY_PRIVATE_SITE_HELP
-  if (status === 404) return 'API cloud tidak ditemukan. Tunggu deploy Netlify, lalu coba lagi.'
+  if (status === 404) return 'API cloud tidak ditemukan. Tunggu deploy selesai, lalu coba lagi.'
   if (status === 429) return 'Terlalu banyak permintaan. Coba beberapa menit lagi.'
   return `${fallback} (HTTP ${status})`
 }

@@ -122,7 +122,12 @@ export function LockScreen() {
         {mode === 'unlock' ? (
           <form className="stack" onSubmit={(e) => void onSubmit(e)}>
             <Field label="Kata sandi induk">
-              <SecretInput value={password} onChange={setPassword} autoComplete="current-password" protectFromAutofill={false} />
+              {/*
+                Shielded on purpose. Left unshielded, Chrome/Brave saves the Kunci master
+                password into its own store and then offers it on unrelated sites. The
+                browser dropdown over this field is the browser's list, not Kunci's.
+              */}
+              <SecretInput value={password} onChange={setPassword} autoComplete="new-password" />
             </Field>
             {hint ? <p className="hint-pill">Petunjuk: {hint}</p> : null}
             {error ? <p className="error">{error}</p> : null}

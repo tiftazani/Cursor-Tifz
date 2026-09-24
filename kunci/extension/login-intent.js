@@ -7,11 +7,23 @@
   const RESET_BTN = /\b(reset password|forgot|lupa kata sandi|send (reset|link)|recover)\b/i
   const SEARCH_HINT = /\b(search|cari|query|filter|find|q)\b/i
   const PAY_HINT = /\b(card|cc-|cvv|cvc|pan|iban|routing|checkout|payment|pay now|bayar)\b/i
-  const LOGIN_PATH = /\/(login|signin|sign-in|masuk|session|auth|sso|accounts\/login)(\/|$|\?)/i
-  const SIGNUP_PATH = /\/(signup|sign-up|register|join|daftar|create-account)(\/|$|\?)/i
+  // One-time codes are not vault passwords. A code from SMS/email/authenticator is
+  // single-use and expires, so filling a saved password into it would send the wrong
+  // string and could burn a login attempt. Keep them out of every password path.
+  // Boundary on the left only: real fields are named "otpCode"/"totpCode"/"mfa_token",
+  // where a right-hand \b never matches.
+  const OTP_HINT =
+    /\b(otp|totp|2fa|mfa|authenticator|passcode|one[-_ ]?time|verification code|verify code|sms code|security token|kode[ -]?(otp|verifikasi|sms))/i
+  const LOGIN_PATH = /\/(login|signin|sign-in|masuk|session|auth|sso|accounts\/login)(\/|$|\?|\.)/i
+  const SIGNUP_PATH = /\/(signup|sign-up|register|join|daftar|create-account)(\/|$|\?|\.)/i
   const RESET_PATH = /\/(forgot|reset|recover|password\/(new|reset))(\/|$|\?)/i
   const CHANGE_PATH = /\/(settings|account|profile).*(password)|\/(change-password|password\/change)/i
   const CHECKOUT_PATH = /\/(checkout|payment|pay|billing|cart)(\/|$|\?)/i
+
+  // Deliberately narrower than LOGIN_BTN: "submit" alone appears on every web form, and
+  // this gate decides whether Kunci shows up next to an email box on pages with no
+  // password field at all.
+  const USERNAME_ONLY_BTN = /\b(continue|next|lanjut|log ?in|sign ?in|logon|masuk|masukkan|anmelden|connexion|entrar)\b/i
 
   function blob(field) {
     return `${field.type} ${field.name} ${field.id} ${field.autocomplete} ${field.placeholder} ${field.ariaLabel} ${field.inputMode || ''}`.toLowerCase()
@@ -19,6 +31,15 @@
 
   function ac(field) {
     return (field.autocomplete || '').toLowerCase().replace(/[\s_]+/g, '-')
+  }
+
+  function isOtpField(field) {
+    if (field.tag !== 'input') return false
+    if (ac(field) === 'one-time-code') return true
+    // Deliberately NOT keyed on inputmode="numeric" alone: phone-number and PIN
+    // fields use that too, and treating them as OTP would hide the username box on
+    // every phone-based login.
+    return OTP_HINT.test(blob(field))
   }
 
   function isUsernameField(field) {
@@ -29,12 +50,38 @@
     }
     if (type === 'search' || SEARCH_HINT.test(blob(field))) return false
     if (PAY_HINT.test(blob(field)) || ac(field).startsWith('cc-')) return false
+    if (isOtpField(field)) return false
     if (/\b(first[-_ ]?name|last[-_ ]?name|given|family|nama depan|nama belakang|address|alamat|company|organization|otp|one-time)\b/.test(blob(field))) {
       return false
     }
     if (type === 'email' || ac(field) === 'username' || ac(field) === 'email') return true
     if (/user|email|login|account|phone|tel|identifier/.test(blob(field))) return true
     return type === 'text' || type === 'tel'
+  }
+
+  function isConfidentUsernameField(field) {
+    if (field.tag !== 'input') return false
+    if (!isUsernameField(field)) return false
+    const auto = ac(field)
+    if ((field.type || 'text').toLowerCase() === 'email' || auto === 'username' || auto === 'email') return true
+    return /user|email|login|account|identifier/.test(blob(field))
+  }
+
+  function credentialShape(form) {
+    const hasPassword = form.fields.some((f) => (f.type || '').toLowerCase() === 'password')
+    if (!hasPassword) return 'user-pass'
+    return form.fields.some(isConfidentUsernameField) ? 'user-pass' : 'pass-only'
+  }
+
+  function isUsernameOnlyLoginStep(form) {
+    if (form.fields.some((f) => (f.type || '').toLowerCase() === 'password')) return false
+    if (!form.fields.some(isConfidentUsernameField)) return false
+    const hay = `${form.id} ${form.name} ${form.action} ${form.buttons.join(' ')}`.toLowerCase()
+    const url = `${form.pageUrl} ${form.action}`
+    const btn = form.buttons.join(' ')
+    if (SIGNUP_PATH.test(url) || SIGNUP_BTN.test(btn) || /\bsignup|register|daftar\b/.test(hay)) return false
+    if (RESET_PATH.test(url) || RESET_BTN.test(btn) || /forgot|reset-password/.test(hay)) return false
+    return LOGIN_PATH.test(url) || USERNAME_ONLY_BTN.test(btn)
   }
 
   function isCurrentPasswordField(field) {
@@ -61,10 +108,17 @@
     const current = passwords.filter(isCurrentPasswordField)
     const created = passwords.filter(isNewPasswordField)
     const users = form.fields.filter(isUsernameField)
+    const confidentUsers = form.fields.filter(isConfidentUsernameField)
     const btn = form.buttons.join(' ')
 
     if (form.fields.some((f) => (f.type || '').toLowerCase() === 'search' || SEARCH_HINT.test(blob(f))) && passwords.length === 0) {
       return { kind: 'search', reason: 'form pencarian' }
+    }
+    // A one-time code box is not a vault password. Checked before everything else
+    // because an OTP step can otherwise look exactly like a login: one text box and
+    // a Continue button.
+    if (form.fields.some(isOtpField)) {
+      return { kind: 'otp', reason: 'kotak kode sekali pakai (OTP), bukan password' }
     }
     if (form.fields.some((f) => PAY_HINT.test(blob(f)) || ac(f).startsWith('cc-')) || CHECKOUT_PATH.test(url) || PAY_HINT.test(hay)) {
       return { kind: 'payment', reason: 'field pembayaran, bukan login' }
@@ -92,6 +146,13 @@
     }
     if (LOGIN_PATH.test(url) || LOGIN_BTN.test(btn) || /\blogin|signin|masuk\b/.test(hay)) {
       return { kind: 'login', reason: 'form masuk sistem' }
+    }
+    // A lone secret box on a settings page (API key, token, webhook secret) is not
+    // a login, even when it has type="password" and sits next to username-looking
+    // boxes like Name or Base URL. Real password managers treat these as secrets,
+    // not credentials: they stay out of the way instead of pushing a suggestion.
+    if (passwords.length === 1 && confidentUsers.length === 0 && !LOGIN_PATH.test(url) && !LOGIN_BTN.test(btn)) {
+      return { kind: 'other', reason: 'satu field rahasia di halaman non-login' }
     }
     if (current.length >= 1 || users.length >= 1) {
       return { kind: 'login', reason: 'username/password untuk autentikasi' }
@@ -134,12 +195,28 @@
     return classifyCredentialForm(snapshotForm(form, location.href))
   }
 
+  function shapeAround(el) {
+    const form = el instanceof Element ? el.closest('form') : null
+    return credentialShape(snapshotForm(form, location.href))
+  }
+
+  function isUsernameOnlyStepAround(el) {
+    const form = el instanceof Element ? el.closest('form') : null
+    return isUsernameOnlyLoginStep(snapshotForm(form, location.href))
+  }
+
   root.kunciLoginIntent = {
     classifyCredentialForm,
     classifyAround,
+    credentialShape,
+    shapeAround,
+    isOtpField,
+    isUsernameOnlyLoginStep,
+    isUsernameOnlyStepAround,
     snapshotForm,
     fieldSnapshot,
     isUsernameField,
+    isConfidentUsernameField,
     isCurrentPasswordField,
     isNewPasswordField,
     shouldAutofillKind(kind) {

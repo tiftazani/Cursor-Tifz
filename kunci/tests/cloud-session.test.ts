@@ -118,11 +118,11 @@ describe('probeCloudSession', () => {
     const state = await probeCloudSession({
       publicHost: false,
       token: null,
-      cloudUrl: 'https://kunci-tifta.netlify.app',
+      cloudUrl: 'https://kunci.tiftazani-cuciin.workers.dev',
       fetch: async (url) => {
         if (url.startsWith('/')) return htmlRes()
-        if (url === 'https://kunci-tifta.netlify.app/api/ping') return jsonRes(200, { ok: true })
-        if (url === 'https://kunci-tifta.netlify.app/api/me') return jsonRes(401, { ok: false })
+        if (url === 'https://kunci.tiftazani-cuciin.workers.dev/api/ping') return jsonRes(200, { ok: true })
+        if (url === 'https://kunci.tiftazani-cuciin.workers.dev/api/me') return jsonRes(401, { ok: false })
         return htmlRes()
       },
     })

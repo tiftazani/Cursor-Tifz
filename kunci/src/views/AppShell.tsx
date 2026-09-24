@@ -229,13 +229,14 @@ export function AppShell() {
                     onClick={() => goView(item.id)}
                   >
                     <Icon size={20} />
-                    {item.label}
+                    <span>{item.label}</span>
+                    {item.id === 'home' && dupeCount > 0 ? <b className="nav-badge">{dupeCount}</b> : null}
                   </button>
                 )
               })}
               <button type="button" className="nav-item" onClick={() => lock()}>
                 <IconLock size={20} />
-                Kunci brankas
+                <span>Kunci brankas</span>
               </button>
             </div>
           </div>
@@ -262,8 +263,9 @@ export function AppShell() {
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Cari nama, situs, username…"
+                  placeholder="Cari nama/situs…"
                   enterKeyHint="search"
+                  aria-label="Cari nama, situs, atau username"
                 />
               </div>
               <button type="button" className="icon-btn toolbar-lock" title="Kunci brankas" onClick={lock}>
@@ -427,7 +429,8 @@ export function AppShell() {
 }
 
 function entryListHint(entry: Entry): string {
-  const host = hostFromUrl(entry.url || entry.urls[0] || entry.name)
+  const url = entry.url || entry.urls[0] || ''
+  const host = hostFromUrl(url)
   if (host) return host
   if (entry.appName) return entry.appName
   if (entry.type === 'login') return 'Website'
