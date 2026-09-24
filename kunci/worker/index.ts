@@ -47,11 +47,18 @@ export class KunciStore {
       else await this.state.storage.put(key, value)
       return Response.json({ ok: true })
     }
-    // rate: fixed window counter
+    // rate: fixed window counter. The window has to be anchored at its own start,
+    // not at the last request: anchoring on the last request means a caller who keeps
+    // coming back more often than windowMs never sees the window expire. Simulated
+    // with a 4/hour limit and one request every 55 minutes, the old shape blocked
+    // 25 of 30 requests even though 27 hours had passed, and the error said "try
+    // again in 1 hour".
     const now = Date.now()
-    const rl = ((await this.state.storage.get(key)) as { n?: number; t?: number } | null) ?? {}
-    const n = (rl.t && rl.t > now - (windowMs ?? 0) ? rl.n ?? 0 : 0) + 1
-    await this.state.storage.put(key, { n, t: now })
+    const rl = ((await this.state.storage.get(key)) as { n?: number; start?: number } | null) ?? {}
+    const expired = !rl.start || now - rl.start >= (windowMs ?? 0)
+    const n = (expired ? 0 : rl.n ?? 0) + 1
+    const start = expired ? now : rl.start
+    await this.state.storage.put(key, { n, start })
     return Response.json({ ok: n <= (max ?? 0) })
   }
 }
@@ -69,8 +76,8 @@ function corsHeaders(req: Request): Record<string, string> {
   }
 }
 
-function json(body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
+function json(body: unknown, status = 200, extraHeaders: Record<string, string> = {}, head = false): Response {
+  return new Response(head ? null : JSON.stringify(body), {
     status,
     headers: {
       'Content-Type': 'application/json',
@@ -127,7 +134,17 @@ function safeEqual(a: string, b: string): boolean {
 function readCookie(req: Request, name: string): string | null {
   for (const part of (req.headers.get('cookie') || '').split(';')) {
     const [k, ...rest] = part.trim().split('=')
-    if (k === name) return decodeURIComponent(rest.join('='))
+    if (k !== name) continue
+    // A cookie value with a broken percent escape (`kunci_session=%`) made
+    // decodeURIComponent throw URIError, which the outer catch turned into a 500 with
+    // the raw message. Every session check then answered 500 instead of 401, and
+    // src/lib/cloud.ts reads 500-with-JSON as "the API is alive", so a dead token
+    // looked configured. A cookie we cannot decode is simply not our cookie.
+    try {
+      return decodeURIComponent(rest.join('='))
+    } catch {
+      return null
+    }
   }
   return null
 }
@@ -147,18 +164,30 @@ async function sessionEmail(req: Request, env: Env): Promise<string | null> {
   return email
 }
 
-async function issueSession(email: string, req: Request, env: Env): Promise<{ token: string; cookie: string }> {
-  const exp = Date.now() + SESSION_MS
-  const token = `${email}|${exp}|${await hmac(`${email}|${exp}`, secret(env))}`
+/**
+ * Build the session cookie, for issuing and for clearing.
+ *
+ * The clear used to be a hardcoded string with `Secure` in it, while issueSession only
+ * added `Secure` when the request arrived over https. On http://127.0.0.1:8780 the two
+ * attributes disagreed, and whether the browser actually removes the cookie then
+ * depends on the implementation. Same function, same flags, `maxAgeSeconds` decides.
+ */
+function sessionCookie(req: Request, value: string, maxAgeSeconds: number): string {
   const parts = [
-    `${COOKIE}=${encodeURIComponent(token)}`,
+    `${COOKIE}=${value}`,
     'Path=/',
     'HttpOnly',
     'SameSite=Strict',
-    `Max-Age=${Math.floor(SESSION_MS / 1000)}`,
+    `Max-Age=${maxAgeSeconds}`,
   ]
   if (new URL(req.url).protocol === 'https:') parts.push('Secure')
-  return { token, cookie: parts.join('; ') }
+  return parts.join('; ')
+}
+
+async function issueSession(email: string, req: Request, env: Env): Promise<{ token: string; cookie: string }> {
+  const exp = Date.now() + SESSION_MS
+  const token = `${email}|${exp}|${await hmac(`${email}|${exp}`, secret(env))}`
+  return { token, cookie: sessionCookie(req, encodeURIComponent(token), Math.floor(SESSION_MS / 1000)) }
 }
 
 async function sendEmail(env: Env, subject: string, text: string): Promise<void> {
@@ -218,7 +247,7 @@ function sanitizeBlob(value: unknown): Record<string, unknown> | null {
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const respond = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}) =>
-      json(body, status, { ...corsHeaders(req), ...extraHeaders })
+      json(body, status, { ...corsHeaders(req), ...extraHeaders }, req.method === 'HEAD')
 
     // One Durable Object holds every secret; the app is single-user.
     const store = env.KUNCI.get(env.KUNCI.idFromName('kunci'))
@@ -236,28 +265,34 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders(req) })
     }
 
+    const url = new URL(req.url)
+    const path = normalizeApiPath(url.pathname)
+
+    // These belong to the local helper daemon only. A request that reaches the cloud
+    // worker for one of them used to fall through to the router and answer
+    // "404 not found", which reads like the API is fine but the path is wrong. It is
+    // a 403: this worker never served them.
+    if (path === '/api/health' || path === '/api/apps' || path === '/api/local-token') {
+      return respond({ error: 'Tidak di worker ini' }, 403)
+    }
+
     if (req.method !== 'GET' && req.method !== 'HEAD' && !originAllowed(req)) {
       return respond({ error: 'Origin ditolak' }, 403)
     }
-
-    const url = new URL(req.url)
-    const path = normalizeApiPath(url.pathname)
 
     try {
       if ((req.method === 'GET' || req.method === 'HEAD') && isPingPath(path)) {
         return respond({ ok: true })
       }
 
-      if (req.method === 'GET' && isSessionPath(path)) {
+      if ((req.method === 'GET' || req.method === 'HEAD') && isSessionPath(path)) {
         const email = await sessionEmail(req, env)
         if (!email) return respond({ ok: false }, 401)
         return respond({ ok: true, email })
       }
 
       if (req.method === 'POST' && path === '/api/auth/logout') {
-        return respond({ ok: true }, 200, {
-          'Set-Cookie': `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-        })
+        return respond({ ok: true }, 200, { 'Set-Cookie': sessionCookie(req, '', 0) })
       }
 
       if (req.method === 'POST' && path === '/api/auth/otp') {
@@ -289,8 +324,12 @@ export default {
         if (!(await rateOk(`rl:verify:${clientIp(req)}`, 20, 60 * 60 * 1000))) {
           return respond({ error: 'Terlalu banyak percobaan. Coba 1 jam lagi.' }, 429)
         }
-        const body = (await req.json().catch(() => ({}))) as { code?: string; email?: string }
-        if ((body.email || ALLOWED_EMAIL).toLowerCase() !== ALLOWED_EMAIL) {
+        const body = (await req.json().catch(() => ({}))) as { code?: string; email?: unknown }
+        // Coerce before comparing. A JSON body can hold any type, so `email: 123` made
+        // .toLowerCase throw a TypeError that the outer catch reported as a 500 with
+        // the raw internal message, instead of the 403 this check exists to give.
+        const claimed = String(body.email ?? ALLOWED_EMAIL).trim().toLowerCase()
+        if (claimed !== ALLOWED_EMAIL) {
           return respond({ error: 'Email tidak diizinkan' }, 403)
         }
         const otp = await getKey<StoredOtp>('otp')
@@ -328,7 +367,7 @@ export default {
 
       if (path === '/api/vault') {
         if (!(await sessionEmail(req, env))) return respond({ error: 'Sesi tidak valid' }, 401)
-        if (req.method === 'GET') {
+        if (req.method === 'GET' || req.method === 'HEAD') {
           return respond({ blob: (await getKey('vault')) ?? null })
         }
         if (req.method === 'PUT') {
@@ -343,8 +382,12 @@ export default {
 
       return respond({ error: 'not found' }, 404)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Server error'
-      return respond({ error: message }, 500)
+      // The client gets a stable message. `err.message` used to go straight out, which
+      // leaked implementation detail (verified live: a JSON body of `{"email":123}`
+      // answered 500 with "(body.email || ALLOWED_EMAIL).toLowerCase is not a function").
+      // The detail goes to the Worker log instead.
+      console.error('kunci worker error:', err)
+      return respond({ error: 'Server error' }, 500)
     }
   },
 }

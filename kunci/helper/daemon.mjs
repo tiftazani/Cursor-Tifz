@@ -218,6 +218,24 @@ function missingUiPage(res) {
 </body>`)
 }
 
+/**
+ * Cached for a few seconds because it reads the whole 328 KB bundle and spawns git.
+ * /health and /apps are reachable without a token from any page that can reach
+ * loopback, so calling it per request let a web page block the daemon's event loop
+ * (readFileSync + spawnSync are synchronous) just by looping.
+ */
+const MEMO_MS = 5000
+const memo = new Map()
+
+async function cached(key, produce) {
+  const hit = memo.get(key)
+  const now = Date.now()
+  if (hit && now - hit.at < MEMO_MS) return hit.value
+  const value = await produce()
+  memo.set(key, { at: now, value })
+  return value
+}
+
 function distMissingRingkasan() {
   const htmlPath = join(DIST, 'index.html')
   const srcDash = join(ROOT, 'src', 'views', 'DashboardView.tsx')
@@ -303,18 +321,20 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://127.0.0.1:${PORT}`)
   try {
     if (req.method === 'GET' && url.pathname === '/health') {
+      const disk = await cached('extensionOnDisk', async () => extensionOnDisk())
+      const stale = await cached('distStale', async () => distMissingRingkasan())
       json(res, 200, {
         ok: true,
         platform: platform(),
-        version: extensionOnDisk().extensionVersion,
+        version: disk.extensionVersion,
         email: RECOVERY_EMAIL,
         ui: serveUi,
         uiBuilt: existsSync(join(DIST, 'index.html')),
-        uiRevision: distMissingRingkasan() ? 'stale' : extensionOnDisk().extensionVersion,
+        uiRevision: stale ? 'stale' : disk.extensionVersion,
         accessibility: await accessibilityTrusted(),
         helperApp: Boolean(helperBinPath()),
         helperAppPath: helperAppBundlePath() || '',
-        ...refreshCommands(),
+        ...(await cached('refreshCommands', async () => refreshCommands())),
       })
       return
     }
@@ -322,10 +342,10 @@ const server = createServer(async (req, res) => {
       json(res, 200, {
         ok: true,
         platform: platform(),
-        accessibility: await accessibilityTrusted(),
+        accessibility: await cached('ax', async () => accessibilityTrusted()),
         helperApp: Boolean(helperBinPath()),
         helperAppPath: helperAppBundlePath() || '',
-        apps: await listGuiApps(),
+        apps: await cached('apps', async () => listGuiApps()),
       })
       return
     }
@@ -409,6 +429,22 @@ const server = createServer(async (req, res) => {
           : 'gagal',
     })
   }
+})
+
+/**
+ * Without this, a second copy of the daemon (or anything else already on 8780) makes
+ * listen() emit 'error', and an unhandled 'error' event on a server crashes the process
+ * with a stack trace. Under launchd with KeepAlive that becomes a restart loop, so the
+ * message has to say what actually happened and exit cleanly instead.
+ */
+server.on('error', (err) => {
+  const code = err && err.code
+  if (code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} sudah dipakai proses lain. Hentikan dulu, atau jalankan ulang layanan.`)
+  } else {
+    console.error(`Layanan tidak bisa jalan: ${err && err.message ? err.message : err}`)
+  }
+  process.exit(1)
 })
 
 server.listen(PORT, '127.0.0.1', () => {
