@@ -128,4 +128,40 @@ describe('probeCloudSession', () => {
     })
     expect(state).toEqual({ signedIn: false, configured: true })
   })
+
+  it('lets localhost skip the OTP gate when the vault is already on this machine', async () => {
+    // The gate used to open for localhost whenever the cloud answered, so a
+    // missing RESEND_API_KEY locked the user out of a vault that was sitting
+    // right there in IndexedDB. A local copy means localhost can carry on and
+    // sync in the background once the OTP goes through.
+    const state = await probeCloudSession({
+      publicHost: false,
+      token: null,
+      localVault: true,
+      cloudUrl: 'https://kunci.tiftazani-cuciin.workers.dev',
+      fetch: async (url) => {
+        if (url.startsWith('/')) return htmlRes()
+        if (url === 'https://kunci.tiftazani-cuciin.workers.dev/api/ping') return jsonRes(200, { ok: true })
+        if (url === 'https://kunci.tiftazani-cuciin.workers.dev/api/me') return jsonRes(401, { ok: false })
+        return htmlRes()
+      },
+    })
+    expect(state).toEqual({ signedIn: false, configured: true, localOnly: true })
+  })
+
+  it('still asks a public host for the code even when a local copy exists', async () => {
+    // The public site has no IndexedDB copy of its own, so it must not skip the gate.
+    const state = await probeCloudSession({
+      publicHost: true,
+      token: null,
+      localVault: true,
+      fetch: async (url) => {
+        if (url.endsWith('/api/ping') || url.endsWith('/kunci-status')) return jsonRes(200, { ok: true })
+        if (url.endsWith('/api/me') || url.endsWith('/api/session')) return jsonRes(401, { ok: false })
+        return htmlRes()
+      },
+    })
+    expect(state).toEqual({ signedIn: false, configured: true })
+    expect(state.localOnly).toBeUndefined()
+  })
 })

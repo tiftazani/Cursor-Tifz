@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Field, SecretInput, TextInput } from '../components/Field'
 import { isStrongMaster } from '../lib/strength'
 import { AUTO_LOCK_OPTIONS, resolveAutoLockSeconds } from '../lib/autolock'
 import { IosInstallGuide } from '../components/IosInstallCard'
+import { cloudHasSession } from '../lib/cloud'
 import { useVault } from '../state/VaultContext'
 
 export function SettingsView() {
@@ -24,6 +25,16 @@ export function SettingsView() {
   const [next2, setNext2] = useState('')
   const [hintDraft, setHintDraft] = useState(hint)
   const [msg, setMsg] = useState('')
+  const [cloudSession, setCloudSession] = useState(false)
+  useEffect(() => {
+    let live = true
+    void cloudHasSession().then((on) => {
+      if (live) setCloudSession(on)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
   if (!vault) return null
   const s = vault.settings
 
@@ -189,6 +200,19 @@ export function SettingsView() {
         <button type="button" className="btn" onClick={() => void logoutPublic()}>
           Keluar dari sesi cloud ({recoveryEmail})
         </button>
+        {cloudSession ? (
+          <p className="muted">Sesi cloud aktif. Perubahan ikut tersimpan di server.</p>
+        ) : (
+          <>
+            <p className="muted">
+              Belum ada sesi cloud di browser ini, jadi perubahan hanya tersimpan di perangkat ini. Buka gerbang kode
+              email untuk menyalakan sinkron.
+            </p>
+            <button type="button" className="btn" onClick={() => window.location.reload()}>
+              Buka gerbang kode email
+            </button>
+          </>
+        )}
         <button
           type="button"
           className="btn btn-danger"

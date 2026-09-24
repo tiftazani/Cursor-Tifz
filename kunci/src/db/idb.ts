@@ -74,6 +74,15 @@ export const vaultDb = {
   },
 }
 
+/** Localhost needs this to know whether it can open without a cloud session. */
+export async function hasLocalVault(): Promise<boolean> {
+  try {
+    return Boolean(await vaultDb.getBlob())
+  } catch {
+    return false
+  }
+}
+
 export async function pushIdbBackup(
   blob: EncryptedBlob,
   reason: StoredBackup['reason'],

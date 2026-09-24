@@ -2,6 +2,7 @@ import { isEncryptedBlob } from './crypto'
 import type { EncryptedBlob } from '../types'
 import { RECOVERY_EMAIL } from './account'
 import { DEFAULT_CLOUD_URL } from './allowed-origins'
+import { hasLocalVault } from '../db/idb'
 
 const TOKEN_KEY = 'kunci_cloud_token'
 
@@ -48,6 +49,11 @@ export type SessionState = {
   signedIn: boolean
   email?: string
   configured: boolean
+  /**
+   * Localhost only: the vault is already in this browser's IndexedDB, so the app
+   * can run without a cloud session. Syncing waits until the OTP goes through.
+   */
+  localOnly?: boolean
   error?: 'network' | 'missing'
 }
 
@@ -78,6 +84,8 @@ export async function probeCloudSession(opts: {
   publicHost: boolean
   token: string | null
   cloudUrl?: string
+  /** Localhost only: a decrypted-able vault already exists in IndexedDB. */
+  localVault?: boolean
 }): Promise<SessionState> {
   const cloud = (opts.cloudUrl || DEFAULT_CLOUD_URL).replace(/\/$/, '')
   const origins = opts.publicHost ? [''] : ['', cloud]
@@ -133,18 +141,36 @@ export async function probeCloudSession(opts: {
     }
 
     if (email) return { signedIn: true, email, configured: true }
-    if (contacted) return { signedIn: false, configured: true }
+    if (contacted) {
+      // A vault on this machine is enough for localhost: the code only buys
+      // cloud sync, and blocking on it locked people out of their own data
+      // whenever the mail key was missing.
+      if (opts.localVault && !opts.publicHost) return { signedIn: false, configured: true, localOnly: true }
+      return { signedIn: false, configured: true }
+    }
   }
 
   return { signedIn: false, configured: false, error: network ? 'network' : 'missing' }
 }
 
 export async function sessionStatus(): Promise<SessionState> {
+  // A vault in IndexedDB means localhost does not need a cloud session to open it.
+  const localVault = await hasLocalVault()
   return probeCloudSession({
     fetch: (input, init) => globalThis.fetch(input, init),
     publicHost: isPublicHost(),
     token: readToken(),
+    localVault,
   })
+}
+
+/**
+ * Whether this browser can write to the cloud right now. Settings uses it to say
+ * plainly that changes stay on the device until the email gate is passed.
+ */
+export async function cloudHasSession(): Promise<boolean> {
+  const state = await sessionStatus()
+  return state.signedIn
 }
 
 function parseApiError(text: string, status: number, fallback: string): string {

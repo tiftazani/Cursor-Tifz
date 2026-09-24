@@ -30,7 +30,7 @@ function CloudSessionGate({ children }: { children: ReactNode }) {
     applyPlatformAttr()
     void sessionStatus()
       .then((s) => {
-        if (s.signedIn) setState('ok')
+        if (s.signedIn || s.localOnly) setState('ok')
         else if (!s.configured) setState(s.error === 'network' ? 'offline' : 'missing')
         else setState('auth')
       })
