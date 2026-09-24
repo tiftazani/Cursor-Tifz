@@ -64,6 +64,8 @@ Cek cepat: `npx wrangler secret list` — kalau `RESEND_API_KEY` tidak ada di da
 
 Deploy: `npm run deploy` (= build + `wrangler deploy`). Lihat secret: `npx wrangler secret list`. Storage = Durable Object `KunciStore` (konsisten kuat, jadi cap percobaan OTP tidak bisa diakali).
 
+**Migrasi blob dari Netlify.** Brankas lama ada di Netlify Blobs store `kunci-secure` (site `kunci-tifta`). Sudah disalin ke Durable Object Worker pada 2026-09-24; ciphertext diverifikasi identik byte-per-byte (570.384 byte `data`). Salinan cadangan: `~/.kunci/netlify-vault-20260924.json` (mode 600). Brankas Netlify lama **belum dihapus** — hapus setelah yakin Worker jalan.
+
 > Netlify sudah ditinggalkan (kredit akun habis, deploy diblokir). Jangan buat ulang `netlify.toml` / `.netlify`.
 
 ## Cara jalanin Mac (kritis)
