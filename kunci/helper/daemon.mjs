@@ -284,6 +284,17 @@ await wipeLegacyDek()
 if (platform() === 'darwin') await quitHelperProcesses()
 const server = createServer(async (req, res) => {
   cors(req, res)
+  // A request that carries an Origin we do not recognise is a page we did not write.
+  // CORS only stops it from READING the answer; it does not stop the answer from
+  // being sent, and curl proved it: /api/local-token handed the helper token to
+  // `Origin: https://evil.example`. Refuse the request instead of hiding the reply.
+  // No Origin at all means a script or a native app (curl, the helper itself), which
+  // cannot be a web page.
+  const origin = req.headers.origin
+  if (origin && !localOrigin(req)) {
+    json(res, 403, { error: 'Origin tidak dikenal' })
+    return
+  }
   if (req.method === 'OPTIONS') {
     res.writeHead(204)
     res.end()
