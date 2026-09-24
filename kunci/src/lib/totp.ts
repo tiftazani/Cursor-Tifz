@@ -77,8 +77,3 @@ export function parseOtpauth(uri: string): { secret: string; label: string; issu
     return null
   }
 }
-
-export function looksLikeTotpSecret(value: string): boolean {
-  const clean = normalizeSecret(value)
-  return clean.length >= 8 && /^[A-Z2-7]+$/.test(clean)
-}
