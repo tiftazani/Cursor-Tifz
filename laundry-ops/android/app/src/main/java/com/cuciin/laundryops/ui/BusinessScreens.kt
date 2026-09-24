@@ -46,7 +46,7 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
     val session = businessStore.session.value ?: return
     var showBranchSheet by rememberSaveable { mutableStateOf(false) }
     businessStore.revision.intValue
-    val allowedBranches = if (canViewAllBranches(session)) businessStore.branches.toList() else businessStore.branches.filter { it.id == session.branchId }
+    val allowedBranches = if (canViewAllBranches(session)) businessStore.branches.toList() else businessStore.branches.filter { it.id in session.allowedBranchIds }
     var branchId by rememberSaveable { mutableStateOf(session.branchId) }
     var creating by rememberSaveable { mutableStateOf(false) }
     var category by remember { mutableStateOf(ExpenseCategory.Gaji) }
@@ -158,8 +158,9 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
     var editingAttendance by remember { mutableStateOf<AttendanceRecord?>(null) }
     var attendanceNote by remember { mutableStateOf("") }
     val allowedBranches = if (canViewAllBranches(session)) businessStore.branches.toList()
-    else businessStore.branches.filter { it.id == session.branchId }
-    val today = businessStore.todayAttendance(session.email)
+    else businessStore.branches.filter { it.id in session.allowedBranchIds }
+    val today = businessStore.todayAttendance(session.email, branchId)
+    val todayAll = businessStore.todayAttendances(session.email)
     val rows = if (canViewAllBranches(session)) businessStore.visibleAttendance(branchIds = setOf(branchId))
     else businessStore.visibleAttendance()
     val tap = rememberTapFeedback()
@@ -198,12 +199,27 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
             CardBlock(accent = if (today?.checkOutAtMs == null) Teal else Green) {
                 SectionLabel("Absensi saya hari ini")
                 if (today == null) {
-                    Text("Belum absen masuk", fontSize = 22.sp, fontWeight = FontWeight.Black, color = Ink)
+                    Text("Belum absen masuk di cabang ini", fontSize = 22.sp, fontWeight = FontWeight.Black, color = Ink)
                     Text("Pilih cabang tempat bekerja, lalu tekan Absen masuk.", color = Muted, fontSize = 12.sp)
                 } else {
                     InfoRow(Icons.Outlined.Login, "Masuk", today.checkInAt)
                     InfoRow(Icons.Outlined.Logout, "Pulang", today.checkOutAt ?: "Shift masih berjalan")
                     Text(durationLabel(today), color = Teal, fontWeight = FontWeight.Bold)
+                }
+                // Satu karyawan boleh bekerja di lebih dari satu cabang dalam sehari. Tanpa
+                // ringkasan ini, memilih cabang lain membuat kartunya tampak "belum absen"
+                // seolah catatan sebelumnya hilang.
+                val lainnya = todayAll.filter { it.branchId != branchId }
+                if (lainnya.isNotEmpty()) {
+                    RowDivider()
+                    Text(
+                        "Sudah absen hari ini di " + lainnya.joinToString { r ->
+                            val nama = businessStore.branches.firstOrNull { it.id == r.branchId }?.name?.removePrefix("Cuciin ") ?: r.branchId
+                            if (r.checkOutAtMs == null) "$nama (masih bekerja)" else nama
+                        },
+                        color = Muted,
+                        fontSize = 12.sp,
+                    )
                 }
             }
         }
@@ -236,10 +252,10 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
                     }
                     PrimaryBtn("Absen pulang", enabled = checkOutPhotoPath.isNotBlank(), icon = Icons.Outlined.Logout) {
                         tap()
-                        businessStore.checkOut(note, checkOutPhotoPath)?.let(toast) ?: run { note = ""; checkOutPhotoPath = ""; toast("Absen pulang berhasil dicatat") }
+                        businessStore.checkOut(branchId, note, checkOutPhotoPath)?.let(toast) ?: run { note = ""; checkOutPhotoPath = ""; toast("Absen pulang berhasil dicatat") }
                     }
                 } else {
-                    FeedbackBanner("Absensi hari ini sudah lengkap.")
+                    FeedbackBanner("Absensi cabang ini sudah lengkap. Pilih cabang lain bila Anda bekerja di sana.")
                 }
             }
         }

@@ -2,6 +2,34 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.38 — 24 Sep 2026 (versionCode 57)
+
+### Absensi per cabang untuk kasir yang bertugas di beberapa cabang
+
+Kasir yang ditugaskan ke lebih dari satu cabang hanya bisa absen di satu cabang saja. Laporan
+dari lapangan: Aida terdaftar di dua cabang, tetapi di layar Absensi hanya muncul Bunayya, dan
+absen di cabang kedua selalu ditolak.
+
+Akar masalahnya ada di aplikasi, bukan di data. `Session` hanya menyimpan satu `branchId`, yaitu
+cabang pertama dari daftar penugasan. Seluruh layar menyaring dengan `it.id == session.branchId`,
+sehingga cabang kedua tidak pernah tampil. Pemeriksa di `checkIn` membandingkan dengan cabang
+yang sama, dan `checkOut` menutup baris pertama hari itu tanpa melihat cabang sama sekali —
+sehingga absen pulang di cabang kedua justru menutup catatan cabang pertama.
+
+Perbaikan menyentuh tiga lapis:
+
+1. `Session` menyimpan seluruh `branchIds` penugasan, dengan `allowedBranchIds` sebagai sumber
+   tunggal untuk seluruh layar.
+2. Aturan absensi dipindah ke `AttendanceScope` yang bisa diuji: pencarian dan penutupan catatan
+   selalu menyebut cabangnya, dan id baris deterministik per (cabang, tanggal, karyawan) supaya
+   dua perangkat tidak membuat baris kembar.
+3. Sisi server: migrasi `0009_attendance_per_branch.sql` mengganti kunci
+   `UNIQUE(staff_email, work_date)` menjadi `UNIQUE(staff_email, work_date, branch_id)`, dan
+   penulisan absensi menangani kedua kunci sekaligus agar perangkat versi lama tetap diterima.
+
+Layar lain yang sebelumnya juga terkurung satu cabang ikut diperbaiki: Nota, Biaya, Aset, Kas,
+Persediaan, dan Riwayat mutasi stok.
+
 ## 1.10.37 — 22 Sep 2026 (versionCode 56)
 
 ### Perubahan peran dari server langsung berlaku

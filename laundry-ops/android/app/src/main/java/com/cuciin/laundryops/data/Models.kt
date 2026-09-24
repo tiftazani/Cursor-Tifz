@@ -403,8 +403,27 @@ data class Session(
     val role: Role,
     val name: String,
     val email: String,
+    /** Cabang yang sedang dipakai layar sebagai pilihan awal. */
     val branchId: String,
-)
+    /**
+     * Seluruh cabang penugasan akun ini.
+     *
+     * Sebelumnya hanya satu cabang yang disimpan, yaitu cabang pertama. Akibatnya kasir yang
+     * ditugaskan ke dua cabang terkunci pada satu cabang saja: pemilih cabang di layar Absensi
+     * hanya berisi satu pilihan, absen di cabang kedua ditolak, dan transaksi cabang lain tidak
+     * terlihat. Daftar lengkapnya sekarang ikut disimpan.
+     */
+    val branchIds: List<String> = emptyList(),
+) {
+    /**
+     * Cabang yang boleh dipakai akun ini.
+     *
+     * Selalu ada isinya: bila [branchIds] kosong (data lama yang belum ikut diperbarui),
+     * nilainya jatuh ke [branchId] supaya akun tidak mendadak kehilangan seluruh cabangnya.
+     */
+    val allowedBranchIds: List<String>
+        get() = branchIds.ifEmpty { listOfNotNull(branchId.takeIf { it.isNotBlank() }) }
+}
 
 @Serializable
 data class CloudIdentity(

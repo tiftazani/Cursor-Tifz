@@ -440,3 +440,79 @@ test("reproject memakai revisi jurnal terbaru supaya versi entity tidak mundur",
   assert.equal(chosen,999,"revisi yang dipakai tidak boleh lebih kecil dari revisi jurnal");
   assert.ok(chosen>=journal.revision,"versi entity tidak boleh mundur di bawah revisi jurnal");
 });
+
+test("absensi satu karyawan dicatat per cabang, bukan satu per hari", async () => {
+  // Kejadian nyata 24 Sep 2026: `aidanurita25@gmail.com` ditugaskan ke dua cabang
+  // (`staff_branches`), tetapi hanya bisa absen di cabang pertama. Tabel `attendance` versi lama
+  // memakai UNIQUE(staff_email, work_date), sehingga absen di cabang kedua ditolak basis data
+  // walau Worker mengizinkannya.
+  const env=fakeD1(); seedBaseline(env);
+  const kasirDuaCabang={...identities.kasir,branchIds:["melati","kenanga"]};
+
+  const absen=(commandId,id,branchId)=>pushCommands(commandRequest([{
+    commandId,type:"attendance.upsert",entityId:id,branchId,
+    payload:{id,branchId,staffEmail:"kasir@cuciin.id",staffName:"Kasir Melati",workDate:"2026-09-24",checkInAt:1789000000000,note:""},
+  }]),env,kasirDuaCabang);
+
+  const pertama=await (await absen("absen-cabang-0001","att-melati-2026-09-24-1","melati")).json();
+  const kedua=await (await absen("absen-cabang-0002","att-kenanga-2026-09-24-1","kenanga")).json();
+
+  assert.equal(pertama.results[0].accepted,true,"absen di cabang pertama harus diterima");
+  assert.equal(kedua.results[0].accepted,true,"absen di cabang kedua harus diterima, bukan ditolak batas unik");
+  const baris=rows(env,"SELECT branch_id FROM attendance WHERE staff_email='kasir@cuciin.id' AND work_date='2026-09-24' ORDER BY branch_id");
+  assert.deepEqual(baris.map(row=>row.branch_id),["kenanga","melati"],"harus ada satu catatan per cabang");
+});
+
+test("absen di cabang di luar penugasan tetap ditolak", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  const body=await (await pushCommands(commandRequest([{
+    commandId:"absen-luar-0001",type:"attendance.upsert",entityId:"att-luar-1",branchId:"kenanga",
+    payload:{id:"att-luar-1",branchId:"kenanga",staffEmail:"kasir@cuciin.id",staffName:"Kasir Melati",workDate:"2026-09-24",checkInAt:1789000000000,note:""},
+  }]),env,identities.kasir)).json();
+  assert.equal(body.results[0].accepted,false,"kasir tidak boleh absen di cabang yang bukan penugasannya");
+  assert.equal(body.results[0].code,403);
+});
+
+test("absen kedua di cabang yang sama pada hari yang sama memperbarui, bukan menabrak", async () => {
+  // Id perangkat baru deterministik per (cabang, tanggal, karyawan), jadi kiriman ulang harus
+  // menjadi UPDATE. Id acak dari perangkat versi lama tetap tertangkap kunci unik kedua.
+  const env=fakeD1(); seedBaseline(env);
+  const kirim=(commandId,id,checkIn,checkOut)=>pushCommands(commandRequest([{
+    commandId,type:"attendance.upsert",entityId:id,branchId:"melati",
+    payload:{id,branchId:"melati",staffEmail:"kasir@cuciin.id",staffName:"Kasir Melati",workDate:"2026-09-24",checkInAt:checkIn,checkOutAt:checkOut,note:""},
+  }]),env,identities.kasir);
+
+  await (await kirim("absen-ulang-0001","att-melati-2026-09-24-1",1789000000000,null)).json();
+  const idAcak=await (await kirim("absen-ulang-0002","att-acak-dari-perangkat-lama",1789000000000,1789003600000)).json();
+
+  assert.equal(idAcak.results[0].accepted,true,"id acak dari perangkat lama tidak boleh ditolak 409");
+  const baris=rows(env,"SELECT id,check_out_at FROM attendance WHERE staff_email='kasir@cuciin.id' AND work_date='2026-09-24'");
+  assert.equal(baris.length,1,"satu karyawan, satu tanggal, satu cabang tetap satu baris");
+  assert.equal(baris[0].check_out_at,1789003600000,"jam pulang harus tersimpan");
+});
+
+test("migrasi 0009 mengganti kunci absensi menjadi per cabang", () => {
+  const sql=readFileSync(new URL("../migrations/0009_attendance_per_branch.sql", import.meta.url), "utf8");
+  assert.match(sql,/UNIQUE \(staff_email, work_date, branch_id\)/,"kunci baru harus menyertakan branch_id");
+  assert.match(sql,/INSERT OR IGNORE INTO attendance_baru/,"baris lama harus disalin, bukan dibuang");
+  assert.match(sql,/idx_attendance_staff_date_branch/,"indeks pencarian absensi harian per cabang harus dibangun");
+});
+
+test("kunci absensi per cabang benar-benar berlaku di basis data", () => {
+  // Membuktikan migrasinya bekerja, bukan hanya teksnya ada. Tanpa kunci baru, baris kedua gagal.
+  const env=fakeD1();
+  env.db.exec(`
+    INSERT INTO organizations(id,name,owner_email,created_at,updated_at) VALUES('cuciin','Cuciin','o@x.id',1,1);
+    INSERT INTO branches(id,organization_id,code,name,address,maps_query,updated_at) VALUES('melati','cuciin','MEL','Melati','','',1);
+    INSERT INTO branches(id,organization_id,code,name,address,maps_query,updated_at) VALUES('kenanga','cuciin','KEN','Kenanga','','',1);
+  `);
+  const insert=(id,branch)=>env.db.prepare("INSERT INTO attendance(id,organization_id,branch_id,staff_email,staff_name,work_date,check_in_at,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?)")
+    .run(id,"cuciin",branch,"kasir@cuciin.id","Kasir Melati","2026-09-24",1,"",1);
+  insert("att-1","melati");
+  insert("att-2","kenanga");
+  assert.equal(rows(env,"SELECT count(*) AS n FROM attendance")[0].n,2,"dua cabang pada hari yang sama harus bisa berdampingan");
+
+  let ditolak=false;
+  try { insert("att-3","melati"); } catch { ditolak=true; }
+  assert.equal(ditolak,true,"baris kembar untuk cabang yang sama tetap harus ditolak");
+});

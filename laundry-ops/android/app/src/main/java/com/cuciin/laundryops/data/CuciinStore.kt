@@ -250,6 +250,26 @@ object CuciinStore {
         fill(accessRoles, s.accessRoles.ifEmpty { AccessCatalog.builtInRoles() })
         fill(whatsappTemplates, s.whatsappTemplates.ifEmpty { listOf(WhatsAppTemplate()) })
         upgradeAccessRoles()
+        segarkanSesiDariStaff()
+    }
+
+    /**
+     * Menyegarkan cabang penugasan akun yang sedang login setelah data staf datang dari server.
+     *
+     * Kejadian nyata 24 Sep 2026: Owner menambahkan `aidanurita25@gmail.com` ke cabang kedua pukul
+     * 13:19 WIB. Data di server sudah benar, tetapi sesi kasir yang sedang terbuka masih memegang
+     * daftar cabang lama, sehingga sampai logout akun itu tetap terkunci pada satu cabang. Tanpa
+     * langkah ini, satu-satunya jalan keluar bagi kasir adalah keluar lalu masuk lagi.
+     *
+     * Peran ikut disamakan supaya penurunan hak akses di server langsung berlaku, sama seperti
+     * `samakanHakAkses` pada tarikan bertahap. Nama dan email tidak disentuh: identitas akun tidak
+     * boleh berubah sendiri di tengah sesi.
+     */
+    private fun segarkanSesiDariStaff() {
+        val aktif = session.value ?: return
+        val baris = staff.firstOrNull { it.email.equals(aktif.email, ignoreCase = true) } ?: return
+        val baru = SessionScope.refreshed(aktif, baris)
+        if (baru !== aktif) session.value = baru
     }
 
     fun applyCloud(s: Snapshot, onPersisted: (() -> Unit)? = null) {
@@ -633,7 +653,9 @@ object CuciinStore {
 
     fun selectedStockBranch(): String {
         val s = session.value ?: return branches.firstOrNull()?.id.orEmpty()
-        if (s.role != Role.Owner) return s.branchId
+        if (s.role != Role.Owner) return stockBranchId.value
+            ?.takeIf { id -> id in s.allowedBranchIds }
+            ?: s.allowedBranchIds.firstOrNull().orEmpty()
         return stockBranchId.value
             ?.takeIf { id -> branches.any { it.id == id } }
             ?: branches.firstOrNull()?.id.orEmpty().also { stockBranchId.value = it }
@@ -645,7 +667,8 @@ object CuciinStore {
             when (s.role) {
                 Role.Owner -> (viewBranch.value == "all" || n.branchId == viewBranch.value) &&
                     (viewKasir.value == "all" || n.kasir == viewKasir.value)
-                else -> n.branchId == s.branchId
+                // Non-Owner melihat cabang penugasannya, bukan hanya cabang pertama.
+                else -> n.branchId in s.allowedBranchIds
             }
         }
     }
@@ -657,7 +680,7 @@ object CuciinStore {
         return notas.filter {
             it.createdAtMs >= start && when (s.role) {
                 Role.Owner -> selected.isEmpty() || it.branchId in selected
-                else -> it.branchId == s.branchId
+                else -> it.branchId in s.allowedBranchIds
             }
         }
     }
@@ -669,7 +692,7 @@ object CuciinStore {
         return expenses.filter {
             it.occurredAtMs >= start && when (s.role) {
                 Role.Owner -> selected.isEmpty() || it.branchId in selected
-                else -> it.branchId == s.branchId
+                else -> it.branchId in s.allowedBranchIds
             }
         }
     }
@@ -760,7 +783,7 @@ object CuciinStore {
             staff[userIndex] = u.copy(passwordHash = Passwords.hash(password))
         }
         pendingName.value = null
-        session.value = Session(u.role, u.name, u.email, u.branchIds.first())
+        session.value = Session(u.role, u.name, u.email, u.branchIds.first(), u.branchIds)
         viewBranch.value = if (u.role == Role.Owner) "all" else u.branchIds.first()
         persist()
         return true
@@ -935,7 +958,7 @@ object CuciinStore {
         )
         val s = session.value
         if (s != null && s.email.equals(email, ignoreCase = true)) {
-            session.value = s.copy(name = staff[i].name, email = targetEmail, role = staff[i].role, branchId = staff[i].branchIds.first())
+            session.value = s.copy(name = staff[i].name, email = targetEmail, role = staff[i].role, branchId = staff[i].branchIds.first(), branchIds = staff[i].branchIds)
         }
         log("User ${staff[i].name} diubah", staff[i].branchIds.first())
         bump()
@@ -1166,8 +1189,19 @@ object CuciinStore {
         return null
     }
 
-    fun todayAttendance(email: String = session.value?.email.orEmpty()): AttendanceRecord? =
-        attendance.firstOrNull { it.staffEmail.equals(email, true) && it.workDate == Clock.dateKey() }
+    /**
+     * Absensi milik sendiri untuk satu cabang pada satu tanggal.
+     *
+     * Cabangnya wajib disebut. Sebelumnya fungsi ini mencari baris pertama hari itu tanpa
+     * melihat cabang, sehingga karyawan yang ditugaskan ke dua cabang dianggap "sudah absen"
+     * di cabang kedua padahal ia baru absen di cabang pertama.
+     */
+    fun todayAttendance(email: String = session.value?.email.orEmpty(), branchId: String = session.value?.branchId.orEmpty()): AttendanceRecord? =
+        AttendanceScope.rowFor(attendance, email, Clock.dateKey(), branchId)
+
+    /** Semua absensi milik sendiri hari ini, satu per cabang yang sudah diabsen. */
+    fun todayAttendances(email: String = session.value?.email.orEmpty()): List<AttendanceRecord> =
+        AttendanceScope.rowsFor(attendance, email, Clock.dateKey())
 
     /**
      * Absensi yang boleh dilihat akun ini.
@@ -1203,22 +1237,40 @@ object CuciinStore {
             val maySee = if (canAccess("attendance", "attendance.view")) {
                 branchIds.isEmpty() || row.branchId in branchIds
             } else {
-                row.staffEmail.equals(s.email, true) && row.branchId == s.branchId
+                // Tanpa hak melihat absensi orang lain, yang tampil hanya absensi sendiri —
+                // dan itu berlaku untuk SEMUA cabang penugasan, bukan hanya cabang pertama.
+                // Sebelumnya `row.branchId == s.branchId` membuat riwayat absen di cabang
+                // kedua hilang dari layar.
+                row.staffEmail.equals(s.email, true) && (branchIds.isEmpty() || row.branchId in branchIds)
             }
             maySee && (fromMs == null || row.checkInAtMs >= fromMs) && (untilMs == null || row.checkInAtMs <= untilMs)
         }.sortedByDescending { it.checkInAtMs }
     }
 
+    /**
+     * Absen masuk di satu cabang.
+     *
+     * Cabangnya harus salah satu dari cabang penugasan akun ini, bukan hanya cabang pertama.
+     * Sebelumnya pemeriksaannya `branchId != s.branchId`, sehingga kasir yang ditugaskan ke dua
+     * cabang selalu ditolak saat memilih cabang keduanya — walau server mengizinkannya.
+     * Pemeriksaan "sudah absen hari ini" juga kini per cabang, supaya orang yang pagi di satu
+     * cabang dan sore di cabang lain tetap bisa mencatat keduanya.
+     */
     fun checkIn(branchId: String, note: String = "", photoPath: String = ""): String? {
         val s = session.value ?: return "Silakan masuk kembali"
         if (!boleh("attendance", "attendance.self")) return tolak("attendance.self")
-        if (s.role != Role.Owner && branchId != s.branchId) return "Cabang absensi tidak sesuai akun"
-        if (s.role == Role.Owner && branches.none { it.id == branchId }) return "Cabang tidak ditemukan"
-        if (todayAttendance(s.email) != null) return "Anda sudah absen masuk hari ini"
+        // Cabang penugasan diperiksa SELURUHNYA. Versi lama membandingkan dengan `s.branchId`
+        // saja, sehingga kasir dua cabang selalu ditolak saat memilih cabang keduanya.
+        AttendanceScope.rejection(s.role, s.allowedBranchIds, branches.map { it.id }, branchId)?.let { return it }
+        if (todayAttendance(s.email, branchId) != null) return "Anda sudah absen masuk di cabang ini hari ini"
         if (photoPath.isBlank()) return "Ambil foto absensi masuk terlebih dahulu"
         val now = Clock.nowMs()
         val row = AttendanceRecord(
-            id = "att-${java.util.UUID.randomUUID()}",
+            // Kunci baris mengikuti (karyawan, tanggal, cabang), bukan angka acak. Dua perangkat
+            // yang mengabsen orang yang sama di cabang yang sama pada hari yang sama akan
+            // menghasilkan id yang sama, sehingga server memperbarui barisnya alih-alih
+            // menabrak batas unik dan mengembalikan 409.
+            id = AttendanceScope.idFor(branchId, Clock.dateKey(now), s.email),
             staffEmail = s.email,
             staffName = s.name,
             branchId = branchId,
@@ -1234,13 +1286,18 @@ object CuciinStore {
         return null
     }
 
-    fun checkOut(note: String = "", photoPath: String = ""): String? {
+    /**
+     * Absen pulang untuk satu cabang.
+     *
+     * Cabangnya wajib disebut, sama seperti [checkIn]. Sebelumnya fungsi ini menutup baris
+     * pertama hari itu yang belum pulang, tanpa melihat cabangnya. Bila seseorang sudah absen
+     * di dua cabang, absen pulang di cabang kedua justru menutup catatan cabang pertama.
+     */
+    fun checkOut(branchId: String, note: String = "", photoPath: String = ""): String? {
         val s = session.value ?: return "Silakan masuk kembali"
         if (!boleh("attendance", "attendance.self")) return tolak("attendance.self")
-        val index = attendance.indexOfFirst {
-            it.staffEmail.equals(s.email, true) && it.workDate == Clock.dateKey() && it.checkOutAtMs == null
-        }
-        if (index < 0) return "Absen masuk hari ini belum ditemukan"
+        val index = AttendanceScope.openRowIndex(attendance, s.email, Clock.dateKey(), branchId)
+        if (index < 0) return "Absen masuk di cabang ini belum ditemukan"
         if (photoPath.isBlank()) return "Ambil foto absensi pulang terlebih dahulu"
         val now = Clock.nowMs()
         val old = attendance[index]
@@ -1400,7 +1457,9 @@ object CuciinStore {
         if (!canCreateService()) return tolak("service.create", "Akun ini tidak dapat membuat Service baru")
         val permittedBranch = when (s.role) {
             Role.Owner -> branches.any { it.id == branchId }
-            else -> branchId == s.branchId
+            // Seluruh cabang penugasan, bukan hanya yang pertama. Kasir dua cabang sebelumnya
+            // tidak bisa membuat Service di cabang keduanya.
+            else -> branchId in s.allowedBranchIds
         }
         if (!permittedBranch) return "Cabang transaksi tidak tersedia untuk akun ini"
         if (cartLines.isEmpty()) return "Service harus memiliki minimal satu layanan"
@@ -1502,7 +1561,7 @@ object CuciinStore {
         if (!boleh("service", "service.correct")) {
             return tolak("service.correct", "Akun ini tidak dapat mengoreksi Service tersebut")
         }
-        if (s.role == Role.Supervisor || (s.role != Role.Owner && s.branchId != old.branchId)) {
+        if (s.role == Role.Supervisor || (s.role != Role.Owner && old.branchId !in s.allowedBranchIds)) {
             return "Akun ini tidak dapat mengoreksi Service tersebut"
         }
         if (old.waSent && !canCorrectSentNota()) return tolak("service.correctSent", "Service sudah dikirim ke pelanggan; hanya Owner yang dapat mengoreksi")
@@ -1590,7 +1649,7 @@ object CuciinStore {
         if (!boleh("service", "service.delete")) {
             return tolak("service.delete", "Akun ini tidak dapat menghapus Service tersebut")
         }
-        if (s.role == Role.Supervisor || (s.role != Role.Owner && s.branchId != old.branchId)) {
+        if (s.role == Role.Supervisor || (s.role != Role.Owner && old.branchId !in s.allowedBranchIds)) {
             return "Akun ini tidak dapat menghapus Service tersebut"
         }
         if (old.waSent && !canCorrectSentNota()) return tolak("service.correctSent", "Service sudah dikirim ke pelanggan; hanya Owner yang dapat menghapus")
@@ -1630,7 +1689,7 @@ object CuciinStore {
         if (!boleh("queue", "queue.status")) return tolak("queue.status", "Akun ini tidak dapat mengubah status pengerjaan")
         val s = session.value ?: return "Silakan masuk kembali"
         val n = notas.find { it.id == id } ?: return "Service tidak ditemukan"
-        if (s.role != Role.Owner && s.branchId != n.branchId) return "Cabang Service tidak sesuai akun"
+        if (s.role != Role.Owner && n.branchId !in s.allowedBranchIds) return "Cabang Service tidak sesuai akun"
         val next = n.laundry.next ?: return "Service sudah selesai"
         n.laundry = next
         if (next == LaundryStatus.Selesai && n.completedAt == null) n.completedAt = Clock.nowLabel()
@@ -1645,7 +1704,7 @@ object CuciinStore {
         if (!boleh("service", "service.payment")) {
             return tolak("service.payment", "Akun ini tidak dapat mencatat pembayaran Service tersebut")
         }
-        if (s.role == Role.Supervisor || (s.role != Role.Owner && s.branchId != n.branchId)) return "Akun ini tidak dapat mencatat pembayaran Service tersebut"
+        if (s.role == Role.Supervisor || (s.role != Role.Owner && n.branchId !in s.allowedBranchIds)) return "Akun ini tidak dapat mencatat pembayaran Service tersebut"
         val remaining = (n.total - n.paid).coerceAtLeast(0)
         if (remaining == 0 || n.pay == PayStatus.Lunas) return "Pembayaran Service sudah lunas"
         val now = Clock.nowMs()
@@ -1689,7 +1748,7 @@ object CuciinStore {
     fun editStocks(changes: Map<String, Int>, branchId: String, kind: StockKind, occurredAtMs: Long = Clock.nowMs()): Int {
         if (!boleh("stock", "stock.write")) return TOLAK_STOK
         val s = session.value ?: return 0
-        if (s.role != Role.Owner && branchId != s.branchId) return 0
+        if (s.role != Role.Owner && branchId !in s.allowedBranchIds) return 0
         val t = occurredAtMs
         var saved = 0
         changes.forEach { (product, qty) ->
@@ -1715,7 +1774,10 @@ object CuciinStore {
     /** Owner dapat menerapkan pencatatan fisik yang sama untuk beberapa cabang sekaligus. */
     fun editStocks(changes: Map<String, Int>, branchIds: Set<String>, kind: StockKind, occurredAtMs: Long = Clock.nowMs()): Int {
         val s = session.value ?: return 0
-        val targets = if (s.role == Role.Owner) branchIds else setOf(s.branchId)
+        // Non-Owner tidak boleh menyentuh cabang di luar penugasannya, tetapi boleh memilih
+        // lebih dari satu selama semuanya cabangnya. Sebelumnya hanya cabang pertama.
+        val targets = if (s.role == Role.Owner) branchIds
+        else branchIds.intersect(s.allowedBranchIds.toSet()).ifEmpty { s.allowedBranchIds.toSet() }
         return targets.sumOf { branchId -> editStocks(changes, branchId, kind, occurredAtMs) }
     }
 
@@ -1736,11 +1798,15 @@ object CuciinStore {
      * izinnya dicabut melihat pesan "Kas cabang ini sudah ditutup hari ini" padahal kasnya sama
      * sekali tidak ditutup. Penolakan izin harus punya pesannya sendiri.
      */
-    fun cashCloseReject(): String? {
+    fun cashCloseReject(branchId: String = ""): String? {
         val s = session.value ?: return "Silakan masuk kembali"
         if (!boleh("cash", "cash.close")) return tolak("cash.close", "Akun ini tidak dapat menutup kas")
-        val bid = if (s.role == Role.Owner) viewBranch.value else s.branchId
+        // Cabangnya datang dari layar. Sebelumnya store menebak sendiri dari `s.branchId`, jadi
+        // kasir dua cabang selalu menutup kas cabang pertama walau layarnya menampilkan cabang
+        // kedua — penerimaan cabang kedua jadi tidak pernah tertutup.
+        val bid = branchId.ifBlank { if (s.role == Role.Owner) viewBranch.value else s.branchId }
         if (bid == "all") return "Pilih satu cabang sebelum menutup kas"
+        if (s.role != Role.Owner && bid !in s.allowedBranchIds) return "Cabang kas tidak sesuai akun"
         val t = Clock.nowMs()
         if (cashCloses.any { it.branchId == bid && Clock.dateKey(it.atMs) == Clock.dateKey(t) }) {
             return "Kas cabang ini sudah ditutup hari ini"
@@ -1748,10 +1814,10 @@ object CuciinStore {
         return null
     }
 
-    fun closeCash(): CashClose? {
+    fun closeCash(branchId: String = ""): CashClose? {
         val s = session.value ?: return null
-        if (cashCloseReject() != null) return null
-        val bid = if (s.role == Role.Owner) viewBranch.value else s.branchId
+        if (cashCloseReject(branchId) != null) return null
+        val bid = branchId.ifBlank { if (s.role == Role.Owner) viewBranch.value else s.branchId }
         val t = Clock.nowMs()
         val received = paymentRecords(notas.filter { it.branchId == bid }).filter { it.atMs >= Clock.todayStartMs() }
         val row = CashClose(

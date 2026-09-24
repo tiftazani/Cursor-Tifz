@@ -84,7 +84,7 @@ object FirebaseCloud {
                         finish(false, false, "Akun belum memiliki cabang")
                         return@verifyIdentity
                     }
-                    CuciinStore.session.value = Session(identity.role, identity.name, identity.email, branchId)
+                    CuciinStore.session.value = Session(identity.role, identity.name, identity.email, branchId, identity.branchIds)
                     CuciinStore.viewBranch.value = if (identity.role == Role.Owner) "all" else branchId
                     CuciinStore.bumpPublic()
                     CloudSync.onAuthenticated()

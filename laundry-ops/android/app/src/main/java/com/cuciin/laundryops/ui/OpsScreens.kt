@@ -137,7 +137,7 @@ internal fun HomeScreen(nav: NavHostController) {
     // Periode menyaring berdasarkan tanggal masuk Service. Rentang sendiri memakai tanggal
     // yang dipilih pengguna, jadi tanggal mana pun bisa dibandingkan tanpa mengubah nota.
     val periodStart = Clock.periodStartMs(period)
-    val bid = if (canViewAllBranches(s)) store.viewBranch.value else s.branchId
+    val bid = if (canViewAllBranches(s)) store.viewBranch.value else (if (s.allowedBranchIds.size == 1) s.allowedBranchIds.first() else store.viewBranch.value.takeIf { it in s.allowedBranchIds } ?: "all")
     val scoped = all.filter { nota ->
         val inRange = if (customRange) {
             rangeValid && DisplayDates.isInSelectedMinute(nota.createdAtMs, from, until)
@@ -352,8 +352,8 @@ internal fun NotaScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val s = store.session.value ?: return
     val tap = rememberTapFeedback()
-    val allowedBranches = if (canViewAllBranches(s)) store.branches.toList() else store.branches.filter { it.id == s.branchId }
-    val defaultBranchId = if (canViewAllBranches(s) && store.viewBranch.value != "all") store.viewBranch.value else s.branchId
+    val allowedBranches = if (canViewAllBranches(s)) store.branches.toList() else store.branches.filter { it.id in s.allowedBranchIds }
+    val defaultBranchId = if (canViewAllBranches(s) && store.viewBranch.value != "all") store.viewBranch.value else (store.notaBranchId.value?.takeIf { it in s.allowedBranchIds } ?: s.allowedBranchIds.firstOrNull() ?: s.branchId)
     val selectedBranchId = store.notaBranchId.value?.takeIf { id -> allowedBranches.any { it.id == id } } ?: defaultBranchId
     LaunchedEffect(selectedBranchId) { if (store.notaBranchId.value != selectedBranchId) store.notaBranchId.value = selectedBranchId }
     store.revision.intValue
@@ -610,7 +610,7 @@ internal fun PreviewScreen(nav: NavHostController, toast: (String) -> Unit) {
     val customer = store.selectedCustomer.value
     val session = store.session.value ?: return
     val branchId = store.notaBranchId.value
-        ?.takeIf { canViewAllBranches(session) || it == session.branchId }
+        ?.takeIf { canViewAllBranches(session) || it in session.allowedBranchIds }
         ?: session.branchId
     val total = cart.sumOf { (it.qty * it.unitPrice).toInt() }
     var feedback by rememberSaveable { mutableStateOf("") }
@@ -687,7 +687,7 @@ internal fun BayarScreen(nav: NavHostController, toast: (String) -> Unit) {
     val cust = store.selectedCustomer.value
     val s = store.session.value ?: return
     val branchId = store.notaBranchId.value
-        ?.takeIf { id -> canViewAllBranches(s) || id == s.branchId }
+        ?.takeIf { id -> canViewAllBranches(s) || id in s.allowedBranchIds }
         ?: s.branchId
     val cart = store.cart.map { it.copy() }
     val total = cart.sumOf { (it.qty * it.unitPrice).toInt() }.coerceAtLeast(0)
@@ -980,7 +980,7 @@ internal fun StockScreen(nav: NavHostController, toast: (String) -> Unit) {
     val low = products.count { store.stockOf(it.key, branchId) <= it.min }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Persediaan", "${store.branch(branchId).name} · ${DisplayDates.date(LocalDateTime.now(Clock.ZONE))}") }
-        if (canViewAllBranches(s)) item {
+        if (canViewAllBranches(s) || s.allowedBranchIds.size > 1) item {
             FilterBar(
                 label = "Cabang",
                 value = store.branch(branchId).name.removePrefix("Cuciin "),
@@ -1031,13 +1031,18 @@ internal fun StockScreen(nav: NavHostController, toast: (String) -> Unit) {
     if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
-            store.branches.forEach { branch ->
-                FilterSheetRow(branch.id == branchId, branch.name, "${store.stockMoves.count { it.branchId == branch.id }} perubahan stok") {
-                    store.stockBranchId.value = branch.id
-                    store.touchStatus()
-                    showBranchSheet = false
+            // Non-Owner hanya melihat cabang penugasannya, seluruhnya. Sebelumnya daftarnya
+            // memuat semua cabang organisasi, sehingga kasir bisa memilih cabang yang bukan
+            // miliknya lalu melihat saldo nol yang menyesatkan.
+            store.branches
+                .filter { canViewAllBranches(s) || it.id in s.allowedBranchIds }
+                .forEach { branch ->
+                    FilterSheetRow(branch.id == branchId, branch.name, "${store.stockMoves.count { it.branchId == branch.id }} perubahan stok") {
+                        store.stockBranchId.value = branch.id
+                        store.touchStatus()
+                        showBranchSheet = false
+                    }
                 }
-            }
         }
     }
 }
@@ -1134,7 +1139,7 @@ internal fun StockHistoryScreen(nav: NavHostController) {
     var showActorSheet by rememberSaveable { mutableStateOf(false) }
     var fromValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).minusDays(30).withHour(0).withMinute(0))) }
     var untilValue by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59))) }
-    var branchIds by remember { mutableStateOf(if (canViewAllBranches(session)) emptySet<String>() else setOf(session.branchId)) }
+    var branchIds by remember { mutableStateOf(if (canViewAllBranches(session)) emptySet<String>() else session.allowedBranchIds.toSet()) }
     var actor by rememberSaveable { mutableStateOf("all") }
     var allDates by rememberSaveable { mutableStateOf(false) }
     store.revision.intValue

@@ -353,7 +353,9 @@ class RouteAccessTest {
     fun layarMembacaPesanPenolakanSebelumMemanggilFungsi() {
         val pasangan = listOf(
             Triple("OpsScreens.kt", "fun save(openWa: Boolean)", "notaReject(" to "store.saveNota("),
-            Triple("MoreScreens.kt", "Tutup kas hari ini", "cashCloseReject()" to "store.closeCash()"),
+            // `cashCloseReject` kini menerima cabang pilihan layar, jadi yang dicocokkan adalah
+            // nama fungsinya, bukan bentuk pemanggilan tanpa argumen.
+            Triple("MoreScreens.kt", "Tutup kas hari ini", "cashCloseReject(" to "store.closeCash("),
         )
         val pelanggaran = mutableListOf<String>()
         for ((nama, penanda, pasang) in pasangan) {

@@ -12,10 +12,20 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.37"
-    val currentCode: Int = 56
+    val currentName: String = "1.10.38"
+    val currentCode: Int = 57
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.38", code = 57, date = "24 Sep 2026",
+            notes = listOf(
+                "Kasir yang ditugaskan ke lebih dari satu cabang kini bisa absen di setiap cabangnya. Sebelumnya aplikasi hanya menyimpan satu cabang, yaitu cabang pertama, sehingga pemilih cabang di layar Absensi hanya berisi satu pilihan dan absen di cabang kedua selalu ditolak. Sekarang seluruh cabang penugasan ikut tersimpan dan bisa dipilih.",
+                "Satu orang yang bekerja di dua cabang dalam sehari punya dua catatan absensi, masing-masing dengan jam masuk dan jam pulangnya sendiri. Sebelumnya absen pulang di cabang kedua justru menutup catatan cabang pertama.",
+                "Layar Absensi menampilkan ringkasan \"sudah absen hari ini di cabang lain\" supaya catatan sebelumnya tidak tampak hilang saat berpindah cabang.",
+                "Layar lain yang sebelumnya juga terkurung pada satu cabang ikut diperbaiki: Nota, Biaya, Aset, Kas, Persediaan, dan Riwayat mutasi stok kini memakai seluruh cabang penugasan akun.",
+                "Sisi server: tabel absensi kini berkunci per karyawan, tanggal, dan cabang, sehingga satu karyawan boleh punya satu catatan di tiap cabang pada hari yang sama.",
+            ),
+        ),
         AppRelease(
             name = "1.10.37", code = 56, date = "22 Sep 2026",
             notes = listOf(

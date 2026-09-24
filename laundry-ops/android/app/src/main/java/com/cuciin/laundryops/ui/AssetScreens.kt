@@ -49,7 +49,7 @@ internal fun AssetListScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val session = assetStore.session.value ?: return
     assetStore.revision.intValue
-    val allowedBranches = if (canViewAllBranches(session)) assetStore.branches.toList() else assetStore.branches.filter { it.id == session.branchId }
+    val allowedBranches = if (canViewAllBranches(session)) assetStore.branches.toList() else assetStore.branches.filter { it.id in session.allowedBranchIds }
     var branchId by rememberSaveable { mutableStateOf(session.branchId) }
     var typeFilter by rememberSaveable { mutableStateOf("") }
     var showBranchSheet by rememberSaveable { mutableStateOf(false) }
@@ -183,7 +183,7 @@ internal fun AssetFormScreen(nav: NavHostController, assetId: String?, toast: (S
     val session = assetStore.session.value ?: return
     assetStore.revision.intValue
     val editing = remember(assetId) { assetStore.inventory.firstOrNull { it.id == assetId } }
-    val allowedBranches = if (canViewAllBranches(session)) assetStore.branches.toList() else assetStore.branches.filter { it.id == session.branchId }
+    val allowedBranches = if (canViewAllBranches(session)) assetStore.branches.toList() else assetStore.branches.filter { it.id in session.allowedBranchIds }
     var branchId by rememberSaveable { mutableStateOf(editing?.branchId ?: session.branchId) }
     var assetTypeId by rememberSaveable { mutableStateOf(editing?.assetTypeId ?: "") }
     var name by rememberSaveable { mutableStateOf(editing?.name.orEmpty()) }

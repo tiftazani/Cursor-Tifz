@@ -632,7 +632,12 @@ internal fun AuditScreen(nav: NavHostController) {
 internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val s = store.session.value ?: return
-    val bid = if (canViewAllBranches(s)) store.viewBranch.value else s.branchId
+    // Non-Owner boleh menutup kas di cabang mana pun yang ditugaskan kepadanya, bukan hanya
+    // cabang pertama. Pilihannya disimpan di layar ini supaya berpindah cabang tidak menutup
+    // kas cabang lain tanpa sengaja.
+    var pilihanCabang by rememberSaveable { mutableStateOf("") }
+    val bid = if (canViewAllBranches(s)) store.viewBranch.value
+    else pilihanCabang.takeIf { it in s.allowedBranchIds } ?: s.allowedBranchIds.firstOrNull() ?: s.branchId
     var showBranchSheet by remember { mutableStateOf(false) }
     if (showBranchSheet) ModalBottomSheet(onDismissRequest = { showBranchSheet = false }) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -646,7 +651,12 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
                     }
                 }
             } else {
-                FilterSheetRow(true, store.branch(bid).name, "Cabang tugas Anda") { showBranchSheet = false }
+                store.branches.filter { it.id in s.allowedBranchIds }.forEach { branch ->
+                    FilterSheetRow(bid == branch.id, branch.name, "Cabang tugas Anda") {
+                        pilihanCabang = branch.id
+                        showBranchSheet = false
+                    }
+                }
             }
         }
     }
@@ -691,10 +701,10 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
                 PrimaryBtn("Tutup kas hari ini") {
                     // Pesan penolakan dibaca dari store, bukan ditebak layar. Sebelumnya izin yang
                     // dicabut dilaporkan sebagai "sudah ditutup hari ini", yang tidak benar.
-                    val tolakKas = store.cashCloseReject()
+                    val tolakKas = store.cashCloseReject(bid)
                     if (tolakKas != null) toast(tolakKas)
                     else {
-                        val row = store.closeCash()
+                        val row = store.closeCash(bid)
                         if (row == null) toast("Kas cabang ini sudah ditutup hari ini")
                         else {
                             toast("Kas ditutup ${row.at}")

@@ -592,5 +592,7 @@ internal fun allowedSyncBranches(session: Session?, staff: List<Staff>): Set<Str
     if (session == null || session.role == Role.Owner) return null
     return staff.firstOrNull { it.email.equals(session.email, ignoreCase = true) }
         ?.branchIds?.toSet()?.takeIf { it.isNotEmpty() }
-        ?: setOf(session.branchId)
+        // Jatuh ke seluruh cabang penugasan sesi, bukan hanya cabang pertama. Kalau baris staff
+        // belum tersinkron, kasir dua cabang tidak boleh kehilangan hak sinkron cabang keduanya.
+        ?: session.allowedBranchIds.toSet()
 }
