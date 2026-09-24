@@ -112,7 +112,8 @@ export function matchesForUrl(entries, pageUrl) {
       const host = hostFromUrl(pageUrl)
       if (!host) return false
       const name = (e.name || '').toLowerCase()
-      return nameMatchesHost(name, host)
+      const app = (e.appName || '').toLowerCase()
+      return nameMatchesHost(name, host) || nameMatchesHost(app, host)
     })
     // The entry saved from THIS path is the one the user wants at this prompt; the
     // site-root login is the fallback. Never hide a match, only order them.

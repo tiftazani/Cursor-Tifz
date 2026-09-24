@@ -81,7 +81,14 @@ function shareHost(a: Entry, b: Entry): boolean {
     // One side has no URL at all: the other side's host may still match this
     // entry's name, and only as a whole domain label.
     const named = ha ? b : a
-    return nameMatchesHost((named.name || named.appName || '').toLowerCase(), ha || hb)
+    const host = ha || hb
+    // The nameless side must not name a DIFFERENT site. Without this, a bare entry
+    // called "mail" matched both mail.google.com and mail.yahoo.com (nameMatchesHost
+    // accepts a substring), and union-find fused those two sites into one cluster
+    // with a suggestion to delete one of them.
+    const ownHost = hostFromUrl((named.name || named.appName || '').trim())
+    if (ownHost && ownHost !== host) return false
+    return nameMatchesHost((named.name || named.appName || '').toLowerCase(), host)
   }
   // Neither side has a URL, so the name is the only thing left to compare.
   const na = hostFromUrl((a.name || a.appName || '').trim())
@@ -96,7 +103,12 @@ function shareLayer(a: Entry, b: Entry): boolean {
   // Only the site root is generic enough to stand in for a named layer. /login and
   // /transfer/confirm are two different prompts, not the same credential.
   const root = (p: string) => p === '' || p === '/'
-  return root(la) || root(lb)
+  // The root may stand in for a NAMED layer, but never bridge two named layers:
+  // a bare "https://bank.example.com" entry would otherwise fuse /login with
+  // /transfer/confirm, and the cluster then advises deleting one of two genuinely
+  // different credentials. A root-vs-root match is already covered by `la === lb`.
+  if (root(la) && root(lb)) return false
+  return (root(la) && lb !== '') || (root(lb) && la !== '')
 }
 
 export function relatedDuplicate(a: Entry, b: Entry): DuplicateReason | null {
@@ -158,6 +170,25 @@ export function findDuplicateClusters(entries: Entry[]): DuplicateCluster[] {
   const pool = entries.filter((e) => e.type === 'login' || e.type === 'app' || e.type === 'password')
   const parent = pool.map((_, i) => i)
   const reasonByRoot = new Map<number, DuplicateReason>()
+  // The named layer each group holds. A group may hold at most one: otherwise a
+  // bare "https://bank.example.com" entry pairs with both /login and
+  // /transfer/confirm (each pairing is fine on its own) and union-find fuses the
+  // two into one cluster whose advice is to DELETE one of two different
+  // credentials. A cluster that spans two layers is never correct.
+  const namedLayer = pool.map((e) => {
+    const l = layerOf(e)
+    return l && l !== '/' ? l : ''
+  })
+  const layersByRoot = new Map<number, Set<string>>()
+
+  const layersOf = (root: number): Set<string> => {
+    const existing = layersByRoot.get(root)
+    if (existing) return existing
+    const fresh = new Set<string>()
+    if (namedLayer[root]) fresh.add(namedLayer[root]!)
+    layersByRoot.set(root, fresh)
+    return fresh
+  }
 
   for (let i = 0; i < pool.length; i++) {
     for (let j = i + 1; j < pool.length; j++) {
@@ -166,7 +197,12 @@ export function findDuplicateClusters(entries: Entry[]): DuplicateCluster[] {
       const a = find(parent, i)
       const b = find(parent, j)
       if (a === b) continue
+      const la = layersOf(a)
+      const lb = layersOf(b)
+      const merged = new Set([...la, ...lb])
+      if (merged.size > 1) continue
       parent[b] = a
+      layersByRoot.set(a, merged)
       reasonByRoot.set(a, reasonByRoot.get(a) ?? reason)
     }
   }

@@ -299,8 +299,12 @@ export default {
         if (otp.attempts >= OTP_MAX_ATTEMPTS) return respond({ error: 'Terlalu banyak percobaan' }, 429)
         const incoming = await sha256Hex(`${otp.salt}:${String(body.code || '').trim().toUpperCase()}`)
         const ok = safeEqual(incoming, otp.hash)
-        await setKey('otp', { ...otp, attempts: otp.attempts + 1 })
-        if (!ok) return respond({ error: 'Kode salah' }, 401)
+        if (!ok) {
+          await setKey('otp', { ...otp, attempts: otp.attempts + 1 })
+          return respond({ error: 'Kode salah' }, 401)
+        }
+        // One increment on a wrong code, and a dead record on a right one. The
+        // success path used to bump the counter twice for no reason.
         await setKey('otp', { ...otp, attempts: otp.attempts + 1, exp: 0 })
         const session = await issueSession(ALLOWED_EMAIL, req, env)
         return respond({ ok: true, email: ALLOWED_EMAIL, token: session.token }, 200, { 'Set-Cookie': session.cookie })

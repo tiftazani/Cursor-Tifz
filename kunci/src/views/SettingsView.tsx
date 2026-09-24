@@ -5,6 +5,7 @@ import { AUTO_LOCK_OPTIONS, resolveAutoLockSeconds } from '../lib/autolock'
 import { IosInstallGuide } from '../components/IosInstallCard'
 import { cloudHasSession, requestCloudGate } from '../lib/cloud'
 import { isAndroidEntry } from '../lib/cleanup'
+import { unlockErrorMessage } from '../lib/crypto'
 import { useVault } from '../state/VaultContext'
 
 export function SettingsView() {
@@ -60,7 +61,7 @@ export function SettingsView() {
       setNext2('')
       setMsg('Kata sandi induk diganti')
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : 'Gagal')
+      setMsg(unlockErrorMessage(e))
     }
   }
 

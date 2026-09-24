@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Field, SecretInput, StrengthBar, TextArea, TextInput } from '../components/Field'
 import { IconKey, IconLock } from '../components/Icons'
 import { IosInstallCard } from '../components/IosInstallCard'
+import { unlockErrorMessage } from '../lib/crypto'
 import { isStrongMaster, passwordStrength } from '../lib/strength'
 import { useVault } from '../state/VaultContext'
 
@@ -80,7 +81,7 @@ export function LockScreen() {
     try {
       await unlock(password)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal membuka')
+      setError(unlockErrorMessage(err))
     }
   }
 

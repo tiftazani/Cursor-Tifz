@@ -2,7 +2,7 @@ import './ext-api.js'
 import { decryptVault, dekToB64, emptyListMessage, entriesToOffer, isEncryptedBlob, unlockErrorMessage } from './crypto.js'
 
 const offerEntries = entriesToOffer
-const emptyMessage = ({ query }) => emptyListMessage({ hasUrl: true, query })
+const emptyMessage = ({ query, hasUrl }) => emptyListMessage({ hasUrl, query })
 
 const status = document.getElementById('status')
 const unlock = document.getElementById('unlock')

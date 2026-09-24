@@ -81,6 +81,10 @@ function setNativeValue(el, value) {
 
 const BIND_GEN = newId()
 const iconHosts = new Map()
+// The button inside each icon host. The shadow root is closed, so
+// querySelectorAll can never reach it: the unlocked state has to be cleared
+// through a live reference, or the icon stays amber after the vault opens.
+const iconButtons = new Map()
 
 function visibleInput(el) {
   if (!(el instanceof HTMLInputElement) || el.disabled) return false
@@ -249,6 +253,7 @@ function ensureButton(pw, usernameOnly = false) {
     if (stale) {
       stale.remove()
       iconHosts.delete(pw)
+      iconButtons.delete(pw)
     }
     return
   }
@@ -295,6 +300,7 @@ function ensureButton(pw, usernameOnly = false) {
   shadow.append(style, btn)
   document.documentElement.appendChild(host)
   iconHosts.set(pw, host)
+  iconButtons.set(pw, btn)
   placeOutside(pw, host)
 
   btn.addEventListener('click', async (e) => {
@@ -800,7 +806,7 @@ if (isKunciPage()) {
       }
       if (msg.type === 'VAULT_UNLOCKED') {
         autofillTried = false
-        document.querySelectorAll('.kunci-fill-btn.locked').forEach((btn) => btn.classList.remove('locked'))
+        for (const btn of iconButtons.values()) btn.classList.remove('locked')
         void restorePendingSave()
         void maybeAutofill()
       }

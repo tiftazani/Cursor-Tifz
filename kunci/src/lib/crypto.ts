@@ -208,3 +208,18 @@ export function isEncryptedBlob(value: unknown): value is EncryptedBlob {
   const v = value as EncryptedBlob
   return (v.v === 1 || v.v === 2) && v.kdf === 'PBKDF2-SHA256' && typeof v.salt === 'string' && typeof v.data === 'string'
 }
+
+/**
+ * A wrong master password makes WebCrypto throw an OperationError whose message is
+ * "The operation failed for an operation-specific reason". Showing that to the user
+ * says nothing about what they did wrong. This mirrors unlockErrorMessage in
+ * extension/crypto.js, which the popup already uses.
+ */
+export function unlockErrorMessage(err: unknown): string {
+  const name = err && typeof err === 'object' && 'name' in err ? String((err as { name: unknown }).name) : ''
+  const msg = err instanceof Error ? err.message : String(err || '')
+  if (!msg.trim() || name === 'OperationError' || /operationerror/i.test(msg)) {
+    return 'Kata sandi induk salah'
+  }
+  return msg
+}

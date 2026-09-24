@@ -759,8 +759,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       await copyText(value)
       const seconds = vaultRef.current?.settings.clipboardSeconds ?? 20
       clearClipRef.current()
-      clearClipRef.current = scheduleClipboardClear(seconds, value, () => {
-        toast.push('Papan klip dibersihkan')
+      clearClipRef.current = scheduleClipboardClear(seconds, value, (cleared) => {
+        toast.push(cleared ? 'Papan klip dibersihkan' : 'Papan klip tidak bisa dibersihkan — hapus manual', cleared ? 'ok' : 'warn')
       })
       toast.push(`${label} disalin${seconds ? ` · hapus otomatis ${seconds} dtk` : ''}`)
     },

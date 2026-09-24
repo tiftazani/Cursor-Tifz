@@ -188,6 +188,43 @@ describe('duplicate clusters', () => {
     const [cluster] = findDuplicateClusters([a, b])
     expect(cluster?.memberIds.sort()).toEqual(['1', '2'])
   })
+
+  it('does not let a bare name bridge two different sites', () => {
+    // A bare entry called "mail" matched both mail.google.com and mail.yahoo.com,
+    // because a name match is a substring test. Union-find then fused two unrelated
+    // sites into one cluster that advised deleting one of them.
+    const bare = login('bare', { name: 'mail', username: 'me', password: 'p' })
+    const gmail = login('gmail', { name: 'Gmail', url: 'https://mail.google.com', username: 'me', password: 'p' })
+    const yahoo = login('yahoo', { name: 'Yahoo', url: 'https://mail.yahoo.com', username: 'me', password: 'p' })
+
+    expect(relatedDuplicate(gmail, yahoo)).toBeNull()
+
+    const clusters = findDuplicateClusters([bare, gmail, yahoo])
+    for (const cluster of clusters) {
+      const hosts = cluster.members.map((m) => m.host).filter(Boolean)
+      expect(new Set(hosts).size, `cluster spans ${hosts.join(', ')}`).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('does not let a site-root entry bridge two password layers', () => {
+    // A bare "https://bank.example.com" entry is generic enough to belong with
+    // either layer, which used to fuse the site login and the transfer PIN into one
+    // cluster. They are different credentials.
+    const root = login('root', { name: 'Bank', url: 'https://bank.example.com', username: 'me', password: 'p0' })
+    const site = login('site', { name: 'Bank', url: 'https://bank.example.com/login', username: 'me', password: 'p1' })
+    const pin = login('pin', {
+      name: 'Bank',
+      url: 'https://bank.example.com/transfer/confirm',
+      username: 'me',
+      password: 'p2',
+    })
+
+    expect(relatedDuplicate(site, pin)).toBeNull()
+    expect(findDuplicateClusters([site, pin])).toHaveLength(0)
+
+    const clusters = findDuplicateClusters([root, site, pin])
+    expect(clusters.some((c) => c.memberIds.includes('site') && c.memberIds.includes('pin'))).toBe(false)
+  })
 })
 
 describe('split widths', () => {
