@@ -28,4 +28,15 @@ describe('extension version is consistent', () => {
       expect(hits, `${f} still mentions an old extension version: ${JSON.stringify(hits)}`).toEqual([])
     }
   })
+
+  it('leaves no hardcoded version in a view, only the injected one', () => {
+    // AppShell shipped "Ringkasan · 1.3" for weeks while the manifest moved on.
+    // Views must read __KUNCI_VERSION__ (baked from extension/VERSION) instead.
+    const shell = read('src/views/AppShell.tsx')
+    expect(shell).toContain('__KUNCI_VERSION__')
+    expect(shell).not.toMatch(/Ringkasan · 1\.\d/)
+    const daemon = read('helper/daemon.mjs')
+    expect(daemon).toContain('extensionOnDisk().extensionVersion')
+    expect(daemon).not.toMatch(/uiRevision: [^,\n]*'1\.\d'/)
+  })
 })

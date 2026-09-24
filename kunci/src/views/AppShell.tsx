@@ -177,7 +177,7 @@ export function AppShell() {
           </span>
           <div>
             <strong>Kunci</strong>
-            <span className="muted">Ringkasan · 1.3</span>
+            <span className="muted">Ringkasan · {__KUNCI_VERSION__}</span>
           </div>
         </div>
         <nav>

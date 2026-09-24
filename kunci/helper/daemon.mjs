@@ -17,7 +17,7 @@ import {
   revealHelperApp,
 } from './mac-ax.mjs'
 import { quitHelperProcesses } from './build-helper-app.mjs'
-import { KUNCI_ROOT, refreshCommands } from './repo-paths.mjs'
+import { KUNCI_ROOT, extensionOnDisk, refreshCommands } from './repo-paths.mjs'
 
 const ROOT = KUNCI_ROOT
 const DIST = join(ROOT, 'dist')
@@ -186,7 +186,7 @@ function staleUiPage(res) {
 <p>Kalau git bilang <code>origin/cursor/... is not a commit</code>: jangan checkout <code>origin/branch</code>. Clone single-branch cuma nulis commit ke <code>FETCH_HEAD</code>. Paste blok di bawah — pakai <code>&amp;&amp;</code>, jangan <code>;</code> supaya npm tidak jalan setelah git gagal.</p>
 <p>Di Terminal Mac:</p>
 <pre style="background:#12171f;padding:12px 16px;border-radius:8px;white-space:pre-wrap">${cmd}</pre>
-<p>Lalu hard-refresh <a href="/" style="color:#3ee0c3">http://127.0.0.1:8780</a>. Sidebar harus tertulis <strong>Ringkasan · 1.3</strong>, bukan daftar password di depan.</p>
+<p>Lalu hard-refresh <a href="/" style="color:#3ee0c3">http://127.0.0.1:8780</a>. Sidebar harus tertulis <strong>Ringkasan · ${extensionOnDisk().extensionVersion}</strong>, bukan daftar password di depan.</p>
 </body>`)
 }
 
@@ -233,11 +233,11 @@ const server = createServer(async (req, res) => {
       json(res, 200, {
         ok: true,
         platform: platform(),
-        version: '1.4.3',
+        version: extensionOnDisk().extensionVersion,
         email: RECOVERY_EMAIL,
         ui: serveUi,
         uiBuilt: existsSync(join(DIST, 'index.html')),
-        uiRevision: distMissingRingkasan() ? 'stale' : '1.3',
+        uiRevision: distMissingRingkasan() ? 'stale' : extensionOnDisk().extensionVersion,
         accessibility: await accessibilityTrusted(),
         helperApp: Boolean(helperBinPath()),
         helperAppPath: helperAppBundlePath() || '',

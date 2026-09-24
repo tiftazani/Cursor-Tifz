@@ -32,7 +32,7 @@ Localhost dan URL publik memakai **satu blob terenkripsi** di Durable Object. Se
 ```
 kunci/
   src/                 React UI (views, state/VaultContext, lib/)
-  extension/           Chrome MV3 unpacked (manifest 1.3.8)
+  extension/           Chrome MV3 unpacked (manifest 1.3.9)
   helper/              daemon.mjs, install-service, Mac AX fill, repo-paths.mjs
   worker/              index.ts (API + KunciStore Durable Object)
   scripts/             sync-branch, ambil-branch.sh, extension-status, gen-icons
@@ -96,9 +96,9 @@ Sukses lokal:
 
 - `git branch --show-current` = `cursor/kunci-password-manager-4eaf`
 - ada `kunci/src/views/DashboardView.tsx`
-- sidebar **Ringkasan · 1.3**
+- sidebar **Ringkasan · 1.3.9** (dari `extension/VERSION`, bukan hardcode)
 - helper Mac hijau di `http://127.0.0.1:8780`
-- kartu Chrome **Versi 1.3.8**
+- kartu Chrome **Versi 1.3.9**
 
 Stop helper: `npm run uninstall-service`.
 
@@ -151,7 +151,7 @@ Lint: `npm run lint` (oxlint).
 - Jangan merge ke `main` kecuali diminta (Vercel Cuan Yuk Guys di `main`, root `cuan-yuk-guys`).
 - Jangan hardcode secrets.
 - Netlify sudah ditinggalkan; abaikan `.netlify` di gitignore (legacy).
-- Kalau update PR lewat tool: **baca body GitHub dulu** dan preserve edit manusia. Body PR bisa usang (masih menyebut versi lama / `checkout origin/...`); fakta terkini: **1.3.8** + `FETCH_HEAD`.
+- Kalau update PR lewat tool: **baca body GitHub dulu** dan preserve edit manusia. Body PR bisa usang (masih menyebut versi lama / `checkout origin/...`); fakta terkini: **1.3.9** + `FETCH_HEAD`.
 
 ## Known issues / backlog
 
@@ -168,7 +168,7 @@ Lint: `npm run lint` (oxlint).
 1. Pertama kali: `chrome://extensions` → Load unpacked → `/Users/tiftazani/Cursor-Tifz/kunci/extension`.
 2. Helper harus nyala (`install-service`).
 3. Setelah git pull / file di `extension/` berubah, SW melihat stamp baru dari `/health` dan reload sendiri.
-4. Kartu harus **1.3.8**. Reload manual Chrome ≠ ganti file Git.
+4. Kartu harus **1.3.9**. Reload manual Chrome ≠ ganti file Git.
 5. Save login: tunggu outcome sukses; jangan simpan saat submit gagal.
 6. Ikon toolbar: `was_pinned_by_default: false`, jadi **tidak** muncul sendiri. Pin lewat puzzle-piece → pin. Ini bukan bug kode.
 
@@ -215,7 +215,7 @@ Kerjakan hanya di kunci/ pada branch cursor/kunci-password-manager-4eaf
 
 Mac path: /Users/tiftazani/Cursor-Tifz.
 Jangan sentuh cuan-yuk-guys. Jangan merge main. Zero-knowledge: jangan
-hardcode secrets. Extension unpacked: kunci/extension (1.3.8). Helper:
+hardcode secrets. Extension unpacked: kunci/extension (1.3.9). Helper:
 127.0.0.1:8780. Git Mac: fetch + checkout -B … FETCH_HEAD (bukan origin/branch).
 Bahasa chat: Indonesia natural.
 ```
@@ -233,7 +233,7 @@ Bahasa chat: Indonesia natural.
 | Daemon /health | `helper/daemon.mjs` |
 | Install Mac | `helper/install-service.mjs` |
 | Extension SW | `extension/background.js` |
-| Manifest | `extension/manifest.json` (`1.3.8`) |
+| Manifest | `extension/manifest.json` (`1.3.9`) |
 | Cloudflare worker + API | `worker/index.ts` |
 | Cloudflare config | `wrangler.toml` |
 

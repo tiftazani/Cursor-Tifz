@@ -62,7 +62,7 @@ export function AutofillView() {
           Folder ekstensi: <code>{extensionDir}</code>
           {fromHelper ? ' (dari helper Mac).' : ' — fallback clone Cursor-Tifz, bukan tifz-apps.'}{' '}
           Load unpacked ke folder itu <strong>sekali</strong>. Setelah itu, kalau aplikasi/helper di-update (git pull
-          atau <code>npm run install-service</code>), Chrome reload sendiri. Kartu harus {helperExtensionVersion || '1.3.8'}
+          atau <code>npm run install-service</code>), Chrome reload sendiri. Kartu harus {helperExtensionVersion || '1.3.9'}
           — bukan versi lama.
         </p>
         <ol className="steps">
