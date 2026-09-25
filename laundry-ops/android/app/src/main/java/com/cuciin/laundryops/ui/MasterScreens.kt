@@ -55,6 +55,8 @@ import androidx.navigation.NavHostController
 import com.cuciin.laundryops.data.Branch
 import com.cuciin.laundryops.data.Customer
 import com.cuciin.laundryops.data.CuciinStore
+import com.cuciin.laundryops.data.FirebaseCloud
+import com.cuciin.laundryops.data.LoginProvision
 import com.cuciin.laundryops.data.Product
 import com.cuciin.laundryops.data.ProductKind
 import com.cuciin.laundryops.data.Role
@@ -433,15 +435,25 @@ internal fun UsersScreen(nav: NavHostController, toast: (String) -> Unit) {
                     Spacer(Modifier.height(8.dp))
                     PrimaryBtn("Simpan") {
                         val bids = branches.toList().ifEmpty { listOfNotNull(store.branches.firstOrNull()?.id) }
+                        // Kata sandi akun login diperiksa SEBELUM barisnya disimpan. Kalau baru
+                        // ditolak Firebase, barisnya sudah terlanjur ada tanpa akun login dan
+                        // orangnya tidak bisa masuk.
+                        val problem = LoginProvision.passwordProblem(pass, FirebaseCloud.enabled)
+                        if (problem != null) { toast(problem); return@PrimaryBtn }
                         val err = if (editing == null) {
                             store.addStaff(name, email, role, bids, pass, approved = true)
                         } else {
                             store.updateStaff(editing!!.email, name, role, bids, pass.ifBlank { null }, newEmail = email)
                         }
-                        if (err != null) toast(err) else {
-                            toast("Pengguna tersimpan")
-                            creating = false
-                            editing = null
+                        if (err != null) { toast(err); return@PrimaryBtn }
+                        creating = false
+                        editing = null
+                        // Baris user sudah tersimpan. Akun loginnya belum tentu ada: layar ini
+                        // dulu hanya menulis baris user, sehingga kasir yang ditambahkan lewat
+                        // sini tidak pernah bisa masuk walaupun namanya ada di daftar. Sekarang
+                        // akun loginnya dibuat sekalian; kalau sudah ada, tidak ada yang berubah.
+                        FirebaseCloud.provisionLoginAccount(email.trim(), LoginProvision.initialPassword(pass)) { result ->
+                            toast(LoginProvision.message(result, pass.isNotBlank()))
                         }
                     }
                     if (editing != null && !editing!!.approved) {

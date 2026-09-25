@@ -12,10 +12,18 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.38"
-    val currentCode: Int = 57
+    val currentName: String = "1.10.39"
+    val currentCode: Int = 58
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.39", code = 58, date = "25 Sep 2026",
+            notes = listOf(
+                "Akun login sekarang ikut dibuat saat Owner menambah pengguna lewat layar Daftar User. Sebelumnya layar itu hanya menyimpan nama pengguna ke server tanpa membuat akun login, sehingga kasir yang ditambahkan lewat layar itu tidak akan pernah bisa masuk meskipun namanya sudah ada di daftar dan kata sandinya benar. Lima kasir sempat terjebak begitu.",
+                "Kata sandi yang terlalu pendek ditolak sebelum data pengguna disimpan. Sebelumnya penolakan baru terjadi di server identitas, saat baris penggunanya sudah tersimpan tanpa akun login.",
+                "Pesan setelah Simpan menyebut dengan jelas apakah akun loginnya dibuat, sudah ada, atau gagal dibuat, supaya tidak ada pengguna yang tampak tersimpan tetapi sebenarnya tidak bisa masuk.",
+            ),
+        ),
         AppRelease(
             name = "1.10.38", code = 57, date = "24 Sep 2026",
             notes = listOf(

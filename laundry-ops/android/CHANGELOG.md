@@ -2,6 +2,37 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.39 — 25 Sep 2026 (versionCode 58)
+
+### Akun login ikut dibuat saat Owner menambah pengguna
+
+Laporan dari operasi: beberapa kasir tidak bisa masuk dengan pesan `Email atau kata sandi tidak sesuai.`
+Padahal kata sandinya belum pernah diganti.
+
+Akar masalahnya bukan pada kata sandi. Layar **Daftar User → Tambah user** hanya menulis baris
+pengguna ke server, tanpa membuat akun login. Login aplikasi diverifikasi Firebase Auth, dan
+Firebase tidak mengenal email yang belum pernah dibuatkan akun. Jadi barisnya rapi di daftar user,
+sandinya benar, tetapi tidak ada akun yang bisa menerimanya.
+
+Bukti di data produksi: lima kasir (`alfin`, `febri`, `ihsan`, `Bu rohma`, `Nabila`) ada di tabel
+`staff` dengan `firebase_uid` kosong, dan kelimanya ditambahkan Owner lewat layar itu antara
+24 dan 25 September 2026. Enam kasir lain yang dibuat lewat layar **Daftar** (yang memang membuat
+akun login) tidak terpengaruh.
+
+Perbaikan:
+
+1. Setelah baris pengguna tersimpan, aplikasi membuat akun loginnya sekalian. Pembuatan memakai
+   sambungan identitas kedua, supaya sesi Owner yang sedang membuka layar tidak ikut keluar.
+2. Kalau akun loginnya sudah ada, tidak ada yang diubah. Owner diberi tahu bahwa kata sandi yang
+   baru diketik **tidak** berlaku, dan pemiliknya bisa memakai **Lupa kata sandi**.
+3. Kata sandi di bawah 6 karakter ditolak **sebelum** baris pengguna disimpan. Sebelumnya
+   penolakan baru terjadi di Firebase, saat barisnya sudah tersimpan tanpa akun login.
+4. Pesan setelah Simpan menyebut hasilnya apa adanya: akun dibuat, sudah ada, atau gagal dibuat
+   beserta sebabnya.
+
+Data lima kasir itu sudah dibuatkan akun loginnya dan diverifikasi: seluruh 12 akun staf kini
+bisa masuk dan diterima server dengan peran dan cabang yang benar.
+
 ## 1.10.38 — 24 Sep 2026 (versionCode 57)
 
 ### Absensi per cabang untuk kasir yang bertugas di beberapa cabang

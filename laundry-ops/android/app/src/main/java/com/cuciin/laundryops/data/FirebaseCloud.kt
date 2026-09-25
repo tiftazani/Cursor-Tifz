@@ -13,7 +13,9 @@ import java.util.concurrent.TimeUnit
 /** Firebase hanya menangani identitas. Data operasional dikirim ke Cloudflare D1. */
 object FirebaseCloud {
     private const val TAG = "CuciinFirebase"
+    private const val PROVISION_APP = "cuciin-provision"
     private val main = Handler(Looper.getMainLooper())
+    private var appContext: Application? = null
     var enabled: Boolean = false
         private set
     val authenticated: Boolean get() = enabled && FirebaseAuth.getInstance().currentUser != null
@@ -34,6 +36,7 @@ object FirebaseCloud {
     }
 
     fun init(app: Application) {
+        appContext = app
         enabled = try {
             if (FirebaseApp.getApps(app).isEmpty()) FirebaseApp.initializeApp(app) != null else true
         } catch (e: Exception) {
@@ -147,6 +150,75 @@ object FirebaseCloud {
                 }
             }
             .addOnFailureListener { e -> ui { onDone(e.message ?: "gagal daftar") } }
+    }
+
+    /**
+     * Membuat akun login Firebase untuk user yang ditambahkan Owner.
+     *
+     * Layar "Pengguna baru" dulu hanya menyimpan baris user ke server. Baris itu TIDAK membuat
+     * akun login, jadi kasir yang ditambahkan lewat layar itu tidak akan pernah bisa masuk
+     * meskipun namanya sudah ada di daftar user. Kejadian nyata: lima kasir tidak bisa masuk
+     * karena akun loginnya tidak pernah dibuat.
+     *
+     * Akun dibuat lewat instance Firebase KEDUA supaya sesi Owner yang sedang membuka layar
+     * tidak terganggu. Memakai instance utama akan mengeluarkan Owner dari sesinya lalu masuk
+     * sebagai user baru.
+     */
+    fun provisionLoginAccount(email: String, password: String, onDone: (ProvisionResult) -> Unit) {
+        if (!enabled) return ui { onDone(ProvisionResult(ProvisionKind.SKIPPED)) }
+        val app = provisionApp()
+            ?: return ui { onDone(ProvisionResult(ProvisionKind.FAILED, "sambungan identitas kedua tidak tersedia")) }
+        val auth = FirebaseAuth.getInstance(app)
+        val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun finish(result: ProvisionResult) {
+            if (!done.compareAndSet(false, true)) return
+            ui { onDone(result) }
+        }
+        // Sama seperti layar Masuk: rantai Task Firebase tidak selalu memanggil listener-nya.
+        // Tanpa batas waktu, Owner menekan Simpan dan tidak pernah tahu hasilnya.
+        val watchdog = Runnable { finish(ProvisionResult(ProvisionKind.FAILED, "server identitas tidak menjawab")) }
+        main.postDelayed(watchdog, 20_000)
+        auth.createUserWithEmailAndPassword(email.trim(), password)
+            .addOnSuccessListener {
+                main.removeCallbacks(watchdog)
+                // Sesi di instance kedua tidak dipakai siapa pun; tinggalkan supaya tidak
+                // ada token menggantung di perangkat Owner.
+                auth.signOut()
+                finish(ProvisionResult(ProvisionKind.CREATED))
+            }
+            .addOnFailureListener { e ->
+                main.removeCallbacks(watchdog)
+                val raw = e.message.orEmpty().lowercase()
+                val result = when {
+                    "already in use" in raw || "email exists" in raw || "email_exists" in raw ->
+                        ProvisionResult(ProvisionKind.ALREADY_EXISTS)
+                    "password" in raw ->
+                        ProvisionResult(ProvisionKind.FAILED, "kata sandi ditolak server identitas")
+                    "network" in raw || "timeout" in raw || "unreachable" in raw ->
+                        ProvisionResult(ProvisionKind.FAILED, "tidak dapat menghubungi server identitas")
+                    else -> ProvisionResult(ProvisionKind.FAILED, e.message?.take(120).orEmpty())
+                }
+                finish(result)
+            }
+            .addOnCanceledListener {
+                main.removeCallbacks(watchdog)
+                finish(ProvisionResult(ProvisionKind.FAILED, "permintaan dibatalkan"))
+            }
+    }
+
+    /** Instance Firebase kedua, khusus pembuatan akun. Dibuat sekali lalu dipakai ulang. */
+    private fun provisionApp(): FirebaseApp? {
+        val context = appContext ?: return null
+        return try {
+            FirebaseApp.getInstance(PROVISION_APP)
+        } catch (_: IllegalStateException) {
+            try {
+                FirebaseApp.initializeApp(context, FirebaseApp.getInstance().options, PROVISION_APP)
+            } catch (e: Exception) {
+                Log.w(TAG, "sambungan identitas kedua gagal dibuat", e)
+                null
+            }
+        }
     }
 
     fun sendPasswordReset(email: String, onDone: (String?) -> Unit) {
