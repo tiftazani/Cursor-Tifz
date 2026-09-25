@@ -1,4 +1,4 @@
-import { Field, TextInput } from '../components/Field'
+import { Field, SecretInput, TextInput } from '../components/Field'
 import { useVault } from '../state/VaultContext'
 import { isMacDesktop } from '../lib/platform'
 import { promptHelperAccess, revealHelperApp } from '../lib/helper'
@@ -193,9 +193,9 @@ export function AutofillView() {
             <TextInput value={s.helperUrl} onChange={(e) => void updateSettings({ helperUrl: e.target.value })} />
           </Field>
           <Field label="Token helper (terisi otomatis jika helper nyala)">
-            <TextInput
+            <SecretInput
               value={s.helperToken}
-              onChange={(e) => void updateSettings({ helperToken: e.target.value.trim() })}
+              onChange={(value) => void updateSettings({ helperToken: value.trim() })}
               placeholder="otomatis dari 127.0.0.1:8780"
             />
           </Field>

@@ -74,4 +74,15 @@ describe('the public bundle carries no personal paths', () => {
     expect(view).toContain('{showGuide ? (')
     expect(view).toContain('onClick={() => setShowGuide((v) => !v)}')
   })
+
+  it('never prints the helper token as plain text', () => {
+    // The token authorises /fill, which types a login into whatever Mac app is in
+    // front. It sat in a TextInput, so it was readable on screen and in any
+    // screenshot of the page.
+    const view = readFileSync(join(root, 'src/views/AutofillView.tsx'), 'utf8')
+    const field = view.slice(view.indexOf('Token helper'))
+    const box = field.slice(0, field.indexOf('</Field>'))
+    expect(box).toContain('<SecretInput')
+    expect(box).not.toContain('<TextInput')
+  })
 })
