@@ -18,6 +18,69 @@ export interface DuplicateMember {
   createdAt: number
 }
 
+/**
+ * Which entry of a group the card should pre-select, i.e. the one to keep.
+ *
+ * This used to be simply the most recently edited member, and that is not a quality
+ * signal. Two rows for one site can differ in ways a person can see at a glance: one
+ * name is still a raw url while the other reads `site (account)`, and only one of them
+ * carries a username. Presenting the raw one as the recommendation asks the user to
+ * confirm a worse entry.
+ *
+ * The order below is deliberate, highest first, and the first difference decides:
+ * an account beats no account, a human-readable name beats a raw url, a name that says
+ * more than the bare host beats one that repeats it, and a stored password beats an
+ * empty one. Recency is only the tie-break, so equal rows keep the old behaviour.
+ *
+ * A group whose passwords CONFLICT still gets a pre-selection, but it is never safe to
+ * act on: `passwordConflict` drives the card to `Cek dulu`, and no rule here can know
+ * which of two different passwords is the real one. Auto-filling the choice is not the
+ * same as auto-applying it.
+ */
+function pickKeeper(group: Entry[], members: DuplicateMember[]): DuplicateMember {
+  const byId = new Map(group.map((e) => [e.id, e]))
+  const quality = (m: DuplicateMember) => {
+    const src = byId.get(m.id)
+    const name = (m.name || '').trim()
+    const host = (m.host || '').trim().toLowerCase()
+    const lower = name.toLowerCase()
+    // A url got stored as the name. Only a scheme (or a path after the host) proves it:
+    // a bare `agoda.com` is a perfectly good name, and treating it as a raw url made
+    // `www.agoda.com` look like the better row.
+    const rawUrl = /^[a-z][a-z0-9+.-]*:\/\//i.test(name) || /^[\w.-]+\.(com|net|org|id|io|app|co\.id)(\/\S*)?$/i.test(name) && name.includes('/')
+    // The name repeats the host instead of adding the account the user recognises.
+    // `www.` is stripped from BOTH sides: the host already arrives with it removed, so
+    // comparing `www.agoda.com` against `agoda.com` unnormalised made the prefixed row
+    // look like the more informative name and win the tier.
+    const stripWww = (s: string) => s.replace(/^www\./, '')
+    const bareHost = lower === host || stripWww(lower) === stripWww(host) || lower.startsWith(`${host}/`)
+    const wwwNoise = /^www\./.test(lower) ? 0 : 1
+    return [
+      (src?.username || '').trim() ? 1 : 0,
+      rawUrl ? 0 : 1,
+      bareHost ? 0 : 1,
+      wwwNoise,
+      (src?.password || '').length ? 1 : 0,
+      // Seconds since the epoch, scaled so one edit cannot outweigh a whole tier.
+      m.updatedAt / 1e13,
+    ]
+  }
+  let best = members[0]
+  let bestScore = quality(best)
+  for (const m of members.slice(1)) {
+    const score = quality(m)
+    for (let i = 0; i < score.length; i++) {
+      if (score[i] === bestScore[i]) continue
+      if (score[i] > bestScore[i]) {
+        best = m
+        bestScore = score
+      }
+      break
+    }
+  }
+  return best
+}
+
 export interface DuplicateCluster {
   id: string
   reason: DuplicateReason
@@ -259,7 +322,7 @@ export function findDuplicateClusters(entries: Entry[]): DuplicateCluster[] {
   for (const [root, group] of groups) {
     if (group.length < 2) continue
     const members = group.map(memberOf).sort((a, b) => b.updatedAt - a.updatedAt)
-    const keepId = members[0].id
+    const keepId = pickKeeper(group, members).id
     const passwords = [...new Set(group.map((e) => e.password || '').filter(Boolean))]
     const passwordConflict = passwords.length > 1
     const host = members.find((m) => m.host)?.host || members[0].name
