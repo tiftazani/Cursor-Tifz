@@ -42,13 +42,14 @@ import { BackupView } from './BackupView'
 import { SettingsView } from './SettingsView'
 import { QuickFind } from './QuickFind'
 
-// `group` starts a labelled block in the desktop sidebar; the mobile tab bar
-// ignores it.
+// `group` starts a labelled block in the sidebar. Eight items in one flat list is
+// hard to scan, and the narrow layout cannot fall back to a bottom tab bar the way
+// it used to, so the labels have to hold at every width.
 const NAV: { id: AppView; label: string; icon: typeof IconKey; group?: string }[] = [
-  { id: 'home', label: 'Ringkasan', icon: IconHome },
+  { id: 'home', label: 'Ringkasan', icon: IconHome, group: 'Brankas' },
   { id: 'vault', label: 'Brankas', icon: IconVault },
   { id: 'health', label: 'Kesehatan', icon: IconShield },
-  { id: 'generator', label: 'Generator', icon: IconSliders },
+  { id: 'generator', label: 'Generator', icon: IconSliders, group: 'Alat' },
   { id: 'history', label: 'Riwayat', icon: IconClock },
   { id: 'autofill', label: 'Isi otomatis', icon: IconFill, group: 'Perangkat dan data' },
   { id: 'backup', label: 'Cadangan', icon: IconDownload },

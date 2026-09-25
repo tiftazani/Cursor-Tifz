@@ -2256,6 +2256,9 @@ button.sev {
 }
 
 @media (max-width: 1100px) {
+  /* The nav turns into a single horizontal bar at this width, so a block heading
+     would sit inline with the buttons and read as one more tab. The labels belong to
+     the column layout only. */
   .nav-group {
     display: none;
   }
@@ -2311,18 +2314,29 @@ button.sev {
   }
 }
 
-/* The blue frame separates the personal vault from the browser window. */
-@media (min-width: 1101px) {
-  .shell { inset: 14px max(14px, calc((100vw - 1440px) / 2)) 0; height:auto;max-height:none;padding:0;border-radius:18px 18px 0 0;background:var(--bg);box-shadow:0 30px 80px rgba(10,20,50,.35); }
-  .sidebar { padding:0 14px 14px; }
-  .brand-side { margin:0 -14px 14px;padding:18px 22px;border-bottom:1px solid var(--line); }
-  .sidebar nav { gap:2px; }
-  .nav-item { border-radius:8px;font-weight:520;color:var(--text); }
-  .nav-item.active { background:var(--accent);color:var(--accent-text);box-shadow:none;font-weight:620; }
-  .nav-badge.nav-badge { background:color-mix(in srgb,var(--danger) 12%,var(--bg-2));color:var(--danger); }
-  .nav-item.active .nav-badge { background:var(--bg-2);color:var(--danger); }
-  .nav-group { margin:18px 10px 4px; }
-  .sidebar-foot { border-top:1px solid var(--line); }
+/* The blue frame separates the personal vault from the browser window.
+   Shown on laptops and up. The approved mockup drops the frame at 700px, where the
+   gradient would eat the little room a phone has, so the two match exactly. With the
+   frame off, the page keeps the flat background the phone layout expects. */
+@media (min-width: 701px) {
+  .shell {
+    inset: 14px max(14px, calc((100vw - 1440px) / 2)) 0;
+    height: auto;
+    max-height: none;
+    padding: 0;
+    border-radius: 18px 18px 0 0;
+    background: var(--bg);
+    box-shadow: 0 30px 80px rgba(10, 20, 50, 0.35);
+  }
+  .sidebar { padding: 0 14px 14px; }
+  .brand-side { margin: 0 -14px 14px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+  .sidebar nav { gap: 2px; }
+  .nav-item { border-radius: 8px; font-weight: 520; color: var(--text); }
+  .nav-item.active { background: var(--accent); color: var(--accent-text); box-shadow: none; font-weight: 620; }
+  .nav-badge.nav-badge { background: color-mix(in srgb, var(--danger) 12%, var(--bg-2)); color: var(--danger); }
+  .nav-item.active .nav-badge { background: var(--bg-2); color: var(--danger); }
+  .nav-group { margin: 18px 10px 4px; }
+  .sidebar-foot { border-top: 1px solid var(--line); }
 }
 
 /* The v2 layout puts the vault overview before the action panels. */
