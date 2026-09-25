@@ -85,7 +85,18 @@ export function EntryPane({
           <button type="button" className="btn" onClick={() => void restoreEntry(entry.id)}>
             Pulihkan
           </button>
-          <button type="button" className="btn btn-danger" onClick={() => void purgeEntry(entry.id)}>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => {
+              // Emptying the whole trash asks first; deleting one entry from it did
+              // not, so a single misclick destroyed an entry permanently with no way
+              // back. `purgeEntry` drops it from `trash` outright — there is no undo.
+              if (window.confirm(`Hapus permanen "${entry.name}"? Ini tidak bisa dibatalkan.`)) {
+                void purgeEntry(entry.id)
+              }
+            }}
+          >
             Hapus permanen
           </button>
         </div>
