@@ -25,7 +25,14 @@ export function SetupScreen() {
       setError('Kata sandi induk minimal 12 karakter dan harus kuat')
       return
     }
-    await setup(password, hint.trim())
+    try {
+      await setup(password, hint.trim())
+    } catch (err) {
+      // `setup` writes the blob, the hint and the creation stamp to IndexedDB. A
+      // blocked or full store rejects, and without this the promise escaped
+      // unhandled: the button stopped saying "Menyiapkan…" and nothing else happened.
+      setError(err instanceof Error ? `Gagal membuat brankas: ${err.message}` : 'Gagal membuat brankas')
+    }
   }
 
   return (

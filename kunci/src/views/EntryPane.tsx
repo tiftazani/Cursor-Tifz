@@ -76,6 +76,13 @@ export function EntryPane({
     }
   }, [draft.totpSecret])
 
+  /** Run a vault mutation and surface a rejection instead of letting it escape. */
+  function run(fn: Promise<unknown>, what: string) {
+    void fn.catch((err) => {
+      toast.push(err instanceof Error ? err.message : `Gagal ${what}`, 'danger')
+    })
+  }
+
   if (inTrash) {
     return (
       <article className="pane">
@@ -125,7 +132,7 @@ export function EntryPane({
           <p className="muted">Tidak ada isi lain untuk ditampilkan.</p>
         ) : null}
         <div className="row-actions">
-          <button type="button" className="btn" onClick={() => void restoreEntry(entry.id)}>
+          <button type="button" className="btn" onClick={() => run(restoreEntry(entry.id), 'memulihkan')}>
             Pulihkan
           </button>
           <button
@@ -136,7 +143,7 @@ export function EntryPane({
               // not, so a single misclick destroyed an entry permanently with no way
               // back. `purgeEntry` drops it from `trash` outright — there is no undo.
               if (window.confirm(`Hapus permanen "${entry.name}"? Ini tidak bisa dibatalkan.`)) {
-                void purgeEntry(entry.id)
+                run(purgeEntry(entry.id), 'menghapus')
               }
             }}
           >
@@ -172,6 +179,11 @@ export function EntryPane({
       if (!ok) return
       toast.push('Disimpan')
       if (isNew) onCloseNew?.()
+    } catch (err) {
+      // `saveEntry` can still reject: `persist` throws "Brankas terkunci" when the
+      // auto-lock fired between opening the pane and pressing Simpan. Without this
+      // the rejection escaped unhandled and the button just went quiet.
+      toast.push(err instanceof Error ? err.message : 'Gagal menyimpan', 'danger')
     } finally {
       setSaving(false)
     }
@@ -206,7 +218,7 @@ export function EntryPane({
             <IconStar />
           </button>
           {!isNew ? (
-            <button type="button" className="icon-btn danger" title="Buang" onClick={() => void deleteEntry(draft.id)}>
+            <button type="button" className="icon-btn danger" title="Buang" onClick={() => run(deleteEntry(draft.id), 'membuang')}>
               <IconTrash />
             </button>
           ) : null}

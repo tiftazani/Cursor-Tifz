@@ -166,6 +166,46 @@ describe('saving a hint gives feedback', () => {
   })
 })
 
+describe('a rejected vault action never escapes unhandled', () => {
+  it('SetupScreen catches a failed vault creation', () => {
+    // Live before: `await setup(...)` sat outside any try. `setup` writes the blob,
+    // the hint and the creation stamp to IndexedDB; a blocked store rejected with
+    // nobody watching, the button stopped saying "Menyiapkan…" and nothing else
+    // happened. Assert the exact shape — a plain `indexOf('try {')` check passed
+    // even with the catch replaced by a dead `else if`, because -1 sorts first.
+    const gate = read('src/views/Gate.tsx')
+    expect(gate).toMatch(/try \{\s*await setup\(password, hint\.trim\(\)\)\s*\} catch \(err\) \{/)
+    expect(gate).toContain('Gagal membuat brankas')
+  })
+
+  it('settings actions report a rejection', () => {
+    const settings = read('src/views/SettingsView.tsx')
+    // `rotateRecoveryKey` throws when locked; `destroyVault` rejects if the
+    // IndexedDB delete fails, and the vault is then still on disk.
+    expect(settings).toContain('void rotateRecoveryKey().catch(')
+    expect(settings).toContain('void destroyVault().catch(')
+    expect(settings).toContain('void logoutPublic().catch(')
+    expect(settings).toContain('Gagal membuat recovery key baru')
+    expect(settings).toContain('Gagal menghapus brankas')
+  })
+
+  it('EntryPane mutations go through the guarded helper', () => {
+    // `persist` throws "Brankas terkunci" when auto-lock fires between opening the
+    // pane and pressing the button, so every one of these could reject.
+    expect(entryPane).toContain('function run(fn: Promise<unknown>, what: string)')
+    expect(entryPane).toContain("run(restoreEntry(entry.id), 'memulihkan')")
+    expect(entryPane).toContain("run(purgeEntry(entry.id), 'menghapus')")
+    expect(entryPane).toContain("run(deleteEntry(draft.id), 'membuang')")
+    expect(entryPane).not.toContain('void purgeEntry(entry.id)')
+  })
+
+  it('saving reports a locked vault instead of going quiet', () => {
+    const save = entryPane.slice(entryPane.indexOf('async function save()'))
+    const body = save.slice(0, 1100)
+    expect(body).toContain("toast.push(err instanceof Error ? err.message : 'Gagal menyimpan', 'danger')")
+  })
+})
+
 describe('a TOTP field accepts the otpauth URI its hint promises', () => {
   it('parses the URI before decoding', () => {
     // No `strip` here: the comment stripper eats the `//` inside the regex literal.

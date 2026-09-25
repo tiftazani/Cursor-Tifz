@@ -7,6 +7,7 @@ import { cloudHasSession, requestCloudGate } from '../lib/cloud'
 import { isAndroidEntry } from '../lib/cleanup'
 import { unlockErrorMessage } from '../lib/crypto'
 import { useVault } from '../state/VaultContext'
+import { useToast } from '../components/Toast'
 
 export function SettingsView() {
   const {
@@ -23,6 +24,7 @@ export function SettingsView() {
     recoveryEmail,
     removeAndroidEntries,
   } = useVault()
+  const toast = useToast()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [next2, setNext2] = useState('')
@@ -228,7 +230,12 @@ export function SettingsView() {
                 'Recovery key lama tidak berlaku lagi. Pastikan kamu bisa menyimpan yang baru sekarang.',
               )
             ) {
-              void rotateRecoveryKey()
+              // `rotateRecoveryKey` throws when the vault is locked and can reject
+              // on a failed write. The old `void` call turned both into an unhandled
+              // rejection: the confirm dialog closed and nothing happened.
+              void rotateRecoveryKey().catch((err) => {
+                toast.push(err instanceof Error ? err.message : 'Gagal membuat recovery key baru', 'danger')
+              })
             }
           }}
         >
@@ -241,7 +248,7 @@ export function SettingsView() {
         <button type="button" className="btn" onClick={lock}>
           Kunci sekarang
         </button>
-        <button type="button" className="btn" onClick={() => void logoutPublic()}>
+        <button type="button" className="btn" onClick={() => void logoutPublic().catch(() => toast.push('Gagal keluar dari sesi', 'danger'))}>
           Keluar dari sesi cloud ({recoveryEmail})
         </button>
         {cloudSession ? (
@@ -273,7 +280,12 @@ export function SettingsView() {
                 'Hapus brankas dari browser ini? Salinan terenkripsi di cloud (localhost dan URL publik) tidak ikut terhapus.',
               )
             ) {
-              void destroyVault()
+              // If the IndexedDB delete fails, the vault is still on disk and the UI
+              // must not imply it is gone. `destroyVault` only announces success
+              // after `vaultDb.destroy()` resolves, so a rejection has to be caught.
+              void destroyVault().catch((err) => {
+                toast.push(err instanceof Error ? err.message : 'Gagal menghapus brankas', 'danger')
+              })
             }
           }}
         >
