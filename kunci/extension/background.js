@@ -7,6 +7,7 @@ import {
   dekFromB64,
   dekToB64,
   hostFromUrl,
+  isEncryptedBlob,
   isKunciAppUrl,
   layerFromUrl,
   matchesForUrl,
@@ -37,6 +38,8 @@ const session = (() => {
 })()
 
 const CLOUD = 'https://kunci.tiftazani-cuciin.workers.dev'
+// A cloud PUT that never answers must not pin the save chain forever.
+const CLOUD_TIMEOUT_MS = 15000
 const KUNCI_TAB_URLS = [
   'http://127.0.0.1:8780/*',
   'http://localhost:8780/*',
@@ -128,6 +131,10 @@ async function pushCloud(blob, token) {
   // over by the Kunci page. With it, the session cookie the browser already holds is
   // a second chance when that token has gone stale. The worker reads `bearer ||
   // cookie`, so a dead Authorization header hides a live cookie: retry without it.
+  //
+  // Bounded: a host that accepts the connection and never answers used to hang this
+  // forever. `writeVault` awaits it, and `withVault` serialises, so one stuck PUT
+  // blocked every later save and left the save bar up with no error.
   const put = (auth) =>
     fetch(`${CLOUD}/api/vault`, {
       method: 'PUT',
@@ -136,6 +143,7 @@ async function pushCloud(blob, token) {
         ? { 'Content-Type': 'application/json', Authorization: `Bearer ${auth}` }
         : { 'Content-Type': 'application/json' },
       body: JSON.stringify({ blob }),
+      signal: AbortSignal.timeout(CLOUD_TIMEOUT_MS),
     })
   try {
     let res = await put(token)
@@ -334,19 +342,48 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return ack(sendResponse, () => queueSave(msg.capture, sender.tab?.id))
   }
   if (msg.type === 'SYNC' && msg.blob) {
-    return ack(sendResponse, async () => {
-      await chrome.storage.local.set({ blob: msg.blob })
-      const { dekB64, unlocked } = await session.get(['dekB64', 'unlocked'])
-      if (unlocked && dekB64) {
-        try {
-          const vault = await decryptWithDek(msg.blob, dekFromB64(dekB64))
-          vaultCache = { blob: msg.blob, vault }
-          await session.set({ unlocked: true, dekB64 })
-        } catch {
-          /* dek mismatch after password change */
-        }
+    // Validate before storing: any caller could otherwise write an arbitrary object
+    // into `blob`, and `isEncryptedBlob` is what popup.js and the web bridge use.
+    if (!isEncryptedBlob(msg.blob)) {
+      try {
+        sendResponse({ ok: false, error: 'Blob tidak valid' })
+      } catch {
+        /* sender already gone */
       }
-    })
+      return false
+    }
+    // Report the real outcome instead of an unconditional `{ok:true}`. `ack()` answers
+    // before the write runs, so an over-quota `storage.local.set` (10 MB cap, and the
+    // blob is the ciphertext of the whole vault) dropped the write while the app was
+    // told it synced — the extension then served the stale vault.
+    void Promise.resolve()
+      .then(async () => {
+        await chrome.storage.local.set({ blob: msg.blob })
+        const { dekB64, unlocked } = await session.get(['dekB64', 'unlocked'])
+        if (unlocked && dekB64) {
+          try {
+            const vault = await decryptWithDek(msg.blob, dekFromB64(dekB64))
+            vaultCache = { blob: msg.blob, vault }
+            await session.set({ unlocked: true, dekB64 })
+          } catch {
+            /* dek mismatch after password change */
+          }
+        }
+        try {
+          sendResponse({ ok: true })
+        } catch {
+          /* sender already gone */
+        }
+      })
+      .catch((err) => {
+        try {
+          const message = err instanceof Error ? err.message : String(err)
+          sendResponse({ ok: false, error: message.trim() || 'Gagal menyimpan brankas' })
+        } catch {
+          /* sender already gone */
+        }
+      })
+    return true
   }
   if (msg.type === 'CLOUD_TOKEN') {
     return ack(sendResponse, () => session.set({ cloudToken: msg.token || '' }))
@@ -445,9 +482,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const { blob } = await chrome.storage.local.get('blob')
         if (!blob) throw new Error('Brankas tidak ada')
         const next = applyLoginCapture(vault.entries || [], msg.capture)
-        await clearPendingSave(sender.tab?.id)
-        if (next.changed === 'skip') return { ok: true, changed: 'skip' }
+        if (next.changed === 'skip') {
+          await clearPendingSave(sender.tab?.id)
+          return { ok: true, changed: 'skip' }
+        }
+        // Write first, clear the pending record only once it landed. Clearing first
+        // meant a failed write (quota, dek mismatch, storage error) lost both the
+        // login and the record `restorePendingSave()` would have offered again.
         await writeVault({ ...vault, entries: next.entries }, dekB64, blob)
+        await clearPendingSave(sender.tab?.id)
         return { ok: true, changed: next.changed }
       })
       return result

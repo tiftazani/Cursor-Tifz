@@ -201,10 +201,20 @@ function fill(match) {
   if (match.id) void send({ type: 'TOUCH', id: match.id })
 }
 
+/**
+ * True only for a page that really is the Kunci app.
+ *
+ * The scheme matters. Matching on hostname+port alone meant any OTHER local dev
+ * server — `npm run dev` in an unrelated Vite project defaults to 5173 — was
+ * treated as Kunci, wired into the vault bridge, and could then ask for the
+ * encrypted blob or push a replacement one. Loopback http on Kunci's own ports
+ * is the app; an https loopback server is somebody else.
+ */
 function isKunciPage() {
-  const { hostname, port } = location
-  if (hostname === 'kunci.tiftazani-cuciin.workers.dev') return true
-  return (hostname === '127.0.0.1' || hostname === 'localhost') && ['8780', '5173', '4173'].includes(port)
+  const { hostname, port, protocol } = location
+  if (hostname === 'kunci.tiftazani-cuciin.workers.dev') return protocol === 'https:'
+  if (hostname !== '127.0.0.1' && hostname !== 'localhost') return false
+  return protocol === 'http:' && ['8780', '5173', '4173'].includes(port)
 }
 
 let lastUsername = ''
@@ -535,7 +545,18 @@ function showSaveBar(pending) {
               })
               return
             }
-            if (res?.ok) hideSaveBar()
+            if (res?.ok) {
+              hideSaveBar()
+              return
+            }
+            // `background.js` answers `{error}` for any thrown save, and an over-quota
+            // blob is a real one. Leaving the bar up with no message made the user
+            // press Simpan again with no idea it had failed.
+            showOtherBar({
+              title: 'Gagal menyimpan',
+              subtitle: res?.error || 'Login ini tidak tersimpan. Coba lagi.',
+              actions: [{ label: 'Tutup', onClick: () => undefined }],
+            })
           })
         },
       },

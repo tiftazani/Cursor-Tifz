@@ -121,6 +121,12 @@ describe('extension and web matching agree', () => {
       'http://localhost:3000/',
       'http://127.0.0.1:9999/',
       'https://bank.example.com/login',
+      // An https loopback server on one of Kunci's ports is a DIFFERENT app. The
+      // extension used to ignore the scheme and call it Kunci, while src/lib
+      // compared full origins — a drift the list above could not see.
+      'https://127.0.0.1:5173/',
+      'https://localhost:8780/',
+      'https://localhost:4173/x',
       // A lookalike host must not be treated as the app.
       'https://kunci.tiftazani-cuciin.workers.dev.evil.com/',
       'not a url',

@@ -16,8 +16,11 @@ const KUNCI_PORTS = new Set(['8780', '5173', '4173'])
 export function isKunciAppUrl(raw) {
   try {
     const url = new URL(raw)
-    if (url.hostname === 'kunci.tiftazani-cuciin.workers.dev') return true
-    if ((url.hostname === '127.0.0.1' || url.hostname === 'localhost') && KUNCI_PORTS.has(url.port || '80')) return true
+    if (url.hostname === 'kunci.tiftazani-cuciin.workers.dev') return url.protocol === 'https:'
+    // `http:` only. An https loopback server on one of these ports is a different
+    // app that happens to reuse the port, and `src/lib/capture.ts` already says so.
+    if (url.protocol !== 'http:') return false
+    if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') return KUNCI_PORTS.has(url.port || '80')
     return false
   } catch {
     return false

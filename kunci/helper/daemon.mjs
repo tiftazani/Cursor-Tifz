@@ -249,11 +249,28 @@ const memo = new Map()
 
 async function cached(key, produce) {
   const hit = memo.get(key)
+  // In-flight first: such an entry is fresh by definition, and its `value` is
+  // either undefined (first call) or the previous value, so the freshness check
+  // below would hand back a stale answer instead of the shared promise.
+  if (hit?.pending) return hit.pending
   const now = Date.now()
   if (hit && now - hit.at < MEMO_MS) return hit.value
-  const value = await produce()
-  memo.set(key, { at: now, value })
-  return value
+  // Dedupe in-flight work. Recording the value only after `produce()` resolves meant
+  // N concurrent cold misses each ran their own `osascript` — 400 cold /health
+  // requests spawned 43 unique PIDs. Storing the promise closes that window.
+  const pending = (async () => {
+    try {
+      const value = await produce()
+      memo.set(key, { at: Date.now(), value })
+      return value
+    } catch (err) {
+      // Do not memoise a failure; the next caller should try again.
+      memo.delete(key)
+      throw err
+    }
+  })()
+  memo.set(key, { at: now, pending })
+  return pending
 }
 
 function distMissingRingkasan() {
@@ -290,14 +307,18 @@ function staleUiPage(res) {
 </body>`)
 }
 
-function serveStatic(req, res) {
+async function serveStatic(req, res) {
   const head = req.method === 'HEAD'
   const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname
   if (pathname.startsWith('/api/') || pathname === '/kunci-status') return false
   if (!serveUi || !existsSync(DIST)) return false
   let path = new URL(req.url || '/', 'http://127.0.0.1').pathname
   if (path === '/') path = '/index.html'
-  if ((path === '/' || path === '/index.html') && distMissingRingkasan()) {
+  // Memoised. `distMissingRingkasan()` reads the 335 KB bundle synchronously, so
+  // calling it per request let any page that can reach loopback do that work in a
+  // loop — the same bug class already closed for /health, left open here.
+  const staleDist = () => cached('distStale', async () => distMissingRingkasan())
+  if (path === '/index.html' && (await staleDist())) {
     staleUiPage(res)
     return true
   }
@@ -305,7 +326,7 @@ function serveStatic(req, res) {
   if (!file.startsWith(DIST)) return false
   if (!existsSync(file) || statSync(file).isDirectory()) {
     const fallback = join(DIST, 'index.html')
-    if (distMissingRingkasan()) {
+    if (await staleDist()) {
       staleUiPage(res)
       return true
     }
@@ -463,7 +484,7 @@ const server = createServer(async (req, res) => {
       await proxyCloud(req, res, url)
       return
     }
-    if ((req.method === 'GET' || req.method === 'HEAD') && serveStatic(req, res)) return
+    if ((req.method === 'GET' || req.method === 'HEAD') && (await serveStatic(req, res))) return
     if (
       (req.method === 'GET' || req.method === 'HEAD') &&
       serveUi &&
