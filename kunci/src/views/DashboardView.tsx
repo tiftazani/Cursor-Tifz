@@ -6,7 +6,7 @@ import { hostFromUrl } from '../lib/match'
 import { useVault } from '../state/VaultContext'
 import { useToast } from '../components/Toast'
 import { EntryGlyph } from '../components/EntryGlyph'
-import { IconCheck, IconCopy, IconShield } from '../components/Icons'
+import { IconCopy } from '../components/Icons'
 import type { AppView } from '../types'
 
 const KIND_LABEL: Record<IssueKind, string> = {
@@ -83,123 +83,47 @@ export function DashboardView({
 
   return (
     <div className="page dash">
-      <header className="page-head">
-        <h2>Ringkasan</h2>
-        <p className="muted">
-          {lockMinutes > 0 ? `Kunci otomatis aktif: ${lockMinutes} menit tanpa aktivitas` : 'Kunci otomatis mati'}
-        </p>
-      </header>
-
-      {summary.total > 0 && top ? (
-        <section className="card prio">
-          <div className="prio-h">
-            <span className="prio-i">
-              <IconShield size={20} />
-            </span>
-            <div>
-              <h3>{summary.headline}</h3>
-              <p>{summary.advice}</p>
-            </div>
-          </div>
-          <div className="prio-b">
-            <div className="sev-row" role="group" aria-label="Lihat per jenis masalah">
-              <span className="muted sev-lead">{summary.entries} entri terdampak:</span>
-              {summary.byKind.map((k) => (
-                <button key={k.kind} type="button" className={`sev sev-${k.tone}`} onClick={() => onNavigate('health')}>
-                  {k.count} {KIND_LABEL[k.kind]}
-                </button>
-              ))}
-            </div>
-            <button type="button" className="btn btn-primary" onClick={() => onOpenEntry(top.id)}>
-              Buka entri {top.name || 'ini'}
-            </button>
-          </div>
-        </section>
-      ) : (
-        <section className="card prio prio-ok">
-          <div className="prio-h">
-            <span className="prio-i">
-              <IconCheck size={20} />
-            </span>
-            <div>
-              <h3>Tidak ada masalah sandi yang terdeteksi</h3>
-              <p>Dihitung di perangkat ini dari {list.length} entri.</p>
-            </div>
-          </div>
-        </section>
-      )}
-
-      <div className="card stat-strip">
-        <button type="button" onClick={onOpenVault}>
-          <strong>{list.length}</strong>
-          <span>Entri aktif</span>
-        </button>
-        <div>
-          <strong>{favorites}</strong>
-          <span>Favorit</span>
-        </div>
-        <div>
-          <strong>{withOtp}</strong>
-          <span>Punya kode OTP</span>
-        </div>
-        <div>
-          <strong>{vault.trash.length}</strong>
-          <span>Di sampah</span>
-        </div>
-      </div>
-
-      <div className="dash-grid">
-        <section className="card status-card">
-          <div className="split">
-            <h3>Isi otomatis</h3>
-            <button type="button" className="linkish" onClick={() => onNavigate('autofill')}>
-              Atur ›
-            </button>
-          </div>
-          <div className="status-row">
-            <span className={`dot ${helperOnline && helperAccessibility ? 'on' : 'warn'}`} aria-hidden="true" />
-            <span className="grow">
-              {helperOnline ? (helperAccessibility ? 'Helper Mac aktif' : 'Helper Mac belum diizinkan') : 'Helper Mac mati'}
-              <small>
-                {helperOnline
-                  ? helperAccessibility
-                    ? 'Bisa mengisi login di aplikasi Mac'
-                    : 'Izinkan Aksesibilitas agar bisa mengisi aplikasi Mac'
-                  : 'Isi di aplikasi Mac tidak tersedia. Ekstensi browser tetap jalan.'}
-              </small>
-            </span>
-          </div>
-        </section>
-
-        <section className="card status-card">
-          <div className="split">
-            <h3>Cadangan</h3>
-            <button type="button" className="linkish" onClick={() => onNavigate('backup')}>
-              Atur ›
-            </button>
-          </div>
-          <div className="status-row">
-            <span className={`dot ${lastBackup ? 'on' : 'warn'}`} aria-hidden="true" />
-            <span className="grow">
-              {lastBackup ? `Cadangan terakhir ${relativeTime(lastBackup)}` : 'Belum ada cadangan'}
-              <small>
-                {vault.settings.autoBackup === 'off' ? 'Cadangan otomatis mati' : `${backups.length} tersimpan di perangkat ini`}
-              </small>
-            </span>
-          </div>
-          <div className="status-row">
-            <span className={`dot ${hasRecoveryWrap ? 'on' : 'warn'}`} aria-hidden="true" />
-            <span className="grow">
-              {hasRecoveryWrap ? 'Kunci pemulihan aktif' : 'Kunci pemulihan belum dibuat'}
-              <small>
-                {hasRecoveryWrap
-                  ? 'Simpan di tempat aman. Tanpa itu, lupa sandi induk berarti brankas tidak bisa dibuka.'
-                  : 'Tanpa kunci pemulihan, lupa sandi induk berarti brankas tidak bisa dibuka.'}
-              </small>
-            </span>
+      <div className="dash-v2-hero">
+        <h1>Ini brankas<br /><em>kamu hari ini</em></h1>
+        <section className="card dash-v2-overview">
+          <div className="split"><h2>Ikhtisar brankas</h2><button type="button" className="linkish" onClick={onOpenVault}>Buka brankas ›</button></div>
+          <div className="dash-v2-stats">
+            <button type="button" onClick={onOpenVault}><strong>{list.length}</strong><span>Entri aktif</span></button>
+            <div><strong>{favorites}</strong><span>Favorit</span></div>
+            <div><strong>{vault.trash.length}</strong><span>Di sampah</span></div>
           </div>
         </section>
       </div>
+
+      <div className="dash-v2-actions">
+        <section className="card dash-v2-panel">
+          <div className="dash-v2-panel-head risk"><h2>Perlu tindakan <small>{summary.total} temuan · {summary.entries} entri</small></h2><button type="button" className="linkish" onClick={() => onNavigate('health')}>Kesehatan ›</button></div>
+          {summary.total ? (
+            <>
+              <p className="dash-v2-explain">Satu entri bisa punya lebih dari satu temuan.</p>
+              {summary.byKind.map((k) => <button type="button" className="dash-v2-row" key={k.kind} onClick={() => onNavigate('health')}><b>{k.count}</b> {KIND_LABEL[k.kind]} <span>›</span></button>)}
+              {top ? <button type="button" className="dash-v2-row" onClick={() => onOpenEntry(top.id)}>Prioritas: {summary.headline}<span>›</span></button> : null}
+            </>
+          ) : <p className="dash-v2-explain">Tidak ada masalah yang terdeteksi pada {list.length} entri.</p>}
+        </section>
+        <section className="card dash-v2-panel">
+          <div className="dash-v2-panel-head"><h2>Cadangan</h2><button type="button" className="linkish" onClick={() => onNavigate('backup')}>Buka cadangan ›</button></div>
+          <button type="button" className="dash-v2-row" onClick={() => onNavigate('backup')}>
+            {lastBackup ? `Cadangan terakhir ${relativeTime(lastBackup)}` : 'Belum ada cadangan'}<span>›</span>
+          </button>
+          <button type="button" className="dash-v2-row" onClick={() => onNavigate('settings')}>
+            {hasRecoveryWrap ? 'Kunci pemulihan aktif' : 'Kunci pemulihan belum dibuat'}<span>›</span>
+          </button>
+          <p className="dash-v2-explain">{vault.settings.autoBackup === 'off' ? 'Cadangan otomatis mati' : `${backups.length} cadangan tersimpan di perangkat ini`}</p>
+        </section>
+      </div>
+
+      <section className="dash-v2-helper">
+        <span className={`dot ${helperOnline && helperAccessibility ? 'on' : 'warn'}`} aria-hidden="true" />
+        <span>{helperOnline ? (helperAccessibility ? 'Isi otomatis aplikasi Mac aktif' : 'Helper Mac perlu izin Aksesibilitas') : 'Helper Mac tidak terhubung'}</span>
+        <button type="button" className="linkish" onClick={() => onNavigate('autofill')}>Lihat pengaturan</button>
+        <span className="muted">{lockMinutes > 0 ? `Kunci otomatis ${lockMinutes} menit` : 'Kunci otomatis mati'} · {withOtp} entri dengan OTP</span>
+      </section>
 
       <section className="dash-section">
         <div className="split">

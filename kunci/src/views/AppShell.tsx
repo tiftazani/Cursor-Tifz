@@ -462,6 +462,16 @@ export function AppShell() {
         </>
       ) : (
         <section className="main-col">
+          {!compact ? (
+            <header className="shell-topbar">
+              <button type="button" className="shell-find" onClick={() => setFindOpen(true)}>
+                <IconSearch size={17} /> Cari entri, situs, atau username <kbd>⌘K</kbd>
+              </button>
+              <button type="button" className="icon-btn" title="Kunci brankas" aria-label="Kunci brankas" onClick={lock}>
+                <IconLock size={18} />
+              </button>
+            </header>
+          ) : null}
           {view === 'home' ? (
             <DashboardView
               onOpenVault={() => goView('vault')}

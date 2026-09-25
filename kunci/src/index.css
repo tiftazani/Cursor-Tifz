@@ -1890,7 +1890,7 @@ button.dash-stat {
   }
 }
 
-/* ---- Redesign v8: sidebar groups, priority card, issue chips ---- */
+/* ---- Personal vault sidebar and health controls ---- */
 
 .nav-group {
   margin: 14px 10px 4px;
@@ -2309,4 +2309,45 @@ button.sev {
   .prio-b .btn {
     width: 100%;
   }
+}
+
+/* The v2 layout puts the vault overview before the action panels. */
+.shell-topbar { display:flex;align-items:center;gap:16px;padding:16px 28px 0; }
+.shell-topbar .icon-btn { margin-left:auto; }
+.shell-find { width:min(460px,100%);min-height:44px;display:flex;align-items:center;gap:10px;padding:0 12px;text-align:left;background:var(--bg-2);border:1px solid var(--line);border-radius:9px;color:var(--muted);font:inherit;cursor:pointer; }
+.shell-find kbd { margin-left:auto;border:1px solid var(--line);border-radius:5px;padding:2px 6px;font:inherit;font-size:12px; }
+.page.dash { max-width:1120px;gap:22px; }
+.dash-v2-hero { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);align-items:center;gap:28px; }
+.dash-v2-hero h1 { margin:0;font-size:clamp(30px,3vw,42px);line-height:1.08;letter-spacing:-.035em; }
+.dash-v2-hero em { font-style:normal;color:var(--accent); }
+.dash-v2-overview { padding:18px 22px; }
+.dash-v2-overview h2,.dash-v2-panel h2 { margin:0;font-size:17px; }
+.dash-v2-overview .split { padding-bottom:14px;border-bottom:1px solid var(--line); }
+.dash-v2-stats { display:grid;grid-template-columns:repeat(3,minmax(0,1fr)); }
+.dash-v2-stats > * { padding:16px 8px 4px 20px;border:0;border-left:1px solid var(--line);background:none;color:inherit;font:inherit;text-align:left; }
+.dash-v2-stats > :first-child { padding-left:0;border-left:0;cursor:pointer; }
+.dash-v2-stats strong,.dash-v2-stats span { display:block; }
+.dash-v2-stats strong { font-size:clamp(25px,2.5vw,34px);letter-spacing:-.03em; }
+.dash-v2-stats span { color:var(--muted);font-size:13px; }
+.dash-v2-actions { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:18px; }
+.dash-v2-panel { padding:0;gap:0;overflow:hidden; }
+.dash-v2-panel-head { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 18px;background:var(--accent-dim);border-bottom:1px solid var(--line); }
+.dash-v2-panel-head.risk { background:color-mix(in srgb,var(--danger) 9%,var(--bg-2)); }
+.dash-v2-panel-head small { display:block;font-size:12px;font-weight:500;color:var(--muted); }
+.dash-v2-row { display:flex;align-items:center;gap:6px;min-height:54px;width:100%;padding:10px 18px;text-align:left;background:none;border:0;border-top:1px solid var(--line);color:inherit;font:inherit;cursor:pointer; }
+.dash-v2-row:hover,.dash-v2-stats button:hover { background:var(--bg-3); }
+.dash-v2-row b { color:var(--danger); }
+.dash-v2-row span { margin-left:auto;color:var(--muted); }
+.dash-v2-explain { margin:0;padding:12px 18px;color:var(--muted);font-size:13px; }
+.dash-v2-helper { display:flex;align-items:center;flex-wrap:wrap;gap:10px;font-size:13px;color:var(--muted); }
+.dash-v2-helper .linkish { margin-right:auto; }
+@media (max-width:1100px) {
+  .dash-v2-hero,.dash-v2-actions { grid-template-columns:1fr; }
+  .dash-v2-hero { gap:18px; }
+  .dash-v2-row,.dash-v2-stats button,.dash-v2-helper .linkish { min-height:44px; }
+}
+@media (max-width:520px) {
+  .dash-v2-overview { padding:16px; }
+  .dash-v2-stats > * { padding-left:10px; }
+  .dash-v2-stats span { font-size:12px; }
 }
