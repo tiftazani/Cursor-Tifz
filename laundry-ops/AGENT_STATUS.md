@@ -63,6 +63,29 @@ bawah 6 karakter ditolak sebelum baris disimpan.
 `ihsanibnuabdurrauf@gmail.com` masuk sampai Beranda dan Profil (peran Kasir); alfin juga masuk
 dengan 2 cabang. Tangkapan layar di `releases/1.10.39-candidate/bukti/`.
 
+**Uji ulang end-to-end 25 Sep 15:15 WIB (build 1.10.39, emulator):** Owner `us.archuleta1207@gmail.com`
+masuk, lalu **menambah user baru dari layar Daftar User** (`ujifix.hermes@gmail.com`, Kasir, cabang
+Laupay Kirab). Log perangkat mencatat `Creating user with ujifix.hermes@gmail.com` pada app
+`cuciin-provision` — akun login dibuat otomatis. Hasil uji: akun itu **langsung bisa masuk** dan
+diterima `/v1/me` 200 dengan peran dan cabang yang benar. Edit berikutnya (ganti cabang ke Bunayya)
+juga sampai ke server: jurnal `#1036 staff/delete` + `#1037 staff/upsert` oleh Owner, dan baris
+`staff_branches` ikut berubah. Data uji (`ujifix.hermes@gmail.com`, `ujilogin.hermes@gmail.com`,
+`daftarmandiri.hermes@gmail.com`) sudah dihapus kembali dari D1 debug dan Firebase.
+
+**Uji ulang 12 akun produksi 25 Sep 15:00 WIB:** 12 dari 12 bisa masuk, 0 gagal; `ihsan` diterima
+`/v1/me` 200 dengan 4 cabang. Bandingkan D1 produksi vs Firebase: **tidak ada staf tanpa akun login**.
+
+**Catatan penting soal HP Owner:** HP Owner masih memakai versi lama yang belum punya
+`LoginProvision`, jadi akun yang dia tambah **sebelum** APK 1.10.39 terpasang tetap tidak akan bisa
+masuk. Kasus Nabila (`tsanaulaila78@gmail.com`) membuktikannya: barisnya ditambah dari HP Owner
+25 Sep 09:38 WIB, tetapi akun Firebase-nya baru ada 12:17 WIB lewat skrip perbaikan, bukan lewat
+aplikasi. **Tindakan yang dibutuhkan: pasang APK 1.10.39 di HP Owner.** Berkas siap di
+`releases/1.10.39-candidate/cuciin-1.10.39-release.apk` (tanda tangan `CN=Tiftazani Khara, OU=Cuciin`,
+versionCode 58) dan salinannya di `~/Downloads/Cuciin-1.10.39-release.apk`.
+
+**Belum terbukti:** pasang 1.10.39 di HP cabang/HP Owner yang asli dan buat user baru dari sana;
+pembaruan APK dari jarak jauh belum ada fiturnya, jadi pemasangan harus manual.
+
 **Skrip baru yang bisa dipakai ulang** (semuanya di `cloudflare/scripts/`):
 
 - `cek_akun_vs_firebase.py` — membandingkan daftar staf D1 dengan akun Firebase; menemukan akun
