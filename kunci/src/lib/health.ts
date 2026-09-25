@@ -81,3 +81,52 @@ export function analyzeHealth(entries: Entry[], now = Date.now()): HealthReport 
 
   return { score, issues, weak, reused, old, short }
 }
+
+export type IssueKind = HealthIssue['kind']
+export type IssueTone = 'hi' | 'md' | 'lo' | 'info'
+
+// Most urgent first. A breach beats reuse, reuse beats a weak password (one leak
+// opens every site sharing it), and age is only advice.
+const ORDER: IssueKind[] = ['pwned', 'reused', 'weak', 'short', 'old']
+const TONE: Record<IssueKind, IssueTone> = { pwned: 'hi', reused: 'md', weak: 'lo', short: 'lo', old: 'info' }
+
+export interface IssueSummary {
+  /** Issue count. One entry can carry several, so this can exceed `entries`. */
+  total: number
+  /** Distinct entries with at least one issue. */
+  entries: number
+  byKind: { kind: IssueKind; count: number; tone: IssueTone }[]
+  /** The single issue to act on first, or null when there is none. */
+  top: HealthIssue | null
+  headline: string
+  advice: string
+}
+
+export function summarizeIssues(issues: HealthIssue[]): IssueSummary {
+  const byKind = ORDER.map((kind) => ({
+    kind,
+    count: issues.filter((i) => i.kind === kind).length,
+    tone: TONE[kind],
+  })).filter((k) => k.count > 0)
+  const entries = new Set(issues.map((i) => i.entryId)).size
+  const top = byKind.length ? (issues.find((i) => i.kind === byKind[0].kind) ?? null) : null
+  const total = byKind.reduce((n, k) => n + k.count, 0)
+  if (total !== issues.length) throw new Error('summarizeIssues: unknown issue kind')
+  if (!top) return { total: 0, entries: 0, byKind, top, headline: '', advice: '' }
+  const name = top.entryName || 'Tanpa nama'
+  const HEAD: Record<IssueKind, string> = {
+    pwned: `Sandi ${name} muncul di kebocoran publik`,
+    reused: `Sandi ${name} dipakai juga di entri lain`,
+    weak: `Sandi ${name} lemah`,
+    short: `Sandi ${name} terlalu pendek`,
+    old: `Sandi ${name} sudah lama tidak diganti`,
+  }
+  const ADVICE: Record<IssueKind, string> = {
+    pwned: 'Ganti di situsnya dulu, lalu simpan sandi baru di Kunci.',
+    reused: 'Kalau satu situs bocor, situs lain ikut terbuka. Buat sandi unik untuk tiap entri.',
+    weak: 'Generator bisa membuat sandi pengganti yang kuat.',
+    short: 'Sandi di bawah 10 karakter mudah ditebak. Generator bisa membuat penggantinya.',
+    old: 'Sudah lebih dari 1 tahun. Ganti kalau situsnya penting.',
+  }
+  return { total, entries, byKind, top, headline: HEAD[top.kind], advice: ADVICE[top.kind] }
+}

@@ -1,19 +1,22 @@
 :root {
   color-scheme: dark;
-  --bg: #0a0d12;
-  --bg-2: #12171f;
-  --bg-3: #1b232e;
-  --bg-hover: #222b38;
-  --line: rgba(232, 238, 246, 0.08);
-  --text: #eef3f8;
-  --muted: #8b97a8;
-  --accent: #3ee0c3;
+  /* Neutral surfaces + one blue accent, taken from the approved v8 mockup. */
+  --bg: #0f1318;
+  --bg-2: #161b22;
+  --bg-3: #1c222b;
+  --bg-hover: #232a35;
+  --line: #262d37;
+  --text: #eef2f6;
+  --muted: #96a0ad;
+  --accent: #5a8cf2;
   --accent-dim: color-mix(in srgb, var(--accent) 16%, transparent);
-  --accent-text: #06241d;
-  --accent-2: #8ab4ff;
-  --danger: #ff6f7d;
-  --warn: #f5c16c;
-  --ok: #3ee0c3;
+  /* Dark label on the blue fill: 5.8:1. White would only reach 3.4. */
+  --accent-text: #0b1220;
+  --accent-2: #8db0ff;
+  --danger: #ff8a8a;
+  --warn: #f0c26a;
+  --orange: #ffb27a;
+  --ok: #5fd39a;
   /* Text drawn on top of --warn. Dark theme warn is a light tan, so the label
      is near-black; the light theme warn is a dark brown and needs white. */
   --on-warn: #1a1408;
@@ -33,24 +36,24 @@
 
 :root[data-theme='light'] {
   color-scheme: light;
-  --bg: #eef1f6;
+  --bg: #f6f7f9;
   --bg-2: #ffffff;
-  --bg-3: #f4f6fa;
-  --bg-hover: #e8edf4;
-  --line: rgba(16, 24, 40, 0.1);
-  --text: #122033;
-  --muted: #5c6b7c;
-  /* White label text on this fill needs 4.5:1, so the light accent is darker
-     than the dark-theme one. #0f9d86 only reached 3.39. */
-  --accent: #0a7263;
+  --bg-3: #f1f3f6;
+  --bg-hover: #eceff3;
+  --line: #e3e6eb;
+  --text: #14181f;
+  --muted: #5e6673;
+  /* White label text on this fill needs 4.5:1; #2458d3 gives 6.2. */
+  --accent: #2458d3;
   --accent-text: #ffffff;
   /* These four are read by .linkish, .pill-*, .error/.ok and the strength
      meter. Without them the dark-theme neon values leak onto white surfaces
      and land at 1.5-2.7:1. */
-  --accent-2: #2563eb;
-  --danger: #be123c;
+  --accent-2: #1f4fbf;
+  --danger: #b42323;
   --warn: #8a5a00;
-  --ok: #0a7a68;
+  --orange: #a4460b;
+  --ok: #1b7a4c;
   --on-warn: #ffffff;
   --shadow: 0 14px 36px rgba(16, 24, 40, 0.08);
 }
@@ -1854,5 +1857,419 @@ button.dash-stat {
     width: auto;
     flex: 1;
     min-height: 44px;
+  }
+}
+
+/* ---- Redesign v8: sidebar groups, priority card, issue chips ---- */
+
+.nav-group {
+  margin: 14px 10px 4px;
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.nav-item.active {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.nav-badge.nav-badge {
+  /* Solid fill: bg-2 on danger is 7.6:1 dark, 6.5:1 light. */
+  background: var(--danger);
+  color: var(--bg-2);
+}
+
+.page.dash,
+.page.health {
+  max-width: 1040px;
+}
+
+.status-card .split,
+.dash-section .split {
+  align-items: center;
+}
+
+.recent-acts {
+  min-height: 34px;
+}
+
+/* Pull the copy button's box out so its glyph lines up with the text above. */
+.recent-acts .icon-btn {
+  margin-left: -9px;
+}
+
+.small {
+  font-size: 0.82rem;
+}
+
+.prio {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
+}
+
+.prio-ok {
+  border-color: var(--line);
+}
+
+.prio-h {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 18px 20px;
+}
+
+.prio-h h3 {
+  margin: 0 0 4px;
+  font-size: 1.02rem;
+}
+
+.prio-h p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.prio-i {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg-2));
+}
+
+.prio-idle {
+  border-color: var(--line);
+}
+
+.prio-idle .prio-i {
+  color: var(--accent-2);
+  background: var(--accent-dim);
+}
+
+.prio-ok .prio-i {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, var(--bg-2));
+}
+
+.prio-b {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-3);
+}
+
+.prio-err {
+  margin: 0;
+  padding: 0 20px 14px;
+}
+
+.sev-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.sev-lead {
+  margin-right: 4px;
+  font-size: 0.85rem;
+}
+
+/* Tone is carried by the label text too, never by colour alone. */
+.sev {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px solid;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 620;
+  white-space: nowrap;
+}
+
+button.sev {
+  cursor: pointer;
+}
+
+.sev-hi {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, var(--bg-2));
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--bg-2));
+}
+
+.sev-md {
+  color: var(--orange);
+  background: color-mix(in srgb, var(--orange) 9%, var(--bg-2));
+  border-color: color-mix(in srgb, var(--orange) 30%, var(--bg-2));
+}
+
+.sev-lo {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 9%, var(--bg-2));
+  border-color: color-mix(in srgb, var(--warn) 30%, var(--bg-2));
+}
+
+.sev-info {
+  color: var(--muted);
+  background: var(--bg-3);
+  border-color: var(--line);
+}
+
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  padding: 0;
+}
+
+.stat-strip > * {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 18px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.stat-strip > :first-child {
+  border-left: 0;
+}
+
+.stat-strip button {
+  cursor: pointer;
+}
+
+.stat-strip button:hover {
+  background: var(--bg-3);
+}
+
+.stat-strip strong {
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
+}
+
+.stat-strip span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.status-card h3,
+.dash-section h3,
+.dash-dupes h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.status-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.status-row .dot {
+  margin-top: 6px;
+}
+
+.dot.warn {
+  background: var(--warn);
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.grow small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.dash-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recent-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.recent-card {
+  gap: 10px;
+}
+
+.recent-card p {
+  margin: 0;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-h {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.recent-h > div {
+  min-width: 0;
+}
+
+.recent-h strong,
+.recent-h small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-h small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.recent-acts {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab[aria-selected='true'] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.sec-h {
+  align-items: baseline;
+}
+
+.sec-h h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.usage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.usage-card {
+  gap: 6px;
+}
+
+.usage-card .sev {
+  align-self: flex-start;
+}
+
+.usage-card .big {
+  font-size: 1.9rem;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin-top: 6px;
+}
+
+.usage-card h4 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.usage-card p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.usage-foot {
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+@media (max-width: 1100px) {
+  .nav-group {
+    display: none;
+  }
+
+  .nav-item.active {
+    box-shadow: none;
+  }
+
+  .stat-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stat-strip > :nth-child(3) {
+    border-left: 0;
+  }
+
+  .stat-strip > :nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+
+  .recent-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .prio-b .btn,
+  .dupe-card .btn,
+  .tab,
+  button.sev,
+  .main-col .linkish {
+    min-height: 44px;
+  }
+
+  .main-col .linkish {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .dupe-member input[type='radio'] {
+    width: 24px;
+    height: 44px;
+    margin: 0;
+  }
+
+  .prio-b .btn {
+    width: 100%;
   }
 }

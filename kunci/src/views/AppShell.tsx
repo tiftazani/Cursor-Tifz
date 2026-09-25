@@ -1,17 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { AppView, Entry, FilterId } from '../types'
 import {
-  IconApp,
   IconClock,
   IconDownload,
   IconFill,
-  IconGlobe,
   IconHome,
   IconKey,
   IconLock,
   IconMore,
-  IconNote,
-  IconOtp,
   IconPlus,
   IconSearch,
   IconSettings,
@@ -21,10 +17,10 @@ import {
 } from '../components/Icons'
 import { VSplit } from '../components/VSplit'
 import { searchEntries } from '../lib/search'
-import { faviconUrl, letterAvatar } from '../lib/favicon'
 import { useCompactLayout } from '../lib/media'
 import { hostFromUrl } from '../lib/match'
-import { findDuplicateClusters } from '../lib/duplicates'
+import { analyzeHealth } from '../lib/health'
+import { EntryGlyph } from '../components/EntryGlyph'
 import {
   LIST_MAX,
   LIST_MIN,
@@ -45,13 +41,15 @@ import { BackupView } from './BackupView'
 import { SettingsView } from './SettingsView'
 import { QuickFind } from './QuickFind'
 
-const NAV: { id: AppView; label: string; icon: typeof IconKey }[] = [
+// `group` starts a labelled block in the desktop sidebar; the mobile tab bar
+// ignores it.
+const NAV: { id: AppView; label: string; icon: typeof IconKey; group?: string }[] = [
   { id: 'home', label: 'Ringkasan', icon: IconHome },
   { id: 'vault', label: 'Brankas', icon: IconKey },
-  { id: 'generator', label: 'Generator', icon: IconSpark },
   { id: 'health', label: 'Kesehatan', icon: IconShield },
+  { id: 'generator', label: 'Generator', icon: IconSpark },
   { id: 'history', label: 'Riwayat', icon: IconClock },
-  { id: 'autofill', label: 'Autofill', icon: IconFill },
+  { id: 'autofill', label: 'Isi otomatis', icon: IconFill, group: 'Perangkat dan data' },
   { id: 'backup', label: 'Cadangan', icon: IconDownload },
   { id: 'settings', label: 'Pengaturan', icon: IconSettings },
 ]
@@ -103,7 +101,9 @@ export function AppShell() {
   }, [source, filter, query])
 
   const selected = draft ?? filtered.find((e) => e.id === selectedId) ?? (draftDirty ? source.find((e) => e.id === selectedId) : undefined) ?? null
-  const dupeCount = useMemo(() => findDuplicateClusters(vault?.entries ?? []).length, [vault?.entries])
+  // Same source as the Kesehatan page and the Ringkasan card, so the badge and
+  // the counts on those pages never disagree.
+  const issueCount = useMemo(() => analyzeHealth(vault?.entries ?? []).issues.length, [vault?.entries])
 
   // The keydown listener registers once (deps `[lock]`), so it would keep calling
   // the `startNew` captured on that first render — where `draftDirty` was still
@@ -212,7 +212,7 @@ export function AppShell() {
           </span>
           <div>
             <strong>Kunci</strong>
-            <span className="muted">Ringkasan · {__KUNCI_VERSION__}</span>
+            <span className="muted">Brankas pribadi · {__KUNCI_VERSION__}</span>
           </div>
         </div>
         <nav>
@@ -220,16 +220,23 @@ export function AppShell() {
             const Icon = item.icon
             const hiddenInBar = MORE_NAV.has(item.id)
             return (
-              <button
-                key={item.id}
-                type="button"
-                className={`nav-item ${view === item.id ? 'active' : ''} ${hiddenInBar ? 'nav-secondary' : ''}`}
-                onClick={() => goView(item.id)}
-              >
-                <Icon size={compact ? 22 : 18} />
-                <span>{item.label}</span>
-                {item.id === 'home' && dupeCount > 0 ? <b className="nav-badge">{dupeCount}</b> : null}
-              </button>
+              <Fragment key={item.id}>
+                {item.group ? <p className="nav-group">{item.group}</p> : null}
+                <button
+                  type="button"
+                  className={`nav-item ${view === item.id ? 'active' : ''} ${hiddenInBar ? 'nav-secondary' : ''}`}
+                  aria-current={view === item.id ? 'page' : undefined}
+                  onClick={() => goView(item.id)}
+                >
+                  <Icon size={compact ? 22 : 18} />
+                  <span>{item.label}</span>
+                  {item.id === 'health' && issueCount > 0 ? (
+                    <b className="nav-badge" aria-label={`${issueCount} masalah`}>
+                      {issueCount}
+                    </b>
+                  ) : null}
+                </button>
+              </Fragment>
             )
           })}
           <button
@@ -265,7 +272,6 @@ export function AppShell() {
                   >
                     <Icon size={20} />
                     <span>{item.label}</span>
-                    {item.id === 'home' && dupeCount > 0 ? <b className="nav-badge">{dupeCount}</b> : null}
                   </button>
                 )
               })}
@@ -440,8 +446,7 @@ export function AppShell() {
             <DashboardView
               onOpenVault={() => goView('vault')}
               onOpenEntry={openEntry}
-              onGenerate={() => goView('generator')}
-              onHealth={() => goView('health')}
+              onNavigate={goView}
             />
           ) : null}
           {view === 'generator' ? <GeneratorView /> : null}
@@ -483,27 +488,4 @@ function entryListHint(entry: Entry): string {
   if (entry.type === 'note') return 'Catatan'
   if (entry.type === 'totp') return 'OTP'
   return 'Password'
-}
-
-function EntryGlyph({ entry }: { entry: Entry }) {
-  const src = faviconUrl(entry.url)
-  const { letter, hue } = letterAvatar(entry.name || entry.appName || '?')
-  if (src) {
-    return (
-      <img
-        className="glyph"
-        src={src}
-        alt=""
-        onError={(e) => {
-          e.currentTarget.style.display = 'none'
-        }}
-      />
-    )
-  }
-  const Icon = entry.type === 'app' ? IconApp : entry.type === 'note' ? IconNote : entry.type === 'totp' ? IconOtp : IconGlobe
-  return (
-    <span className="glyph letter" style={{ background: `hsl(${hue} 40% 22%)`, color: `hsl(${hue} 70% 72%)` }}>
-      {entry.type === 'login' ? letter : <Icon size={14} />}
-    </span>
-  )
 }

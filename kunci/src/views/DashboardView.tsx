@@ -1,51 +1,56 @@
 import { useMemo, useState } from 'react'
-import { analyzeHealth } from '../lib/health'
+import { analyzeHealth, summarizeIssues, type IssueKind } from '../lib/health'
 import { findDuplicateClusters, maskAccount } from '../lib/duplicates'
 import { relativeTime } from '../lib/time'
+import { hostFromUrl } from '../lib/match'
 import { useVault } from '../state/VaultContext'
 import { useToast } from '../components/Toast'
-import { IconKey, IconShield, IconSpark, IconStar } from '../components/Icons'
+import { EntryGlyph } from '../components/EntryGlyph'
+import { IconCheck, IconCopy, IconShield } from '../components/Icons'
+import type { AppView } from '../types'
+
+const KIND_LABEL: Record<IssueKind, string> = {
+  reused: 'dipakai ulang',
+  weak: 'lemah',
+  short: 'pendek',
+  old: 'usang',
+  pwned: 'bocor',
+}
 
 export function DashboardView({
   onOpenVault,
   onOpenEntry,
-  onGenerate,
-  onHealth,
+  onNavigate,
 }: {
   onOpenVault: () => void
   onOpenEntry: (id: string) => void
-  onGenerate: () => void
-  onHealth: () => void
+  onNavigate: (view: AppView) => void
 }) {
-  const { vault, mergeEntries, deleteEntry } = useVault()
+  const { vault, mergeEntries, deleteEntry, copySecret, helperOnline, helperAccessibility, backups, hasRecoveryWrap } =
+    useVault()
   const toast = useToast()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [keepByCluster, setKeepByCluster] = useState<Record<string, string>>({})
 
   const entries = vault?.entries
   const report = useMemo(() => analyzeHealth(entries ?? []), [entries])
+  const summary = useMemo(() => summarizeIssues(report.issues), [report])
   const clusters = useMemo(() => findDuplicateClusters(entries ?? []), [entries])
-  const types = useMemo(() => {
-    const list = entries ?? []
-    const login = list.filter((e) => e.type === 'login').length
-    const app = list.filter((e) => e.type === 'app').length
-    const other = list.length - login - app
-    return [
-      { id: 'login', label: 'Website', n: login },
-      { id: 'app', label: 'Aplikasi', n: app },
-      { id: 'other', label: 'Lainnya', n: other },
-    ]
-  }, [entries])
   const recent = useMemo(
-    () => [...(entries ?? [])].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6),
+    () =>
+      [...(entries ?? [])]
+        .sort((a, b) => (b.lastUsedAt ?? b.updatedAt) - (a.lastUsedAt ?? a.updatedAt))
+        .slice(0, 3),
     [entries],
   )
-  const list = entries ?? []
-  const maxType = Math.max(1, ...types.map((t) => t.n))
-  const favorites = list.filter((e) => e.favorite).length
-  const used = list.filter((e) => e.lastUsedAt).length
 
   if (!vault) return null
+  const list = vault.entries
+  const favorites = list.filter((e) => e.favorite).length
+  const withOtp = list.filter((e) => e.totpSecret).length
+  const lastBackup = backups.length ? Math.max(...backups.map((b) => b.createdAt)) : null
+  const lockMinutes = Math.round(vault.settings.autoLockSeconds / 60)
+  const top = summary.top ? list.find((e) => e.id === summary.top!.entryId) : undefined
 
   async function mergeCluster(clusterId: string, keepId: string, memberIds: string[]) {
     setBusyId(clusterId)
@@ -76,88 +81,184 @@ export function DashboardView({
 
   return (
     <div className="page dash">
-      <header className="dash-hero">
-        <div>
-          <p className="dash-kicker">Ringkasan brankas</p>
-          <h2>Keadaan akun, bukan daftar sandi</h2>
-          <p className="muted">
-            Skor dan duplikat dihitung di perangkat. Username/password tidak ditampilkan di sini.
-          </p>
-        </div>
-        <ScoreRing score={report.score} />
+      <header className="page-head">
+        <h2>Ringkasan</h2>
+        <p className="muted">
+          {lockMinutes > 0 ? `Kunci otomatis aktif: ${lockMinutes} menit tanpa aktivitas` : 'Kunci otomatis mati'}
+        </p>
       </header>
 
-      <div className="dash-stats">
-        <button type="button" className="card dash-stat" onClick={onOpenVault}>
+      {summary.total > 0 && top ? (
+        <section className="card prio">
+          <div className="prio-h">
+            <span className="prio-i">
+              <IconShield size={20} />
+            </span>
+            <div>
+              <h3>{summary.headline}</h3>
+              <p>{summary.advice}</p>
+            </div>
+          </div>
+          <div className="prio-b">
+            <div className="sev-row" role="group" aria-label="Lihat per jenis masalah">
+              <span className="muted sev-lead">{summary.entries} entri terdampak:</span>
+              {summary.byKind.map((k) => (
+                <button key={k.kind} type="button" className={`sev sev-${k.tone}`} onClick={() => onNavigate('health')}>
+                  {k.count} {KIND_LABEL[k.kind]}
+                </button>
+              ))}
+            </div>
+            <button type="button" className="btn btn-primary" onClick={() => onOpenEntry(top.id)}>
+              Buka entri {top.name || 'ini'}
+            </button>
+          </div>
+        </section>
+      ) : (
+        <section className="card prio prio-ok">
+          <div className="prio-h">
+            <span className="prio-i">
+              <IconCheck size={20} />
+            </span>
+            <div>
+              <h3>Tidak ada masalah sandi yang terdeteksi</h3>
+              <p>Dihitung di perangkat ini dari {list.length} entri.</p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <div className="card stat-strip">
+        <button type="button" onClick={onOpenVault}>
           <strong>{list.length}</strong>
-          <span>Entri</span>
+          <span>Entri aktif</span>
         </button>
-        <div className="card dash-stat">
-          <strong className={clusters.length ? 'warn-text' : ''}>{clusters.length}</strong>
-          <span>Kelompok duplikat</span>
+        <div>
+          <strong>{favorites}</strong>
+          <span>Favorit</span>
         </div>
-        <div className="card dash-stat">
-          <strong className={report.weak ? 'warn-text' : ''}>{report.weak}</strong>
-          <span>Password lemah</span>
+        <div>
+          <strong>{withOtp}</strong>
+          <span>Punya kode OTP</span>
         </div>
-        <div className="card dash-stat">
-          <strong>{used}</strong>
-          <span>Pernah dipakai</span>
+        <div>
+          <strong>{vault.trash.length}</strong>
+          <span>Di sampah</span>
         </div>
       </div>
 
       <div className="dash-grid">
-        <section className="card">
-          <h3>Komposisi</h3>
-          <div className="dash-bars">
-            {types.map((t) => (
-              <div key={t.id} className="dash-bar-row">
-                <span>{t.label}</span>
-                <i>
-                  <b style={{ width: `${(t.n / maxType) * 100}%` }} />
-                </i>
-                <em>{t.n}</em>
-              </div>
-            ))}
-          </div>
-          <p className="meta-line">
-            {favorites} favorit · skor kesehatan {report.score}/100
-          </p>
-        </section>
-
-        <section className="card">
+        <section className="card status-card">
           <div className="split">
-            <h3>Baru diubah</h3>
-            <button type="button" className="btn btn-ghost" onClick={onOpenVault}>
-              Buka brankas
+            <h3>Isi otomatis</h3>
+            <button type="button" className="linkish" onClick={() => onNavigate('autofill')}>
+              Atur ›
             </button>
           </div>
-          {recent.length === 0 ? (
-            <p className="muted">Belum ada entri. Generator bisa bikin sandi baru, lalu simpan di brankas.</p>
-          ) : (
-            <ul className="dash-recent">
-              {recent.map((e) => (
-                <li key={e.id}>
-                  <button type="button" className="linkish" onClick={() => onOpenEntry(e.id)}>
-                    {e.favorite ? <IconStar size={12} /> : null} {e.name || 'Tanpa nama'}
-                  </button>
-                  <span className="muted">{relativeTime(e.updatedAt)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className="status-row">
+            <span className={`dot ${helperOnline && helperAccessibility ? 'on' : 'warn'}`} aria-hidden="true" />
+            <span className="grow">
+              {helperOnline ? (helperAccessibility ? 'Helper Mac aktif' : 'Helper Mac belum diizinkan') : 'Helper Mac mati'}
+              <small>
+                {helperOnline
+                  ? helperAccessibility
+                    ? 'Bisa mengisi login di aplikasi Mac'
+                    : 'Izinkan Aksesibilitas agar bisa mengisi aplikasi Mac'
+                  : 'Isi di aplikasi Mac tidak tersedia. Ekstensi browser tetap jalan.'}
+              </small>
+            </span>
+          </div>
+        </section>
+
+        <section className="card status-card">
+          <div className="split">
+            <h3>Cadangan</h3>
+            <button type="button" className="linkish" onClick={() => onNavigate('backup')}>
+              Atur ›
+            </button>
+          </div>
+          <div className="status-row">
+            <span className={`dot ${lastBackup ? 'on' : 'warn'}`} aria-hidden="true" />
+            <span className="grow">
+              {lastBackup ? `Cadangan terakhir ${relativeTime(lastBackup)}` : 'Belum ada cadangan'}
+              <small>
+                {vault.settings.autoBackup === 'off' ? 'Cadangan otomatis mati' : `${backups.length} tersimpan di perangkat ini`}
+              </small>
+            </span>
+          </div>
+          <div className="status-row">
+            <span className={`dot ${hasRecoveryWrap ? 'on' : 'warn'}`} aria-hidden="true" />
+            <span className="grow">
+              {hasRecoveryWrap ? 'Kunci pemulihan aktif' : 'Kunci pemulihan belum dibuat'}
+              <small>
+                {hasRecoveryWrap
+                  ? 'Simpan di tempat aman. Tanpa itu, lupa sandi induk berarti brankas tidak bisa dibuka.'
+                  : 'Tanpa kunci pemulihan, lupa sandi induk berarti brankas tidak bisa dibuka.'}
+              </small>
+            </span>
+          </div>
         </section>
       </div>
 
-      <section className="card dash-dupes">
+      <section className="dash-section">
         <div className="split">
-          <div>
-            <h3>Rekomendasi duplikat</h3>
-            <p className="muted">
-              Situs yang sama (agoda.com vs www.agoda.com), nama mirip, atau login dobel. Gabungkan, atau buang yang
-              tidak dipakai.
-            </p>
+          <h3>Terbaru</h3>
+          <button type="button" className="linkish" onClick={onOpenVault}>
+            Semua entri ›
+          </button>
+        </div>
+        {recent.length === 0 ? (
+          <p className="muted">Belum ada entri. Generator bisa bikin sandi baru, lalu simpan di brankas.</p>
+        ) : (
+          <div className="recent-grid">
+            {recent.map((e) => {
+              const where = hostFromUrl(e.url || e.urls[0] || '') || e.appName || 'Tanpa situs'
+              return (
+                <div key={e.id} className="card recent-card">
+                  <div className="recent-h">
+                    <EntryGlyph entry={e} />
+                    <div>
+                      <strong>{e.name || 'Tanpa nama'}</strong>
+                      <small>
+                        {e.lastUsedAt ? `Dipakai ${relativeTime(e.lastUsedAt)}` : `Diubah ${relativeTime(e.updatedAt)}`}
+                      </small>
+                    </div>
+                  </div>
+                  <p className="muted">
+                    {where}
+                    {e.totpSecret ? ' · kode OTP tersimpan' : ''}
+                  </p>
+                  <div className="recent-acts">
+                    {e.password ? (
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title="Salin sandi"
+                        aria-label={`Salin sandi ${e.name}`}
+                        onClick={() => void copySecret('Sandi', e.password!)}
+                      >
+                        <IconCopy size={16} />
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                    <button type="button" className="linkish" onClick={() => onOpenEntry(e.id)}>
+                      Buka ›
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
+        )}
+      </section>
+
+      <section className="card dash-dupes">
+        <div>
+          <h3>Rekomendasi duplikat</h3>
+          <p className="muted">
+            Situs yang sama (agoda.com vs www.agoda.com), nama mirip, atau login dobel. Gabungkan, atau buang yang tidak
+            dipakai.
+          </p>
         </div>
         {clusters.length === 0 ? (
           <p className="ok">Tidak ada duplikat yang ketahuan.</p>
@@ -170,8 +271,8 @@ export function DashboardView({
                 <li key={c.id} className="dupe-card">
                   <header>
                     <strong>{c.title}</strong>
-                    <span className={`pill ${c.passwordConflict ? 'pill-weak' : ''}`}>
-                      {c.suggestion === 'merge' ? 'Gabungkan' : 'Cek dulu'}
+                    <span className={`sev ${c.passwordConflict ? 'sev-hi' : 'sev-info'}`}>
+                      {c.suggestion === 'merge' ? 'Bisa digabung' : 'Cek dulu'}
                     </span>
                   </header>
                   <p className="muted">{c.detail}</p>
@@ -224,48 +325,6 @@ export function DashboardView({
           </ul>
         )}
       </section>
-
-      <div className="dash-actions">
-        <button type="button" className="btn btn-primary" onClick={onOpenVault}>
-          <IconKey size={16} /> Brankas
-        </button>
-        <button type="button" className="btn" onClick={onGenerate}>
-          <IconSpark size={16} /> Generator
-        </button>
-        <button type="button" className="btn" onClick={onHealth}>
-          <IconShield size={16} /> Kesehatan
-        </button>
-      </div>
     </div>
-  )
-}
-
-function ScoreRing({ score }: { score: number }) {
-  const r = 52
-  const c = 2 * Math.PI * r
-  const offset = c * (1 - Math.min(100, Math.max(0, score)) / 100)
-  const tone = score >= 80 ? 'var(--ok)' : score >= 50 ? 'var(--warn)' : 'var(--danger)'
-  return (
-    <svg className="score-ring" viewBox="0 0 128 128" aria-label={`Skor ${score} dari 100`}>
-      <circle cx="64" cy="64" r={r} fill="none" stroke="var(--line)" strokeWidth="10" />
-      <circle
-        cx="64"
-        cy="64"
-        r={r}
-        fill="none"
-        stroke={tone}
-        strokeWidth="10"
-        strokeLinecap="round"
-        strokeDasharray={c}
-        strokeDashoffset={offset}
-        transform="rotate(-90 64 64)"
-      />
-      <text x="64" y="60" textAnchor="middle" className="score-num">
-        {score}
-      </text>
-      <text x="64" y="78" textAnchor="middle" className="score-sub">
-        skor
-      </text>
-    </svg>
   )
 }

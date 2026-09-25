@@ -71,3 +71,24 @@ describe('strength and health', () => {
     expect(report.score).toBeLessThan(100)
   })
 })
+
+describe('summarizeIssues', () => {
+  it('counts issues, not entries, and puts the most urgent kind first', async () => {
+    const { summarizeIssues } = await import('../src/lib/health')
+    const report = analyzeHealth([entry('a', 'abc'), entry('b', 'abc'), entry('c', 'Tr0pical-Mangrove-2026')])
+    const pwned = { id: 'c-pwned', entryId: 'c', entryName: 'c', kind: 'pwned' as const, detail: '' }
+    const s = summarizeIssues([...report.issues, pwned])
+    expect(s.total).toBe(report.issues.length + 1)
+    expect(s.byKind.reduce((n, k) => n + k.count, 0)).toBe(s.total)
+    expect(s.entries).toBe(3)
+    expect(s.byKind[0].kind).toBe('pwned')
+    expect(s.top?.entryId).toBe('c')
+    expect(s.headline).toContain('kebocoran')
+  })
+
+  it('returns an empty summary for a clean vault', async () => {
+    const { summarizeIssues } = await import('../src/lib/health')
+    const s = summarizeIssues([])
+    expect(s).toMatchObject({ total: 0, entries: 0, top: null, byKind: [] })
+  })
+})
