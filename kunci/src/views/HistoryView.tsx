@@ -11,7 +11,7 @@ export function HistoryView({ onOpen }: { onOpen: (id: string) => void }) {
     <div className="page">
       <header className="page-head">
         <h2>Riwayat kredensial</h2>
-        <p className="muted">Username dan password lama tersimpan tiap kali kamu mengganti entri.</p>
+        <p className="muted">Kredensial lama tersimpan di brankas saat username atau password diubah. Sandi lama tetap tersembunyi.</p>
       </header>
       {rows.length === 0 ? (
         <div className="card empty">Belum ada riwayat. Riwayat muncul setelah password atau username diganti.</div>
@@ -26,13 +26,15 @@ export function HistoryView({ onOpen }: { onOpen: (id: string) => void }) {
                 <div className="muted">{formatDateTime(row.record.changedAt)}</div>
                 <div className="row-actions">
                   <span>{row.record.username || 'tanpa username'}</span>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => void copySecret('Password lama', row.record.password ?? '')}
-                  >
-                    Salin password lama
-                  </button>
+                  {row.record.password ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => void copySecret('Password lama', row.record.password!)}
+                    >
+                      Salin password lama
+                    </button>
+                  ) : <span className="muted">Tidak ada sandi lama</span>}
                 </div>
               </li>
             ))}

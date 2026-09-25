@@ -15,6 +15,8 @@ const KIND_LABEL: Record<IssueKind, string> = {
   short: 'pendek',
   old: 'usang',
   pwned: 'bocor',
+  insecure: 'situs tidak aman',
+  duplicate: 'duplikat',
 }
 
 export function DashboardView({

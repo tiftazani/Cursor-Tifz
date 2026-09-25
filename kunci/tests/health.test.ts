@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { analyzeHealth } from '../src/lib/health'
+import { analyzeHealth, sortHealthIssues, summarizeIssues } from '../src/lib/health'
 import { isCommonPassword, isStrongMaster, passwordStrength } from '../src/lib/strength'
 import type { Entry } from '../src/types'
 
@@ -69,6 +69,33 @@ describe('strength and health', () => {
     expect(report.weak).toBeGreaterThan(0)
     expect(report.old).toBeGreaterThan(0)
     expect(report.score).toBeLessThan(100)
+  })
+})
+
+describe('personal health risks', () => {
+  it('flags only a primary HTTP login URL, not historical URLs or app URLs', () => {
+    const entries = [
+      entry('http', 'Secure-Long-Password!2026', { url: 'http://example.com/login' }),
+      entry('history', 'Secure-Long-Password!2027', { url: 'https://other.com', urls: ['http://other.com'] }),
+      entry('app', 'Secure-Long-Password!2028', { type: 'app', url: 'android://com.example' }),
+    ]
+    expect(analyzeHealth(entries, 1).issues.filter((i) => i.kind === 'insecure').map((i) => i.entryId)).toEqual(['http'])
+  })
+
+  it('uses duplicate clusters, counting each affected entry once even without a password', () => {
+    const entries = [
+      entry('a', '', { url: 'https://example.com', username: 'user' }),
+      entry('b', '', { url: 'https://example.com', username: 'user' }),
+    ]
+    const duplicates = analyzeHealth(entries, 1).issues.filter((i) => i.kind === 'duplicate')
+    expect(duplicates.map((i) => i.entryId).sort()).toEqual(['a', 'b'])
+    expect(summarizeIssues(duplicates).entries).toBe(2)
+  })
+
+  it('sorts by risk, then updatedAt descending, then stable id', () => {
+    const entries = [entry('b', 'abc', { updatedAt: 5 }), entry('a', 'abc', { updatedAt: 5 }), entry('c', 'abc', { updatedAt: 10 })]
+    const issues = analyzeHealth(entries, 1).issues
+    expect(sortHealthIssues(issues, entries).filter((i) => i.kind === 'reused').map((i) => i.entryId)).toEqual(['c', 'a', 'b'])
   })
 })
 

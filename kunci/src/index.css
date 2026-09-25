@@ -802,6 +802,36 @@ html:not([data-platform='mac']) .mac-only {
   height: 34px;
 }
 
+.vault-list-controls {
+  padding: 0 12px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  flex: none;
+}
+
+.vault-list-controls label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.vault-sort {
+  max-width: 130px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-2);
+  color: var(--text);
+  font: inherit;
+  padding: 4px;
+  min-height: 30px;
+}
+
+.favorite-mark { color: var(--warn); display: inline-flex; align-items: center; }
+
 .filter-row {
   display: flex;
   /* overflow:auto zeroes the automatic min-size, so a long .entry-list would
@@ -2229,6 +2259,13 @@ button.sev {
   .nav-group {
     display: none;
   }
+
+  .vault-sort { min-height: 44px; }
+  .vault-list-controls { padding-top: 6px; }
+  .list-col .search { min-height: 44px; }
+  .list-col .search input { min-height: 44px; }
+  .list-col .chip { min-height: 44px; }
+  .list-col .filter-row { padding-bottom: 6px; }
 
   .nav-item.active {
     box-shadow: none;

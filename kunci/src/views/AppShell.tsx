@@ -73,6 +73,7 @@ export function AppShell() {
   const [view, setView] = useState<AppView>('home')
   const [filter, setFilter] = useState<FilterId>('all')
   const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<'recent' | 'name'>('recent')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<Entry | null>(null)
   const [draftDirty, setDraftDirty] = useState(false)
@@ -97,8 +98,10 @@ export function AppShell() {
     let list = source
     if (filter === 'favorite') list = list.filter((e) => e.favorite)
     else if (filter !== 'all' && filter !== 'trash') list = list.filter((e) => e.type === filter)
-    return searchEntries(list, query).sort((a, b) => b.updatedAt - a.updatedAt)
-  }, [source, filter, query])
+    return searchEntries(list, query).sort((a, b) => sort === 'name'
+      ? a.name.localeCompare(b.name, 'id') || a.id.localeCompare(b.id)
+      : b.updatedAt - a.updatedAt || a.id.localeCompare(b.id))
+  }, [source, filter, query, sort])
 
   const selected = draft ?? filtered.find((e) => e.id === selectedId) ?? (draftDirty ? source.find((e) => e.id === selectedId) : undefined) ?? null
   // Same source as the Kesehatan page and the Ringkasan card, so the badge and
@@ -328,7 +331,17 @@ export function AppShell() {
                 </button>
               )}
             </div>
-            <div className="filter-row">
+            <div className="vault-list-controls">
+              <span aria-live="polite">{filtered.length} dari {source.length} entri</span>
+              <label>
+                Urutkan
+                <select className="vault-sort" value={sort} onChange={(e) => setSort(e.target.value as 'recent' | 'name')}>
+                  <option value="recent">Terakhir diubah</option>
+                  <option value="name">Nama A–Z</option>
+                </select>
+              </label>
+            </div>
+            <div className="filter-row" aria-label="Filter jenis entri">
               {FILTERS.map((f) => (
                 <button
                   key={f.id}
@@ -348,7 +361,13 @@ export function AppShell() {
                 </button>
               ))}
             </div>
-            <ul className="entry-list">
+            <ul className="entry-list" aria-label="Daftar entri" onKeyDown={(e) => {
+              if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+              const rows = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('.entry-row'))
+              const current = rows.indexOf(document.activeElement as HTMLButtonElement)
+              const next = rows[current + (e.key === 'ArrowDown' ? 1 : -1)]
+              if (next) { e.preventDefault(); next.focus() }
+            }}>
               {filtered.length === 0 ? (
                 <li className="empty-hero">
                   {query ? (
@@ -377,6 +396,7 @@ export function AppShell() {
                     <button
                       type="button"
                       className={`entry-row ${selected?.id === e.id ? 'active' : ''}`}
+                      aria-current={selected?.id === e.id ? 'true' : undefined}
                       onClick={() => {
                         // Same guard as the filter chips: a remount here would drop
                         // the unsaved draft. `setDraft(null)` only clears the
@@ -391,7 +411,7 @@ export function AppShell() {
                       <EntryGlyph entry={e} />
                       <span>
                         <strong>
-                          {e.favorite ? <IconStar size={12} /> : null} {e.name}
+                          {e.name}{e.favorite ? <span className="favorite-mark" aria-label="Favorit"><IconStar size={12} /></span> : null}
                         </strong>
                         <em>{entryListHint(e)}</em>
                       </span>
@@ -431,7 +451,7 @@ export function AppShell() {
             ) : (
               <div className="empty tall empty-hero">
                 <strong>Pilih entri</strong>
-                <span>Atau buat yang baru untuk menyimpan username dan password.</span>
+                <span>Atau buat yang baru untuk menyimpan nama pengguna dan kata sandi.</span>
                 <button type="button" className="btn btn-primary" onClick={startNew}>
                   <IconPlus size={16} /> Entri baru
                 </button>

@@ -1,11 +1,13 @@
 import type { Entry } from '../types'
 import { passwordStrength } from './strength'
+import { findDuplicateClusters } from './duplicates'
+import { hostFromUrl } from './match'
 
 export interface HealthIssue {
   id: string
   entryId: string
   entryName: string
-  kind: 'weak' | 'reused' | 'old' | 'pwned' | 'short'
+  kind: 'weak' | 'reused' | 'old' | 'pwned' | 'short' | 'insecure' | 'duplicate'
   detail: string
 }
 
@@ -21,7 +23,7 @@ export interface HealthReport {
 const YEAR = 1000 * 60 * 60 * 24 * 365
 
 export function analyzeHealth(entries: Entry[], now = Date.now()): HealthReport {
-  const secrets = entries.filter((e) => e.password)
+  const secrets = entries.filter((e) => (e.type === 'login' || e.type === 'app') && e.password)
   const byPassword = new Map<string, Entry[]>()
   for (const e of secrets) {
     const list = byPassword.get(e.password!) ?? []
@@ -30,7 +32,20 @@ export function analyzeHealth(entries: Entry[], now = Date.now()): HealthReport 
   }
 
   const issues: HealthIssue[] = []
-  for (const e of secrets) {
+  const eligible = entries.filter((e) => e.type === 'login' || e.type === 'app')
+  const duplicateIds = new Set(findDuplicateClusters(eligible).flatMap((cluster) => cluster.memberIds))
+  for (const e of eligible) {
+    if (duplicateIds.has(e.id)) issues.push({
+      id: `${e.id}-duplicate`, entryId: e.id, entryName: e.name,
+      kind: 'duplicate', detail: 'Kemungkinan entri ganda; periksa sebelum menggabungkan',
+    })
+    const primary = e.url || e.urls[0] || ''
+    if (e.password && /^http:\/\//i.test(primary.trim()) && hostFromUrl(primary)) issues.push({
+      id: `${e.id}-insecure`, entryId: e.id, entryName: e.name,
+      kind: 'insecure', detail: 'Alamat utama memakai HTTP tanpa enkripsi transport',
+    })
+  }
+  for (const e of secrets.filter((e) => e.type === 'login' || e.type === 'app')) {
     const strength = passwordStrength(e.password!)
     if (e.password!.length < 10) {
       issues.push({
@@ -87,8 +102,15 @@ export type IssueTone = 'hi' | 'md' | 'lo' | 'info'
 
 // Most urgent first. A breach beats reuse, reuse beats a weak password (one leak
 // opens every site sharing it), and age is only advice.
-const ORDER: IssueKind[] = ['pwned', 'reused', 'weak', 'short', 'old']
-const TONE: Record<IssueKind, IssueTone> = { pwned: 'hi', reused: 'md', weak: 'lo', short: 'lo', old: 'info' }
+const ORDER: IssueKind[] = ['pwned', 'reused', 'weak', 'short', 'insecure', 'duplicate', 'old']
+const TONE: Record<IssueKind, IssueTone> = { pwned: 'hi', reused: 'md', weak: 'lo', short: 'lo', insecure: 'md', duplicate: 'info', old: 'info' }
+
+export function sortHealthIssues(issues: HealthIssue[], entries: Entry[]): HealthIssue[] {
+  const updated = new Map(entries.map((entry) => [entry.id, entry.updatedAt]))
+  return [...issues].sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind)
+    || (updated.get(b.entryId) ?? 0) - (updated.get(a.entryId) ?? 0)
+    || a.entryId.localeCompare(b.entryId))
+}
 
 export interface IssueSummary {
   /** Issue count. One entry can carry several, so this can exceed `entries`. */
@@ -120,6 +142,8 @@ export function summarizeIssues(issues: HealthIssue[]): IssueSummary {
     weak: `Sandi ${name} lemah`,
     short: `Sandi ${name} terlalu pendek`,
     old: `Sandi ${name} sudah lama tidak diganti`,
+    insecure: `Situs ${name} memakai HTTP`,
+    duplicate: `Entri ${name} kemungkinan ganda`,
   }
   const ADVICE: Record<IssueKind, string> = {
     pwned: 'Ganti di situsnya dulu, lalu simpan sandi baru di Kunci.',
@@ -127,6 +151,8 @@ export function summarizeIssues(issues: HealthIssue[]): IssueSummary {
     weak: 'Generator bisa membuat sandi pengganti yang kuat.',
     short: 'Sandi di bawah 10 karakter mudah ditebak. Generator bisa membuat penggantinya.',
     old: 'Sudah lebih dari 1 tahun. Ganti kalau situsnya penting.',
+    insecure: 'Periksa alamat situs dan gunakan HTTPS bila tersedia.',
+    duplicate: 'Periksa entri sebelum menggabungkan atau menghapusnya.',
   }
   return { total, entries, byKind, top, headline: HEAD[top.kind], advice: ADVICE[top.kind] }
 }

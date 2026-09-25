@@ -13,10 +13,12 @@ export function GeneratorView() {
   const { copySecret } = useVault()
   const [opts, setOpts] = useState<GeneratorOptions>(DEFAULT_GENERATOR)
   const [samples, setSamples] = useState(() => generateMany(5, DEFAULT_GENERATOR))
+  const [revealed, setRevealed] = useState(false)
   const preview = samples[0] ?? ''
   const strength = passwordStrength(preview)
 
   function apply(next: GeneratorOptions) {
+    setRevealed(false)
     setOpts(next)
     try {
       setSamples(generateMany(5, next))
@@ -103,8 +105,13 @@ export function GeneratorView() {
           )}
         </div>
         <div className="card">
-          <code className="gen-password">{preview || '—'}</code>
+          <label className="field-label" htmlFor="generated-password">Hasil generator</label>
+          <input id="generated-password" className="input gen-password" type={revealed ? 'text' : 'password'} value={preview} readOnly autoComplete="off" />
+          <button type="button" className="btn btn-ghost" onClick={() => setRevealed((shown) => !shown)} disabled={!preview}>
+            {revealed ? 'Sembunyikan hasil' : 'Tampilkan hasil'}
+          </button>
           <StrengthBar score={strength.score} label={strength.label} />
+          <p className="muted">Salinan dibersihkan dari papan klip sesuai waktu di Pengaturan, jika masih berisi sandi ini. Bila browser menolak akses, hapus manual.</p>
           <div className="row-actions">
             <button type="button" className="btn btn-primary" onClick={() => void copySecret('Password', preview)} disabled={!preview}>
               Salin
@@ -117,11 +124,12 @@ export function GeneratorView() {
             <>
               <span className="field-label">Pilihan lain</span>
               <ul className="sample-list">
-                {samples.slice(1).map((s) => (
-                  <li key={s}>
-                    <code>{s}</code>
+                {samples.slice(1).map((s, index) => (
+                  <li key={index}>
+                    <label className="field-label" htmlFor={`generated-option-${index}`}>Pilihan {index + 2}</label>
+                    <input id={`generated-option-${index}`} className="input" type={revealed ? 'text' : 'password'} value={s} readOnly autoComplete="off" />
                     <button type="button" className="btn btn-ghost" onClick={() => void copySecret('Password', s)}>
-                      Salin
+                      Salin pilihan {index + 2}
                     </button>
                   </li>
                 ))}
