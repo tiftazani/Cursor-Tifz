@@ -56,7 +56,7 @@ interface VaultApi {
   recoveryEmail: string
   logoutPublic: () => Promise<void>
   lock: () => void
-  saveEntry: (entry: Entry, isNew?: boolean) => Promise<void>
+  saveEntry: (entry: Entry, isNew?: boolean) => Promise<boolean>
   mergeEntries: (keepId: string, dropIds: string[]) => Promise<void>
   deleteEntry: (id: string) => Promise<void>
   restoreEntry: (id: string) => Promise<void>
@@ -176,16 +176,17 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const persist = useCallback(async (next: Vault, reason: 'auto' | 'manual' | 'hourly' | 'daily' | 'none' = 'auto') => {
+  const persist = useCallback(async (next: Vault, reason: 'auto' | 'manual' | 'hourly' | 'daily' | 'none' = 'auto'): Promise<boolean> => {
     if (isPreviewUi()) {
       vaultRef.current = next
       setVault(next)
-      return
+      return true
     }
     const key = keyRef.current
     const blob = blobRef.current
     if (!key || !blob) throw new Error('Brankas terkunci')
-    persistChain.current = persistChain.current
+    let ok = true
+    const run = persistChain.current
       .then(async () => {
         const updated = await persistWithKey(next, key, blob)
         blobRef.current = updated
@@ -239,9 +240,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         // Without this the chain stayed rejected forever: one failure (a full
         // IndexedDB quota, a write during a page clear) made every later save a
         // no-op while the UI kept showing the change as saved.
+        ok = false
         toast.push(err instanceof Error ? `Gagal menyimpan: ${err.message}` : 'Gagal menyimpan', 'danger')
       })
-    await persistChain.current
+    // The chain must stay the *pending* promise, not this call's result, or two
+    // saves in flight run concurrently and the slower one wins.
+    persistChain.current = run
+    await run
+    return ok
   }, [toast])
 
   useEffect(() => {
@@ -369,9 +375,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const saveEntry = useCallback(
-    async (entry: Entry, isNew = false) => {
+    async (entry: Entry, isNew = false): Promise<boolean> => {
       const current = vaultRef.current
-      if (!current) return
+      if (!current) return false
       let entries: Entry[]
       if (isNew) {
         entries = [entry, ...current.entries]
@@ -382,7 +388,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       }
       const next = { ...current, entries }
       setVault(next)
-      await persist(next)
+      return persist(next)
     },
     [persist],
   )
@@ -608,9 +614,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const setHint = useCallback(async (value: string) => {
-    await vaultDb.setHint(value)
-    setHintState(value)
-  }, [])
+    try {
+      await vaultDb.setHint(value)
+      setHintState(value)
+      toast.push('Petunjuk disimpan')
+    } catch (err) {
+      // This used to be a bare await with no feedback, so the button looked dead
+      // and a failed write rejected with nobody watching.
+      toast.push(err instanceof Error ? `Gagal menyimpan petunjuk: ${err.message}` : 'Gagal menyimpan petunjuk', 'danger')
+    }
+  }, [toast])
 
   const exportBackup = useCallback(async () => {
     const blob = blobRef.current
@@ -647,8 +660,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         next = { ...current, entries: merged }
       }
       setVault(next)
-      await persist(next, 'manual')
-      toast.push(mode === 'replace' ? 'Brankas diganti dari cadangan' : 'Cadangan digabung')
+      const ok = await persist(next, 'manual')
+      if (ok) toast.push(mode === 'replace' ? 'Brankas diganti dari cadangan' : 'Cadangan digabung')
     },
     [persist, toast],
   )
@@ -663,7 +676,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       }
       const next = { ...current, entries: [...imported, ...current.entries] }
       setVault(next)
-      await persist(next)
+      const ok = await persist(next)
+      // Only claim the import landed if it really did: `persist` used to swallow the
+      // write error, so a full quota still produced "N entri diimpor ke brankas".
+      if (!ok) return 0
       toast.push(`${imported.length} entri diimpor ke brankas`)
       return imported.length
     },
@@ -694,10 +710,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const backupNow = useCallback(async () => {
     const current = vaultRef.current
     if (!current) return
-    await persist(current, 'manual')
+    // Order matters: snapshot first, download only if it landed. This used to
+    // announce "Cadangan manual disimpan" even when the write failed.
+    const ok = await persist(current, 'manual')
+    if (!ok) return
     await exportBackup()
-    toast.push('Cadangan manual disimpan')
-  }, [exportBackup, persist, toast])
+  }, [exportBackup, persist])
 
   const restoreIdbBackup = useCallback(
     async (id: string, password: string) => {
@@ -779,10 +797,19 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const sequentialCopy = useCallback(
     async (entry: Entry) => {
       const gap = vaultRef.current?.settings.sequentialCopySeconds ?? 6
-      toast.push(entry.username ? `Username disalin. Password menyusul ${gap} detik.` : 'Password disalin')
-      await runSequential(entry.username, entry.password, gap, (phase) => {
-        if (phase === 'pass' && entry.username) toast.push('Password disalin — tempel sekarang')
-      })
+      // Announce nothing up front. The old code pushed "Username disalin. Password
+      // menyusul 6 detik." before copying, so a blocked clipboard (NotAllowedError:
+      // Document is not focused) still claimed success and nothing was copied.
+      try {
+        await runSequential(entry.username, entry.password, gap, (phase) => {
+          if (phase === 'user') toast.push(`Username disalin. Password menyusul ${gap} detik.`)
+          // Password-only entries never emit "user", so they land here directly.
+          if (phase === 'pass') toast.push(entry.username ? 'Password disalin — tempel sekarang' : 'Password disalin')
+        })
+      } catch {
+        toast.push('Tidak bisa menyalin — klik halaman dulu, lalu coba lagi', 'danger')
+        return
+      }
       await touchEntry(entry.id)
       const seconds = vaultRef.current?.settings.clipboardSeconds ?? 20
       if (entry.password) {

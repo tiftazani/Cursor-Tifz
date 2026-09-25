@@ -77,6 +77,7 @@ export function AppShell() {
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<Entry | null>(null)
+  const [draftDirty, setDraftDirty] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
   const [mobileDetail, setMobileDetail] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -97,7 +98,7 @@ export function AppShell() {
     return searchEntries(list, query).sort((a, b) => b.updatedAt - a.updatedAt)
   }, [source, filter, query])
 
-  const selected = draft ?? filtered.find((e) => e.id === selectedId) ?? null
+  const selected = draft ?? filtered.find((e) => e.id === selectedId) ?? (draftDirty ? source.find((e) => e.id === selectedId) : undefined) ?? null
   const dupeCount = useMemo(() => findDuplicateClusters(vault?.entries ?? []).length, [vault?.entries])
 
   useEffect(() => {
@@ -121,14 +122,25 @@ export function AppShell() {
   }, [lock])
 
   function goView(next: AppView) {
+    // Leaving the vault view unmounts the pane, which is where the unsaved edits
+    // live. Ask first.
+    if (next !== 'vault' && !confirmDiscard('pindah halaman')) return
     setView(next)
     setMoreOpen(false)
     if (next === 'vault') setMobileDetail(false)
   }
 
+  /** One place to ask before an action would drop edits the user has not saved. */
+  function confirmDiscard(what: string): boolean {
+    if (!draftDirty) return true
+    return window.confirm(`Ada suntingan yang belum disimpan. Buang dan ${what}?`)
+  }
+
   function startNew() {
+    if (!confirmDiscard('mulai entri baru')) return
     const entry = blankEntry('login')
     setDraft(entry)
+    setDraftDirty(false)
     setSelectedId(entry.id)
     setView('vault')
     setFilter('all')
@@ -137,7 +149,9 @@ export function AppShell() {
   }
 
   function openEntry(id: string) {
+    if (!confirmDiscard('buka entri lain')) return
     setDraft(null)
+    setDraftDirty(false)
     setSelectedId(id)
     setView('vault')
     setFilter('all')
@@ -148,6 +162,7 @@ export function AppShell() {
   function backToList() {
     setMobileDetail(false)
     setDraft(null)
+    setDraftDirty(false)
   }
 
   const shellClass = [
@@ -294,8 +309,13 @@ export function AppShell() {
                   type="button"
                   className={`chip ${filter === f.id ? 'active' : ''}`}
                   onClick={() => {
+                    // Do not throw away unsaved edits. Switching a chip used to
+                    // remount the pane (the key below includes `filter`) and the
+                    // local draft died with it.
+                    if (draftDirty && !window.confirm('Ada suntingan yang belum disimpan. Buang dan pindah filter?')) return
                     setFilter(f.id)
                     setDraft(null)
+                    setDraftDirty(false)
                     setMobileDetail(false)
                   }}
                 >
@@ -333,7 +353,12 @@ export function AppShell() {
                       type="button"
                       className={`entry-row ${selected?.id === e.id ? 'active' : ''}`}
                       onClick={() => {
+                        // Same guard as the filter chips: a remount here would drop
+                        // the unsaved draft. `setDraft(null)` only clears the
+                        // never-saved entry, which has no vault copy to fall back to.
+                        if (draftDirty && !window.confirm('Ada suntingan yang belum disimpan. Buang dan buka entri lain?')) return
                         setDraft(null)
+                        setDraftDirty(false)
                         setSelectedId(e.id)
                         setMobileDetail(true)
                       }}
@@ -370,12 +395,13 @@ export function AppShell() {
           <section className="detail-col">
             {selected ? (
               <EntryPane
-                key={`${selected.id}-${selected.updatedAt}-${filter}`}
+                key={`${selected.id}-${selected.updatedAt}${draftDirty ? '' : `-${filter}`}`}
                 entry={selected}
                 isNew={Boolean(draft && draft.id === selected.id)}
                 inTrash={filter === 'trash'}
                 onCloseNew={startNew}
                 onBack={backToList}
+                onDirtyChange={setDraftDirty}
               />
             ) : (
               <div className="empty tall empty-hero">

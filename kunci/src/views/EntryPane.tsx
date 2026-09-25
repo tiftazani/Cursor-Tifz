@@ -28,12 +28,14 @@ export function EntryPane({
   inTrash = false,
   onCloseNew,
   onBack,
+  onDirtyChange,
 }: {
   entry: Entry
   isNew: boolean
   inTrash?: boolean
   onCloseNew?: () => void
   onBack?: () => void
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const { saveEntry, deleteEntry, restoreEntry, purgeEntry, copySecret, sequentialCopy } = useVault()
   const toast = useToast()
@@ -43,6 +45,16 @@ export function EntryPane({
   const [saving, setSaving] = useState(false)
   const [fillOpen, setFillOpen] = useState(false)
   const [totp, setTotp] = useState<{ code: string; remaining: number } | null>(null)
+
+  // Tell the shell when this pane holds edits that are not in the vault yet. The
+  // shell changes `key` on filter changes, which remounts this component and threw
+  // the local draft away — switching a filter or typing a search silently reverted
+  // the entry to its saved value.
+  const dirty = !inTrash && JSON.stringify(draft) !== JSON.stringify(entry)
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+    return () => onDirtyChange?.(false)
+  }, [dirty, onDirtyChange])
 
   useEffect(() => {
     const secret = draft.totpSecret
@@ -80,7 +92,36 @@ export function EntryPane({
             </div>
           </div>
         </header>
-        <p className="muted">{entry.username || entry.url || entry.appName}</p>
+        {/* Show what is about to be destroyed. The panel used to print only the name,
+            so a note entry gave the user no way to check the content before purging. */}
+        {entry.username ? (
+          <Field label="Username">
+            <input className="input" value={entry.username} readOnly />
+          </Field>
+        ) : null}
+        {entry.password ? (
+          <Field label="Password">
+            <input className="input" value={entry.password} readOnly />
+          </Field>
+        ) : null}
+        {entry.url ? (
+          <Field label="URL">
+            <input className="input" value={entry.url} readOnly />
+          </Field>
+        ) : null}
+        {entry.appName ? (
+          <Field label="Aplikasi">
+            <input className="input" value={entry.appName} readOnly />
+          </Field>
+        ) : null}
+        {entry.notes ? (
+          <Field label="Catatan">
+            <textarea className="input textarea" value={entry.notes} readOnly rows={4} />
+          </Field>
+        ) : null}
+        {!entry.username && !entry.password && !entry.url && !entry.appName && !entry.notes ? (
+          <p className="muted">Tidak ada isi lain untuk ditampilkan.</p>
+        ) : null}
         <div className="row-actions">
           <button type="button" className="btn" onClick={() => void restoreEntry(entry.id)}>
             Pulihkan
@@ -114,7 +155,7 @@ export function EntryPane({
     if (!draft.name.trim() || saving) return
     setSaving(true)
     try {
-      await saveEntry(
+      const ok = await saveEntry(
         {
           ...draft,
           name: draft.name.trim(),
@@ -123,6 +164,10 @@ export function EntryPane({
         },
         isNew,
       )
+      // `saveEntry` reports whether the write actually landed. It used to resolve
+      // even when IndexedDB rejected, so this said "Disimpan" while the vault kept
+      // the old value and the edit vanished on reload.
+      if (!ok) return
       toast.push('Disimpan')
       if (isNew) onCloseNew?.()
     } finally {

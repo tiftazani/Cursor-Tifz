@@ -161,7 +161,14 @@ export function BackupView() {
             min={3}
             max={40}
             value={vault.settings.backupKeep}
-            onChange={(e) => void updateSettings({ backupKeep: Number(e.target.value) })}
+            onChange={(e) => {
+              // `min={3}` is only an HTML hint — React never enforced it, and
+              // `Number('')` is 0, so clearing the box and saving once shrank the
+              // on-device snapshots from 3 to 1. Clamp, and ignore an empty box.
+              const raw = e.target.value
+              if (raw.trim() === '') return
+              void updateSettings({ backupKeep: Math.min(40, Math.max(3, Number(raw) || 3)) })
+            }}
           />
         </Field>
         <p className="muted">Folder Mac: {backupFolderName ?? 'belum dipilih (Chrome/Edge)'}</p>

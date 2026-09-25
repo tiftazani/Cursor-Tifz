@@ -11,6 +11,7 @@ export function RecoveryKeyModal({
   onEmail?: () => Promise<boolean>
 }) {
   const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
   const [emailed, setEmailed] = useState<'idle' | 'ok' | 'fail'>('idle')
   const [busy, setBusy] = useState(false)
 
@@ -28,10 +29,15 @@ export function RecoveryKeyModal({
             type="button"
             className="btn"
             onClick={() => {
-              void copyText(recoveryKey).then(() => setCopied(true))
+              // The old line was `void copyText(...).then(...)` with no `.catch`, so a
+              // blocked clipboard (unfocused document, no permission) left the button
+              // reading "Salin" forever and said nothing.
+              void copyText(recoveryKey)
+                .then(() => setCopied(true))
+                .catch(() => setCopyFailed(true))
             }}
           >
-            {copied ? 'Tersalin' : 'Salin'}
+            {copied ? 'Tersalin' : copyFailed ? 'Gagal menyalin — klik halaman lalu coba lagi' : 'Salin'}
           </button>
           <button
             type="button"
