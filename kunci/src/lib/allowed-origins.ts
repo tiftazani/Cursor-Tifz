@@ -7,8 +7,9 @@ export const DEFAULT_CLOUD_URL = 'https://kunci.tiftazani-cuciin.workers.dev'
  * so the id changes the moment the repo is cloned somewhere else. The value that
  * was here had 33 characters — one more than the 32 a browser can produce — so it
  * never matched anything and the daemon answered the extension's own health poll
- * with 403. Derived from `kunci/extension` next to this file:
- * sha256('/Users/tiftazani/Documents/Hermes-AI/Kunci/kunci/extension')[0..32].
+ * with 403. The current id is the first 32 hex characters of sha256() over the
+ * absolute path of the `kunci/extension` folder, so a clone in a different folder
+ * gets a different id — recompute it when the repo moves.
  *
  * The worker used to trust a `Kunci-local/` User-Agent instead of this list. A
  * User-Agent is a header the caller writes, so any page could claim it and skip

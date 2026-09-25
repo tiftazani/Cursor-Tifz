@@ -13,20 +13,22 @@ export function AutofillView() {
     helperAppInstalled,
     helperAppPath,
     fillFrontmostApp,
-    helperRepoRoot,
-    helperKunciRoot,
     helperExtensionDir,
     helperExtensionVersion,
+    helperPull,
+    helperInstall,
   } = useVault()
   const [axMsg, setAxMsg] = useState('')
+  const [showGuide, setShowGuide] = useState(false)
   if (!vault) return null
   const s = vault.settings
   const mac = isMacDesktop()
-  const repo = helperRepoRoot || '/Users/tiftazani/Cursor-Tifz'
-  const kunciDir = helperKunciRoot || `${repo}/kunci`
-  const extensionDir = helperExtensionDir || `${kunciDir}/extension`
-  const fromHelper = Boolean(helperRepoRoot)
-  const ambilBranch = `cd ${repo} && git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && git fetch origin cursor/kunci-password-manager-4eaf && (test -z "$(git status --porcelain)" || git stash push -u -m "sebelum kunci branch") && git checkout -B cursor/kunci-password-manager-4eaf FETCH_HEAD && test -f kunci/src/views/DashboardView.tsx`
+  // Everything below comes from the daemon at runtime. Nothing here may name a
+  // path on this machine: this file ships in the public bundle.
+  const extensionDir = helperExtensionDir || 'kunci/extension'
+  const fromHelper = Boolean(helperExtensionDir)
+  const pullCmd = helperPull || 'cd <folder-clone> && git fetch origin <branch> && git checkout FETCH_HEAD'
+  const installCmd = helperInstall || 'cd <folder-clone>/kunci && npm install && npm run install-service'
 
   async function askAccess() {
     setAxMsg('Meminta izin…')
@@ -60,32 +62,46 @@ export function AutofillView() {
         <h3>Website</h3>
         <p className="muted">
           Folder ekstensi: <code>{extensionDir}</code>
-          {fromHelper ? ' (dari helper Mac).' : ' — fallback clone Cursor-Tifz, bukan tifz-apps.'}{' '}
+          {fromHelper ? ' (dari helper Mac).' : '.'}{' '}
           Load unpacked ke folder itu <strong>sekali</strong>. Setelah itu, kalau aplikasi/helper di-update (git pull
           atau <code>npm run install-service</code>), Chrome reload sendiri. Kartu harus {helperExtensionVersion || __KUNCI_VERSION__}
           — bukan versi lama.
         </p>
-        <ol className="steps">
-          <li>
-            Di Terminal:{' '}
-            <code>{ambilBranch} && cd kunci && npm install && npm run install-service</code>
-          </li>
-          <li>
-            Pertama kali saja: <code>chrome://extensions</code> → Load unpacked ke <code>{extensionDir}</code> (bukan
-            folder app Cursor). Jangan Remove tiap ada update.
-          </li>
-          <li>
-            Safari: di folder <code>kunci</code> jalankan <code>npm run install-safari</code>. Lalu Safari → Settings →
-            Developer → Allow unsigned extensions → Add Temporary Extension… → pilih folder yang dibuka Finder. Nyalakan
-            Kunci Autofill, lalu <strong>Always Allow on Every Website</strong>.
-          </li>
-          <li>Buka brankas di tab Kunci, buka popup, masukkan kata sandi induk</li>
-        </ol>
-        <p className="muted">
-          Safari sementara hilang saat Safari ditutup — Add Temporary Extension lagi, atau{' '}
-          <code>npm run install-safari -- --pack</code> (butuh Xcode). iPhone tidak bisa isi situs lain di Safari tanpa
-          App Store; pakai Kunci di Layar Utama + salin berurutan.
-        </p>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          aria-expanded={showGuide}
+          onClick={() => setShowGuide((v) => !v)}
+        >
+          {showGuide ? 'Sembunyikan panduan pemasangan' : 'Panduan pemasangan'}
+        </button>
+        {showGuide ? (
+          <>
+            <ol className="steps">
+              <li>
+                Di Terminal:{' '}
+                <code>
+                  {pullCmd} && cd kunci && npm install && npm run install-service
+                </code>
+              </li>
+              <li>
+                Pertama kali saja: <code>chrome://extensions</code> → Load unpacked ke <code>{extensionDir}</code>{' '}
+                (bukan folder app Cursor). Jangan Remove tiap ada update.
+              </li>
+              <li>
+                Safari: di folder <code>kunci</code> jalankan <code>npm run install-safari</code>. Lalu Safari → Settings
+                → Developer → Allow unsigned extensions → Add Temporary Extension… → pilih folder yang dibuka Finder.
+                Nyalakan Kunci Autofill, lalu <strong>Always Allow on Every Website</strong>.
+              </li>
+              <li>Buka brankas di tab Kunci, buka popup, masukkan kata sandi induk</li>
+            </ol>
+            <p className="muted">
+              Safari sementara hilang saat Safari ditutup — Add Temporary Extension lagi, atau{' '}
+              <code>npm run install-safari -- --pack</code> (butuh Xcode). iPhone tidak bisa isi situs lain di Safari
+              tanpa App Store; pakai Kunci di Layar Utama + salin berurutan.
+            </p>
+          </>
+        ) : null}
         <label className="check">
           <input
             type="checkbox"
@@ -140,17 +156,27 @@ export function AutofillView() {
             <code>killall -9 &quot;Kunci Helper&quot;</code> lalu{' '}
             <code>launchctl bootout gui/$(id -u)/com.kunci.daemon</code>, baru install-service lagi.
           </p>
-          <ol className="steps">
-            <li>
-              <code>{ambilBranch}</code>
-            </li>
-            <li>
-              <code>cd {kunciDir} && npm run install-service</code> — Finder harusnya langsung membuka app-nya
-            </li>
-            <li>
-              System Settings → Privacy & Security → Accessibility → centang <strong>Kunci Helper</strong>
-            </li>
-          </ol>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            aria-expanded={showGuide}
+            onClick={() => setShowGuide((v) => !v)}
+          >
+            {showGuide ? 'Sembunyikan panduan pemasangan' : 'Panduan pemasangan'}
+          </button>
+          {showGuide ? (
+            <ol className="steps">
+              <li>
+                <code>{pullCmd}</code>
+              </li>
+              <li>
+                <code>{installCmd}</code> — Finder harusnya langsung membuka app-nya
+              </li>
+              <li>
+                System Settings → Privacy & Security → Accessibility → centang <strong>Kunci Helper</strong>
+              </li>
+            </ol>
+          ) : null}
           <div className="row-actions">
             <button type="button" className="btn btn-primary" disabled={!helperOnline} onClick={() => void fillFrontmostApp()}>
               Isi ke app yang saya klik

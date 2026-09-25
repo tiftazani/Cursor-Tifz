@@ -42,6 +42,10 @@ interface VaultApi {
   helperKunciRoot: string
   helperExtensionDir: string
   helperExtensionVersion: string
+  /** Commands the daemon built from the real paths on this Mac. Empty when the
+   *  helper is offline, which is exactly when the UI shows the generic steps. */
+  helperPull: string
+  helperInstall: string
   backups: StoredBackup[]
   backupFolderName: string | null
   pendingRecoveryKey: string | null
@@ -113,6 +117,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const [helperKunciRoot, setHelperKunciRoot] = useState('')
   const [helperExtensionDir, setHelperExtensionDir] = useState('')
   const [helperExtensionVersion, setHelperExtensionVersion] = useState('')
+  // Commands come from the daemon so the real home path never reaches the bundle.
+  const [helperPull, setHelperPull] = useState('')
+  const [helperInstall, setHelperInstall] = useState('')
   const [backups, setBackups] = useState<StoredBackup[]>([])
   const [backupFolderName, setBackupFolderName] = useState<string | null>(null)
   const [pendingRecoveryKey, setPendingRecoveryKey] = useState<string | null>(null)
@@ -914,6 +921,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       setHelperKunciRoot(s.kunciRoot || '')
       setHelperExtensionDir(s.extensionDir || '')
       setHelperExtensionVersion(s.extensionVersion || '')
+      setHelperPull(s.pull || '')
+      setHelperInstall(s.install || '')
       if (s.ok) {
         const token = await localToken(vault.settings.helperUrl)
         const current = vaultRef.current
@@ -944,6 +953,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       helperKunciRoot,
       helperExtensionDir,
       helperExtensionVersion,
+      helperPull,
+      helperInstall,
       backups,
       backupFolderName,
       pendingRecoveryKey,
@@ -995,6 +1006,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       helperKunciRoot,
       helperExtensionDir,
       helperExtensionVersion,
+      helperPull,
+      helperInstall,
       backups,
       backupFolderName,
       pendingRecoveryKey,

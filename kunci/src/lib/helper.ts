@@ -15,6 +15,10 @@ export interface HelperStatus {
   extensionDir?: string
   extensionVersion?: string
   extensionStamp?: string
+  /** Ready-made commands from the daemon. It knows the real paths on this Mac;
+   *  the UI must not re-derive them or they end up baked into the public bundle. */
+  pull?: string
+  install?: string
 }
 
 export interface FillPayload {
