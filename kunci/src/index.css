@@ -942,6 +942,33 @@ html:not([data-platform='mac']) .mac-only {
   background: var(--bg-3);
 }
 
+/* Picked rows wear a ring, not a fill: the fill is what marks the row the detail pane
+   is showing, and the two must stay tellable apart when both are true at once. */
+.entry-row.picked {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 0 8px 8px;
+  border-radius: 12px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+}
+
+.selection-bar strong {
+  flex: 1;
+  font-size: 0.86rem;
+}
+
+.selection-bar .btn {
+  padding: 6px 12px;
+  font-size: 0.82rem;
+}
+
 .entry-row strong {
   display: flex;
   align-items: center;

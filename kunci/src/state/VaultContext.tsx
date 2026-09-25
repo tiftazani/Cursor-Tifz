@@ -68,6 +68,10 @@ interface VaultApi {
   restoreEntry: (id: string) => Promise<void>
   purgeEntry: (id: string) => Promise<void>
   emptyTrash: () => Promise<void>
+  /** Move a whole selection to the trash in one write. Returns how many moved. */
+  trashEntries: (ids: string[]) => Promise<number>
+  /** Delete a selection from the trash for good. Returns how many were removed. */
+  purgeEntries: (ids: string[]) => Promise<number>
   /** Move every Android app login to the trash. Returns how many moved. */
   removeAndroidEntries: () => Promise<number>
   touchEntry: (id: string) => Promise<void>
@@ -504,6 +508,49 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     setVault(next)
     await persist(next)
   }, [persist])
+
+  /**
+   * Move a whole selection to the trash in one write.
+   *
+   * One `persist` for the group, not one per entry: twenty separate writes would
+   * re-encrypt and re-upload the vault twenty times, and a failure halfway would leave
+   * half the selection moved with no way to tell which half.
+   */
+  const trashEntries = useCallback(
+    async (ids: string[]) => {
+      const current = vaultRef.current
+      if (!current) return 0
+      const drop = new Set(ids)
+      const found = current.entries.filter((e) => drop.has(e.id))
+      if (!found.length) return 0
+      const next: Vault = {
+        ...current,
+        entries: current.entries.filter((e) => !drop.has(e.id)),
+        trash: [...found.map((e) => ({ ...e, updatedAt: Date.now() })), ...current.trash],
+      }
+      setVault(next)
+      await persist(next)
+      return found.length
+    },
+    [persist],
+  )
+
+  /** Delete a selection from the trash for good, in one write. */
+  const purgeEntries = useCallback(
+    async (ids: string[]) => {
+      const current = vaultRef.current
+      if (!current) return 0
+      const drop = new Set(ids)
+      const kept = current.trash.filter((e) => !drop.has(e.id))
+      const removed = current.trash.length - kept.length
+      if (!removed) return 0
+      const next = { ...current, trash: kept }
+      setVault(next)
+      await persist(next)
+      return removed
+    },
+    [persist],
+  )
 
   /**
    * Remove every entry saved from an Android app, in one go.
@@ -1031,6 +1078,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       restoreEntry,
       purgeEntry,
       emptyTrash,
+      trashEntries,
+      purgeEntries,
       removeAndroidEntries,
       touchEntry,
       updateSettings,
@@ -1082,6 +1131,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       restoreEntry,
       purgeEntry,
       emptyTrash,
+      trashEntries,
+      purgeEntries,
       removeAndroidEntries,
       touchEntry,
       updateSettings,

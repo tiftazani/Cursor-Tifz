@@ -43,6 +43,16 @@ import { SettingsView } from './SettingsView'
 import { QuickFind } from './QuickFind'
 import { useToast } from '../components/Toast'
 import { deleteIntent } from '../lib/delete-key'
+import {
+  bulkDeleteIntent,
+  clickMode,
+  keptSelection,
+  purgeQuestion,
+  rangeSelection,
+  selectionLabel,
+  toggleSelection,
+  trashSummary,
+} from '../lib/multi-select'
 
 // `group` starts a labelled block in the sidebar. Eight items in one flat list is
 // hard to scan, and the narrow layout cannot fall back to a bottom tab bar the way
@@ -72,7 +82,7 @@ const FILTERS: { id: FilterId; label: string }[] = [
 ]
 
 export function AppShell() {
-  const { vault, lock, helperOnline, helperAccessibility, emptyTrash, deleteEntry, purgeEntry } = useVault()
+  const { vault, lock, helperOnline, helperAccessibility, emptyTrash, deleteEntry, purgeEntry, trashEntries, purgeEntries } = useVault()
   const toast = useToast()
   const compact = useCompactLayout()
   const [view, setView] = useState<AppView>('home')
@@ -80,6 +90,14 @@ export function AppShell() {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'recent' | 'name'>('recent')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The entries picked with Shift or ⌘. Kept apart from `selectedId`, which is the one
+  // entry the detail pane is showing: opening one row and selecting several are
+  // different acts, and merging them would make a Shift-click open a pane nobody asked
+  // for.
+  const [picked, setPicked] = useState<string[]>([])
+  // Where a Shift-click range starts. Set on every plain click, so ranges always grow
+  // from the last row the user actually pointed at.
+  const [rangeAnchor, setRangeAnchor] = useState<string | null>(null)
   const [draft, setDraft] = useState<Entry | null>(null)
   const [draftDirty, setDraftDirty] = useState(false)
   // Bumped only when we deliberately drop the pane's local draft. It must NOT be
@@ -170,7 +188,21 @@ export function AppShell() {
    * field, an open panel, or a dialog already on screen all keep the key.
    */
   function onListKeyDown(e: React.KeyboardEvent<HTMLUListElement>) {
+    if (e.key === 'Escape') {
+      if (picked.length) {
+        e.preventDefault()
+        clearPicked()
+      }
+      return
+    }
     if (e.key !== 'Delete' && e.key !== 'Backspace') return
+    // A group is running the show. Deleting one row out of a highlighted selection
+    // would silently leave the rest selected, so the group is what the key means now.
+    if (picked.length > 1) {
+      e.preventDefault()
+      void bulkDelete()
+      return
+    }
     const target = e.target as HTMLElement | null
     // `isContentEditable` matters because the notes field is a textarea rendered from
     // contenteditable roots in some browsers, and a `readOnly` input still counts as a
@@ -196,6 +228,81 @@ export function AppShell() {
       return
     }
     void purgeSelected(intent.id)
+  }
+
+  /**
+   * Click on a row.
+   *
+   * The gesture decides the meaning, so the list keeps working the way it always did:
+   * a plain click opens the entry, Shift takes a range, and ⌘ (or Ctrl) adds one more.
+   * Only a plain click moves the anchor and opens the pane; a range or a toggle must
+   * not, or dragging across twenty rows would open twenty panes along the way.
+   */
+  function clickRow(e: React.MouseEvent, id: string) {
+    const mode = clickMode(e)
+    if (mode === 'plain') {
+      // Same guard as the filter chips: a remount here would drop the unsaved draft.
+      // `setDraft(null)` only clears the never-saved entry, which has no vault copy.
+      if (draftDirty && !window.confirm('Ada suntingan yang belum disimpan. Buang dan buka entri lain?')) return
+      setDraft(null)
+      setDraftDirty(false)
+      setSelectedId(id)
+      setRangeAnchor(id)
+      setMobileDetail(true)
+      return
+    }
+    if (draftDirty) {
+      // Selecting elsewhere does not drop the draft by itself, so this needs no dialog;
+      // but the anchor must still move, or the next Shift-click ranges from nowhere.
+      setDraftDirty(false)
+    }
+    const visibleIds = filtered.map((f) => f.id)
+    if (mode === 'range') {
+      setPicked(rangeSelection(visibleIds, rangeAnchor, id))
+      return
+    }
+    setPicked((prev) => toggleSelection(prev, id))
+    setRangeAnchor(id)
+  }
+
+  /** Drop ids that are no longer on screen, so a hidden row can never be bulk-deleted. */
+  useEffect(() => {
+    const visibleIds = filtered.map((f) => f.id)
+    setPicked((prev) => {
+      const kept = keptSelection(prev, visibleIds)
+      return kept.length === prev.length ? prev : kept
+    })
+  }, [filtered])
+
+  async function bulkDelete() {
+    const intent = bulkDeleteIntent({ ids: picked, inTrash: filter === 'trash', overlayOpen: findOpen || moreOpen })
+    if (intent.action === 'none') return
+    if (intent.action === 'trash') {
+      if (!confirmDiscard(`membuang ${intent.ids.length} entri`)) return
+      const firstName = source.find((e) => e.id === intent.ids[0])?.name ?? 'Entri'
+      try {
+        const moved = await trashEntries(intent.ids)
+        toast.push(trashSummary(moved, firstName))
+        clearPicked()
+      } catch (err) {
+        toast.push(err instanceof Error ? err.message : 'Gagal membuang', 'danger')
+      }
+      return
+    }
+    // Permanent, and there is no undo: this one asks, with the count spelled out.
+    if (!window.confirm(purgeQuestion(intent.ids.length))) return
+    try {
+      const removed = await purgeEntries(intent.ids)
+      toast.push(removed === 1 ? 'Entri dihapus permanen.' : `${removed} entri dihapus permanen.`)
+      clearPicked()
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : 'Gagal menghapus', 'danger')
+    }
+  }
+
+  function clearPicked() {
+    setPicked([])
+    setRangeAnchor(null)
   }
 
   async function trashSelected(id: string) {
@@ -471,18 +578,10 @@ export function AppShell() {
                   <li key={e.id}>
                     <button
                       type="button"
-                      className={`entry-row ${selected?.id === e.id ? 'active' : ''}`}
+                      className={`entry-row ${selected?.id === e.id ? 'active' : ''} ${picked.includes(e.id) ? 'picked' : ''}`}
                       aria-current={selected?.id === e.id ? 'true' : undefined}
-                      onClick={() => {
-                        // Same guard as the filter chips: a remount here would drop
-                        // the unsaved draft. `setDraft(null)` only clears the
-                        // never-saved entry, which has no vault copy to fall back to.
-                        if (draftDirty && !window.confirm('Ada suntingan yang belum disimpan. Buang dan buka entri lain?')) return
-                        setDraft(null)
-                        setDraftDirty(false)
-                        setSelectedId(e.id)
-                        setMobileDetail(true)
-                      }}
+                      aria-pressed={picked.includes(e.id) ? true : undefined}
+                      onClick={(ev) => clickRow(ev, e.id)}
                     >
                       <EntryGlyph entry={e} />
                       <span>
@@ -496,6 +595,15 @@ export function AppShell() {
                 ))
               )}
             </ul>
+            {picked.length > 0 ? (
+              <div className="selection-bar" role="status" aria-live="polite">
+                <strong>{selectionLabel(picked.length)}</strong>
+                <button type="button" className="btn" onClick={clearPicked}>Batal</button>
+                <button type="button" className="btn btn-danger" onClick={() => { void bulkDelete() }}>
+                  {filter === 'trash' ? 'Hapus permanen' : 'Buang'}
+                </button>
+              </div>
+            ) : null}
             {filter !== 'trash' ? (
               <button type="button" className="fab-new" onClick={startNew} aria-label="Entri baru">
                 <IconPlus size={22} />
