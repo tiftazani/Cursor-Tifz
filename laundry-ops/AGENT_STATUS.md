@@ -1,19 +1,78 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 24 September 2026 (oleh Hermes).
+Terakhir diperbarui: 25 September 2026 (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
-**Keadaan `main` per 24 Sep: `f63b779`** (rilis 1.10.38, sudah di-push ke `origin/main`).
+**Keadaan `main` per 25 Sep: `0c3938f`** (rilis 1.10.39, sudah di-push ke `origin/main`).
 
 | Commit | Isi |
 | --- | --- |
+| `0c3938f` | Rilis 1.10.39: layar Tambah user kini membuat akun login Firebase |
+| `dee4ec8` | Dokumen rilis 1.10.38: versi Worker terbaru dan tes dedupe jurnal |
 | `f63b779` | Rilis 1.10.38: absensi per cabang untuk kasir multi-cabang |
 | `2f7438d` | Papan status: rilis 1.10.37 dan akar masalah hak akses peran |
 | `444f57f` | Rilis 1.10.37: penyamaan hak akses memakai endpoint `/v1/snapshot` |
-| `8e6b54d` | Papan status: login 500 sudah terperbaiki dan terbukti di produksi, 1.10.36 keluar |
-| `2ba1172` | Rilis 1.10.36 (versionCode 55): kandidat baru setelah merge dan perbaikan login |
+
+## 0r. Perbaikan DARURAT: beberapa akun tidak bisa login (25 Sep, Hermes)
+
+**Status: SELESAI. Data produksi diperbaiki dan diverifikasi; kode diperbaiki dengan tes penjaga
+yang dibuktikan merah lebih dulu; 1.10.39 dibangun dan terpasang di emulator. Sudah di `main`
+(`0c3938f`).**
+
+Laporan operasi lewat WhatsApp: beberapa kasir tidak bisa masuk, pesan `Email atau kata sandi tidak
+sesuai.`, padahal kata sandinya belum pernah diganti. Tangkapan layar menyebut
+`ihsanibnuabdurrauf@gmail.com`.
+
+**Akar masalahnya BUKAN kata sandi.** Login aplikasi diverifikasi Firebase Auth, sedangkan daftar
+pengguna hanya baris data di D1. Dua jalur pembuatan akun berbeda:
+
+| Jalur | Akun Firebase | Baris D1 |
+| --- | --- | --- |
+| Layar **Daftar** (mandiri) | dibuat | dibuat |
+| Layar **Daftar User → Tambah user** (Owner) | **TIDAK dibuat** | dibuat |
+
+Kasir yang ditambahkan Owner lewat layar Tambah user karena itu tidak pernah punya akun login.
+Barisnya rapi di daftar user dan sandinya benar, tetapi Firebase tidak mengenal emailnya.
+
+**Lima kasir terdampak** (semua `firebase_uid` kosong di produksi):
+
+| Kasir | Ditambahkan | Cabang |
+| --- | --- | --- |
+| alfin (`alfinhumendru@gmail.com`) | 24 Sep 13:22 WIB | bunayya, laupay-dayeuh, laupay-kirab |
+| febri (`febriansyah.atmaja98@gmail.com`) | 24 Sep 13:58 WIB | laupay-kirab, shelly |
+| ihsan (`ihsanibnuabdurrauf@gmail.com`) | 24 Sep 13:24 WIB | bunayya, laupay-dayeuh, laupay-kirab, shelly |
+| Bu rohma (`rochnatillah22@gmail.com`) | 24 Sep 13:21 WIB | shelly |
+| Nabila (`tsanaulaila78@gmail.com`) | 25 Sep 09:38 WIB | shelly |
+
+Semuanya ditambahkan Owner `us.archuleta1207@gmail.com`. Enam kasir lain yang dibuat lewat layar
+Daftar tidak terpengaruh.
+
+**Perbaikan kode:** `LoginProvision` (baru) memisahkan aturan pembuatan akun login supaya bisa
+diuji; `FirebaseCloud.provisionLoginAccount()` membuat akun lewat instance Firebase kedua supaya
+sesi Owner tidak ikut keluar; `UsersScreen` memanggilnya setelah baris pengguna tersimpan. Sandi di
+bawah 6 karakter ditolak sebelum baris disimpan.
+
+**Perbaikan data:** akun login lima kasir dibuatkan lewat skrip
+(`cloudflare/scripts/fix_akun_firebase.py`) dan diverifikasi dengan
+`cloudflare/scripts/verifikasi_akun.py`. Hasil: **12 akun bisa masuk, 0 gagal**, semuanya diterima
+`/v1/me` dengan peran dan cabang yang benar.
+
+**Bukti perangkat:** emulator `emulator-5554`, APK `1.10.39-debug` (versionCode 58).
+`ihsanibnuabdurrauf@gmail.com` masuk sampai Beranda dan Profil (peran Kasir); alfin juga masuk
+dengan 2 cabang. Tangkapan layar di `releases/1.10.39-candidate/bukti/`.
+
+**Skrip baru yang bisa dipakai ulang** (semuanya di `cloudflare/scripts/`):
+
+- `cek_akun_vs_firebase.py` — membandingkan daftar staf D1 dengan akun Firebase; menemukan akun
+  yang ada di daftar tetapi tidak bisa login.
+- `fix_akun_firebase.py` — membuat akun login yang hilang dengan sandi awal aplikasi.
+- `verifikasi_akun.py` — memeriksa seluruh staf bisa masuk dan diterima server.
+
+Catatan: skrip Python diblokir Cloudflare dengan `403 error code: 1010` bila memakai User-Agent
+bawaan Python. Pakai User-Agent mirip aplikasi Android (`okhttp/4.12.0`); Worker sendiri tidak
+membatasi User-Agent.
 
 ## 0q. Perbaikan: kasir multi-cabang hanya bisa absen di satu cabang (24 Sep, Hermes)
 
