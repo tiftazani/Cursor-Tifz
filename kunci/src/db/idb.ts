@@ -54,6 +54,9 @@ async function del(key: string): Promise<void> {
 }
 
 export const vaultDb = {
+  getRefreshSession: () => get<unknown>('refreshSession'),
+  setRefreshSession: (value: unknown) => set('refreshSession', value),
+  clearRefreshSession: () => del('refreshSession'),
   getBlob: () => get<EncryptedBlob>('blob'),
   setBlob: (blob: EncryptedBlob) => set('blob', blob),
   getHint: () => get<string>('hint'),
@@ -67,6 +70,7 @@ export const vaultDb = {
     handle ? set('backupDir', handle) : del('backupDir'),
   destroy: async () => {
     await del('blob')
+    await del('refreshSession')
     await del('hint')
     await del('createdAt')
     await del('backups')

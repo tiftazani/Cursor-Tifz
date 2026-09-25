@@ -8,9 +8,23 @@ export interface LoginCapture {
   url: string
   username: string
   password: string
+  /** Which company/organisation this login belongs to, when the page asked for one. */
+  tenant?: string
+  /** True when the page carried a shared password and the tenant box was left empty. */
+  missingTenant?: boolean
 }
 
-export type SaveDecision = { action: 'skip'; reason: 'empty' | 'kunci-app' | 'unchanged' } | { action: 'create' } | { action: 'update'; entryId: string }
+/**
+ * The shared password stage. A site that asks for a company code and one password
+ * every member uses, then a personal username and password, produces two saves.
+ * The first would otherwise be stored as though it were a real login and sit in the
+ * list forever as a near duplicate. The caller drops it when it recognises the shape.
+ */
+export function isSharedPasswordStage(capture: LoginCapture): boolean {
+  return Boolean(capture.missingTenant)
+}
+
+export type SaveDecision = { action: 'skip'; reason: 'empty' | 'kunci-app' | 'unchanged' | 'shared-password' } | { action: 'create' } | { action: 'update'; entryId: string }
 
 export function isKunciAppUrl(raw: string): boolean {
   try {
@@ -47,6 +61,9 @@ export function decideLoginSave(
   const username = capture.username.trim()
   const password = capture.password
   if (!password) return { action: 'skip', reason: 'empty' }
+  // The shared stage is a step towards the real login, which is saved on the next
+  // screen with a username. Saving this too would leave a near duplicate behind.
+  if (isSharedPasswordStage(capture)) return { action: 'skip', reason: 'shared-password' }
   if (isKunciAppUrl(capture.url)) return { action: 'skip', reason: 'kunci-app' }
   const host = hostFromUrl(capture.url)
   if (host && neverHosts.includes(host)) return { action: 'skip', reason: 'unchanged' }
@@ -81,17 +98,22 @@ export function applyLoginCapture(
   if (decision.action === 'skip') return { entries, changed: 'skip' }
 
   const username = capture.username.trim()
+  const tenant = (capture.tenant || '').trim()
   const url = capture.url.split('#')[0] || capture.url
 
   if (decision.action === 'update') {
     const prev = entries.find((entry) => entry.id === decision.entryId)
     if (!prev) return { entries, changed: 'skip' }
+    const named = tenant && !entryTitleCovers(prev, tenant)
     const next: Entry = {
       ...prev,
+      name: named ? `${prev.name} · ${tenant}` : prev.name,
       username: username || prev.username,
       password: capture.password,
+      appName: tenant || prev.appName,
       url: prev.url || url,
       urls: Array.from(new Set([...(prev.urls || []), url, prev.url].filter(Boolean))) as string[],
+      customFields: withTenantField(prev, tenant),
       lastUsedAt: now,
     }
     const saved = withCredentialHistory(prev, next)
@@ -104,14 +126,15 @@ export function applyLoginCapture(
   const created: Entry = {
     id: makeId(),
     type: 'login',
-    name: loginTitleFromUrl(capture.url),
+    name: tenant ? `${loginTitleFromUrl(capture.url)} · ${tenant}` : loginTitleFromUrl(capture.url),
     username: username || undefined,
     password: capture.password,
+    appName: tenant || undefined,
     url,
     urls: [url],
     tags: [],
     favorite: false,
-    customFields: [],
+    customFields: tenant ? [{ id: makeId(), label: TENANT_LABEL, value: tenant, hidden: false }] : [],
     history: [],
     createdAt: now,
     updatedAt: now,
@@ -119,6 +142,22 @@ export function applyLoginCapture(
     passwordChangedAt: now,
   }
   return { changed: 'create', entries: [created, ...entries] }
+}
+
+export const TENANT_LABEL = 'Perusahaan'
+
+/** Keep the company in a real field, so it is searchable and readable in the pane. */
+function withTenantField(entry: Entry, tenant: string): Entry['customFields'] {
+  const fields = entry.customFields || []
+  if (!tenant) return fields
+  const existing = fields.find((f) => (f.label || '').toLowerCase() === TENANT_LABEL.toLowerCase())
+  if (existing) return fields.map((f) => (f.id === existing.id ? { ...f, value: tenant } : f))
+  return [...fields, { id: `${entry.id}-tenant`, label: TENANT_LABEL, value: tenant, hidden: false }]
+}
+
+/** True when the entry's name already tells the user which company it belongs to. */
+function entryTitleCovers(entry: Entry, tenant: string): boolean {
+  return `${entry.name || ''} ${entry.appName || ''}`.toLowerCase().includes(tenant.toLowerCase())
 }
 
 export function matchAppName(entries: Entry[], appName: string): Entry[] {

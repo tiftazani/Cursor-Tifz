@@ -66,6 +66,63 @@
     return OTP_HINT.test(blob(field))
   }
 
+  /**
+   * A site that asks for a shared password on every entry, then a personal username
+   * and password. One vault entry cannot carry two passwords, so what the user needs
+   * from such a site is a readable label: "which company code is this login for".
+   *
+   * True only on strong evidence: a password box whose own text says
+   * organisation/company/workspace, or a field the page marked
+   * autocomplete="organization" that is NOT the username.
+   *
+   * Mirrors tenantField in src/lib/match.ts.
+   */
+  // A word boundary is unusable on field names: "_" is a word character, so
+  // /\bshared\b/ does NOT match "shared_password", and [ _-] runs like "company_code"
+  // are exactly how these boxes are named. Mirrors src/lib/match.ts.
+  const EDGE_START = '(^|[^A-Za-z0-9])'
+  const EDGE_END = '($|[^A-Za-z0-9])'
+  const EDGE_START_G = '([^A-Za-z0-9])'
+  const TENANT_FIELD_HINT = new RegExp(
+    `${EDGE_START}(organization|organisation|company|tenant|workspace|team[ _-]?(code|id|name)|company[ _-]?(code|id)|kode[ _-]?(perusahaan|organisasi|tenant)|nama[ _-]?(perusahaan|organisasi)|perusahaan|organisasi)${EDGE_END}`,
+    'i',
+  )
+  const TENANT_PASSWORD_HINT = new RegExp(
+    `${EDGE_START_G}(shared|company|organisation|organization|tenant|org|group|team|master|parent|admin)${EDGE_END}`,
+    'i',
+  )
+
+  function fieldText(field) {
+    return `${field.name || ''} ${field.id || ''} ${field.autocomplete || ''} ${field.placeholder || ''} ${field.ariaLabel || ''} ${field.label || ''}`
+  }
+
+  /**
+   * The company box of a two-password form, or null.
+   *
+   * Two password boxes in one form is not normal, and when it happens the second
+   * secret is almost always something else: a PIN, a confirmation box, a new
+   * password. A field only counts as the company when its own text says so, and
+   * never when that field is the username.
+   */
+  function tenantField(form, usernameField) {
+    const fields = ((form && form.fields) || []).filter((f) => f && f.tag !== 'select')
+    const passwordFields = fields.filter((f) => (f.type || '').toLowerCase() === 'password')
+    if (passwordFields.length < 2) return null
+    const strong = passwordFields.some((f) => TENANT_PASSWORD_HINT.test(fieldText(f)))
+    const named = fields.filter(
+      (f) =>
+        (f.type || 'text').toLowerCase() !== 'password' &&
+        !/one-time-code/i.test(f.autocomplete || '') &&
+        TENANT_FIELD_HINT.test(fieldText(f)),
+    )
+    if (!named.length) return null
+    // When the password box itself says the password is shared, the company box may be
+    // the same element the caller thinks is the username: the real site asks for the
+    // company code first, and only then for a personal username.
+    if (!strong) return named.find((f) => f !== usernameField) || null
+    return named.find((f) => f !== usernameField) || named[0]
+  }
+
   function isUsernameField(field) {
     if (field.tag !== 'input') return false
     const type = (field.type || 'text').toLowerCase()
@@ -193,7 +250,39 @@
       autocomplete: el.autocomplete || el.getAttribute('autocomplete') || '',
       placeholder: el.placeholder || '',
       ariaLabel: el.getAttribute('aria-label') || '',
+      // A form may label the box with a real <label> and leave the input itself
+      // anonymous. Without this, the shared-password stage of a two-step login is
+      // invisible to the classifier and its company box is never recognised.
+      label: labelText(el),
       inputMode: el.inputMode || '',
+    }
+  }
+
+  /**
+   * The text a person sees next to this box: <label for=...>, a wrapping <label>,
+   * aria-labelledby, or the nearest table header. Empty when there is none.
+   */
+  function labelText(el) {
+    try {
+      const doc = el.ownerDocument || document
+      const parts = []
+      if (el.id) {
+        const forLabel = doc.querySelector(`label[for="${el.id.replace(/"/g, '\\"')}"]`)
+        if (forLabel && forLabel.textContent) parts.push(forLabel.textContent)
+      }
+      const wrap = el.closest && el.closest('label')
+      if (wrap && wrap.textContent) parts.push(wrap.textContent)
+      const ids = (el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean)
+      for (const id of ids) {
+        const ref = doc.getElementById(id)
+        if (ref && ref.textContent) parts.push(ref.textContent)
+      }
+      const cell = el.closest && el.closest('td')
+      const head = cell && cell.parentElement && cell.parentElement.querySelector('th')
+      if (head && head.textContent) parts.push(head.textContent)
+      return parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 200)
+    } catch {
+      return ''
     }
   }
 
@@ -235,6 +324,7 @@
     credentialShape,
     shapeAround,
     isOtpField,
+    tenantField,
     isUsernameOnlyLoginStep,
     isUsernameOnlyStepAround,
     snapshotForm,

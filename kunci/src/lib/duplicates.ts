@@ -12,6 +12,8 @@ export interface DuplicateMember {
   name: string
   username: string
   host: string
+  /** Company/organisation the login belongs to, when the site asked for one. */
+  tenant?: string
   updatedAt: number
   createdAt: number
 }
@@ -129,9 +131,18 @@ export function relatedDuplicate(a: Entry, b: Entry): DuplicateReason | null {
   const nb = normEntryName(b)
   const sameName = Boolean(na && nb && na === nb && na.length >= 3)
   const samePass = Boolean(a.password && b.password && a.password === b.password)
+  const ta = tenantOf(a).toLowerCase()
+  const tb = tenantOf(b).toLowerCase()
 
   // Two accounts on the same site with different usernames are not duplicates.
   if (sameSite && ua && ub && !sameUser) return null
+  // Same site, same (or empty) username, but two different companies: a shared-login
+  // site where each company gets its own password. Keeping them is the only way the
+  // user can reach the right one, and "delete the others" would destroy a live login.
+  if (sameSite && ta && tb && ta !== tb) return null
+  // One company, two people. Those are separate accounts by definition, and the
+  // cluster's advice would be to delete one of them.
+  if (sameSite && ta && tb && ta === tb && ua && ub && !sameUser) return null
 
   if (sameSite && (sameUser || bothEmptyUser)) return 'same-site'
   if (host && layer && sameUser && samePass) return 'same-login'
@@ -149,15 +160,44 @@ function find(parent: number[], i: number): number {
   return i
 }
 
-function memberOf(entry: Entry): DuplicateMember {
+export function memberOf(entry: Entry): DuplicateMember {
   return {
     id: entry.id,
     name: entry.name || entry.appName || 'Tanpa nama',
     username: entry.username ?? '',
     host: entryHost(entry),
+    tenant: tenantOf(entry),
     updatedAt: entry.updatedAt,
     createdAt: entry.createdAt,
   }
+}
+
+/**
+ * Which company/organisation the login belongs to. A site that asks for a shared
+ * password before the personal one produces several rows that look identical except
+ * for the username; the company is the only thing that tells them apart.
+ */
+export function tenantOf(entry: Entry): string {
+  const field = (entry.customFields || []).find(
+    (f) => (f.label || '').toLowerCase() === 'perusahaan' || (f.label || '').toLowerCase() === 'company',
+  )
+  if (field?.value) return field.value
+  // appName is the same company on entries Kunci saved itself. It is only read when
+  // the name does NOT already carry it, so an older entry named "Talentradar · PT X"
+  // is not read as a company called "Talentradar · PT X".
+  if (entry.appName && entry.name && !entry.name.toLowerCase().includes(entry.appName.toLowerCase())) {
+    return entry.appName
+  }
+  // Neither field is there, but the name Kunci wrote is "Site · Company". That suffix
+  // is the company, and without it two companies on one site look like one duplicate.
+  const suffix = companyFromName(entry.name || '')
+  return suffix
+}
+
+/** The company suffix Kunci writes into a saved login name, or ''. */
+function companyFromName(name: string): string {
+  const at = name.indexOf(' · ')
+  return at > 0 ? name.slice(at + 3).trim() : ''
 }
 
 const REASON_COPY: Record<DuplicateReason, string> = {
@@ -224,13 +264,15 @@ export function findDuplicateClusters(entries: Entry[]): DuplicateCluster[] {
     const passwordConflict = passwords.length > 1
     const host = members.find((m) => m.host)?.host || members[0].name
     // Show the layer when it is not the site root, so two credentials on one host
-    // (site login vs payment PIN) are readable as different things.
+    // (site login vs payment PIN) are readable as different things. The company name
+    // goes on the title too: several logins for the same site differ ONLY by company.
     const layer = group.map(layerOf).find((p) => p && p !== '/') || ''
+    const tenant = group.map(tenantOf).find(Boolean) || ''
     const reason = reasonByRoot.get(root) ?? 'same-name'
     clusters.push({
       id: `dup-${members.map((m) => m.id).sort().join('-')}`,
       reason,
-      title: `${host}${layer}`,
+      title: `${host}${layer}${tenant ? ` · ${tenant}` : ''}`,
       detail: `${group.length} entri · ${REASON_COPY[reason]}`,
       suggestion: passwordConflict ? 'delete' : 'merge',
       keepId,

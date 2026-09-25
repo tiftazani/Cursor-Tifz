@@ -40,6 +40,15 @@ export async function exportDek(key: CryptoKey): Promise<Uint8Array> {
   return new Uint8Array(await crypto.subtle.exportKey('raw', key))
 }
 
+export async function sessionKey(key: CryptoKey): Promise<CryptoKey> {
+  const bytes = new Uint8Array(await crypto.subtle.exportKey('raw', key))
+  try {
+    return await crypto.subtle.importKey('raw', bytes as BufferSource, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
+  } finally {
+    bytes.fill(0)
+  }
+}
+
 export async function importDek(bytes: Uint8Array): Promise<CryptoKey> {
   return crypto.subtle.importKey('raw', bytes as BufferSource, { name: 'AES-GCM', length: 256 }, true, [
     'encrypt',

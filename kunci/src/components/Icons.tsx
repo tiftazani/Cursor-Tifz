@@ -125,7 +125,28 @@ export function IconNote(props: IconProps) {
 export function IconShield(props: IconProps) {
   return (
     <svg {...glyph(props)}>
-      <path d="M12 3l8 3v6c0 5-3.4 8.4-8 9.5C7.4 20.4 4 17 4 12V6l8-3z" />
+      <path d="M12 3.5 19 6v6c0 4.2-3 7.3-7 8.5-4-1.2-7-4.3-7-8.5V6z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  )
+}
+
+export function IconVault(props: IconProps) {
+  return (
+    <svg {...glyph(props)}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 8.8V7M12 17v-1.8M20.5 9h1M20.5 15h1" />
+    </svg>
+  )
+}
+
+export function IconSliders(props: IconProps) {
+  return (
+    <svg {...glyph(props)}>
+      <path d="M4 7h11M4 12h16M4 17h8" />
+      <circle cx="18" cy="7" r="2" />
+      <circle cx="15" cy="17" r="2" />
     </svg>
   )
 }

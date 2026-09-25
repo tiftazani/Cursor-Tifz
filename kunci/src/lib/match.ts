@@ -44,6 +44,85 @@ export function layerFromUrl(raw: string): string {
 }
 
 /**
+ * A site that asks for a shared password on every entry, then a personal username
+ * and password. One vault entry cannot carry two passwords, so what the user needs
+ * from such a site is a readable label: "which company code is this login for".
+ *
+ * The identifier is true only when the evidence is strong: a password box whose own
+ * text says organisation/company/workspace, or a field the page itself marked with
+ * autocomplete="organization" that is NOT the username. A by-password pair alone is
+ * never enough, because plenty of ordinary logins quietly collect a company name.
+ */
+// A word boundary is not usable on field names: "_" is a word character, so
+// /\bshared\b/ does NOT match "shared_password", and [ _-] runs like "company_code"
+// are exactly how these boxes are named. Split on a non-alphanumeric edge instead,
+// but keep the edge itself: a run inside another word ("someadmin") still must not
+// match, while "company_code" and "kode perusahaan" must.
+// Chrome 153 gets the same answer from a lookbehind; the older form is kept because
+// this file also runs where lookbehind is missing.
+const EDGE_START = '(^|[^A-Za-z0-9])'
+const EDGE_END = '($|[^A-Za-z0-9])'
+const EDGE_START_G = '([^A-Za-z0-9])'
+const TENANT_FIELD_HINT = new RegExp(
+  `${EDGE_START}(organization|organisation|company|tenant|workspace|team[ _-]?(code|id|name)|company[ _-]?(code|id)|kode[ _-]?(perusahaan|organisasi|tenant)|nama[ _-]?(perusahaan|organisasi)|perusahaan|organisasi)${EDGE_END}`,
+  'i',
+)
+const TENANT_PASSWORD_HINT = new RegExp(
+  `${EDGE_START_G}(shared|company|organisation|organization|tenant|org|group|team|master|parent|admin)${EDGE_END}`,
+  'i',
+)
+
+export type TenantField = {
+  name?: string
+  id?: string
+  autocomplete?: string
+  placeholder?: string
+  ariaLabel?: string
+  label?: string
+  type?: string
+  tag?: string
+}
+
+/**
+ * Everything a person can read on or beside the box. The label element is included
+ * because plenty of forms label by `<label>Kode perusahaan</label>` and leave the
+ * input itself anonymous, which is exactly how the shared-password stage is built.
+ */
+function fieldText(field: TenantField): string {
+  return `${field.name || ''} ${field.id || ''} ${field.autocomplete || ''} ${field.placeholder || ''} ${field.ariaLabel || ''} ${field.label || ''}`
+}
+
+/**
+ * The company box of a two-password form, or null.
+ *
+ * Two password boxes in one form is not normal, and when it happens the second
+ * secret is almost always something else: a PIN, a confirmation box, a new password.
+ * A field only counts as the company when its own text says so, and never when that
+ * field is the username.
+ */
+export function tenantField(
+  form: { fields?: TenantField[] },
+  usernameField?: TenantField | null,
+): TenantField | null {
+  const fields = (form?.fields || []).filter((f) => f && f.tag !== 'select')
+  const passwordFields = fields.filter((f) => (f.type || '').toLowerCase() === 'password')
+  if (passwordFields.length < 2) return null
+  const strong = passwordFields.some((f) => TENANT_PASSWORD_HINT.test(fieldText(f)))
+  const named = fields.filter(
+    (f) =>
+      (f.type || 'text').toLowerCase() !== 'password' &&
+      !/one-time-code/i.test(f.autocomplete || '') &&
+      TENANT_FIELD_HINT.test(fieldText(f)),
+  )
+  if (!named.length) return null
+  // When the password box itself says the password is shared, the company box may be
+  // the same element the caller thinks is the username: the real site asks for the
+  // company code first, and only then for a personal username.
+  if (!strong) return named.find((f) => f !== usernameField) || null
+  return named.find((f) => f !== usernameField) || named[0]!
+}
+
+/**
  * Whether a url is an Android app login, which Chrome's Android export writes as
  *   android://<credential>@<package>/
  * The credential is base64, so the whole url is never a usable label, and the

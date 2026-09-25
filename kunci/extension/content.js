@@ -257,7 +257,31 @@ function readFormCreds(form) {
   const username = (userEl?.value || lastUsername || '').trim()
   const password = pw?.value || lastPassword || ''
   const kind = pw ? kindAround(pw) : form ? intent.classifyAround(form instanceof Element ? form : document.body).kind : lastKind
-  return { username, password, kind }
+  return { username, password, kind, field: pw || null }
+}
+
+function tenantValueNear(pw) {
+  try {
+    const form = pw instanceof Element ? pw.closest('form') : null
+    const snap = intent.snapshotForm(form, location.href)
+    const userEl = pw ? usernameFieldNear(pw) : null
+    const tenantEl = intent.tenantField(snap, userEl ? fieldSnap(userEl) : null)
+    if (!tenantEl) return ''
+    const dom = findFieldIn(form, tenantEl)
+    return ((dom && dom.value) || '').trim()
+  } catch {
+    return ''
+  }
+}
+
+function findFieldIn(form, snapshot) {
+  const scope = form || document
+  for (const el of scope.querySelectorAll('input')) {
+    const snap = fieldSnap(el)
+    if (snap.name && snap.name === snapshot.name) return el
+    if (snap.id && snap.id === snapshot.id) return el
+  }
+  return null
 }
 
 function captureFromEvent(target) {
@@ -270,7 +294,22 @@ function captureFromEvent(target) {
   if (creds.username) lastUsername = creds.username
   if (creds.password) lastPassword = creds.password
   lastKind = creds.kind
-  return creds
+  const tenant = tenantValueNear(creds.field)
+  // No tenant box at all is not a missing answer: only a form that has one and was
+  // submitted empty is worth warning about.
+  const tenantEl = tenantBoxFor(creds.field)
+  return { ...creds, tenant, missingTenant: Boolean(tenantEl) && !tenant }
+}
+
+function tenantBoxFor(pw) {
+  try {
+    const form = pw instanceof Element ? pw.closest('form') : null
+    const snap = intent.snapshotForm(form, location.href)
+    const userEl = pw ? usernameFieldNear(pw) : null
+    return intent.tenantField(snap, userEl ? fieldSnap(userEl) : null)
+  } catch {
+    return null
+  }
 }
 
 function iconSvg() {
@@ -469,6 +508,7 @@ function barStyles() {
     .copy { flex: 1; min-width: 0; }
     .copy strong { display: block; font-size: 13px; }
     .copy span { color: #8b97a8; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .copy .notice { display: block; margin-top: 4px; font-style: normal; font-size: 12px; line-height: 1.35; color: #f0b46b; }
     button {
       appearance: none; border: 1px solid rgba(255,255,255,.1); background: #1b232e;
       color: #eef3f8; border-radius: 8px; padding: 7px 10px; cursor: pointer; font: inherit; height: 32px;
@@ -477,17 +517,20 @@ function barStyles() {
   `
 }
 
-function mountBar(existing, { title, subtitle, actions, sticky }) {
+function mountBar(existing, { title, subtitle, notice, actions, sticky }) {
   existing?.remove()
   const host = document.createElement('div')
   host.dataset.kunciBar = sticky ? 'save' : 'other'
-  host.style.cssText = 'position:fixed;z-index:2147483646;top:12px;left:50%;transform:translateX(-50%);'
+  host.style.cssText = 'position:fixed;z-index:2147483646;top:12px;left:50%;transform:translateX(-50%);max-width:min(420px,100vw - 24px)'
   const shadow = host.attachShadow({ mode: 'closed' })
   const wrap = document.createElement('div')
   wrap.className = 'bar'
-  wrap.innerHTML = `<div class="mark">${iconSvg()}</div><div class="copy"><strong></strong><span></span></div>`
+  wrap.innerHTML = `<div class="mark">${iconSvg()}</div><div class="copy"><strong></strong><span></span><em class="notice"></em></div>`
   wrap.querySelector('strong').textContent = title
   wrap.querySelector('span').textContent = subtitle
+  const noticeEl = wrap.querySelector('.notice')
+  if (notice) noticeEl.textContent = notice
+  else noticeEl.remove()
   for (const action of actions) {
     const btn = document.createElement('button')
     if (action.primary) btn.className = 'primary'
@@ -530,7 +573,8 @@ function showSaveBar(pending) {
   saveBarHost = mountBar(saveBarHost, {
     sticky: true,
     title: pending.action === 'update' ? 'Perbarui password masuk di Kunci?' : 'Simpan login ke Kunci?',
-    subtitle: capture.username ? `${capture.username} · ${hostName}` : hostName,
+    subtitle: `${capture.tenant ? `Perusahaan: ${capture.tenant} · ` : ''}${capture.username ? `${capture.username} · ${hostName}` : hostName}`,
+    notice: '',
     actions: [
       {
         label: pending.action === 'update' ? 'Perbarui' : 'Simpan',

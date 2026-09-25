@@ -159,6 +159,9 @@ export function decideLoginSave(entries, capture, neverHosts = []) {
   const username = (capture.username || '').trim()
   const password = capture.password || ''
   if (!password) return { action: 'skip', reason: 'empty' }
+  // Mirrors isSharedPasswordStage in src/lib/capture.ts: the shared stage is a step
+  // towards the real login, saved on the next screen with a username.
+  if (capture.missingTenant) return { action: 'skip', reason: 'shared-password' }
   if (isKunciAppUrl(capture.url)) return { action: 'skip', reason: 'kunci-app' }
   const host = hostFromUrl(capture.url)
   if (host && neverHosts.includes(host)) return { action: 'skip', reason: 'never' }
@@ -195,10 +198,35 @@ function newEntryId() {
   }
 }
 
+const TENANT_LABEL = 'Perusahaan'
+const TENANT_ID = 'kunci-tenant-field'
+
+/** True when the entry's name already tells the user which company it belongs to. */
+function tenantTitleCovers(entry, tenant) {
+  return `${entry.name || ''} ${entry.appName || ''}`.toLowerCase().includes(tenant.toLowerCase())
+}
+
+/**
+ * Keep the company in a real field, so it is searchable and readable in the pane.
+ *
+ * Mirrors withTenantField in src/lib/capture.ts. The id is fixed rather than derived
+ * from the entry id, so updating an entry does not leave a second company field behind.
+ */
+function withTenantField(entry, tenant, now) {
+  const fields = entry.customFields || []
+  if (!tenant) return fields
+  const existing = fields.find(
+    (f) => (f.label || '').toLowerCase() === TENANT_LABEL.toLowerCase() || f.id === TENANT_ID,
+  )
+  if (existing) return fields.map((f) => (f.id === existing.id ? { ...f, value: tenant } : f))
+  return [...fields, { id: TENANT_ID, label: TENANT_LABEL, value: tenant, hidden: false, createdAt: now }]
+}
+
 export function applyLoginCapture(entries, capture, now = Date.now()) {
   const decision = decideLoginSave(entries, capture)
   if (decision.action === 'skip') return { entries, changed: 'skip', decision }
   const username = (capture.username || '').trim()
+  const tenant = (capture.tenant || '').trim()
   const url = (capture.url || '').split('#')[0]
   if (decision.action === 'update') {
     const prev = entries.find((e) => e.id === decision.entryId)
@@ -207,12 +235,16 @@ export function applyLoginCapture(entries, capture, now = Date.now()) {
       (prev.password || '') !== capture.password || (prev.username || '') !== username
         ? [{ id: newEntryId(), username: prev.username, password: prev.password, changedAt: now }, ...(prev.history || [])].slice(0, 50)
         : prev.history || []
+    const named = tenant && !tenantTitleCovers(prev, tenant)
     const saved = {
       ...prev,
+      name: named ? `${prev.name} · ${tenant}` : prev.name,
       username: username || prev.username,
       password: capture.password,
+      appName: tenant || prev.appName,
       url: prev.url || url,
       urls: [...new Set([...(prev.urls || []), url, prev.url].filter(Boolean))],
+      customFields: withTenantField(prev, tenant, now),
       history,
       updatedAt: now,
       lastUsedAt: now,
@@ -224,17 +256,19 @@ export function applyLoginCapture(entries, capture, now = Date.now()) {
       entries: entries.map((e) => (e.id === saved.id ? saved : e)),
     }
   }
+  const customFields = withTenantField({ customFields: [] }, tenant, now)
   const created = {
     id: newEntryId(),
     type: 'login',
-    name: loginTitleFromUrl(capture.url),
+    name: tenant ? `${loginTitleFromUrl(capture.url)} · ${tenant}` : loginTitleFromUrl(capture.url),
     username: username || undefined,
     password: capture.password,
+    appName: tenant || undefined,
     url,
     urls: [url],
     tags: [],
     favorite: false,
-    customFields: [],
+    customFields,
     history: [],
     createdAt: now,
     updatedAt: now,

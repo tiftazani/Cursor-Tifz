@@ -86,7 +86,7 @@ body,
 body {
   margin: 0;
   font-family: var(--font);
-  background: var(--bg);
+  background: linear-gradient(160deg, #1c2f66 0%, #2f58c4 48%, #9db4f0 100%);
   color: var(--text);
   min-height: 100%;
   line-height: 1.45;
@@ -2309,6 +2309,20 @@ button.sev {
   .prio-b .btn {
     width: 100%;
   }
+}
+
+/* The blue frame separates the personal vault from the browser window. */
+@media (min-width: 1101px) {
+  .shell { inset: 14px max(14px, calc((100vw - 1440px) / 2)) 0; height:auto;max-height:none;padding:0;border-radius:18px 18px 0 0;background:var(--bg);box-shadow:0 30px 80px rgba(10,20,50,.35); }
+  .sidebar { padding:0 14px 14px; }
+  .brand-side { margin:0 -14px 14px;padding:18px 22px;border-bottom:1px solid var(--line); }
+  .sidebar nav { gap:2px; }
+  .nav-item { border-radius:8px;font-weight:520;color:var(--text); }
+  .nav-item.active { background:var(--accent);color:var(--accent-text);box-shadow:none;font-weight:620; }
+  .nav-badge.nav-badge { background:color-mix(in srgb,var(--danger) 12%,var(--bg-2));color:var(--danger); }
+  .nav-item.active .nav-badge { background:var(--bg-2);color:var(--danger); }
+  .nav-group { margin:18px 10px 4px; }
+  .sidebar-foot { border-top:1px solid var(--line); }
 }
 
 /* The v2 layout puts the vault overview before the action panels. */

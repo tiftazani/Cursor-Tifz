@@ -12,8 +12,9 @@ import {
   IconSearch,
   IconSettings,
   IconShield,
-  IconSpark,
   IconStar,
+  IconVault,
+  IconSliders,
 } from '../components/Icons'
 import { VSplit } from '../components/VSplit'
 import { searchEntries } from '../lib/search'
@@ -45,9 +46,9 @@ import { QuickFind } from './QuickFind'
 // ignores it.
 const NAV: { id: AppView; label: string; icon: typeof IconKey; group?: string }[] = [
   { id: 'home', label: 'Ringkasan', icon: IconHome },
-  { id: 'vault', label: 'Brankas', icon: IconKey },
+  { id: 'vault', label: 'Brankas', icon: IconVault },
   { id: 'health', label: 'Kesehatan', icon: IconShield },
-  { id: 'generator', label: 'Generator', icon: IconSpark },
+  { id: 'generator', label: 'Generator', icon: IconSliders },
   { id: 'history', label: 'Riwayat', icon: IconClock },
   { id: 'autofill', label: 'Isi otomatis', icon: IconFill, group: 'Perangkat dan data' },
   { id: 'backup', label: 'Cadangan', icon: IconDownload },

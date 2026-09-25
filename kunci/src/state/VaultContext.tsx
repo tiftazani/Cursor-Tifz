@@ -7,6 +7,7 @@ import {
   hasRecoveryWrap,
   persistWithKey,
   rewrapWithPassword,
+  sessionKey,
   unlockBlob,
   unlockWithDek,
   unlockWithRecoveryKey,
@@ -25,6 +26,7 @@ import { RECOVERY_EMAIL } from '../lib/account'
 import { localToken } from '../lib/recovery-api'
 import { cloudGetVault, cloudPutVault, emailRecoveryKey, isPublicHost, logoutSession } from '../lib/cloud'
 import { resolveAutoLockSeconds } from '../lib/autolock'
+import { refreshSession } from '../lib/refresh-session'
 import { matchAppName } from '../lib/capture'
 import { moveAndroidToTrash } from '../lib/cleanup'
 import { isPreviewUi, previewVault } from '../lib/preview-vault'
@@ -153,6 +155,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       return
     }
     let cancelled = false
+    refreshSession.cleanupOld()
     void (async () => {
       try {
         let blob = (await vaultDb.getBlob()) ?? null
@@ -172,7 +175,28 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         setHintState(storedHint)
         setBackups(storedBackups)
         setBackupFolderName(dir?.name ?? null)
-        setStatus(blob ? 'locked' : 'setup')
+        if (blob) {
+          const key = await refreshSession.restore(blob, Date.now(), -1)
+          if (key) {
+            try {
+              const restored = normalizeVault(await unlockWithDek<unknown>(blob, key))
+              if (cancelled) return
+              if (!await refreshSession.restore(blob, Date.now(), resolveAutoLockSeconds(restored.settings))) {
+                throw new Error('Sesi tidak aktif')
+              }
+              keyRef.current = key
+              vaultRef.current = restored
+              setVault(restored)
+              setStatus('unlocked')
+            } catch {
+              await refreshSession.clear()
+              if (!cancelled) setStatus('locked')
+            }
+          } else setStatus('locked')
+        } else {
+          await refreshSession.clear()
+          setStatus('setup')
+        }
         requestExtensionBlob()
       } catch {
         if (!cancelled) setStatus('setup')
@@ -311,6 +335,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         setHintState(newHint)
         setVault(initial)
         setStatus('unlocked')
+        await refreshSession.save(await sessionKey(key), blob, Date.now())
         setRecoveryWrapReady(true)
         setPendingRecoveryKey(recoveryKey)
         syncExtension(blob)
@@ -364,6 +389,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         const next = normalizeVault(unlocked.data)
         setVault(next)
         setStatus('unlocked')
+        await refreshSession.save(await sessionKey(key), nextBlob, Date.now())
         syncExtension(nextBlob)
       } catch {
         throw new Error('Kata sandi induk salah')
@@ -375,6 +401,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   )
 
   const lock = useCallback(() => {
+    void refreshSession.clear()
     keyRef.current = null
     setVault(null)
     setStatus('locked')
@@ -537,6 +564,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       keyRef.current = key
       blobRef.current = nextBlob
       await vaultDb.setBlob(nextBlob)
+      await refreshSession.save(await sessionKey(key), nextBlob, Date.now())
       syncExtension(nextBlob)
       try {
         await cloudPutVault(nextBlob)
@@ -566,6 +594,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         const next = normalizeVault(data)
         setVault(next)
         setStatus('unlocked')
+        await refreshSession.save(await sessionKey(dek), nextBlob, Date.now())
         setRecoveryWrapReady(true)
         syncExtension(nextBlob)
         try {
@@ -612,6 +641,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   }, [pendingRecoveryKey])
 
   const logoutPublic = useCallback(async () => {
+    await refreshSession.clear()
     await logoutSession()
     keyRef.current = null
     setVault(null)
@@ -837,6 +867,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   )
 
   const destroyVault = useCallback(async () => {
+    await refreshSession.clear()
     await vaultDb.destroy()
     keyRef.current = null
     blobRef.current = null
@@ -854,9 +885,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (status !== 'unlocked' || !vault) return
     const seconds = resolveAutoLockSeconds(vault.settings)
-    if (seconds < 0) return
-
     const lockNow = () => lock()
+    if (seconds < 0) return
+    const onVisible = () => {
+      if (document.hidden) return
+      void refreshSession.restore(blobRef.current!, Date.now(), seconds).then((key) => {
+        if (!key) lockNow()
+      })
+    }
 
     if (seconds === 0) {
       const onVisibility = () => {
@@ -873,17 +909,25 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
     let timer: number
     const bump = () => {
-      window.clearTimeout(timer)
-      timer = window.setTimeout(lockNow, seconds * 1000)
+      const blob = blobRef.current
+      if (!blob) return lockNow()
+      void refreshSession.touch(blob, Date.now(), seconds).then((valid) => {
+        if (keyRef.current === null) return
+        if (!valid) { lockNow(); return }
+        window.clearTimeout(timer)
+        timer = window.setTimeout(lockNow, seconds * 1000)
+      })
     }
-    bump()
+    timer = window.setTimeout(lockNow, seconds * 1000)
     const opts = { passive: true } as const
     window.addEventListener('pointerdown', bump, opts)
     window.addEventListener('keydown', bump)
     window.addEventListener('mousemove', bump, opts)
     window.addEventListener('scroll', bump, opts)
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('pointerdown', bump)
       window.removeEventListener('keydown', bump)
       window.removeEventListener('mousemove', bump)
