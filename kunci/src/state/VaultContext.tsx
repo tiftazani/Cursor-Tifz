@@ -26,6 +26,8 @@ import { RECOVERY_EMAIL } from '../lib/account'
 import { localToken } from '../lib/recovery-api'
 import { cloudGetVault, cloudPutVault, emailRecoveryKey, isPublicHost, logoutSession } from '../lib/cloud'
 import { resolveAutoLockSeconds } from '../lib/autolock'
+import { checkableEntries, checkableUrl, deadLinks, recordCheck, type UrlHealthRecord } from '../lib/dead-links'
+import { checkHosts } from '../lib/dead-link-probe'
 import { refreshSession } from '../lib/refresh-session'
 import { matchAppName } from '../lib/capture'
 import { moveAndroidToTrash } from '../lib/cleanup'
@@ -70,8 +72,15 @@ interface VaultApi {
   emptyTrash: () => Promise<void>
   /** Move a whole selection to the trash in one write. Returns how many moved. */
   trashEntries: (ids: string[]) => Promise<number>
-  /** Delete a selection from the trash for good. Returns how many were removed. */
+  /** Delete a selection from the trash for good, in one write. Returns how many were removed. */
   purgeEntries: (ids: string[]) => Promise<number>
+  /**
+   * Visit the saved sites and record which names no longer resolve.
+   *
+   * Returns how many were newly confirmed dead. `onProgress` reports progress so the
+   * page can show movement instead of appearing stuck during a long run.
+   */
+  checkLinks: (onProgress?: (done: number, total: number) => void) => Promise<number>
   /** Move every Android app login to the trash. Returns how many moved. */
   removeAndroidEntries: () => Promise<number>
   touchEntry: (id: string) => Promise<void>
@@ -106,6 +115,7 @@ function normalizeVault(raw: unknown): Vault {
       ...settingsIn,
       autoLockSeconds: resolveAutoLockSeconds(settingsIn),
     },
+    linkHealth: (v.linkHealth && typeof v.linkHealth === 'object') ? v.linkHealth : {},
   }
 }
 
@@ -531,6 +541,42 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       setVault(next)
       await persist(next)
       return found.length
+    },
+    [persist],
+  )
+
+  const checkLinks = useCallback(
+    async (onProgress?: (done: number, total: number) => void): Promise<number> => {
+      const current = vaultRef.current
+      if (!current) return 0
+      const targets = checkableEntries(current.entries)
+      if (!targets.length) return 0
+      const hosts = targets.map((e) => checkableUrl(e)!).filter(Boolean)
+      const checks = await checkHosts(hosts, onProgress)
+
+      // Build the next records from the current vault, not from a snapshot taken before
+      // the probes ran, so anything saved during a long check is not thrown away.
+      const latest = vaultRef.current
+      if (!latest) return 0
+      const records: Record<string, UrlHealthRecord> = { ...(latest.linkHealth ?? {}) }
+      const now = Date.now()
+      let confirmed = 0
+      const before = new Set(deadLinks(latest.entries, records).map((l) => l.entryId))
+
+      targets.forEach((entry, i) => {
+        const url = checkableUrl(entry)
+        const check = checks[i]
+        if (!url || !check) return
+        records[entry.id] = recordCheck(records[entry.id], entry.id, url, check, now)
+      })
+
+      const next: Vault = { ...latest, linkHealth: records }
+      const after = new Set(deadLinks(next.entries, records).map((l) => l.entryId))
+      for (const id of after) if (!before.has(id)) confirmed++
+
+      setVault(next)
+      await persist(next)
+      return confirmed
     },
     [persist],
   )
@@ -1080,6 +1126,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       emptyTrash,
       trashEntries,
       purgeEntries,
+      checkLinks,
       removeAndroidEntries,
       touchEntry,
       updateSettings,
@@ -1133,6 +1180,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       emptyTrash,
       trashEntries,
       purgeEntries,
+      checkLinks,
       removeAndroidEntries,
       touchEntry,
       updateSettings,

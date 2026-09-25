@@ -1,5 +1,9 @@
 export type EntryType = 'login' | 'app' | 'password' | 'note' | 'totp'
 
+// The shape of a stored finding, imported rather than redeclared so the rule that
+// produces it and the vault that keeps it cannot drift apart.
+import type { UrlHealthRecord } from './lib/dead-links'
+
 export interface HistoryRecord {
   id: string
   username?: string
@@ -57,6 +61,14 @@ export interface Vault {
   entries: Entry[]
   trash: Entry[]
   settings: VaultSettings
+  /**
+   * Evidence about sites that have gone away, keyed by entry id.
+   *
+   * Kept in the vault, so it is encrypted with everything else and survives a reload.
+   * It also means a finding is a stored fact the user can argue with, not something the
+   * page re-invents on every visit.
+   */
+  linkHealth?: Record<string, UrlHealthRecord>
 }
 
 export interface EncryptedBlob {

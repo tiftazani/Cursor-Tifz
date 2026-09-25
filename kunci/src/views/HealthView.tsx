@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react'
 import { analyzeHealth, sortHealthIssues, summarizeIssues, type HealthIssue, type IssueKind } from '../lib/health'
 import { pwnedCount } from '../lib/hibp'
+import {
+  canStartCheck,
+  checkDisclosure,
+  checkableEntries,
+  deadLinkDetail,
+  deadLinks,
+  remainingCount,
+  DEAD_DAYS,
+} from '../lib/dead-links'
 import { useVault } from '../state/VaultContext'
 import { IconShield } from '../components/Icons'
 
@@ -19,12 +28,17 @@ const KIND_TEXT: Record<IssueKind, { tag: string; title: string; body: string }>
 }
 
 export function HealthView({ onOpen }: { onOpen: (id: string) => void }) {
-  const { vault } = useVault()
+  const { vault, checkLinks } = useVault()
   const [pwned, setPwned] = useState<{ id: string; count: number }[] | null>(null)
   const [checking, setChecking] = useState(false)
   const [checkedAt, setCheckedAt] = useState<number | null>(null)
   const [checkedSignature, setCheckedSignature] = useState('')
   const [error, setError] = useState('')
+  // Link checking. `linkProgress` is null until a run starts, so "running" and "never
+  // run" never look the same.
+  const [linkAgreed, setLinkAgreed] = useState(false)
+  const [linkProgress, setLinkProgress] = useState<{ done: number; total: number } | null>(null)
+  const [linkResult, setLinkResult] = useState('')
   const [tab, setTab] = useState<'sum' | 'list'>('sum')
   const [kindFilter, setKindFilter] = useState<IssueKind | null>(null)
   // Track revisions, never keep plaintext passwords in React state for cache invalidation.
@@ -124,6 +138,91 @@ export function HealthView({ onOpen }: { onOpen: (id: string) => void }) {
     </section>
   )
 
+  const linkTargets = checkableEntries(vault.entries)
+  const gone = deadLinks(vault.entries, vault.linkHealth ?? {})
+  const linkRunning = linkProgress !== null
+  const lastLinkCheck = Object.values(vault.linkHealth ?? {}).reduce((max, r) => Math.max(max, r.lastAt), 0)
+
+  async function runLinkCheck() {
+    setLinkProgress({ done: 0, total: linkTargets.length })
+    setLinkResult('')
+    try {
+      const confirmed = await checkLinks((done, total) => setLinkProgress({ done, total }))
+      setLinkResult(
+        confirmed > 0
+          ? `${confirmed} situs baru dipastikan tidak ada lagi.`
+          : 'Tidak ada situs baru yang dipastikan hilang pada pemeriksaan ini.',
+      )
+    } catch (err) {
+      setLinkResult(err instanceof Error ? err.message : 'Gagal memeriksa alamat situs')
+    } finally {
+      setLinkProgress(null)
+    }
+  }
+
+  const deadCard = (
+    <section className={`card prio ${gone.length === 0 ? 'prio-ok' : ''}`}>
+      <div className="prio-h">
+        <span className="prio-i">
+          <IconShield size={20} />
+        </span>
+        <div>
+          <h3>
+            {gone.length === 0
+              ? 'Semua alamat situs masih ditemukan'
+              : `${gone.length} situs sudah tidak ada lagi`}
+          </h3>
+          <p>
+            Kunci menghubungi tiap alamat dari komputer ini. Yang alamatnya sudah tidak ditemukan
+            sama sekali ditandai setelah gagal pada {DEAD_DAYS} hari berbeda, supaya situs yang
+            hanya sedang bermasalah tidak ikut tertandai. Situs yang tutup tapi alamatnya masih
+            hidup tidak bisa dideteksi dengan cara ini.
+          </p>
+        </div>
+      </div>
+      {gone.length > 0 ? (
+        <ul className="issue-list">
+          {gone.map((l) => (
+            <li key={l.entryId}>
+              <button type="button" className="linkish" onClick={() => onOpen(l.entryId)}>
+                {l.entryName || 'Tanpa nama'}
+              </button>
+              <span className="sev sev-hi">Tidak ada</span>
+              <span className="muted">{deadLinkDetail(l)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="prio-b">
+        <span className="muted small">
+          {linkTargets.length === 0
+            ? 'Tidak ada entri dengan alamat situs yang bisa diperiksa'
+            : `${linkTargets.length} alamat bisa diperiksa · ${
+                lastLinkCheck ? `Terakhir diperiksa ${new Date(lastLinkCheck).toLocaleString('id-ID')}` : 'Belum pernah diperiksa'
+              }`}
+        </span>
+        <button
+          type="button"
+          className={gone.length === 0 && lastLinkCheck === 0 ? 'btn btn-primary' : 'btn'}
+          onClick={() => (linkAgreed ? void runLinkCheck() : setLinkAgreed(true))}
+          disabled={linkRunning || !canStartCheck({ total: linkTargets.length, running: linkRunning })}
+        >
+          {linkRunning
+            ? `Memeriksa… sisa ${remainingCount(linkProgress!.total, linkProgress!.done)}`
+            : linkAgreed
+              ? 'Mulai periksa'
+              : lastLinkCheck
+                ? 'Periksa ulang'
+                : 'Periksa alamat situs'}
+        </button>
+      </div>
+      {linkAgreed && !linkRunning && !linkResult ? (
+        <p className="muted small prio-err">{checkDisclosure(linkTargets.length)}</p>
+      ) : null}
+      {linkResult ? <p className="muted small prio-err">{linkResult}</p> : null}
+    </section>
+  )
+
   const habits = summary.byKind.filter((k) => k.kind !== 'pwned')
 
   return (
@@ -145,6 +244,7 @@ export function HealthView({ onOpen }: { onOpen: (id: string) => void }) {
       {tab === 'sum' ? (
         <>
           {breachCard}
+          {deadCard}
           <div className="split sec-h">
             <h3>Kebiasaan sandi</h3>
             <span className="muted small">

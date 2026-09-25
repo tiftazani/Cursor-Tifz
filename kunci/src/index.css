@@ -1374,6 +1374,28 @@ button.dash-stat {
   border-bottom: 1px solid var(--line);
 }
 
+/* A finding's explanation is a sentence, not a label, so it has to be allowed to wrap.
+   Without this it stayed on one line and ran into the card border. */
+/* ponytail: only the detail needs it; the name and badge stay on one line by design. */
+.issue-list li .muted {
+  min-width: 0;
+  flex: 1 1 auto;
+  text-align: right;
+}
+
+/* A priority card is built from padded blocks, so any list added directly inside one
+   sits flush against the border. Give it the same side padding the blocks use. */
+.prio > .issue-list {
+  padding: 0 18px;
+}
+
+@media (max-width: 560px) {
+  .issue-list li .muted {
+    text-align: left;
+    flex-basis: 100%;
+  }
+}
+
 /* Username above the date, not run together on one line: as bare inline elements
    "tifta" and "9 Sep 2026, 09.03" rendered as "tifta9 Sep 2026, 09.03". */
 .history-who {
