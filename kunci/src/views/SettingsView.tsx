@@ -9,6 +9,55 @@ import { unlockErrorMessage } from '../lib/crypto'
 import { useVault } from '../state/VaultContext'
 import { useToast } from '../components/Toast'
 
+/** A number box that commits only a real value. Writing straight from `onChange`
+ *  meant clearing the box wrote `Number('')` = 0: the clipboard auto-clear turned
+ *  itself off, and the copy gap announced "Password menyusul 0 detik". `min` and
+ *  `max` are HTML hints React never enforces, so clamping happens here too. */
+function NumberField({
+  label,
+  value,
+  min,
+  max,
+  onCommit,
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  onCommit: (n: number) => void
+}) {
+  const [text, setText] = useState(String(value))
+  // Keep the box in step when the stored value changes underneath it (another
+  // window, a reset). Adjusted during render rather than in an effect, which is
+  // the pattern React recommends for deriving state from props.
+  const [lastValue, setLastValue] = useState(value)
+  if (value !== lastValue) {
+    setLastValue(value)
+    setText(String(value))
+  }
+  return (
+    <Field label={label}>
+      <TextInput
+        type="number"
+        min={min}
+        max={max}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => {
+          const n = Number(text)
+          if (text.trim() === '' || !Number.isFinite(n)) {
+            setText(String(value))
+            return
+          }
+          const clamped = Math.min(max, Math.max(min, Math.round(n)))
+          setText(String(clamped))
+          if (clamped !== value) onCommit(clamped)
+        }}
+      />
+    </Field>
+  )
+}
+
 export function SettingsView() {
   const {
     vault,
@@ -94,24 +143,20 @@ export function SettingsView() {
             ))}
           </select>
         </Field>
-        <Field label="Hapus papan klip (detik, 0 = jangan)">
-          <TextInput
-            type="number"
-            min={0}
-            max={120}
-            value={s.clipboardSeconds}
-            onChange={(e) => void updateSettings({ clipboardSeconds: Number(e.target.value) })}
-          />
-        </Field>
-        <Field label="Jeda salin berurutan (detik)">
-          <TextInput
-            type="number"
-            min={2}
-            max={20}
-            value={s.sequentialCopySeconds}
-            onChange={(e) => void updateSettings({ sequentialCopySeconds: Number(e.target.value) })}
-          />
-        </Field>
+        <NumberField
+          label="Hapus papan klip (detik, 0 = jangan)"
+          value={s.clipboardSeconds}
+          min={0}
+          max={120}
+          onCommit={(n) => void updateSettings({ clipboardSeconds: n })}
+        />
+        <NumberField
+          label="Jeda salin berurutan (detik)"
+          value={s.sequentialCopySeconds}
+          min={2}
+          max={20}
+          onCommit={(n) => void updateSettings({ sequentialCopySeconds: n })}
+        />
         <label className="check">
           <input
             type="checkbox"

@@ -63,6 +63,7 @@ export function RecoveryKeyModal({
                 setBusy(true)
                 void onEmail()
                   .then((ok) => setEmailed(ok ? 'ok' : 'fail'))
+                  .catch(() => setEmailed('fail'))
                   .finally(() => setBusy(false))
               }}
             >

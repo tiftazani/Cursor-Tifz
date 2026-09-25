@@ -111,7 +111,33 @@ describe('an unsaved draft is not thrown away silently', () => {
     // and the local draft died with it — the entry silently reverted.
     expect(appShell).toContain('draftDirty')
     expect(appShell).toContain('Ada suntingan yang belum disimpan')
-    expect(appShell).toMatch(/draftDirty \? '' : `-\$\{filter\}`/)
+    // The pane key must NOT be derived from `draftDirty`. An earlier attempt keyed
+    // it on that flag, which remounted the pane the moment the first keystroke set
+    // it — every edit was destroyed as it was typed and no entry could be saved.
+    expect(appShell).not.toMatch(/key=\{`\$\{selected\.id\}-\$\{selected\.updatedAt\}\$\{draftDirty/)
+    expect(appShell).toContain('key={`${selected.id}-${selected.updatedAt}-${paneEpoch}`}')
+    expect(appShell).toContain('const [paneEpoch, setPaneEpoch] = useState(0)')
+    // Dropping the draft on purpose is what bumps the epoch.
+    const confirmFn = appShell.slice(appShell.indexOf('function confirmDiscard'))
+    expect(confirmFn.slice(0, 500)).toContain('setPaneEpoch((e) => e + 1)')
+  })
+
+  it('a keydown handler that registers once still sees the current guard', () => {
+    // The listener's deps are `[lock]`, so it closed over the `startNew` from the
+    // first render — where `draftDirty` was false. ⌘N then skipped the confirm
+    // while the mouse button asked correctly. A ref keeps it current.
+    expect(appShell).toContain('const startNewRef = useRef(startNew)')
+    expect(appShell).toContain('startNewRef.current = startNew')
+    const onKey = appShell.slice(appShell.indexOf('function onKey'))
+    expect(onKey.slice(0, 400)).toContain('startNewRef.current()')
+    expect(onKey.slice(0, 400)).not.toMatch(/^\s*startNew\(\)$/m)
+  })
+
+  it('the compact back button asks too', () => {
+    // In the phone layout this is the only exit from the detail pane, so it is the
+    // one door that matters most there.
+    const back = appShell.slice(appShell.indexOf('function backToList'))
+    expect(back.slice(0, 300)).toContain("confirmDiscard('kembali ke daftar')")
   })
 
   it('every path that unmounts the pane goes through the same guard', () => {
@@ -203,6 +229,50 @@ describe('a rejected vault action never escapes unhandled', () => {
     const save = entryPane.slice(entryPane.indexOf('async function save()'))
     const body = save.slice(0, 1100)
     expect(body).toContain("toast.push(err instanceof Error ? err.message : 'Gagal menyimpan', 'danger')")
+  })
+})
+
+describe('a number box cannot silently write 0', () => {
+  it('settings numbers commit only a clamped, non-empty value', () => {
+    // Live before: `onChange={(e) => void updateSettings({ clipboardSeconds:
+    // Number(e.target.value) })}`. Clearing the box wrote 0, which the clipboard
+    // code reads as "never auto-clear", and the copy gap announced
+    // "Password menyusul 0 detik". `min`/`max` are HTML hints React never enforces.
+    const settings = read('src/views/SettingsView.tsx')
+    expect(settings).toContain('function NumberField(')
+    expect(settings).toContain('onCommit')
+    expect(settings).toContain('Math.min(max, Math.max(min, Math.round(n)))')
+    expect(settings).toContain("if (text.trim() === '' || !Number.isFinite(n))")
+    // The raw onChange writes must be gone.
+    expect(settings).not.toContain('updateSettings({ clipboardSeconds: Number(e.target.value) })')
+    expect(settings).not.toContain('updateSettings({ sequentialCopySeconds: Number(e.target.value) })')
+    expect(settings).toContain('onCommit={(n) => void updateSettings({ clipboardSeconds: n })}')
+    expect(settings).toContain('onCommit={(n) => void updateSettings({ sequentialCopySeconds: n })}')
+  })
+})
+
+describe('the recovery-key email button reports its failure', () => {
+  it('catches a rejected send instead of going quiet', () => {
+    // Live before: `void onEmail().then(...).finally(...)` with no `.catch`, so a
+    // network failure left the button reading "Kirim ke Gmail (kurang aman)" with
+    // no error text and an unhandled rejection. The sibling copy button was
+    // already fixed for exactly this.
+    const modal = read('src/components/RecoveryKeyModal.tsx')
+    expect(modal).toContain(".catch(() => setEmailed('fail'))")
+    expect(modal).toContain("emailed === 'fail'")
+    expect(modal).toContain('Gagal mengirim email')
+  })
+})
+
+describe('cancelling a picker is not an error', () => {
+  it('pickBackupFolder treats AbortError as a normal answer', () => {
+    // Live before: `const handle = await picker(...)` with no try, so Esc/Cancel on
+    // the macOS folder dialog logged an unhandled AbortError and said nothing.
+    const fn = ctx.slice(ctx.indexOf('const pickBackupFolder'))
+    const body = fn.slice(0, 1200)
+    expect(body).toContain('try {')
+    expect(body).toContain("err.name === 'AbortError'")
+    expect(body).toContain('Gagal memilih folder cadangan')
   })
 })
 

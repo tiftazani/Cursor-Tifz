@@ -701,7 +701,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       toast.push('Browser ini tidak mendukung folder cadangan otomatis. Gunakan Chrome atau Edge.', 'warn')
       return
     }
-    const handle = await picker({ mode: 'readwrite' })
+    // Cancelling the picker rejects with AbortError. That is a normal answer, not
+    // a failure: say nothing and leave the previous folder in place.
+    let handle: FileSystemDirectoryHandle
+    try {
+      handle = await picker({ mode: 'readwrite' })
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      toast.push('Gagal memilih folder cadangan', 'danger')
+      return
+    }
     await vaultDb.setBackupDir(handle)
     setBackupFolderName(handle.name)
     toast.push(`Folder cadangan: ${handle.name}`)

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { AppView, Entry, FilterId } from '../types'
 import {
   IconApp,
@@ -78,6 +78,10 @@ export function AppShell() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<Entry | null>(null)
   const [draftDirty, setDraftDirty] = useState(false)
+  // Bumped only when we deliberately drop the pane's local draft. It must NOT be
+  // derived from `draftDirty`: keying on that remounted the pane the instant the
+  // first keystroke flipped it, so every edit was destroyed as it was typed.
+  const [paneEpoch, setPaneEpoch] = useState(0)
   const [findOpen, setFindOpen] = useState(false)
   const [mobileDetail, setMobileDetail] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -101,6 +105,15 @@ export function AppShell() {
   const selected = draft ?? filtered.find((e) => e.id === selectedId) ?? (draftDirty ? source.find((e) => e.id === selectedId) : undefined) ?? null
   const dupeCount = useMemo(() => findDuplicateClusters(vault?.entries ?? []).length, [vault?.entries])
 
+  // The keydown listener registers once (deps `[lock]`), so it would keep calling
+  // the `startNew` captured on that first render — where `draftDirty` was still
+  // false, so the discard guard waved every unsaved edit through. Assign the ref
+  // in an effect, which runs before any key can be pressed.
+  const startNewRef = useRef(startNew)
+  useEffect(() => {
+    startNewRef.current = startNew
+  })
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const meta = e.metaKey || e.ctrlKey
@@ -110,7 +123,7 @@ export function AppShell() {
       }
       if (meta && e.key.toLowerCase() === 'n') {
         e.preventDefault()
-        startNew()
+        startNewRef.current()
       }
       if (meta && e.key.toLowerCase() === 'l') {
         e.preventDefault()
@@ -133,7 +146,11 @@ export function AppShell() {
   /** One place to ask before an action would drop edits the user has not saved. */
   function confirmDiscard(what: string): boolean {
     if (!draftDirty) return true
-    return window.confirm(`Ada suntingan yang belum disimpan. Buang dan ${what}?`)
+    if (!window.confirm(`Ada suntingan yang belum disimpan. Buang dan ${what}?`)) return false
+    // They agreed to lose the edits, so force the pane to reload from the vault
+    // rather than leaving its local copy of the discarded text on screen.
+    setPaneEpoch((e) => e + 1)
+    return true
   }
 
   function startNew() {
@@ -160,6 +177,9 @@ export function AppShell() {
   }
 
   function backToList() {
+    // The only exit from the detail pane in the compact layout, so it needs the
+    // same guard as every other door.
+    if (!confirmDiscard('kembali ke daftar')) return
     setMobileDetail(false)
     setDraft(null)
     setDraftDirty(false)
@@ -310,9 +330,8 @@ export function AppShell() {
                   className={`chip ${filter === f.id ? 'active' : ''}`}
                   onClick={() => {
                     // Do not throw away unsaved edits. Switching a chip used to
-                    // remount the pane (the key below includes `filter`) and the
-                    // local draft died with it.
-                    if (draftDirty && !window.confirm('Ada suntingan yang belum disimpan. Buang dan pindah filter?')) return
+                    // remount the pane and the local draft died with it.
+                    if (!confirmDiscard('pindah filter')) return
                     setFilter(f.id)
                     setDraft(null)
                     setDraftDirty(false)
@@ -395,7 +414,7 @@ export function AppShell() {
           <section className="detail-col">
             {selected ? (
               <EntryPane
-                key={`${selected.id}-${selected.updatedAt}${draftDirty ? '' : `-${filter}`}`}
+                key={`${selected.id}-${selected.updatedAt}-${paneEpoch}`}
                 entry={selected}
                 isNew={Boolean(draft && draft.id === selected.id)}
                 inTrash={filter === 'trash'}
