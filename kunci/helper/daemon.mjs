@@ -28,7 +28,8 @@ const TOKEN_PATH = join(TOKEN_DIR, 'helper-token')
 const RECOVERY_PATH = join(TOKEN_DIR, 'recovery.json')
 const OTP_PATH = join(TOKEN_DIR, 'otp.json')
 const CLOUD_ORIGIN = 'https://kunci.tiftazani-cuciin.workers.dev'
-const serveUi = process.env.KUNCI_SERVE_UI !== '0'
+const serveUi =
+  process.argv.includes('--serve-ui') || (process.env.KUNCI_SERVE_UI !== '0' && !process.argv.includes('--no-serve-ui'))
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -50,10 +51,21 @@ const LOOPBACK_ORIGINS = new Set([
   'http://127.0.0.1:4173',
   'http://localhost:4173',
   'http://[::1]:8780',
-  // The unpacked extension polls /health. Its id is fixed by the key in
-  // manifest.json, so this stays stable across reloads.
-  'chrome-extension://djiblgfjmjhjebgacdljbdoibbancniad',
+  // The unpacked extension polls /health. Chrome derives the id of an unpacked
+  // extension from the absolute path of its folder, so this is 32 characters and
+  // matches `extension/` next to this file. It had 33 characters, which no browser
+  // can ever produce: the extension's own health poll was answered 403.
+  'chrome-extension://djiblgfjmhjebgacdljbdoibbancniad',
 ])
+
+/**
+ * Ports the Kunci UI may run on: the daemon itself, the dev server, the preview
+ * server. `localOrigin` used to accept ANY loopback port, so any other local app
+ * with a web view (a dev server the user happened to be running, an Electron app)
+ * could read /api/local-token and then call POST /fill, which types credentials
+ * from the vault into whatever app is in front.
+ */
+const UI_PORTS = new Set([String(PORT), '5173', '4173'])
 
 /**
  * Whether an Origin header belongs to the local Kunci app.
@@ -70,7 +82,7 @@ function localOrigin(req) {
   try {
     const o = new URL(origin)
     if (o.protocol === 'http:' && (o.hostname === '127.0.0.1' || o.hostname === 'localhost' || o.hostname === '[::1]')) {
-      return origin
+      return UI_PORTS.has(o.port || '80') ? origin : null
     }
   } catch {
     return null
@@ -129,9 +141,17 @@ function readBody(req) {
   })
 }
 
+/**
+ * Send a JSON reply, with no body for HEAD.
+ *
+ * Only GET was matched on these routes, so a monitor using HEAD got 404 for
+ * endpoints that exist (`HEAD /health` → 404 while `GET /health` → 200). The
+ * worker already treats HEAD like GET; the daemon did not.
+ */
 function json(res, status, body) {
+  const head = res.req && res.req.method === 'HEAD'
   res.writeHead(status, { 'Content-Type': 'application/json' })
-  res.end(JSON.stringify(body))
+  res.end(head ? undefined : JSON.stringify(body))
 }
 
 async function wipeLegacyDek() {
@@ -271,6 +291,7 @@ function staleUiPage(res) {
 }
 
 function serveStatic(req, res) {
+  const head = req.method === 'HEAD'
   const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname
   if (pathname.startsWith('/api/') || pathname === '/kunci-status') return false
   if (!serveUi || !existsSync(DIST)) return false
@@ -289,11 +310,13 @@ function serveStatic(req, res) {
       return true
     }
     res.writeHead(200, { 'Content-Type': MIME['.html'] })
-    createReadStream(fallback).pipe(res)
+    if (head) res.end()
+    else createReadStream(fallback).pipe(res)
     return true
   }
   res.writeHead(200, { 'Content-Type': MIME[extname(file)] || 'application/octet-stream' })
-  createReadStream(file).pipe(res)
+  if (head) res.end()
+  else createReadStream(file).pipe(res)
   return true
 }
 
@@ -320,7 +343,7 @@ const server = createServer(async (req, res) => {
   }
   const url = new URL(req.url || '/', `http://127.0.0.1:${PORT}`)
   try {
-    if (req.method === 'GET' && url.pathname === '/health') {
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/health') {
       const disk = await cached('extensionOnDisk', async () => extensionOnDisk())
       const stale = await cached('distStale', async () => distMissingRingkasan())
       json(res, 200, {
@@ -331,14 +354,14 @@ const server = createServer(async (req, res) => {
         ui: serveUi,
         uiBuilt: existsSync(join(DIST, 'index.html')),
         uiRevision: stale ? 'stale' : disk.extensionVersion,
-        accessibility: await accessibilityTrusted(),
+        accessibility: await cached('ax', async () => accessibilityTrusted()),
         helperApp: Boolean(helperBinPath()),
         helperAppPath: helperAppBundlePath() || '',
         ...(await cached('refreshCommands', async () => refreshCommands())),
       })
       return
     }
-    if (req.method === 'GET' && url.pathname === '/apps') {
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/apps') {
       json(res, 200, {
         ok: true,
         platform: platform(),
@@ -349,12 +372,20 @@ const server = createServer(async (req, res) => {
       })
       return
     }
-    if (req.method === 'GET' && url.pathname === '/api/local-token') {
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/api/local-token') {
       json(res, 200, { token, email: RECOVERY_EMAIL })
       return
     }
-    if (req.method === 'GET' && url.pathname === '/frontmost') {
-      json(res, 200, { app: await frontmostName() })
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/frontmost') {
+      const provided = String(req.headers['x-kunci-token'] || '')
+      if (provided !== token) {
+        json(res, 401, { ok: false, error: 'Token helper salah' })
+        return
+      }
+      // One osascript per caller was fine; 400 parallel callers spawned 349
+      // `osascript` processes and left /api/local-token waiting 62 ms behind them.
+      // There is no token on this route before, so any local process could start it.
+      json(res, 200, { app: await cached('frontmost', async () => frontmostName()) })
       return
     }
     if (req.method === 'POST' && url.pathname === '/reveal-helper') {
@@ -381,12 +412,35 @@ const server = createServer(async (req, res) => {
         json(res, 401, { ok: false, error: 'Token helper salah' })
         return
       }
-      const body = JSON.parse((await readBody(req)) || '{}')
+      // A body that is not a JSON object is a caller bug, not a server error. This
+      // used to sit inside the route try, so `this-is-not-json` answered 500 with
+      // "Unexpected token 'h' … Di Mac: izinkan Kunci Helper di System Settings"
+      // (an Accessibility message for a parsing problem), and `null` answered 500
+      // with "Cannot read properties of null". `42` even answered ok:true while
+      // typing nothing, because `(42).username` is undefined and no field got filled.
+      let body
+      try {
+        body = JSON.parse((await readBody(req)) || '{}')
+      } catch {
+        json(res, 400, { ok: false, error: 'Body bukan JSON' })
+        return
+      }
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        json(res, 400, { ok: false, error: 'Body harus objek JSON' })
+        return
+      }
+      const mode = body.mode === 'password' ? 'password' : 'login'
+      const username = String(body.username || '')
+      const password = String(body.password || '')
+      if (!password) {
+        json(res, 400, { ok: false, error: 'Password kosong' })
+        return
+      }
       const result = await fillCredentials({
-        username: body.username || '',
-        password: body.password || '',
-        mode: body.mode || 'login',
-        appName: body.appName || '',
+        username,
+        password,
+        mode,
+        appName: String(body.appName || ''),
         waitMs: Number(body.waitMs || 0),
       })
       json(res, 200, { ok: true, method: result.method, app: result.app || null })
@@ -409,9 +463,9 @@ const server = createServer(async (req, res) => {
       await proxyCloud(req, res, url)
       return
     }
-    if (req.method === 'GET' && serveStatic(req, res)) return
+    if ((req.method === 'GET' || req.method === 'HEAD') && serveStatic(req, res)) return
     if (
-      req.method === 'GET' &&
+      (req.method === 'GET' || req.method === 'HEAD') &&
       serveUi &&
       (url.pathname === '/' || url.pathname === '/index.html') &&
       !existsSync(join(DIST, 'index.html'))

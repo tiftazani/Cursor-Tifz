@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { formatDateTime } from '../lib/time'
 import { useVault } from '../state/VaultContext'
+import { useToast } from '../components/Toast'
 import { Field } from '../components/Field'
 import { entriesToCsv } from '../lib/csv'
 import { entriesToXlsx } from '../lib/xlsx'
@@ -23,19 +24,35 @@ export function BackupView() {
   const fileRef = useRef<HTMLInputElement>(null)
   const sheetRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
+  const toast = useToast()
   if (!vault) return null
 
   async function onRestoreFile(file: File, mode: 'replace' | 'merge') {
-    const json = JSON.parse(await file.text()) as unknown
-    const password = window.prompt('Kata sandi induk untuk file cadangan ini:')
-    if (!password) return
-    await restoreBackup(json, password, mode)
+    // Every failure here used to be silent: a JSON.parse SyntaxError, a wrong
+    // password (unlockBlob throws OperationError with an empty message), or a
+    // foreign file all rejected a promise nobody was awaiting, so the dialog closed
+    // and nothing happened. The user could not tell a wrong password from a
+    // successful restore.
+    try {
+      const json = JSON.parse(await file.text()) as unknown
+      const password = window.prompt('Kata sandi induk untuk file cadangan ini:')
+      if (!password) return
+      await restoreBackup(json, password, mode)
+      toast.push('Cadangan dipulihkan', 'ok')
+    } catch (err) {
+      toast.push(err instanceof Error ? `Gagal memulihkan: ${err.message}` : 'Gagal memulihkan cadangan', 'danger')
+    }
   }
 
   async function onRestoreSnap(id: string) {
-    const password = window.prompt('Kata sandi induk (yang dipakai saat cadangan ini dibuat):')
-    if (!password) return
-    await restoreIdbBackup(id, password)
+    try {
+      const password = window.prompt('Kata sandi induk (yang dipakai saat cadangan ini dibuat):')
+      if (!password) return
+      await restoreIdbBackup(id, password)
+      toast.push('Versi cadangan dipulihkan', 'ok')
+    } catch (err) {
+      toast.push(err instanceof Error ? `Gagal memulihkan: ${err.message}` : 'Gagal memulihkan cadangan', 'danger')
+    }
   }
 
   function exportCsv() {

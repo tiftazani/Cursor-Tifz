@@ -1,6 +1,13 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { isPingPath, isSessionPath, normalizeApiPath } from '../src/lib/api-path'
-import { cloudPutVault, cloudSyncPossible, probeCloudSession, readCloudToken, saveCloudToken } from '../src/lib/cloud'
+import {
+  cloudGetVault,
+  cloudPutVault,
+  cloudSyncPossible,
+  probeCloudSession,
+  readCloudToken,
+  saveCloudToken,
+} from '../src/lib/cloud'
 
 function jsonRes(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -285,5 +292,142 @@ describe('localhost with no cloud session', () => {
     vi.resetModules()
     const fresh = await import('../src/lib/cloud')
     expect(fresh.cloudSyncPossible()).toBe(true)
+  })
+})
+
+describe('a stale token must not shadow a live cookie session', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+    const store = new Map<string, string>()
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, v),
+        removeItem: (k: string) => void store.delete(k),
+      },
+      location: { hostname: 'kunci.tiftazani-cuciin.workers.dev', host: 'kunci.tiftazani-cuciin.workers.dev' },
+    })
+  })
+
+  it('retries without the Authorization header before calling the session dead', async () => {
+    // The worker picks the credential with `bearer || cookie`, so an Authorization
+    // header left over from an earlier sign-in shadows a perfectly good session
+    // cookie: the PUT answers 401 and every action on Ringkasan reported "Sesi cloud
+    // habis" even though the browser was still signed in. The save has to drop the
+    // header and let the cookie answer before believing the session is gone.
+    saveCloudToken('token-from-an-older-secret')
+    const seen: (string | null)[] = []
+    vi.stubGlobal('fetch', async (_url: string, init?: RequestInit) => {
+      const auth = new Headers(init?.headers).get('authorization')
+      seen.push(auth)
+      return auth ? jsonRes(401, { error: 'Sesi tidak valid' }) : jsonRes(200, { ok: true })
+    })
+
+    await expect(cloudPutVault({ v: 1 } as never)).resolves.toBeUndefined()
+
+    expect(seen).toHaveLength(2)
+    expect(seen[0]).toMatch(/^Bearer /)
+    expect(seen[1]).toBeNull()
+    // The dead header is gone, but the cookie still works, so the session stays
+    // alive and the next save goes out instead of being skipped.
+    expect(readCloudToken()).toBeNull()
+    expect(cloudSyncPossible()).toBe(true)
+
+    seen.length = 0
+    await cloudPutVault({ v: 1 } as never)
+    expect(seen).toEqual([null])
+  })
+
+  it('still reports a dead session when the cookie is dead too', async () => {
+    saveCloudToken('token-from-an-older-secret')
+    vi.stubGlobal('fetch', async () => jsonRes(401, { error: 'Sesi tidak valid' }))
+    await expect(cloudPutVault({ v: 1 } as never)).rejects.toThrow(/Sesi cloud habis/)
+    expect(readCloudToken()).toBeNull()
+  })
+})
+
+describe('the session probe against a stale token', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+    const store = new Map<string, string>()
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, v),
+        removeItem: (k: string) => void store.delete(k),
+      },
+      location: { hostname: 'kunci.tiftazani-cuciin.workers.dev', host: 'kunci.tiftazani-cuciin.workers.dev' },
+    })
+  })
+
+  it('finds a live cookie session behind a dead bearer token', async () => {
+    // On boot the probe sent the stored token and read the 401 as "signed out",
+    // which parked the app at the code screen and set sessionOn=false, so every
+    // save afterwards refused to even try. The cookie was fine the whole time.
+    const state = await probeCloudSession({
+      publicHost: true,
+      token: 'token-from-an-older-secret',
+      fetch: async (url, init) => {
+        if (url.endsWith('/api/ping') || url.endsWith('/kunci-status')) return jsonRes(200, { ok: true })
+        const auth = new Headers(init?.headers).get('authorization')
+        if (auth) return jsonRes(401, { ok: false })
+        return jsonRes(200, { ok: true, email: 'tiftazani.khara@gmail.com' })
+      },
+    })
+    expect(state).toEqual({ signedIn: true, email: 'tiftazani.khara@gmail.com', configured: true })
+    expect(cloudSyncPossible()).toBe(true)
+    // The header that shadowed the cookie is gone.
+    expect(readCloudToken()).toBeNull()
+  })
+
+  it('still reports signed out when neither credential works', async () => {
+    const state = await probeCloudSession({
+      publicHost: true,
+      token: 'token-from-an-older-secret',
+      fetch: async (url) => {
+        if (url.endsWith('/api/ping') || url.endsWith('/kunci-status')) return jsonRes(200, { ok: true })
+        return jsonRes(401, { ok: false })
+      },
+    })
+    expect(state).toEqual({ signedIn: false, configured: true })
+  })
+})
+
+describe('reading the cloud vault behind a stale token', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+    const store = new Map<string, string>()
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, v),
+        removeItem: (k: string) => void store.delete(k),
+      },
+      location: { hostname: 'kunci.tiftazani-cuciin.workers.dev', host: 'kunci.tiftazani-cuciin.workers.dev' },
+    })
+  })
+
+  it('finds the cloud copy behind a dead bearer token', async () => {
+    // The read answered null on a 401, which the boot path reads as "no cloud copy"
+    // and then lets the local blob overwrite the cloud one. The cookie was fine, so
+    // the vault was there all along.
+    saveCloudToken('token-from-an-older-secret')
+    const blob = { v: 2, kdf: 'PBKDF2-SHA256', salt: 'c2FsdA==', iv: 'aXY=', data: 'ZGF0YQ==', savedAt: 1 }
+    const seen: (string | null)[] = []
+    vi.stubGlobal('fetch', async (_url: string, init?: RequestInit) => {
+      const auth = new Headers(init?.headers).get('authorization')
+      seen.push(auth)
+      return auth ? jsonRes(401, { error: 'Sesi tidak valid' }) : jsonRes(200, { blob })
+    })
+
+    await expect(cloudGetVault()).resolves.toEqual(blob)
+    expect(seen).toEqual([expect.stringMatching(/^Bearer /), null])
+    expect(readCloudToken()).toBeNull()
+  })
+
+  it('reports no cloud copy only when neither credential works', async () => {
+    saveCloudToken('token-from-an-older-secret')
+    vi.stubGlobal('fetch', async () => jsonRes(401, { error: 'Sesi tidak valid' }))
+    await expect(cloudGetVault()).resolves.toBeNull()
   })
 })

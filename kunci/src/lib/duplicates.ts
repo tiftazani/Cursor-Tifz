@@ -84,8 +84,8 @@ function shareHost(a: Entry, b: Entry): boolean {
     const host = ha || hb
     // The nameless side must not name a DIFFERENT site. Without this, a bare entry
     // called "mail" matched both mail.google.com and mail.yahoo.com (nameMatchesHost
-    // accepts a substring), and union-find fused those two sites into one cluster
-    // with a suggestion to delete one of them.
+    // matches a bare label against the site label), and union-find fused those two
+    // sites into one cluster with a suggestion to delete one of them.
     const ownHost = hostFromUrl((named.name || named.appName || '').trim())
     if (ownHost && ownHost !== host) return false
     return nameMatchesHost((named.name || named.appName || '').toLowerCase(), host)

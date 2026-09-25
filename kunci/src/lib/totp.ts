@@ -59,9 +59,13 @@ export async function totpCode(
   period = 30,
   digits = 6,
 ): Promise<{ code: string; remaining: number; period: number }> {
+  // The field hint promises "secret Base32 atau URI otpauth://", and a QR code hands
+  // you the URI. The raw string used to go straight to decodeBase32, so pasting the
+  // URI threw "Rahasia TOTP tidak valid" and the code card never appeared.
+  const raw = /^otpauth:\/\//i.test(secret.trim()) ? (parseOtpauth(secret)?.secret ?? secret) : secret
   const counter = Math.floor(now / 1000 / period)
   const remaining = period - (Math.floor(now / 1000) % period)
-  const code = await hotp(decodeBase32(secret), counter, digits)
+  const code = await hotp(decodeBase32(raw), counter, digits)
   return { code, remaining, period }
 }
 

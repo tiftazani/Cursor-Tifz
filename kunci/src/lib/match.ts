@@ -53,29 +53,77 @@ export function isAndroidAppUrl(raw: string): boolean {
   return /^android:/i.test((raw || '').trim())
 }
 
-export function domainsMatch(entryUrl: string, pageUrl: string): boolean {
-  const a = hostFromUrl(entryUrl)
-  const b = hostFromUrl(pageUrl)
-  if (!a || !b) return false
-  if (a === b) return true
-  const shorter = a.length <= b.length ? a : b
-  const longer = shorter === a ? b : a
+export function domainsMatch(a: string, b: string): boolean {
+  const ha = hostFromUrl(a)
+  const hb = hostFromUrl(b)
+  if (!ha || !hb) return false
+  // A login saved over https must not be filled into the same host over plain http:
+  // the password would go out unencrypted on submit. Only refuse when we can tell
+  // the saved side was secure and the page is not; a bare "example.com" (no scheme)
+  // carries no such promise and still matches.
+  if (isSecureUrl(a) && isInsecureUrl(b)) return false
+  if (ha === hb) return true
+  const shorter = ha.length <= hb.length ? ha : hb
+  const longer = shorter === ha ? hb : ha
   // A bare label ("com", "co", "io") is not a site; only a dotted name may be a suffix.
   if (!shorter.includes('.')) return false
   return longer.endsWith(`.${shorter}`)
 }
 
-/** An entry name may stand in for a host only as a whole domain label. */
+function isSecureUrl(raw: string): boolean {
+  return /^https:\/\//i.test(String(raw ?? '').trim())
+}
+
+function isInsecureUrl(raw: string): boolean {
+  return /^http:\/\//i.test(String(raw ?? '').trim())
+}
+
+/**
+ * An entry name may stand in for a host only as a whole domain label.
+ *
+ * `name.includes(host)` looked harmless and was not: an entry named `notgmail.com`
+ * matched `gmail.com` because the page host is a substring of the name, so the popup
+ * offered the wrong site's login on gmail.com. The host direction leaked too:
+ * `nameMatchesHost("gmail.com.evil.example", "gmail.com")` was true.
+ *
+ * A name is a label or a full domain, never a fragment:
+ *   "gmail"        matches gmail.com, mail.gmail.com
+ *   "mail.google"  matches mail.google.com
+ *   "gmail.com"    matches gmail.com, mail.gmail.com
+ * and nothing else.
+ */
+/**
+ * The label a host actually owns: the site name in front of its public suffix.
+ *
+ * `app.slack.com` -> "slack", `bank.com.au` -> "bank", `gmail.evil.com` -> "evil".
+ */
+export function siteLabel(host: string): string {
+  const parts = host.split('.')
+  if (parts.length <= 2) return parts[0] ?? ''
+  const last = parts[parts.length - 1] ?? ''
+  const second = parts[parts.length - 2] ?? ''
+  // A country-code second level ("co.uk", "com.au", "co.id") pushes the site label
+  // one position further left.
+  if (last.length === 2 && second.length <= 3) return parts[parts.length - 3] ?? ''
+  return second
+}
+
 export function nameMatchesHost(name: string, host: string): boolean {
   if (!name || !host) return false
   // A name holding an account ("tiftazani@gmail.com") is an account, not a site
   // label. Without this, "gmail.com" leaks out of the address itself and the entry
   // is offered on gmail.com wherever it is opened.
   if (name.includes('@')) return false
-  if (name.includes(host)) return true
-  const token = name.replace(/\s+/g, '')
-  if (token.length < 4) return false
-  return host.split('.').includes(token)
+  const token = name.replace(/\s+/g, '').replace(/^www\./, '')
+  if (!token) return false
+  if (token === host) return true
+  // The name as a domain suffix of the host: gmail.com -> mail.gmail.com
+  if (token.includes('.') && host.endsWith(`.${token}`)) return true
+  // A bare service name ("gmail", "slack") stands in for the site it names, and only
+  // for that site: the label the host actually owns. The old any-label rule accepted
+  // "gmail" on gmail.evil.com, because the host split to ["gmail","evil","com"], so an
+  // attacker's subdomain got the real password autofilled with no interaction.
+  return siteLabel(host) === token
 }
 
 export function entryMatchesPage(

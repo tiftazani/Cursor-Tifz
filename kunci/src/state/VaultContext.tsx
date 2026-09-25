@@ -736,7 +736,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       if (!current) return
       toast.push('Klik jendela app yang mau diisi — 4 detik…')
       await new Promise((resolve) => window.setTimeout(resolve, 4000))
-      const app = await frontmostApp(current.settings.helperUrl)
+      const app = await frontmostApp(current.settings.helperUrl, current.settings.helperToken)
       if (!app) {
         toast.push('Tidak bisa membaca app di depan. Izinkan Accessibility untuk Node dan osascript.', 'warn')
         return
@@ -756,7 +756,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const copySecret = useCallback(
     async (label: string, value: string) => {
       if (!value) return
-      await copyText(value)
+      // `navigator.clipboard.writeText` rejects on an unfocused document and in
+      // some browsers without a user gesture. The rejection used to escape: the
+      // caller did `void copySecret(...)`, so nothing was copied and nothing said
+      // so — the user concluded the app had hung.
+      try {
+        await copyText(value)
+      } catch {
+        toast.push(`Tidak bisa menyalin ${label.toLowerCase()} — klik halaman dulu, lalu coba lagi`, 'danger')
+        return
+      }
       const seconds = vaultRef.current?.settings.clipboardSeconds ?? 20
       clearClipRef.current()
       clearClipRef.current = scheduleClipboardClear(seconds, value, (cleared) => {

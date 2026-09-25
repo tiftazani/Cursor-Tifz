@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 // @ts-expect-error plain JS module loaded by the Chrome extension
 import { entriesToOffer, emptyListMessage } from '../extension/crypto.js'
 
@@ -29,5 +31,14 @@ describe('popup offers only the current site', () => {
   it('says why the list is empty instead of "Tidak ada hasil"', () => {
     expect(emptyListMessage({ hasUrl: true, query: '' })).toBe('Belum ada login tersimpan untuk situs ini')
     expect(emptyListMessage({ hasUrl: true, query: 'zzz' })).toBe('Tidak ada hasil')
+  })
+
+  // Finding B8: the popup called emptyMessage({ query }) and left hasUrl undefined, so
+  // the message told the user to "open a site tab" while a site tab was already open.
+  // The assertion is on popup.js itself: the value passed must be the real one.
+  it('passes the real hasUrl to the empty message', () => {
+    const source = readFileSync(join(import.meta.dirname, '..', 'extension', 'popup.js'), 'utf8')
+    const call = source.slice(source.indexOf('emptyMessage({'), source.indexOf('emptyMessage({') + 80)
+    expect(call).toContain('hasUrl')
   })
 })

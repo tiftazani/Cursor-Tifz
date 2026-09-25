@@ -45,4 +45,31 @@ describe('usernameFieldNear picks the nearest username box', () => {
     const password = Object.assign(inputs[0], { form })
     expect(pick(password)).toBeNull()
   })
+
+  // Finding B6: with no <form>, the scope was the WHOLE document, so any anonymous
+  // text box counted as a username candidate and the username landed in a newsletter
+  // email field or a promo-code box. Verified on /spa: #newsletter_email got the
+  // user's email while the login password sat below it.
+  it('with no form, never reaches outside the password box own container', () => {
+    type FakeEl = {
+      id: string
+      parentElement?: FakeEl | null
+      querySelectorAll?: () => FakeEl[]
+      form?: null
+    }
+    const username: FakeEl = { id: 'username' }
+    const password: FakeEl = { id: 'password', form: null }
+    const newsletter: FakeEl = { id: 'newsletter_email' }
+    const loginBox: FakeEl = { id: 'loginbox', querySelectorAll: () => [username, password] }
+    const outside: FakeEl = { id: 'outside', querySelectorAll: () => [newsletter, username, password] }
+    password.parentElement = loginBox
+    loginBox.parentElement = outside
+    outside.parentElement = { id: 'body' }
+    const all = [newsletter, username, password]
+    vm.runInContext('globalThis.isUsernameInput = () => true', ctx)
+    ctx.document = { querySelectorAll: () => all, body: { id: 'body' } }
+    // The nearest container holding both boxes is the login box, so #username wins and
+    // the newsletter field one level up is never reached.
+    expect(pick(password)?.id).toBe('username')
+  })
 })

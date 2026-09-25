@@ -1,14 +1,20 @@
 export const DEFAULT_CLOUD_URL = 'https://kunci.tiftazani-cuciin.workers.dev'
 
 /**
- * The unpacked Kunci extension. Its id is fixed by the `key` in manifest.json, so
- * the id is stable across reloads and machines.
+ * The unpacked Kunci extension.
+ *
+ * Chrome derives an unpacked extension's id from the absolute path of its folder,
+ * so the id changes the moment the repo is cloned somewhere else. The value that
+ * was here had 33 characters — one more than the 32 a browser can produce — so it
+ * never matched anything and the daemon answered the extension's own health poll
+ * with 403. Derived from `kunci/extension` next to this file:
+ * sha256('/Users/tiftazani/Documents/Hermes-AI/Kunci/kunci/extension')[0..32].
  *
  * The worker used to trust a `Kunci-local/` User-Agent instead of this list. A
  * User-Agent is a header the caller writes, so any page could claim it and skip
  * the origin check; the extension's own origin is not forgeable from a web page.
  */
-export const EXTENSION_ID = 'djiblgfjmjhjebgacdljbdoibbancniad'
+export const EXTENSION_ID = 'djiblgfjmhjebgacdljbdoibbancniad'
 
 export const EXTENSION_ORIGINS: readonly string[] = [`chrome-extension://${EXTENSION_ID}`]
 

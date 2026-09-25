@@ -172,21 +172,58 @@ async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer())
 }
 
+/**
+ * Read the file table out of the central directory.
+ *
+ * The central directory is the authority for a zip: it carries name, method,
+ * compressed size and the local header offset for every member. Walking the local
+ * headers instead breaks on any file a streaming writer produced (bit 3 set, sizes
+ * in a data descriptor), because the walk has no way to step over the descriptor
+ * and stops at the first member. That left a valid .xlsx with no sheet in the map,
+ * so the import failed with "File Excel tidak berisi sheet yang bisa dibaca".
+ */
+function centralSizes(buf: Uint8Array): Map<string, { compSize: number; offset: number; method: number }> {
+  const out = new Map<string, { compSize: number; offset: number; method: number }>()
+  // EOCD: scan back for its signature; the comment after it is at most 64 KB.
+  let eocd = -1
+  for (let i = buf.length - 22; i >= 0 && i >= buf.length - 22 - 65535; i--) {
+    if (readU32(buf, i) === 0x06054b50) {
+      eocd = i
+      break
+    }
+  }
+  if (eocd < 0) return out
+  const count = readU16(buf, eocd + 10)
+  let p = readU32(buf, eocd + 16)
+  for (let n = 0; n < count; n++) {
+    if (p + 46 > buf.length || readU32(buf, p) !== 0x02014b50) break
+    const method = readU16(buf, p + 10)
+    const compSize = readU32(buf, p + 20)
+    const nameLen = readU16(buf, p + 28)
+    const extraLen = readU16(buf, p + 30)
+    const commentLen = readU16(buf, p + 32)
+    const localOffset = readU32(buf, p + 42)
+    const name = new TextDecoder().decode(buf.slice(p + 46, p + 46 + nameLen)).replace(/\\/g, '/')
+    out.set(name, { compSize, offset: localOffset, method })
+    p += 46 + nameLen + extraLen + commentLen
+  }
+  return out
+}
+
 async function unzip(buf: Uint8Array): Promise<Map<string, string>> {
   const files = new Map<string, string>()
-  let i = 0
-  while (i + 30 <= buf.length) {
-    if (readU32(buf, i) !== 0x04034b50) break
-    const method = readU16(buf, i + 8)
-    const compSize = readU32(buf, i + 18)
-    const nameLen = readU16(buf, i + 26)
-    const extraLen = readU16(buf, i + 28)
-    const name = new TextDecoder().decode(buf.slice(i + 30, i + 30 + nameLen))
-    const start = i + 30 + nameLen + extraLen
-    const stored = buf.slice(start, start + compSize)
-    const data = method === 8 ? await inflateRaw(stored) : stored
-    if (!name.endsWith('/')) files.set(name.replace(/\\/g, '/'), new TextDecoder().decode(data))
-    i = start + compSize
+  for (const [name, entry] of centralSizes(buf)) {
+    if (name.endsWith('/')) continue
+    if (readU32(buf, entry.offset) !== 0x04034b50) continue
+    // The extra field length is read from the LOCAL header: a zip may carry extra
+    // data there that the central directory does not repeat.
+    const nameLen = readU16(buf, entry.offset + 26)
+    const extraLen = readU16(buf, entry.offset + 28)
+    const start = entry.offset + 30 + nameLen + extraLen
+    if (start + entry.compSize > buf.length) continue
+    const stored = buf.slice(start, start + entry.compSize)
+    const data = entry.method === 8 ? await inflateRaw(stored) : stored
+    files.set(name, new TextDecoder().decode(data))
   }
   return files
 }

@@ -79,10 +79,11 @@ export async function fillHelper(
   return attempt(fresh)
 }
 
-export async function frontmostApp(baseUrl: string): Promise<string | null> {
+export async function frontmostApp(baseUrl: string, token: string): Promise<string | null> {
   const url = helperBase(baseUrl)
+  const auth = await resolveHelperToken(baseUrl, token)
   try {
-    const res = await fetch(`${url}/frontmost`)
+    const res = await fetch(`${url}/frontmost`, { headers: auth ? { 'X-Kunci-Token': auth } : {} })
     if (!res.ok) return null
     const body = (await res.json()) as { app?: string | null }
     return body.app || null

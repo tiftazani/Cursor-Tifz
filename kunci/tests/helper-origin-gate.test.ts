@@ -17,7 +17,7 @@ describe('helper daemon refuses a foreign Origin', () => {
     const gate = source.indexOf('if (origin && !localOrigin(req))')
     expect(gate).toBeGreaterThan(-1)
     // Every route lives inside this try block; the gate has to come first.
-    const router = source.indexOf('if (req.method === \'GET\' && url.pathname === \'/api/local-token\')')
+    const router = source.indexOf("url.pathname === '/api/local-token'")
     expect(router).toBeGreaterThan(gate)
   })
 
@@ -31,8 +31,11 @@ describe('helper daemon refuses a foreign Origin', () => {
   it('still lets the real callers through', () => {
     // A missing Origin is curl, the helper itself, or a native app: not a web page.
     expect(source).toContain("if (!origin) return null")
-    // The unpacked extension talks to the daemon too.
-    expect(source).toContain('chrome-extension://djiblgfjmjhjebgacdljbdoibbancniad')
+    // The unpacked extension talks to the daemon too. The id must be exactly 32
+    // characters: Chrome derives it from the folder path and can never emit 33,
+    // which is what shipped and made the extension's own /health poll answer 403.
+    expect(source).toContain('chrome-extension://djiblgfjmhjebgacdljbdoibbancniad')
+    expect(source).not.toContain('chrome-extension://djiblgfjmjhjebgacdljbdoibbancniad')
   })
 
   it('does not reflect an arbitrary Origin in the CORS headers', () => {

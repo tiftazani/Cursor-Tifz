@@ -5,15 +5,37 @@ import { hostFromUrl, isAndroidAppUrl } from './match'
 export const SHEET_HEADERS = ['name', 'type', 'url', 'username', 'password', 'app', 'notes', 'totp', 'tags'] as const
 
 export function detectCsvDelimiter(text: string): ',' | ';' | '\t' {
-  const line = (text.replace(/^\uFEFF/, '').split(/\r?\n/).find((l) => l.trim()) || '')
-  const counts = {
-    ',': (line.match(/,/g) || []).length,
-    ';': (line.match(/;/g) || []).length,
-    '\t': (line.match(/\t/g) || []).length,
+  // Look at the first few non-empty lines and pick the delimiter that shows up in
+  // the most of them. The old version read only the FIRST non-empty line, which on
+  // an Excel or Sheets export from an Indonesian locale is a title row ("Passwords-data")
+  // with no delimiter at all: every count came out 0, the fallback ',' won, and a
+  // semicolon file imported as 0 entries with no error. Counting across lines also
+  // survives a semicolon inside a value (Kunci's own export joins tags with ';').
+  const lines = text
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .filter((l) => l.trim())
+    .slice(0, 10)
+  if (!lines.length) return ','
+  const delim = [',', ';', '\t'] as const
+  let best: ',' | ';' | '\t' = ','
+  let bestLines = -1
+  let bestTotal = -1
+  for (const d of delim) {
+    let onLines = 0
+    let total = 0
+    for (const line of lines) {
+      const n = line.split(d).length - 1
+      if (n > 0) onLines++
+      total += n
+    }
+    if (onLines > bestLines || (onLines === bestLines && total > bestTotal)) {
+      best = d
+      bestLines = onLines
+      bestTotal = total
+    }
   }
-  if (counts['\t'] > counts[','] && counts['\t'] > counts[';']) return '\t'
-  if (counts[';'] > counts[',']) return ';'
-  return ','
+  return best
 }
 
 export function parseCsv(text: string, delimiter?: ',' | ';' | '\t'): string[][] {
@@ -159,10 +181,19 @@ export function entriesFromRows(rows: string[][], now = Date.now()): Entry[] {
       .map((t) => t.trim())
       .filter(Boolean)
     let type: Entry['type'] = 'login'
+    // The declared type wins. The heuristics used to sit in the same `else if` chain
+    // AHEAD of some declared values, so a row that said `login` with no username was
+    // reclassified: `login,,,Pw12345678!` became `password`, and `login` plus an app
+    // name became `app`. Those rows are exactly what Kunci's own sheet export writes
+    // (sheetRowFromEntry emits ["Tanpa URL","login","","","Pw…"]), so a round trip
+    // through .csv or .xlsx silently changed the entry type.
     if (declared === 'note' || declared === 'catatan') type = 'note'
     else if (declared === 'totp' || declared === 'otp') type = 'totp'
-    else if (declared === 'app' || declared === 'aplikasi' || (appName && !url)) type = 'app'
-    else if (declared === 'password' || (!username && password && !url)) type = 'password'
+    else if (declared === 'app' || declared === 'aplikasi') type = 'app'
+    else if (declared === 'password' || declared === 'sandi') type = 'password'
+    else if (declared === 'login' || declared === 'masuk') type = 'login'
+    else if (appName && !url) type = 'app'
+    else if (!username && password && !url) type = 'password'
     else if (!password && notes && !username && !url) type = 'note'
     if (!username && !password && !url && !appName && !notes && !totpSecret) continue
     out.push({

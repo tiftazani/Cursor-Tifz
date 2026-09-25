@@ -13,16 +13,20 @@ describe('a wrong code is counted once', () => {
    * write was pure waste on the one path that matters, and it made the wrong-code
    * counter harder to reason about.
    */
-  it('bumps attempts only on the wrong-code branch', () => {
+  it('spends one attempt atomically and expires the record once', () => {
     const wrongBranch = workerSource.slice(
       workerSource.indexOf('const ok = safeEqual(incoming, otp.hash)'),
       workerSource.indexOf('const session = await issueSession'),
     )
     expect(wrongBranch).toContain("return respond({ error: 'Kode salah' }, 401)")
-    // Exactly two setKey('otp') calls remain: the wrong-code bump, and the expiry.
+    // The wrong-code path no longer writes the record from the worker: it spends one
+    // attempt through the Durable Object, which is the only place the counter can be
+    // read-checked-incremented without a race. The worker's own setKey('otp') call is
+    // therefore only the expiry on the success path.
+    expect(wrongBranch).toContain("op: 'take-attempt'")
     const writes = wrongBranch.match(/setKey\('otp'/g) ?? []
-    expect(writes).toHaveLength(2)
-    // The unconditional bump before the branch must be gone.
+    expect(writes).toHaveLength(1)
+    // The unconditional bump before the branch must still be gone.
     expect(wrongBranch.indexOf("setKey('otp'")).toBeGreaterThan(wrongBranch.indexOf('if (!ok)'))
   })
 })

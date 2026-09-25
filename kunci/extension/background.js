@@ -47,9 +47,54 @@ const KUNCI_TAB_URLS = [
   `${CLOUD}/*`,
 ]
 
+/**
+ * The unlocked vault, however it is currently held.
+ *
+ * Order matters. The in-memory cache is the fast path and the only place the vault is
+ * ever kept now. When the service worker is evicted the cache is gone, so the second
+ * path decrypts from the encrypted blob on disk using the dek in session storage.
+ * Nothing puts the plaintext vault in session storage any more: that is what blew the
+ * 10 MB quota and made a big vault look locked while it was open.
+ */
 async function sessionState() {
-  const { vault, unlocked, dekB64, cloudToken } = await session.get(['vault', 'unlocked', 'dekB64', 'cloudToken'])
-  return { vault: unlocked ? vault : null, dekB64, cloudToken: cloudToken || '' }
+  const { unlocked, dekB64, cloudToken } = await session.get(['unlocked', 'dekB64', 'cloudToken'])
+  if (!unlocked) return { vault: null, dekB64, cloudToken: cloudToken || '' }
+  if (vaultCache.vault) return { vault: vaultCache.vault, dekB64, cloudToken: cloudToken || '' }
+  return { vault: await loadVault(), dekB64, cloudToken: cloudToken || '' }
+}
+
+/**
+ * The decrypted vault, kept in memory instead of in `chrome.storage.session`.
+ *
+ * Session storage has a 10 MB ceiling. A big vault (4000 entries with 500-byte
+ * passwords and 1 KB notes measured 10,175,664 bytes, 97% of the quota) made
+ * `session.set` throw `Session storage quota bytes exceeded`, after which every read
+ * came back empty and MATCHES answered `locked: true` — the extension claimed the
+ * vault was locked while it was open, with no error anywhere. Only the small dek
+ * lives in session storage now; the vault is decrypted on demand from the encrypted
+ * blob in local storage and cached here, keyed by that blob.
+ */
+let vaultCache = { blob: null, vault: null }
+
+async function loadVault() {
+  const { blob } = await chrome.storage.local.get('blob')
+  if (!blob) return null
+  const { dekB64, unlocked } = await session.get(['dekB64', 'unlocked'])
+  if (!unlocked || !dekB64) return null
+  if (vaultCache.blob === blob && vaultCache.vault) return vaultCache.vault
+  try {
+    const vault = await decryptWithDek(blob, dekFromB64(dekB64))
+    vaultCache = { blob, vault }
+    return vault
+  } catch {
+    /* dek mismatch after a password change; the popup will ask to unlock */
+    return null
+  }
+}
+
+async function sessionVault() {
+  const { vault, dekB64, cloudToken } = await sessionState()
+  return { vault: vault || (await loadVault()), dekB64, cloudToken }
 }
 
 async function publicMatches(vault, url) {
@@ -78,15 +123,30 @@ async function notifyKunciTabs(blob) {
 }
 
 async function pushCloud(blob, token) {
-  if (!token) return
-  try {
-    await fetch(`${CLOUD}/api/vault`, {
+  // `credentials: 'include'` matters: without it a cross-origin fetch from the
+  // extension carries no cookie at all, so the only credential is the token handed
+  // over by the Kunci page. With it, the session cookie the browser already holds is
+  // a second chance when that token has gone stale. The worker reads `bearer ||
+  // cookie`, so a dead Authorization header hides a live cookie: retry without it.
+  const put = (auth) =>
+    fetch(`${CLOUD}/api/vault`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      credentials: 'include',
+      headers: auth
+        ? { 'Content-Type': 'application/json', Authorization: `Bearer ${auth}` }
+        : { 'Content-Type': 'application/json' },
       body: JSON.stringify({ blob }),
     })
+  try {
+    let res = await put(token)
+    if (res.status === 401 && token) {
+      await session.set({ cloudToken: '' })
+      res = await put('')
+    }
+    return res.ok
   } catch {
     /* tab listener still writes IndexedDB */
+    return false
   }
 }
 
@@ -94,7 +154,12 @@ async function writeVault(vault, dekB64, blob) {
   const dekRaw = dekFromB64(dekB64)
   const nextBlob = await persistVault(vault, dekRaw, blob)
   await chrome.storage.local.set({ blob: nextBlob })
-  await session.set({ vault, unlocked: true, dekB64 })
+  // Only the dek goes to session storage; the vault itself is cached in memory so a
+  // big vault cannot blow the 10 MB session quota and make the extension claim it is
+  // locked. The cache is keyed by the blob it was decrypted from, so a write through
+  // any path refreshes it.
+  await session.set({ unlocked: true, dekB64 })
+  vaultCache = { blob: nextBlob, vault }
   const { cloudToken } = await session.get('cloudToken')
   await notifyKunciTabs(nextBlob)
   await pushCloud(nextBlob, cloudToken)
@@ -105,6 +170,20 @@ async function writeVault(vault, dekB64, blob) {
 // it back, and the second write wins: one captured login is silently lost. Every
 // read-modify-write of this map goes through one chain instead.
 let pendingChain = Promise.resolve()
+
+// The same hazard one level up: SAVE_LOGIN is a read-modify-write of the whole vault
+// (`sessionState` -> decrypt -> `applyLoginCapture` -> `writeVault`, each awaited). Two
+// tabs pressing Simpan at once both read the same vault and the second write drops the
+// first entry, while both answer `{ok:true, changed:'create'}`. Measured: three runs,
+// "Site-a" gone every time. All vault mutations go through this chain.
+let vaultChain = Promise.resolve()
+
+function withVault(mutate) {
+  const run = vaultChain.then(mutate)
+  // Keep the chain alive after a failure, or one error makes every later save a no-op.
+  vaultChain = run.catch(() => undefined)
+  return run
+}
 
 function withPendingSaves(mutate) {
   const run = pendingChain.then(async () => {
@@ -210,6 +289,34 @@ async function injectContentScripts() {
   }
 }
 
+/**
+ * Bring every open tab back to life after the extension reloaded itself.
+ *
+ * `chrome.runtime.reload()` does not fire `onInstalled`, so `injectContentScripts()`
+ * never ran on that path: every open tab kept a content script whose `chrome.runtime`
+ * was dead. The icons stayed visible and did nothing, and worse, the flag
+ * `globalThis.kunciContentLoaded` was still true in the page, so the next injection
+ * pass skipped the tab and it never recovered. Reload the tabs instead: it is the only
+ * way to clear that flag, and a page reload is cheap next to a silently dead autofill.
+ */
+async function reloadContentScriptTabs() {
+  try {
+    const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] })
+    await Promise.all(
+      tabs.map(async (tab) => {
+        if (!tab.id) return
+        try {
+          await chrome.tabs.reload(tab.id)
+        } catch {
+          /* tab closed or protected */
+        }
+      }),
+    )
+  } catch {
+    /* ignore */
+  }
+}
+
 function ack(sendResponse, work) {
   void Promise.resolve()
     .then(work)
@@ -233,7 +340,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (unlocked && dekB64) {
         try {
           const vault = await decryptWithDek(msg.blob, dekFromB64(dekB64))
-          await session.set({ vault, unlocked: true, dekB64 })
+          vaultCache = { blob: msg.blob, vault }
+          await session.set({ unlocked: true, dekB64 })
         } catch {
           /* dek mismatch after password change */
         }
@@ -244,16 +352,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return ack(sendResponse, () => session.set({ cloudToken: msg.token || '' }))
   }
   if (msg.type === 'TOUCH') {
-    return ack(sendResponse, async () => {
-      const { vault, dekB64 } = await sessionState()
-      if (!vault || !dekB64 || !msg.id) return
-      const { blob } = await chrome.storage.local.get('blob')
-      if (!blob) return
-      const entries = (vault.entries || []).map((e) => (e.id === msg.id ? { ...e, lastUsedAt: Date.now() } : e))
-      await writeVault({ ...vault, entries }, dekB64, blob)
-    })
+    return ack(sendResponse, () =>
+      withVault(async () => {
+        const { vault, dekB64 } = await sessionState()
+        if (!vault || !dekB64 || !msg.id) return
+        const { blob } = await chrome.storage.local.get('blob')
+        if (!blob) return
+        const entries = (vault.entries || []).map((e) => (e.id === msg.id ? { ...e, lastUsedAt: Date.now() } : e))
+        await writeVault({ ...vault, entries }, dekB64, blob)
+      }),
+    )
   }
   if (msg.type === 'LOCK') {
+    vaultCache = { blob: null, vault: null }
     return ack(sendResponse, () => session.remove(['vault', 'unlocked', 'dekB64']))
   }
 
@@ -268,7 +379,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     if (msg.type === 'UNLOCKED') {
       if (!msg.vault || !msg.dekB64) return { ok: false, error: 'Sesi tidak lengkap' }
-      await session.set({ vault: msg.vault, unlocked: true, dekB64: msg.dekB64 })
+      const { blob } = await chrome.storage.local.get('blob')
+      vaultCache = { blob: blob || null, vault: msg.vault }
+      await session.set({ unlocked: true, dekB64: msg.dekB64 })
       await onVaultUnlocked()
       return { ok: true, count: msg.vault.entries?.length ?? 0 }
     }
@@ -276,7 +389,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const { blob } = await chrome.storage.local.get('blob')
       if (!blob) throw new Error('Belum ada brankas. Buka aplikasi Kunci dulu.')
       const { vault, dekRaw } = await decryptVault(blob, msg.password)
-      await session.set({ vault, unlocked: true, dekB64: dekToB64(dekRaw) })
+      vaultCache = { blob, vault }
+      await session.set({ unlocked: true, dekB64: dekToB64(dekRaw) })
       await onVaultUnlocked()
       return { ok: true, count: vault.entries?.length ?? 0 }
     }
@@ -296,6 +410,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (!vault) return { locked: true, entries: [] }
       const q = (msg.query || '').toLowerCase()
       const entries = (vault.entries || [])
+        // Notes are not logins: they have no password and cannot be filled. They were
+        // listed and clickable, so choosing one sent FILL_ENTRY with an empty password
+        // and closed the popup, doing nothing. matchesForUrl already skips them.
+        .filter((e) => e.type !== 'note')
         .filter((e) => !q || `${e.name} ${e.username} ${e.url} ${e.appName}`.toLowerCase().includes(q))
         .slice(0, 12)
         .map((e) => ({
@@ -321,15 +439,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return { ok: true }
     }
     if (msg.type === 'SAVE_LOGIN') {
-      const { vault, dekB64 } = await sessionState()
-      if (!vault || !dekB64) return { locked: true }
-      const { blob } = await chrome.storage.local.get('blob')
-      if (!blob) throw new Error('Brankas tidak ada')
-      const next = applyLoginCapture(vault.entries || [], msg.capture)
-      await clearPendingSave(sender.tab?.id)
-      if (next.changed === 'skip') return { ok: true, changed: 'skip' }
-      await writeVault({ ...vault, entries: next.entries }, dekB64, blob)
-      return { ok: true, changed: next.changed }
+      const result = await withVault(async () => {
+        const { vault, dekB64 } = await sessionState()
+        if (!vault || !dekB64) return { locked: true }
+        const { blob } = await chrome.storage.local.get('blob')
+        if (!blob) throw new Error('Brankas tidak ada')
+        const next = applyLoginCapture(vault.entries || [], msg.capture)
+        await clearPendingSave(sender.tab?.id)
+        if (next.changed === 'skip') return { ok: true, changed: 'skip' }
+        await writeVault({ ...vault, entries: next.entries }, dekB64, blob)
+        return { ok: true, changed: next.changed }
+      })
+      return result
     }
     if (msg.type === 'NEVER_SAVE') {
       const host = hostFromUrl(msg.url || '')
@@ -396,6 +517,12 @@ async function syncUnpackedExtension() {
     if (prev === remote.extensionStamp) return
     await chrome.storage.local.set({ [STAMP_KEY]: remote.extensionStamp })
     if (!prev) return
+    // A reload leaves every open tab with a dead content script (see
+    // reloadContentScriptTabs). Put the stamp back first so the reload below does not
+    // immediately look like a new version and loop, then revive the tabs before the
+    // runtime goes away. The injection has to happen from THIS side of the reload: the
+    // new background script cannot inject into a tab whose flag is still set.
+    await reloadContentScriptTabs()
     chrome.runtime.reload()
   } catch {
     /* ignore */

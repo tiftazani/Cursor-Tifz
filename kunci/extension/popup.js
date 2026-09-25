@@ -79,7 +79,9 @@ async function render(query) {
   if (!list.children.length) {
     const li = document.createElement('li')
     li.className = 'muted'
-    li.textContent = emptyMessage({ query })
+    // hasUrl has to be the real value: without it the popup told the user to "open a
+    // site tab" while a site tab was already open, which reads as a broken extension.
+    li.textContent = emptyMessage({ query, hasUrl: Boolean(tab?.url) })
     list.appendChild(li)
   }
 }

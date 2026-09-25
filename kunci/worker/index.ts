@@ -31,7 +31,7 @@ export class KunciStore {
 
   async fetch(req: Request): Promise<Response> {
     const { op, key, value, max, windowMs } = (await req.json()) as {
-      op: 'get' | 'set' | 'rate'
+      op: 'get' | 'set' | 'rate' | 'take-attempt'
       key: string
       value?: unknown
       max?: number
@@ -46,6 +46,21 @@ export class KunciStore {
       if (value === null) await this.state.storage.delete(key)
       else await this.state.storage.put(key, value)
       return Response.json({ ok: true })
+    }
+    // take-attempt: read, check the cap, and increment in ONE request to the object.
+    // Doing it in the worker (get → compare → set) left a race: ten concurrent wrong
+    // codes all read attempts:0, so eight of them were evaluated against a cap of 5.
+    // A Durable Object handles one request at a time, so the counter here is serial.
+    if (op === 'take-attempt') {
+      const rec = ((await this.state.storage.get(key)) as { attempts?: number; exp?: number } | null) ?? null
+      if (!rec) return Response.json({ ok: false, record: null })
+      if (typeof rec.exp === 'number' && rec.exp > 0 && Date.now() > rec.exp) {
+        return Response.json({ ok: false, record: rec, expired: true })
+      }
+      if ((rec.attempts ?? 0) >= (max ?? 0)) return Response.json({ ok: false, record: rec, capped: true })
+      const next = { ...rec, attempts: (rec.attempts ?? 0) + 1 }
+      await this.state.storage.put(key, next)
+      return Response.json({ ok: true, record: next })
     }
     // rate: fixed window counter. The window has to be anchored at its own start,
     // not at the last request: anchoring on the last request means a caller who keeps
@@ -339,7 +354,14 @@ export default {
         const incoming = await sha256Hex(`${otp.salt}:${String(body.code || '').trim().toUpperCase()}`)
         const ok = safeEqual(incoming, otp.hash)
         if (!ok) {
-          await setKey('otp', { ...otp, attempts: otp.attempts + 1 })
+          // The cap has to be spent atomically. Ten concurrent wrong codes used to all
+          // read attempts:0 and get evaluated, so eight passed a cap of five. The
+          // increment lives in the Durable Object now, which serializes requests.
+          const spent = (await (await storeFetch({ op: 'take-attempt', key: 'otp', max: OTP_MAX_ATTEMPTS })).json()) as {
+            ok: boolean
+            capped?: boolean
+          }
+          if (spent.capped) return respond({ error: 'Terlalu banyak percobaan' }, 429)
           return respond({ error: 'Kode salah' }, 401)
         }
         // One increment on a wrong code, and a dead record on a right one. The

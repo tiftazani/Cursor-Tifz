@@ -66,6 +66,21 @@ function noteSession(on: boolean): void {
   sessionOn = on
 }
 
+/**
+ * Drop the stored bearer token without touching the session verdict.
+ *
+ * The token and the session are not the same thing: the worker accepts either a
+ * bearer token or the session cookie, so a token that stopped working says nothing
+ * about the cookie. `clearCloudToken` is for when both are gone.
+ */
+function forgetToken(): void {
+  try {
+    window.localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    /* private mode */
+  }
+}
+
 /** True while we have no reason to believe the cloud will reject the write. */
 export function cloudSyncPossible(): boolean {
   return !sessionKnown || sessionOn
@@ -184,6 +199,22 @@ export async function probeCloudSession(opts: {
       } else if (!res) {
         network = true
       }
+      // A stale Authorization header shadows a live cookie: the worker reads
+      // `bearer || cookie`, so a 401 with the header says nothing about the cookie.
+      // Ask again without it before concluding this browser is signed out —
+      // otherwise a token signed with a rotated secret parked the app at the code
+      // screen and blocked every save for the rest of the page's life.
+      if (res && res.status === 401 && headers.Authorization) {
+        delete headers.Authorization
+        res = await tryGet(opts.fetch, `${origin}${path}`, {
+          credentials: cookies ? 'include' : 'omit',
+          headers,
+        })
+        // The cookie answered where the header could not, so the header is the dead
+        // one. Dropping it here means the save path does not have to rediscover this
+        // on every action.
+        if (res && res.ok) forgetToken()
+      }
       if (!res) continue
       if (!apiAlive(res)) continue
       contacted = true
@@ -214,7 +245,10 @@ export async function probeCloudSession(opts: {
     }
   }
 
-  noteSession(false)
+  // No reply from the API at all. This is the one case that must NOT record a
+  // verdict: a momentary network drop during boot used to set sessionOn=false, and
+  // cloudSyncPossible() then refused every later save for the rest of the page's
+  // life — a transient failure became a permanent "never sync again" switch.
   return { signedIn: false, configured: false, error: network ? 'network' : 'missing' }
 }
 
@@ -282,7 +316,14 @@ export async function logoutSession(): Promise<void> {
 
 export async function cloudGetVault(): Promise<EncryptedBlob | null> {
   try {
-    const res = await api('/api/vault')
+    let res = await api('/api/vault')
+    // Same shadowing as cloudPutVault: a stale bearer hides a live cookie, and a
+    // 401 here reads as "no cloud copy" — which then let a local copy overwrite the
+    // cloud one. Ask once without the header before believing the vault is absent.
+    if (res.status === 401 && readToken()) {
+      forgetToken()
+      res = await api('/api/vault')
+    }
     if (res.status === 401 || res.status === 404) return null
     if (!res.ok) return null
     const body = (await res.json()) as { blob?: unknown }
@@ -298,12 +339,23 @@ export async function cloudPutVault(blob: EncryptedBlob): Promise<void> {
   // anyway produced a 401 on every single save and warned "Sesi cloud habis" each
   // time, which reads as a broken session rather than "this browser never signed in".
   if (!cloudSyncPossible()) return
-  const res = await api('/api/vault', { method: 'PUT', body: JSON.stringify({ blob }) })
+  const body = JSON.stringify({ blob })
+  let res = await api('/api/vault', { method: 'PUT', body })
+  if (res.status === 401 && readToken()) {
+    // The worker picks its credential with `bearer || cookie` (worker/index.ts,
+    // sessionEmail), so a leftover Authorization header shadows a session cookie
+    // that is still perfectly good. The header can outlive its usefulness: it is
+    // signed with a secret that may have been rotated, and it is the copy that
+    // expires at 12 hours. Retrying without it lets the cookie answer, and dropping
+    // it means the next save does not repeat the mistake.
+    forgetToken()
+    res = await api('/api/vault', { method: 'PUT', body })
+  }
   if (res.status === 401) {
-    // The session is gone, so the token is dead weight. Dropping it means the
-    // next launch asks for the code once, instead of every single save warning
-    // "Sesi cloud habis" and failing.
-    clearCloudToken()
+    // Both credentials are dead, so there is nothing left to retry with. Recording
+    // the verdict stops the rest of this page's saves from firing the same doomed
+    // request; the next launch asks for the code once.
+    noteSession(false)
     throw new Error('Sesi cloud habis. Buka Pengaturan → Sesi untuk masuk lagi dengan kode email.')
   }
   if (!res.ok) {

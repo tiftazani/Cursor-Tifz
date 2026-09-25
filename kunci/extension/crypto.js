@@ -43,6 +43,9 @@ export function domainsMatch(a, b) {
   const ha = hostFromUrl(a)
   const hb = hostFromUrl(b)
   if (!ha || !hb) return false
+  // A login saved over https must not be filled into the same host over plain http:
+  // the password would go out unencrypted on submit. Mirrors src/lib/match.ts.
+  if (/^https:\/\//i.test(String(a ?? '').trim()) && /^http:\/\//i.test(String(b ?? '').trim())) return false
   if (ha === hb) return true
   const shorter = ha.length <= hb.length ? ha : hb
   const longer = shorter === ha ? hb : ha
@@ -51,16 +54,29 @@ export function domainsMatch(a, b) {
   return longer.endsWith(`.${shorter}`)
 }
 
+// A name is a label or a full domain, never a fragment. `name.includes(host)` let an
+// entry named "notgmail.com" answer for gmail.com, and "gmail.com.evil.example"
+// answer for gmail.com. A bare label matches only the label the host OWNS:
+// `host.split('.').includes(token)` accepted "gmail" on gmail.evil.com, so an
+// attacker's subdomain got the real password with no interaction. Mirrors
+// src/lib/match.ts; tests/match-parity.test.ts guards it.
+function siteLabel(host) {
+  const parts = host.split('.')
+  if (parts.length <= 2) return parts[0] || ''
+  const last = parts[parts.length - 1] || ''
+  const second = parts[parts.length - 2] || ''
+  if (last.length === 2 && second.length <= 3) return parts[parts.length - 3] || ''
+  return second
+}
+
 function nameMatchesHost(name, host) {
   if (!name || !host) return false
-  // A name holding an account ("tiftazani@gmail.com") is an account, not a site
-  // label. Without this, "gmail.com" leaks out of the address itself and the entry
-  // is offered on gmail.com wherever it is opened.
   if (name.includes('@')) return false
-  if (name.includes(host)) return true
-  const token = name.replace(/\s+/g, '')
-  if (token.length < 4) return false
-  return host.split('.').includes(token)
+  const token = name.replace(/\s+/g, '').replace(/^www\./, '')
+  if (!token) return false
+  if (token === host) return true
+  if (token.includes('.') && host.endsWith(`.${token}`)) return true
+  return siteLabel(host) === token
 }
 
 /**

@@ -118,13 +118,30 @@ function isUsernameInput(el) {
 
 function usernameFieldNear(password) {
   const form = password.form
-  const scope = form ? [...form.querySelectorAll('input')] : [...document.querySelectorAll('input')]
-  const candidates = scope.filter(isUsernameInput)
-  const idx = scope.indexOf(password)
-  // reverse() mutates, so the fallback below used to return the LAST username box on
-  // the page instead of the nearest one. Search a copy, and fall back to the first
-  // candidate in document order, which is the one closest to the top of the form.
-  return [...candidates].reverse().find((el) => scope.indexOf(el) < idx) || candidates[0] || null
+  if (form) {
+    const scope = [...form.querySelectorAll('input')]
+    const candidates = scope.filter(isUsernameInput)
+    const idx = scope.indexOf(password)
+    // reverse() mutates, so the fallback below used to return the LAST username box on
+    // the page instead of the nearest one. Search a copy, and fall back to the first
+    // candidate in document order, which is the one closest to the top of the form.
+    return [...candidates].reverse().find((el) => scope.indexOf(el) < idx) || candidates[0] || null
+  }
+  // No <form>. Searching the whole document made every anonymous text box a
+  // candidate, so the username landed in a newsletter email box above the login
+  // (verified on /spa: `#newsletter_email` got tif@example.com) or in a promo-code
+  // box (/promo). Walk up from the password box instead and take the first container
+  // that holds both, stopping before <body>: a box in another section of the page is
+  // a different form, and filling nothing beats filling the wrong box.
+  const all = [...document.querySelectorAll('input')]
+  const candidates = all.filter(isUsernameInput)
+  for (let node = password.parentElement; node && node !== document.body; node = node.parentElement) {
+    const inside = [...node.querySelectorAll('input')]
+    const pwAt = inside.indexOf(password)
+    const hit = [...inside].reverse().find((el) => candidates.includes(el) && inside.indexOf(el) < pwAt)
+    if (hit) return hit
+  }
+  return null
 }
 
 function kindAround(el) {
@@ -162,8 +179,11 @@ function loginPasswordFields() {
 }
 
 function fill(match) {
-  const passwords = loginPasswordFields()
-  const pw = passwords[0] || passwordFields().filter((el) => intent.isCurrentPasswordField(fieldSnap(el)))[0]
+  // Only fields the classifier calls a login password box. The old fallback here was
+  // `passwordFields()[0]`, the first password input on the page whatever it is, so
+  // picking an entry from the popup dropped an unrelated password into a box the
+  // classifier had explicitly refused — a transfer PIN, a card PIN, a confirm box.
+  const pw = loginPasswordFields()[0]
   if (pw) {
     if (match.password) setNativeValue(pw, match.password)
     // Password-only page: typing a username into the nearest text box would drop it in a
@@ -201,10 +221,28 @@ let placeTimer = 0
 let attempt = null
 const ATTEMPT_CHECKS = [400, 1000, 2000, 4000, 7000]
 
+/**
+ * What to offer saving, read from the form the user actually submitted.
+ *
+ * Two bugs lived here. (1) It took the FIRST password box with a value, which on a
+ * change-password form (current, new, confirm — the usual order) is the CURRENT
+ * password, so "Perbarui" wrote the old password into the vault and threw away the
+ * new one the user had just set. (2) When the submitted form had no password box at
+ * all — a newsletter signup next to a login form — it fell through to
+ * `passwordFields()[0]`, the login form's box, and offered to save a login for a
+ * navigation that had nothing to do with it.
+ */
 function readFormCreds(form) {
-  const pw = form
-    ? [...form.querySelectorAll('input[type="password"]')].find((el) => el.value) || passwordFields()[0]
-    : passwordFields()[0]
+  const inForm = form ? [...form.querySelectorAll('input[type="password"]')].filter(visibleInput) : []
+  // A submitted form with no password box is not a login. Do not borrow one from
+  // elsewhere on the page.
+  if (form && !inForm.length) return { username: '', password: '', kind: 'other' }
+  const scope = inForm.length ? inForm : passwordFields()
+  const filled = scope.filter((el) => el.value)
+  // Prefer the NEW password box when the form is a change-password form; otherwise
+  // the current one. `isNewPasswordField` already knows new/confirm/retype in both
+  // languages and reads autocomplete="new-password".
+  const pw = filled.find((el) => intent.isNewPasswordField(fieldSnap(el))) || filled[0] || scope[0]
   const userEl = pw ? usernameFieldNear(pw) : [...document.querySelectorAll('input')].find(isUsernameInput)
   const username = (userEl?.value || lastUsername || '').trim()
   const password = pw?.value || lastPassword || ''
@@ -215,6 +253,10 @@ function readFormCreds(form) {
 function captureFromEvent(target) {
   const form = target instanceof HTMLElement ? target.closest('form') : null
   const creds = readFormCreds(form)
+  // A form with no password box is not a login, and its creds must not overwrite what
+  // the real login form just recorded. Without this, submitting a newsletter form
+  // reset lastKind to 'other' and a genuine login submit right after it was ignored.
+  if (!creds.password) return creds
   if (creds.username) lastUsername = creds.username
   if (creds.password) lastPassword = creds.password
   lastKind = creds.kind
@@ -223,6 +265,29 @@ function captureFromEvent(target) {
 
 function iconSvg() {
   return `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="8" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M11 12h10m-3-3v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`
+}
+
+/**
+ * Interactive neighbours the icon must not cover.
+ *
+ * The icon is fixed and on top of everything, so whatever it covers stops being
+ * clickable. A submit button sitting right of the password box is the common case
+ * and the one that used to swallow the user's click.
+ */
+function clickablesNear(el) {
+  const rect = el.getBoundingClientRect()
+  const pad = 160
+  const near = { left: rect.left - pad, top: rect.top - pad, right: rect.right + pad, bottom: rect.bottom + pad }
+  const out = []
+  for (const node of document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"], a[href]')) {
+    if (node === el || node.closest('.kunci-icon-host')) continue
+    const r = node.getBoundingClientRect()
+    if (r.width < 2 || r.height < 2) continue
+    const b = { left: r.left, top: r.top, right: r.right, bottom: r.bottom }
+    if (b.right < near.left || b.left > near.right || b.bottom < near.top || b.top > near.bottom) continue
+    out.push(b)
+  }
+  return out
 }
 
 function placeOutside(el, host) {
@@ -236,7 +301,7 @@ function placeOutside(el, host) {
   const pos = globalThis.kunciIconPlace?.iconPosition(
     { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height },
     { width: window.innerWidth, height: window.innerHeight },
-    { size },
+    { size, avoid: clickablesNear(el) },
   ) || { left: r.right + 8, top: Math.round(r.top + (r.height - size) / 2) }
   host.style.left = `${pos.left}px`
   host.style.top = `${pos.top}px`
@@ -632,7 +697,16 @@ function sleep(ms) {
 }
 
 async function restorePendingSave() {
-  const res = await send({ type: 'GET_PENDING_SAVE' })
+  // The save that this page is about to be told about may still be landing: the tab
+  // that logged in sent QUEUE_SAVE as it was being torn down, and this page's
+  // GET_PENDING_SAVE can arrive before the write finishes. The read used to lose that
+  // race every single time (0/8 runs) and the bar never appeared. Give the write a few
+  // chances before concluding there is nothing to restore.
+  let res = await send({ type: 'GET_PENDING_SAVE' })
+  for (let i = 0; i < 6 && !res?.pending?.capture; i++) {
+    await sleep(150)
+    res = await send({ type: 'GET_PENDING_SAVE' })
+  }
   if (!res?.pending?.capture) return
   await sleep(400)
   const submitted = res.pending.capture.submittedUrl || res.pending.capture.url || location.href

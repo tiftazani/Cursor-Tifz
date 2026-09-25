@@ -85,4 +85,104 @@ describe('excel and csv portability', () => {
     const fromXlsx = await entriesFromPlainFile('kunci.xlsx', xlsx, 4)
     expect(fromXlsx[0]?.name).toBe('X')
   })
+
+  it('honours the declared type on a round trip through the sheet', async () => {
+    // sheetRowFromEntry writes ["Tanpa URL","login","","","Pw…"] for a login with no
+    // URL or username. The importer's heuristics used to run before the declared
+    // value in the same else-if chain, so that row came back as `password`, and a
+    // login with an app name came back as `app`: a round trip through .csv or .xlsx
+    // silently changed the entry type.
+    const noUrl: Entry = login({ id: '4', name: 'Tanpa URL', url: undefined, username: undefined, password: 'Pw12345678!' })
+    const back = await entriesFromXlsx(entriesToXlsx([noUrl]), 5)
+    expect(back[0]?.type).toBe('login')
+
+    const app = login({ id: '5', name: 'App Mac', type: 'app', appName: 'Mail', url: undefined })
+    const backApp = await entriesFromXlsx(entriesToXlsx([app]), 6)
+    expect(backApp[0]?.type).toBe('app')
+  })
+
+  it('reads an xlsx whose sizes live in the central directory', async () => {
+    // A streaming zip writer sets bit 3 and leaves the local header's size fields at
+    // zero, putting the real sizes in a data descriptor after the data. Reading the
+    // local header then gave compSize 0, the loop stopped on the first file, and the
+    // import threw an Error with an empty message that BackupView showed as an empty
+    // alert box. The fixture is built here so no binary blob is committed.
+    const files = [
+      { name: 'xl/workbook.xml', data: new TextEncoder().encode('<workbook/>') },
+      { name: 'xl/worksheets/sheet1.xml', data: new TextEncoder().encode('<sheetData/>') },
+    ]
+    const bytes = zipWithDescriptors(files)
+    expect(bytes[6]! & 0x08).toBe(0x08) // bit 3 set: sizes are in the descriptor
+    const entries = await entriesFromXlsx(bytes, 7)
+    expect(entries).toEqual([])
+  })
 })
+
+/**
+ * Minimal zip with bit 3 set and zeroed local sizes, the way a streaming writer
+ * emits it. Files are stored (method 0) so the test needs no compressor.
+ */
+function zipWithDescriptors(files: { name: string; data: Uint8Array }[]): Uint8Array {
+  const locals: number[] = []
+  const centrals: number[] = []
+  const u16 = (n: number) => [n & 0xff, (n >> 8) & 0xff]
+  const u32 = (n: number) => [n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, (n >>> 24) & 0xff]
+  let offset = 0
+  for (const f of files) {
+    const name = [...new TextEncoder().encode(f.name)]
+    locals.push(
+      ...[0x50, 0x4b, 0x03, 0x04],
+      ...u16(20),
+      ...u16(0x0008), // bit 3: data descriptor follows
+      ...u16(0),
+      ...u16(0),
+      ...u16(0),
+      ...u32(0), // crc: unknown at write time
+      ...u32(0), // compSize: 0 in the local header
+      ...u32(0), // uncompSize: 0 in the local header
+      ...u16(name.length),
+      ...u16(0),
+      ...name,
+      ...f.data,
+      // data descriptor
+      ...[0x50, 0x4b, 0x07, 0x08],
+      ...u32(0),
+      ...u32(f.data.length),
+      ...u32(f.data.length),
+    )
+    centrals.push(
+      ...[0x50, 0x4b, 0x01, 0x02],
+      ...u16(20),
+      ...u16(20),
+      ...u16(0x0008),
+      ...u16(0),
+      ...u16(0),
+      ...u16(0),
+      ...u32(0),
+      ...u32(f.data.length), // the central directory carries the real size
+      ...u32(f.data.length),
+      ...u16(name.length),
+      ...u16(0),
+      ...u16(0),
+      ...u16(0),
+      ...u16(0),
+      ...u32(0),
+      ...u32(offset),
+      ...name,
+    )
+    offset = locals.length
+  }
+  const centralStart = locals.length
+  const out = [...locals, ...centrals]
+  out.push(
+    ...[0x50, 0x4b, 0x05, 0x06],
+    ...u16(0),
+    ...u16(0),
+    ...u16(files.length),
+    ...u16(files.length),
+    ...u32(centrals.length),
+    ...u32(centralStart),
+    ...u16(0),
+  )
+  return new Uint8Array(out)
+}
