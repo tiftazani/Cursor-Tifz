@@ -148,6 +148,8 @@ describe('the trash pane shows what it is about to destroy', () => {
     expect(pane).toContain('{entry.password ? (')
     expect(pane).toContain('{entry.notes ? (')
     expect(pane).toContain('value={entry.notes} readOnly')
+    // Masked, like the editor: verify what you are destroying, do not print it.
+    expect(pane).toContain('<SecretInput value={entry.password}')
     expect(pane).toContain('window.confirm')
   })
 })

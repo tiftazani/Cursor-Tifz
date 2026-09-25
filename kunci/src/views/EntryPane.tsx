@@ -101,7 +101,9 @@ export function EntryPane({
         ) : null}
         {entry.password ? (
           <Field label="Password">
-            <input className="input" value={entry.password} readOnly />
+            {/* Masked by default, like the editor — the point is that the user can
+                verify what they are about to destroy, not that it is printed out. */}
+            <SecretInput value={entry.password} onChange={() => undefined} />
           </Field>
         ) : null}
         {entry.url ? (
