@@ -56,9 +56,22 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
+          # Keluaran langkah ini harus bisa dibaca cepat. Pada 25 Sep 2026 mirror
+          # gagal dan cadangan menjadi kosong, tetapi laporannya cuma menulis
+          # "tidak terbaca" di antara baris lain. Sekarang keadaan itu ditandai
+          # jelas dan diakhiri dengan keluar kode 1.
+          RUSAK=0
           for db in cuciin-db cuciin-backup-db; do
             n="$(npx wrangler d1 execute "$db" --remote --json \
               --command="SELECT count(*) AS n FROM staff;" 2>/dev/null \
               | grep -oE '"n": *[0-9]+' | grep -oE '[0-9]+' || true)"
-            echo "$db staff: ${n:-tidak terbaca}"
+            echo "$db staff: ${n:-TIDAK TERBACA}"
+            if [ -z "$n" ]; then
+              echo "  ^^ PERINGATAN: tabel staff tidak terbaca di $db. Cadangan kosong berarti tidak ada salinan data produksi." >&2
+              RUSAK=1
+            fi
           done
+          if [ "$RUSAK" = "1" ]; then
+            echo "GALAT: ada database yang tidak bisa dibaca; periksa log langkah sebelumnya." >&2
+            exit 1
+          fi

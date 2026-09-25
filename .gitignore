@@ -41,3 +41,7 @@ laundry-ops/releases/*-candidate/*.aab
 # ulang dengan: python3 tools/bangun_dokumen.py && python3 tools/gabung_dokumen.py
 laundry-ops/docs/_terbangun/
 laundry-ops/tools/__pycache__/
+# Skrip Cloudflare memakai Python; jalankan `py_compile` atau impor apa pun
+# meninggalkan berkas .pyc yang tidak boleh ikut masuk repositori.
+__pycache__/
+*.pyc
