@@ -41,6 +41,8 @@ import { AutofillView } from './AutofillView'
 import { BackupView } from './BackupView'
 import { SettingsView } from './SettingsView'
 import { QuickFind } from './QuickFind'
+import { useToast } from '../components/Toast'
+import { deleteIntent } from '../lib/delete-key'
 
 // `group` starts a labelled block in the sidebar. Eight items in one flat list is
 // hard to scan, and the narrow layout cannot fall back to a bottom tab bar the way
@@ -70,7 +72,8 @@ const FILTERS: { id: FilterId; label: string }[] = [
 ]
 
 export function AppShell() {
-  const { vault, lock, helperOnline, helperAccessibility, emptyTrash } = useVault()
+  const { vault, lock, helperOnline, helperAccessibility, emptyTrash, deleteEntry, purgeEntry } = useVault()
+  const toast = useToast()
   const compact = useCompactLayout()
   const [view, setView] = useState<AppView>('home')
   const [filter, setFilter] = useState<FilterId>('all')
@@ -156,6 +159,75 @@ export function AppShell() {
     // rather than leaving its local copy of the discarded text on screen.
     setPaneEpoch((e) => e + 1)
     return true
+  }
+
+  /**
+   * Delete key on the entry list.
+   *
+   * The list already answers ArrowUp/ArrowDown, so it is the natural place for the
+   * key that removes a row. It only ever acts on the row the list has selected, never
+   * on "whatever is focused", and it defers to `deleteIntent` for the guards: a text
+   * field, an open panel, or a dialog already on screen all keep the key.
+   */
+  function onListKeyDown(e: React.KeyboardEvent<HTMLUListElement>) {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return
+    const target = e.target as HTMLElement | null
+    // `isContentEditable` matters because the notes field is a textarea rendered from
+    // contenteditable roots in some browsers, and a `readOnly` input still counts as a
+    // place the user is working.
+    const typing =
+      !!target &&
+      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)
+    const intent = deleteIntent({
+      selectedId,
+      inTrash: filter === 'trash',
+      typing,
+      overlayOpen: findOpen || moreOpen,
+      // window.confirm is synchronous, so there is never more than one open here. Pass
+      // false rather than pretending to track a dialog this component does not own.
+      confirmPending: false,
+    })
+    if (intent.action === 'none') return
+    // Only claim the key once it is certain to act, so Backspace still reaches the
+    // browser in every case the user is typing.
+    e.preventDefault()
+    if (intent.action === 'trash') {
+      void trashSelected(intent.id)
+      return
+    }
+    void purgeSelected(intent.id)
+  }
+
+  async function trashSelected(id: string) {
+    if (!confirmDiscard('membuang entri ini')) return
+    const entry = source.find((e) => e.id === id)
+    try {
+      await deleteEntry(id)
+      toast.push(`"${entry?.name ?? 'Entri'}" masuk sampah.`)
+      // Clear the selection, or the pane goes on showing an entry that is now in the
+      // trash and the next Delete would act on it a second time.
+      if (selectedId === id) setSelectedId(null)
+      setDraft(null)
+      setDraftDirty(false)
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : 'Gagal membuang', 'danger')
+    }
+  }
+
+  async function purgeSelected(id: string) {
+    const entry = source.find((e) => e.id === id)
+    // Permanent, and there is no undo: this one asks, exactly like the button in the
+    // trash pane does.
+    if (!window.confirm(`Hapus permanen "${entry?.name ?? 'entri ini'}"? Ini tidak bisa dibatalkan.`)) return
+    try {
+      await purgeEntry(id)
+      toast.push('Entri dihapus permanen.')
+      if (selectedId === id) setSelectedId(null)
+      setDraft(null)
+      setDraftDirty(false)
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : 'Gagal menghapus', 'danger')
+    }
   }
 
   function startNew() {
@@ -364,6 +436,8 @@ export function AppShell() {
               ))}
             </div>
             <ul className="entry-list" aria-label="Daftar entri" onKeyDown={(e) => {
+              onListKeyDown(e)
+              if (e.defaultPrevented) return
               if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
               const rows = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('.entry-row'))
               const current = rows.indexOf(document.activeElement as HTMLButtonElement)

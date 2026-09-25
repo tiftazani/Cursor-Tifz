@@ -884,12 +884,24 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (status !== 'unlocked' || !vault) return
+    // The preview harness unlocks without ever producing a blob or a session key, so
+    // the inactivity machinery has nothing to validate against and would lock the demo
+    // the moment the idle timer fired. It is fixtures only and holds no real vault, so
+    // there is no session to protect.
+    if (isPreviewUi()) return
     const seconds = resolveAutoLockSeconds(vault.settings)
     const lockNow = () => lock()
     if (seconds < 0) return
     const onVisible = () => {
       if (document.hidden) return
-      void refreshSession.restore(blobRef.current!, Date.now(), seconds).then((key) => {
+      // A missing blob means there is no refresh session to check. Locking is the safe
+      // answer, and it is also what `bump` does, so both paths agree.
+      const blob = blobRef.current
+      if (!blob) {
+        lockNow()
+        return
+      }
+      void refreshSession.restore(blob, Date.now(), seconds).then((key) => {
         if (!key) lockNow()
       })
     }
