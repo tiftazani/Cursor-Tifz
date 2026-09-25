@@ -78,6 +78,40 @@ Catatan,,,
     expect(csv).toContain('Mail')
   })
 
+  it('lets a declared type win over the heuristics', () => {
+    // Kunci's own sheet export writes a `type` column, in SHEET_HEADERS order. The
+    // heuristics used to sit ahead of the declared value in the same else-if chain,
+    // so a `login` row with no URL or username came back as `password`, and a `login`
+    // with an app name came back as `app`: a round trip through .csv or .xlsx
+    // silently changed the entry type.
+    const text = [
+      'name,type,url,username,password,app,notes,totp,tags',
+      'Tanpa URL,login,,,Pw12345678!,,,,',
+      'App Login,login,,,Pw12345678!,Safari,,,',
+      'App Mac,app,https://app.test,,Pw12345678!,,,,',
+      'PIN wifi,password,,,rumah-wifi,,,,',
+      'Catatan,note,,,,,isi catatan,,',
+      'OTP kerja,totp,,,,,,JBSWY3DPEHPK3PXP,',
+    ].join('\n')
+    const entries = entriesFromCsv(text, 10)
+    const byName = new Map(entries.map((e) => [e.name, e.type]))
+    expect(byName.get('Tanpa URL')).toBe('login')
+    expect(byName.get('App Login')).toBe('login')
+    expect(byName.get('App Mac')).toBe('app')
+    expect(byName.get('PIN wifi')).toBe('password')
+    expect(byName.get('Catatan')).toBe('note')
+    expect(byName.get('OTP kerja')).toBe('totp')
+  })
+
+  it('still infers a type when the column is absent or blank', () => {
+    // The heuristics are not gone, only demoted: a file with no `type` column keeps
+    // importing the way it always did.
+    const noColumn = entriesFromCsv('name,url,username,password\nWiFi,,,rumah-wifi', 1)
+    expect(noColumn[0]?.type).toBe('password')
+    const blank = entriesFromCsv('name,type,url,username,password\nWiFi,,,,rumah-wifi', 1)
+    expect(blank[0]?.type).toBe('password')
+  })
+
   it('skips empty rows', () => {
     expect(entriesFromCsv('name,url,username,password\n,,,', 1)).toHaveLength(0)
   })

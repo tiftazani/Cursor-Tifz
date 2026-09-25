@@ -393,6 +393,67 @@ describe('the session probe against a stale token', () => {
   })
 })
 
+describe('a network blip during boot is not a verdict', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+    // sessionKnown/sessionOn are module-level and other tests in this file set them,
+    // so each case here needs its own copy of the module to start from "unknown".
+    vi.resetModules()
+    const store = new Map<string, string>()
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, v),
+        removeItem: (k: string) => void store.delete(k),
+      },
+      location: { hostname: '127.0.0.1', host: '127.0.0.1:8780' },
+      sessionStorage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined },
+    })
+  })
+
+  it('keeps trying after the API never answered', async () => {
+    // Nothing replied at all, which used to be recorded as "no session" — and
+    // cloudSyncPossible() then refused every later save for the rest of the page's
+    // life. A momentary drop became a permanent "never sync again" switch.
+    const cloud = await import('../src/lib/cloud')
+    const state = await cloud.probeCloudSession({
+      publicHost: false,
+      token: null,
+      cloudUrl: 'https://kunci.tiftazani-cuciin.workers.dev',
+      fetch: async () => {
+        throw new TypeError('Failed to fetch')
+      },
+    })
+    expect(state.error).toBe('network')
+    // No verdict was recorded, so a save still goes out.
+    expect(cloud.cloudSyncPossible()).toBe(true)
+
+    let called = false
+    vi.stubGlobal('fetch', async () => {
+      called = true
+      return jsonRes(200, { ok: true })
+    })
+    await cloud.cloudPutVault({ v: 1 } as never)
+    expect(called).toBe(true)
+  })
+
+  it('does record a verdict when the API answered and refused', async () => {
+    // The contrast case: a real 401 IS a verdict, so saves stop instead of firing
+    // the same doomed request on every action.
+    const cloud = await import('../src/lib/cloud')
+    await cloud.probeCloudSession({
+      publicHost: false,
+      token: null,
+      cloudUrl: 'https://kunci.tiftazani-cuciin.workers.dev',
+      fetch: async (url) => {
+        if (url.endsWith('/api/ping')) return jsonRes(200, { ok: true })
+        return jsonRes(401, { ok: false })
+      },
+    })
+    expect(cloud.cloudSyncPossible()).toBe(false)
+  })
+})
+
 describe('reading the cloud vault behind a stale token', () => {
   beforeEach(() => {
     vi.unstubAllGlobals()
