@@ -403,6 +403,49 @@ Dua jebakan yang sudah ditangani skrip, jangan dihapus tanpa alasan:
   tanpa mengunci DB). Mirror ini untuk yang lebih lama dari 7 hari dan untuk selamat bila
   akun Cloudflare hilang. Keduanya saling melengkapi, bukan saling menggantikan.
 
+### 0j-1. Cadangan sempat KOSONG 25 Sep 2026 — urutan langkah dan urutan tabel
+
+**Status: diperbaiki dan dipulihkan; 5 tes baru mengunci perilakunya.**
+
+Saat memeriksa CI pada 25 Sep 2026 ketemu `cuciin-backup-db` **tanpa satu tabel pun**.
+Run mirror 24 Sep 20:58 UTC gagal, dan langkahnya sudah lebih dulu membuang seluruh
+tabel cadangan. Jadi bukan cuma gagal menyalin: salinan yang ada ikut hilang.
+
+Dua sebab bertumpuk, keduanya harus diperbaiki bersamaan:
+
+1. **`wrangler d1 export` menulis pernyataan mengikuti urutan tabel di `sqlite_master`,
+   bukan urutan ketergantungan.** Di export produksi, `CREATE TABLE products` muncul
+   setelah `INSERT INTO services ... product_id`. Impor berhenti dengan
+   `no such table: main.products`. Setelah urutan CREATE dibereskan, muncul galat
+   berikutnya: `FOREIGN KEY constraint failed`, karena baris induk ditulis setelah
+   baris anak. Berkas export membuka dengan `PRAGMA defer_foreign_keys=TRUE`, tetapi
+   **D1 tidak menjalankan pragma itu untuk impor berkas**, jadi cek FK tetap per pernyataan.
+2. **Urutan langkah skrip terbalik.** Tabel cadangan dibuang dulu, baru impor dijalankan.
+   Impor gagal di tengah = cadangan kosong. Galat impor juga disembunyikan
+   `>/dev/null 2>&1`, dan verifikasi hanya membandingkan jumlah `staff`, sehingga
+   kegagalannya cuma muncul sebagai "tidak terbaca" di antara baris log lain.
+
+Perbaikan yang sekarang ada di repo:
+
+- `cloudflare/scripts/reorder_d1_export.py` — memecah export, membaca ketergantungan FK
+  dari tiap `CREATE TABLE`, menyusun tabel secara topologis, menaruh `CREATE INDEX` dan
+  `CREATE TRIGGER` di akhir, lalu **membuktikan hasilnya bisa dijalankan ulang** di SQLite
+  lokal dengan `foreign_keys=ON`, satu pernyataan per transaksi (paling ketat).
+- `mirror-d1.sh` — export diuji SEBELUM cadangan disentuh; isi cadangan lama diselamatkan
+  ke berkas dulu; impor gagal memasang kembali isi lama; galat impor tidak lagi disembunyikan;
+  verifikasi membandingkan **delapan tabel**, bukan hanya `staff`.
+- Workflow `cuciin-d1-mirror.yml` — laporan menandai database yang tidak terbaca dan keluar
+  kode 1, tidak lagi menulis "tidak terbaca" di antara baris lain.
+
+Bukti: impor ulang menulis 26 tabel / 2.338 baris; delapan tabel produksi dan cadangan
+**identik**; `bash scripts/mirror-d1.sh` dijalankan penuh sampai "Mirror selesai dan
+terverifikasi". `tests/reorder-d1-export.test.mjs` (5 tes) dibuktikan **merah lebih dulu**
+terhadap versi lama (4 dari 5 gagal). `npm run check`: 82 tes lulus.
+
+**Jangan ubah dua hal ini tanpa tes:** urutan "uji export → simpan cadangan lama → buang →
+impor", dan penolakan berkas yang tidak bisa dijalankan ulang. Keduanya yang mencegah
+cadangan kosong terulang.
+
 ## 0k. Email reset sandi: teks "project-634935388002" berasal dari OAuth brand, bukan nama project
 
 **Status: akar masalah terbukti; perubahan template TIDAK bisa lewat API — harus dari Console.**
