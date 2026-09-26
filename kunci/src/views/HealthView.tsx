@@ -7,6 +7,8 @@ import {
   checkableEntries,
   deadLinkDetail,
   deadLinks,
+  hostsToProbe,
+  pendingCount,
   remainingCount,
   DEAD_DAYS,
 } from '../lib/dead-links'
@@ -139,12 +141,14 @@ export function HealthView({ onOpen }: { onOpen: (id: string) => void }) {
   )
 
   const linkTargets = checkableEntries(vault.entries)
+  const probeHosts = hostsToProbe(vault.entries)
   const gone = deadLinks(vault.entries, vault.linkHealth ?? {})
+  const waiting = pendingCount(vault.entries, vault.linkHealth ?? {})
   const linkRunning = linkProgress !== null
   const lastLinkCheck = Object.values(vault.linkHealth ?? {}).reduce((max, r) => Math.max(max, r.lastAt), 0)
 
   async function runLinkCheck() {
-    setLinkProgress({ done: 0, total: linkTargets.length })
+    setLinkProgress({ done: 0, total: probeHosts.length })
     setLinkResult('')
     try {
       const confirmed = await checkLinks((done, total) => setLinkProgress({ done, total }))
@@ -197,7 +201,9 @@ export function HealthView({ onOpen }: { onOpen: (id: string) => void }) {
         <span className="muted small">
           {linkTargets.length === 0
             ? 'Tidak ada entri dengan alamat situs yang bisa diperiksa'
-            : `${linkTargets.length} alamat bisa diperiksa · ${
+            : `${linkTargets.length} alamat bisa diperiksa${
+                probeHosts.length < linkTargets.length ? ` (${probeHosts.length} situs unik)` : ''
+              } · ${
                 lastLinkCheck ? `Terakhir diperiksa ${new Date(lastLinkCheck).toLocaleString('id-ID')}` : 'Belum pernah diperiksa'
               }`}
         </span>
@@ -205,7 +211,7 @@ export function HealthView({ onOpen }: { onOpen: (id: string) => void }) {
           type="button"
           className={gone.length === 0 && lastLinkCheck === 0 ? 'btn btn-primary' : 'btn'}
           onClick={() => (linkAgreed ? void runLinkCheck() : setLinkAgreed(true))}
-          disabled={linkRunning || !canStartCheck({ total: linkTargets.length, running: linkRunning })}
+          disabled={linkRunning || !canStartCheck({ total: probeHosts.length, running: linkRunning })}
         >
           {linkRunning
             ? `Memeriksa… sisa ${remainingCount(linkProgress!.total, linkProgress!.done)}`
@@ -217,7 +223,14 @@ export function HealthView({ onOpen }: { onOpen: (id: string) => void }) {
         </button>
       </div>
       {linkAgreed && !linkRunning && !linkResult ? (
-        <p className="muted small prio-err">{checkDisclosure(linkTargets.length)}</p>
+        <p className="muted small prio-err">{checkDisclosure(probeHosts.length)}</p>
+      ) : null}
+      {/* A first run that finds a failure cannot name it yet, because the rule needs two
+          different days. Saying so stops the silence from reading as a broken check. */}
+      {waiting > 0 && !linkRunning ? (
+        <p className="muted small prio-err">
+          {waiting} alamat gagal sekali dan sedang menunggu pemeriksaan hari kedua sebelum ditandai.
+        </p>
       ) : null}
       {linkResult ? <p className="muted small prio-err">{linkResult}</p> : null}
     </section>

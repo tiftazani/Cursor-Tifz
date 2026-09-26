@@ -1,5 +1,6 @@
 import {
   PROBE_CONCURRENCY,
+  PROBE_REPEAT_GAP_MS,
   PROBE_TIMEOUT_MS,
   reasonFor,
   verdictFromProbe,
@@ -19,7 +20,7 @@ import {
  * for every such test.
  */
 
-function probeHost(host: string): Promise<{ ms: number; reportedAlive: boolean; timedOut: boolean }> {
+function probeOnce(host: string): Promise<{ ms: number; reportedAlive: boolean; timedOut: boolean }> {
   return new Promise((resolve) => {
     const started = performance.now()
     let settled = false
@@ -54,15 +55,33 @@ function probeHost(host: string): Promise<{ ms: number; reportedAlive: boolean; 
   })
 }
 
-/** Check one host, once. */
+/**
+ * Ask one host twice.
+ *
+ * Twice because once is not enough: the first lookup of a dead name is slow, since it has
+ * to reach the resolver, and that slowness is indistinguishable from a live host. The
+ * second lookup comes back in a millisecond or two from the resolver's memory of the
+ * empty answer, and no live host can do that. See `DEAD_BEFORE_MS`.
+ *
+ * The gap is short on purpose. It is there so the second attempt is a fresh lookup rather
+ * than a second listen on a socket that is still closing.
+ */
 export async function checkHost(host: string, now = Date.now()): Promise<UrlCheck> {
-  const probe = await probeHost(host)
-  const verdict = verdictFromProbe(probe)
+  const first = await probeOnce(host)
+  // A host that answered needs no second opinion, and one attempt already spent the
+  // timeout is not worth repeating.
+  const attempts = first.reportedAlive || first.timedOut ? [first] : [first, await (async () => {
+    await new Promise((r) => window.setTimeout(r, PROBE_REPEAT_GAP_MS))
+    return probeOnce(host)
+  })()]
+  const verdict = verdictFromProbe(attempts)
+  const timedOut = attempts.some((a) => a.timedOut)
   return {
     url: host,
     verdict,
-    reason: reasonFor(verdict, probe.timedOut),
-    ms: probe.ms,
+    reason: reasonFor(verdict, timedOut),
+    // The fastest attempt, because that is the number the verdict was read from.
+    ms: Math.min(...attempts.map((a) => a.ms)),
     at: now,
   }
 }

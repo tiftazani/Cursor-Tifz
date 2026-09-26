@@ -42,12 +42,42 @@ export interface UrlCheck {
 /**
  * The failure that is faster than any real answer can be.
  *
- * 60 ms. Well above the 23 ms worst dead case measured, and well below the 78 ms
- * fastest live case, so it sits in the gap rather than near either edge. HTTPS on a
- * first visit costs a TLS handshake on top of the name lookup, which is why a live host
- * cannot come back this fast even when everything is warm.
+ * 25 ms, and the number comes from a two-probe rule rather than a single one. A dead name
+ * is slow exactly once: the first lookup has to travel to the resolver and come back
+ * empty, which measured 32 to 1101 ms, and that overlaps live hosts (89 to 214 ms), so a
+ * single slow failure proves nothing. But the resolver then remembers the empty answer,
+ * and the same name fails again in 1 to 2 ms. A live host has no such shortcut, because
+ * its lookup succeeds and the connection still has to be made and refused.
+ *
+ * So the fastest of two attempts is what gets compared. Measured across a spread of real
+ * hosts: dead names bottomed out at 1 to 2 ms (12 of 12, and 0 of 12 stayed slow), while
+ * the fastest live host measured was 43 ms (cloudflare.com), with the rest from 67 ms to
+ * 6 seconds. 25 ms sits in that gap, well clear of both sides.
  */
-export const DEAD_BEFORE_MS = 60
+export const DEAD_BEFORE_MS = 25
+
+/**
+ * Hosts that cannot be judged from here, and so are never asked about.
+ *
+ * An address on the user's own network is the reason this exists. It resolves inside the
+ * office and nowhere else, so a probe from a laptop at home would fail and the entry
+ * would be condemned for being somewhere the check cannot reach. The same goes for a
+ * machine's own name and for bare IP addresses, which say nothing about a public site.
+ * Skipping them is what keeps this from accusing working entries.
+ */
+export function looksPublicHost(host: string): boolean {
+  const h = host.trim().toLowerCase().replace(/^\[|\]$/g, '')
+  if (!h.includes('.')) return false
+  // An IP address is not a name, and a private one is not even reachable.
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return false
+  if (h.includes(':')) return false // IPv6 literal
+  // Names that only mean something inside one network.
+  const reserved = ['.local', '.localhost', '.internal', '.intranet', '.lan', '.home', '.corp', '.localdomain', '.test', '.invalid', '.example']
+  if (reserved.some((s) => h === s.slice(1) || h.endsWith(s))) return false
+  // A name with no dot in its last label cannot be a public domain.
+  const last = h.split('.').pop() ?? ''
+  return /^[a-z]{2,}$/.test(last)
+}
 
 /** One entry's gathered evidence, kept in the vault so it survives a reload. */
 export interface UrlHealthRecord {
@@ -85,7 +115,7 @@ export function checkableUrl(entry: Entry): string | null {
     } else if (/^[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(url)) {
       host = hostFromUrl(`https://${url}`)
     }
-    if (host && host.includes('.')) return host
+    if (host && host.includes('.') && looksPublicHost(host)) return host
   }
   return null
 }
@@ -96,24 +126,57 @@ export function checkableEntries(entries: Entry[]): Entry[] {
 }
 
 /**
- * Read one probe result.
+ * The distinct addresses a run should probe.
  *
- * The verdict is decided here rather than at the network call, so the rule is in one
- * place and can be tested without a browser.
+ * A real vault saves the same site many times, so probing entry by entry asks one host
+ * the same question over and over and makes a large vault take far longer than it needs
+ * to. Each address is visited once, and the single answer is then applied to every entry
+ * that points there.
  */
-export function verdictFromProbe(opts: { ms: number; reportedAlive: boolean; timedOut: boolean }): UrlVerdict {
+export function hostsToProbe(entries: Entry[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const e of entries) {
+    const host = checkableUrl(e)
+    if (!host || seen.has(host)) continue
+    seen.add(host)
+    out.push(host)
+  }
+  return out
+}
+
+/**
+ * Read two probe attempts at one host.
+ *
+ * Both attempts are needed, and neither alone is enough. A dead name is slow on its first
+ * lookup and fast on the second, so only a fast *repeat* proves the name is gone. A live
+ * host fails slowly both times, because it has to be contacted and refuse.
+ *
+ * The important case is a slow failure on both attempts: it proves nothing at all. It
+ * might be a dead name on a cold resolver or a live site that is merely unreachable from
+ * here, and those must not be told apart by guessing. It is reported as `unclear`, which
+ * leaves the evidence count alone, rather than as `alive`, which would wipe a genuine
+ * finding. Erring this way costs a second day of waiting; the other way loses a real
+ * finding.
+ */
+export function verdictFromProbe(attempts: { ms: number; reportedAlive: boolean; timedOut: boolean }[]): UrlVerdict {
   // Anything that opened, or answered at all, proves the name resolved.
-  if (opts.reportedAlive) return 'alive'
-  if (opts.timedOut) return 'unclear'
-  // A failure this fast did not reach the network. The name did not resolve.
-  return opts.ms < DEAD_BEFORE_MS ? 'dead' : 'alive'
+  if (attempts.some((a) => a.reportedAlive)) return 'alive'
+  if (attempts.some((a) => a.timedOut)) return 'unclear'
+  // The fastest attempt is the one the resolver answered from memory. A live host has no
+  // such shortcut and cannot come back this fast on any attempt.
+  const fastest = Math.min(...attempts.map((a) => a.ms))
+  if (fastest < DEAD_BEFORE_MS) return 'dead'
+  // Slow to fail every time: a real answer could not be obtained, so nothing is proved.
+  return 'unclear'
 }
 
 /** The reason to record alongside a dead verdict. */
 export function reasonFor(verdict: UrlVerdict, timedOut: boolean): FailReason | undefined {
   if (verdict === 'alive') return undefined
   if (timedOut) return 'timeout'
-  return 'dns'
+  // A slow failure that reached the network but got nowhere is a block, not a missing name.
+  return verdict === 'dead' ? 'dns' : 'blocked'
 }
 
 /**
@@ -225,6 +288,15 @@ export function deadLinkDetail(link: DeadLink): string {
 export const PROBE_TIMEOUT_MS = 10_000
 
 /**
+ * How long to wait before asking a host the second time.
+ *
+ * Long enough that the second attempt is a new lookup rather than a repeat of the first,
+ * short enough not to slow a large vault down. The wait costs nothing in practice, since
+ * hosts are checked a few at a time.
+ */
+export const PROBE_REPEAT_GAP_MS = 150
+
+/**
  * How many entries are checked at once.
  *
  * Kept low on purpose. This runs from the user's own browser and their own connection,
@@ -241,6 +313,27 @@ export function canStartCheck(opts: { total: number; running: boolean }): boolea
 /** How many entries one run still has to visit. Shown to the user while it works. */
 export function remainingCount(total: number, done: number): number {
   return Math.max(0, total - done)
+}
+
+/**
+ * Entries that failed once and are waiting for a second day to be called dead.
+ *
+ * Worth showing. The rule only names a site after two different days, so a first run
+ * that finds failures reports "nothing new" while actually having found something. A
+ * user who cannot see that pending evidence reads the silence as a broken check and
+ * runs it again, which cannot help, because the second day has to be a real day.
+ */
+export function pendingCount(entries: Entry[], records: Record<string, UrlHealthRecord>): number {
+  const byId = new Map(entries.map((e) => [e.id, e]))
+  let n = 0
+  for (const rec of Object.values(records)) {
+    if (rec.deadDays <= 0 || rec.deadDays >= DEAD_DAYS) continue
+    const entry = byId.get(rec.entryId)
+    if (!entry) continue
+    if (checkableUrl(entry) !== rec.url) continue
+    n++
+  }
+  return n
 }
 
 /**

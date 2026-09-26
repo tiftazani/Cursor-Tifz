@@ -26,7 +26,7 @@ import { RECOVERY_EMAIL } from '../lib/account'
 import { localToken } from '../lib/recovery-api'
 import { cloudGetVault, cloudPutVault, emailRecoveryKey, isPublicHost, logoutSession } from '../lib/cloud'
 import { resolveAutoLockSeconds } from '../lib/autolock'
-import { checkableEntries, checkableUrl, deadLinks, recordCheck, type UrlHealthRecord } from '../lib/dead-links'
+import { checkableEntries, checkableUrl, deadLinks, hostsToProbe, recordCheck, type UrlCheck, type UrlHealthRecord } from '../lib/dead-links'
 import { checkHosts } from '../lib/dead-link-probe'
 import { refreshSession } from '../lib/refresh-session'
 import { matchAppName } from '../lib/capture'
@@ -549,10 +549,15 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     async (onProgress?: (done: number, total: number) => void): Promise<number> => {
       const current = vaultRef.current
       if (!current) return 0
-      const targets = checkableEntries(current.entries)
-      if (!targets.length) return 0
-      const hosts = targets.map((e) => checkableUrl(e)!).filter(Boolean)
+      // One probe per distinct address, not per entry. A vault that saves the same site
+      // twenty times used to be asked about that site twenty times.
+      const hosts = hostsToProbe(current.entries)
+      if (!hosts.length) return 0
       const checks = await checkHosts(hosts, onProgress)
+      const byHost = new Map<string, UrlCheck>()
+      hosts.forEach((host, i) => {
+        if (checks[i]) byHost.set(host, checks[i])
+      })
 
       // Build the next records from the current vault, not from a snapshot taken before
       // the probes ran, so anything saved during a long check is not thrown away.
@@ -563,12 +568,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       let confirmed = 0
       const before = new Set(deadLinks(latest.entries, records).map((l) => l.entryId))
 
-      targets.forEach((entry, i) => {
+      for (const entry of checkableEntries(latest.entries)) {
         const url = checkableUrl(entry)
-        const check = checks[i]
-        if (!url || !check) return
+        if (!url) continue
+        const check = byHost.get(url)
+        // No answer for this host means the run was cut short, which proves nothing.
+        if (!check) continue
         records[entry.id] = recordCheck(records[entry.id], entry.id, url, check, now)
-      })
+      }
 
       const next: Vault = { ...latest, linkHealth: records }
       const after = new Set(deadLinks(next.entries, records).map((l) => l.entryId))
