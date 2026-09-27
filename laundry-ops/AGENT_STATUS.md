@@ -21,7 +21,7 @@ Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **
 ## 0t. Rilis 1.10.40 (27 Sep, Hermes)
 
 **Status: SELESAI di repo dan di server. APK 1.10.40 ada di `releases/1.10.40-candidate/` dan
-`salinannya di akar `releases/`; Worker produksi sudah ter-deploy. BELUM dipasang di cabang mana pun.****
+salinannya di akar `releases/`; Worker produksi sudah ter-deploy. BELUM dipasang di cabang mana pun.**
 
 Isi rilis:
 
