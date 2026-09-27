@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { homedir, platform, userInfo } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { buildKunciHelperApp, quitHelperProcesses } from './build-helper-app.mjs'
 import { EXTENSION_DIR, extensionOnDisk } from './repo-paths.mjs'
@@ -110,7 +110,33 @@ if (!existsSync(join(ROOT, 'dist', 'index.html'))) {
 await mkdir(plistDir, { recursive: true })
 await mkdir(logsDir, { recursive: true })
 
-const nodePath = process.execPath
+/**
+ * The node path to put in the plist.
+ *
+ * `process.execPath` is the node that ran this installer, which on Homebrew is a
+ * versioned Cellar path such as `/opt/homebrew/Cellar/node/26.9.0/bin/node`. A Homebrew
+ * upgrade deletes that directory, and the plist keeps pointing at it: launchd then exits
+ * 78 on every restart, so the helper is dead until someone reinstalls the service by
+ * hand. That is exactly what happened here, and because the helper is what reloads the
+ * unpacked extension, the extension silently stopped updating too.
+ *
+ * Prefer a path that survives an upgrade. Homebrew keeps `/opt/homebrew/bin/node` as a
+ * symlink to the current version, so record that instead. Only fall back to the running
+ * binary when no stable path is present.
+ */
+function stableNodePath() {
+  for (const candidate of ['/opt/homebrew/bin/node', '/usr/local/bin/node', '/usr/bin/node']) {
+    try {
+      // Resolve through the symlink so a dangling one is not recorded either.
+      if (existsSync(realpathSync(candidate))) return candidate
+    } catch {
+      /* try the next one */
+    }
+  }
+  return process.execPath
+}
+
+const nodePath = stableNodePath()
 const daemonPath = join(ROOT, 'helper', 'daemon.mjs')
 const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
