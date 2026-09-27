@@ -1,8 +1,8 @@
-# Cuciin 1.10.30 — kesiapan rilis
+# Cuciin 1.10.40 — kesiapan rilis
 
-Status: kandidat rilis operasional yang menjalani ulang pemeriksaan kode, build, dan verifikasi cloud pada 20 September 2026. Owner tetap harus menyelesaikan validasi perangkat, rotasi akun, saldo awal, backup terjadwal pertama, dan keputusan go-live. APK bertanda tangan tidak menjamin hilangnya peringatan Play Protect pada distribusi di luar store.
+Status: kandidat rilis operasional yang menjalani ulang pemeriksaan kode, build, dan verifikasi cloud pada 27 September 2026. Owner tetap harus menyelesaikan validasi perangkat, rotasi akun, saldo awal, backup terjadwal pertama, dan keputusan go-live. APK bertanda tangan tidak menjamin hilangnya peringatan Play Protect pada distribusi di luar store.
 
-Dokumen ini terakhir diselaraskan saat rilis **1.10.30 (versionCode 49)**; sebelumnya masih menyebut 1.10.1 dan tertinggal 29 versi. Bagian perpindahan identitas aplikasi di bawah tetap berlaku sebagai catatan sejarah, tetapi angka versi di dalamnya sudah tidak dipakai.
+Dokumen ini terakhir diselaraskan saat rilis **1.10.40 (versionCode 59)**; sebelumnya masih menyebut 1.10.30 dan tertinggal 10 versi. Bagian perpindahan identitas aplikasi di bawah tetap berlaku sebagai catatan sejarah, tetapi angka versi di dalamnya sudah tidak dipakai.
 
 ## Perpindahan identitas aplikasi (16 September 2026)
 
@@ -16,7 +16,18 @@ Konsekuensi yang perlu diketahui sebelum distribusi:
 - Seluruh akun operasional dibuat ulang di project baru. Kata sandi awal `test1234` dan wajib diubah dari Profil sebelum data nyata dipakai.
 - Alamat email Owner tidak diubah; hanya nama tampilan yang menjadi `Cuciin`.
 
-## Bukti verifikasi kandidat (1.10.30)
+## Bukti verifikasi kandidat (1.10.40)
+
+- Android: **336 unit test debug dan 336 unit test rilis lulus**, lint tanpa error, APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
+- APK rilis: non-debuggable, application ID `com.cuciin.laundryops`, versionCode `59`, versionName `1.10.40`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB. `verify_release.py` PASS.
+- SHA-256 sertifikat rilis cocok dengan fingerprint yang dicatat: `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`. Sertifikat **tidak berubah** sejak 1.10.1, jadi APK baru dapat menimpa pemasangan lama.
+- Worker: **84 test lulus** (`npm run check`), termasuk dua tes baru yang mengunci tipe kolom jam pulang absensi.
+- Uji perangkat (emulator-5554, APK debug, kasir dua cabang): enam titik multi-cabang terbukti, satu tulis nyata tercatat di D1, dan cap waktu foto absensi terbaca di berkas foto. Rinciannya di `releases/1.10.40-candidate/README.md`.
+- Worker produksi ter-deploy `dac2f6bd` (revision 1111); hitungan tabel produksi identik sebelum dan sesudah deploy.
+
+## Bukti verifikasi kandidat (1.10.30) — historis
+
+Angka di bagian ini berlaku saat 1.10.30 dan **tidak lagi dipakai** untuk menilai versi sekarang.
 
 - Android: **267 unit test debug dan 267 unit test rilis lulus**, lint tanpa error (19 warning lama: 12 `UseKtx`, 4 `GradleDependency`, 1 `AndroidGradlePluginVersion`, 1 `ObsoleteSdkInt`), APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
 - APK rilis: non-debuggable, application ID `com.cuciin.laundryops`, versionCode `49`, versionName `1.10.30`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB. `verify_release.py` PASS.

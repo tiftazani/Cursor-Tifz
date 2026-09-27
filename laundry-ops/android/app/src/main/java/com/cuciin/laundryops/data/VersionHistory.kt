@@ -12,10 +12,19 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.39"
-    val currentCode: Int = 58
+    val currentName: String = "1.10.40"
+    val currentCode: Int = 59
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.40", code = 59, date = "27 Sep 2026",
+            notes = listOf(
+                "Kasir yang ditugaskan ke lebih dari satu cabang kini benar-benar bisa bekerja di semua cabangnya, bukan hanya cabang pertama. Sebelumnya pemilih cabang di lima layar dikunci di balik izin melihat laporan semua cabang, dan preset Kasir tidak punya izin itu. Akibatnya kasir multi-cabang terkurung di satu cabang: antrean, Service baru, Tutup kas, perubahan stok massal, dan laporan perubahan stok semuanya hanya menampilkan satu cabang.",
+                "Pemilih cabang sekarang muncul di Antrian, Service baru, Tutup kas, perubahan stok massal, dan laporan perubahan stok untuk semua akun yang punya lebih dari satu cabang penugasan. Aturan pemilihnya disatukan di satu tempat supaya tidak ada layar yang tertinggal lagi.",
+                "Tujuan penulisan stok massal ikut disaring cabang penugasan, jadi akun tidak bisa menulis ke cabang di luar penugasannya.",
+                "Foto absensi: cap waktu di foto bisa digambar lagi. Sebelumnya foto gagal diproses dan muncul pesan Foto belum dapat diproses, walaupun fotonya sudah terambil.",
+            ),
+        ),
         AppRelease(
             name = "1.10.39", code = 58, date = "25 Sep 2026",
             notes = listOf(

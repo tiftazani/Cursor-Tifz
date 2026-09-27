@@ -491,6 +491,44 @@ test("absen kedua di cabang yang sama pada hari yang sama memperbarui, bukan men
   assert.equal(baris[0].check_out_at,1789003600000,"jam pulang harus tersimpan");
 });
 
+test("jam pulang absensi disimpan sebagai angka, bukan label jam", async () => {
+  // Kejadian nyata 27 Sep 2026: kolom `check_out_at` bertipe INTEGER, tetapi berisi teks
+  // '27 Sep 2026, 19.58'. Penyebabnya perangkat mengirim DUA bentuk jam pulang sekaligus,
+  // `checkOutAt` (label siap tampil) dan `checkOutAtMs` (angka), dan Worker memilih yang label
+  // lebih dulu. Akibatnya aritmetika durasi di sisi mana pun yang membaca kolom itu rusak.
+  const env=fakeD1(); seedBaseline(env);
+  const kirim=(commandId,id,checkIn,checkOutLabel,checkOutMs)=>pushCommands(commandRequest([{
+    commandId,type:"attendance.upsert",entityId:id,branchId:"melati",
+    payload:{id,branchId:"melati",staffEmail:"kasir@cuciin.id",staffName:"Kasir Melati",workDate:"2026-09-24",
+      checkInAtMs:checkIn,checkInAt:"24 Sep 2026, 08.00",checkOutAtMs:checkOutMs,checkOutAt:checkOutLabel,note:""},
+  }]),env,identities.kasir);
+
+  const body=await (await kirim("absen-pulang-0001","att-melati-2026-09-24-2",1789000000000,"24 Sep 2026, 17.00",1789033200000)).json();
+  assert.equal(body.results[0].accepted,true,"absen pulang harus diterima");
+
+  const baris=rows(env,"SELECT check_in_at,check_out_at,typeof(check_out_at) AS tipe FROM attendance WHERE staff_email='kasir@cuciin.id'");
+  assert.equal(baris.length,1,"harus ada satu baris absensi");
+  assert.equal(baris[0].tipe,"integer","kolom jam pulang harus menyimpan angka, bukan teks label");
+  assert.equal(baris[0].check_out_at,1789033200000,"angka jam pulang harus dipakai, bukan label jam");
+  assert.equal(baris[0].check_in_at,1789000000000,"jam masuk juga harus tersimpan sebagai angka");
+});
+
+test("absen pulang tanpa angka tetap diterima dan disimpan kosong", async () => {
+  // Perangkat versi lama mungkin hanya mengirim label. Itu tidak boleh menggagalkan absen,
+  // dan tidak boleh menulis teks ke kolom angka.
+  const env=fakeD1(); seedBaseline(env);
+  const body=await (await pushCommands(commandRequest([{
+    commandId:"absen-label-0001",type:"attendance.upsert",entityId:"att-melati-2026-09-24-3",branchId:"melati",
+    payload:{id:"att-melati-2026-09-24-3",branchId:"melati",staffEmail:"kasir@cuciin.id",staffName:"Kasir Melati",
+      workDate:"2026-09-24",checkInAtMs:1789000000000,checkOutAt:"24 Sep 2026, 17.00",note:""},
+  }]),env,identities.kasir)).json();
+  assert.equal(body.results[0].accepted,true,"absen dengan label saja tetap harus diterima");
+
+  const baris=rows(env,"SELECT check_out_at FROM attendance WHERE staff_email='kasir@cuciin.id'");
+  assert.equal(baris.length,1,"harus ada satu baris absensi");
+  assert.equal(baris[0].check_out_at,null,"label teks tidak boleh masuk kolom angka");
+});
+
 test("migrasi 0009 mengganti kunci absensi menjadi per cabang", () => {
   const sql=readFileSync(new URL("../migrations/0009_attendance_per_branch.sql", import.meta.url), "utf8");
   assert.match(sql,/UNIQUE \(staff_email, work_date, branch_id\)/,"kunci baru harus menyertakan branch_id");

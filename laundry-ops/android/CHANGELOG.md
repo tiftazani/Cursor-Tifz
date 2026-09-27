@@ -2,6 +2,67 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.40 — 27 Sep 2026 (versionCode 59)
+
+### Kasir multi-cabang bisa bekerja di semua cabangnya
+
+Laporan Owner: kasir yang ditugaskan ke lebih dari satu cabang hanya bisa beraktivitas di satu
+cabang. Audit menyeluruh menemukan **satu syarat yang salah dipakai di lima layar**: pemilih cabang
+dikunci di balik `canViewAllBranches(s)`, yang sebenarnya berarti izin `analytics.view` (melihat
+laporan semua cabang). Preset **Kasir tidak memuat** izin itu, jadi kelima layar mengunci kasir
+multi-cabang di cabang pertama (`session.branchId`).
+
+| Layar | Gejala sebelum perbaikan |
+| --- | --- |
+| Antrian | Hanya satu baris statis "Cabang tugas Anda", tidak bisa berpindah |
+| Service baru | Pemilih "Cabang transaksi" tidak muncul |
+| Tutup kas | Pemilih cabang tidak muncul |
+| Perubahan stok massal | Pemilih "Cabang yang diperbarui" tidak muncul |
+| Laporan perubahan stok | Pemilih cabang tidak muncul |
+
+Perbaikan: aturan dipindahkan ke fungsi murni baru `ui/BranchPicker.kt`
+(`visible`, `options`, `writeTargets`) dan dipakai sebagai gerbang tunggal di semua layar.
+`writeTargets` juga menyaring tujuan tulis massal dengan cabang penugasan.
+
+**Lapisan store dan server sudah benar sejak awal** (tidak diubah): `visibleNotas`,
+`visibleAttendance`, `saveNota`, `editStocks`, `closeCash`, `checkIn`/`checkOut` memakai seluruh
+`allowedBranchIds`; `command-sync.ts` `staffJournalScopes` menulis satu entri jurnal per cabang;
+`pullChanges` menyaring jurnal dengan `branch_id IN (cabang pengguna)`; `visibleSnapshot` di
+`index.ts` memangkas seluruh `BRANCH_DATASETS` ke cabang penugasan sebelum dikirim ke perangkat.
+
+Bukti emulator (kasir 2 cabang, laupay-dayeuh + laupay-kirab):
+
+| Titik uji | Hasil |
+| --- | --- |
+| Antrian | Sheet "Semua cabang saya · 2 cabang"; pilih Kirab → pindah |
+| Service baru | Sheet "Pilih cabang transaksi" berisi 2 cabang |
+| Tutup kas | Sheet berisi 2 cabang; pilih Kirab → piutang Rp 11.000 → Rp 0 |
+| Perubahan stok massal | Sheet multi-pilih 2 cabang, keduanya bisa dicentang |
+| Laporan perubahan stok | "2 cabang dipilih"; memuat entri Kirab DAN Dayeuh |
+| Tulis nyata | Softener +5 di Kirab tersimpan di D1 `stock_moves` `branch_id='laupay-kirab'` |
+| Absensi | Sheet "Pilih cabang kerja" berisi 2 cabang |
+
+Tes: **336 tes Android** (+2 dari `AttendancePhotoStampTest`), **84 tes Worker** (+2 dari uji jam pulang).
+
+### Jam pulang absensi disimpan sebagai angka, bukan label jam
+
+Ditemukan saat audit lanjutan. Kolom `check_out_at` di tabel `attendance` bertipe INTEGER, tetapi
+isinya teks siap tampil (`'27 Sep 2026, 19.58'`). Penyebabnya perangkat mengirim DUA bentuk jam
+pulang sekaligus, `checkOutAt` (label) dan `checkOutAtMs` (angka), dan Worker memilih yang label
+lebih dulu lewat `p.checkOutAt ?? p.checkOutAtMs`. Terdampak di produksi: 1 baris, dan di D1 debug.
+Akibatnya aritmetika durasi di sisi mana pun yang membaca kolom itu rusak. Perbaikan: Worker hanya
+menerima angka, dan label dari perangkat versi lama diabaikan alih-alih ditulis ke kolom angka.
+Dikunci dua tes Worker baru, terbukti merah lebih dulu (`actual: 'text'`, `actual: '24 Sep 2026, 17.00'`).
+
+### Foto absensi: cap waktu bisa digambar lagi
+
+`BitmapFactory.decodeFile(path)` mengembalikan bitmap yang tidak boleh diubah, sehingga
+`Canvas(image)` melempar `IllegalStateException: Immutable bitmap passed to Canvas constructor`.
+Akibatnya cap "ABSEN MASUK/PULANG" gagal digambar dan layar berbunyi "Foto belum dapat diproses.
+Coba ambil kembali." padahal fotonya sudah terambil. Perbaikan: baca dengan
+`BitmapFactory.Options().apply { inMutable = true }`. Dikunci `AttendancePhotoStampTest`, terbukti
+merah lebih dulu.
+
 ## 1.10.39 — 25 Sep 2026 (versionCode 58)
 
 ### Akun login ikut dibuat saat Owner menambah pengguna
