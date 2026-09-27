@@ -5,20 +5,59 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
-**Keadaan `main` per 27 Sep: `a59de2f`** (perbaikan kasir multi-cabang, sudah di-push ke `origin/main`; CI hijau).
+**Keadaan `main` per 27 Sep: `ba87666`** (rilis 1.10.40: kasir multi-cabang, foto absensi, jam pulang sebagai angka; sudah di-push ke `origin/main`).
 
 | Commit | Isi |
 | --- | --- |
+| `ba87666` | Rilis 1.10.40: kasir multi-cabang, foto absensi, jam pulang tersimpan sebagai angka |
+| `2eae19a` | Foto absensi: baca bitmap yang boleh diubah agar cap waktu bisa digambar |
+| `de69107` | Papan status: koreksi — laporan aman karena server sudah menyaring per cabang |
+| `6337fa5` | Papan status: perbaikan kasir multi-cabang (a59de2f) + catatan uji jurnal |
 | `a59de2f` | Kasir multi-cabang: pemilih cabang di semua layar kerja |
 | `efa15ee` | Papan status: bukti uji 1.10.39 (user baru dari aplikasi bisa login) |
 | `0c3938f` | Rilis 1.10.39: layar Tambah user kini membuat akun login Firebase |
-| `dee4ec8` | Dokumen rilis 1.10.38: versi Worker terbaru dan tes dedupe jurnal |
 | `f63b779` | Rilis 1.10.38: absensi per cabang untuk kasir multi-cabang |
+
+## 0t. Rilis 1.10.40 (27 Sep, Hermes)
+
+**Status: SELESAI di repo dan di server. APK 1.10.40 ada di `releases/1.10.40-candidate/` dan
+`salinannya di akar `releases/`; Worker produksi sudah ter-deploy. BELUM dipasang di cabang mana pun.****
+
+Isi rilis:
+
+| Perbaikan | Sisi | Bukti |
+| --- | --- | --- |
+| Kasir multi-cabang di semua layar kerja | Android | 6 titik di emulator + tulis stok nyata ke D1 |
+| Cap waktu foto absensi bisa digambar | Android | foto absen dibaca ulang dari perangkat, cap terbaca |
+| Jam pulang absensi tersimpan sebagai angka | Worker | D1 debug: `typeof(check_out_at)='integer'` |
+
+**Temuan tambahan saat menguji (penting untuk sesi berikutnya):**
+
+1. **D1 debug belum menjalankan migrasi `0009_attendance_per_branch.sql`.** Akibatnya absen di
+   cabang kedua ditolak batas unik `UNIQUE(staff_email, work_date)` versi lama, dan **kegagalannya
+   tidak muncul sebagai pesan apa pun di layar** — layar tampak sukses, tetapi barisnya tidak
+   tersimpan dan hilang setelah restart. Sudah diterapkan ke `cuciin-debug-db`; D1 produksi sudah
+   memakai skema benar sejak awal. **Uji absensi multi-cabang di D1 debug wajib memeriksa
+   `d1_migrations` lebih dulu.**
+2. **Kolom `check_out_at` bertipe INTEGER tetapi berisi label teks** (`'27 Sep 2026, 19.58'`).
+   Penyebab: perangkat mengirim `checkOutAt` (label) DAN `checkOutAtMs` (angka), Worker memilih
+   label lebih dulu (`p.checkOutAt ?? p.checkOutAtMs`). Terukur di produksi: 1 baris (cabang
+   shelly). Sudah diperbaiki di Worker; dua tes penjaga baru, terbukti merah lebih dulu.
+   **Baris produksi yang telanjur teks belum dibersihkan** — akan tertimpa saat karyawan itu absen
+   pulang lagi.
+3. **`PeriodSheet` (Laporan) memakai `store.branches` — diperiksa dan BUKAN bug.** Perangkat kasir
+   hanya memuat cabang penugasan (server menyaring), dan pemegang `analytics.view` memang berhak
+   melihat semua cabang organisasi.
+
+**Angka sesudah rilis 1.10.40:** 336 tes Android (debug dan release), 84 tes Worker, lint lulus,
+`verify_release.py` PASS. Worker produksi `dac2f6bd` (revision 1111), Worker debug `79e8f50c`.
+Hitungan tabel produksi identik sebelum dan sesudah deploy (`orders 33, staff 12, branches 5,
+attendance 6, sync_changes 587`).
 
 ## 0s. Kasir multi-cabang hanya muncul di satu cabang (27 Sep, Hermes)
 
-**Status: SELESAI. Kode diperbaiki, teruji, dan dibuktikan di emulator; sudah di `main` (`a59de2f`),
-CI hijau. BELUM dipasang di cabang mana pun (masih perlu APK baru).**
+**Status: SELESAI. Kode diperbaiki, teruji, dan dibuktikan di emulator; sudah di `main` (`a59de2f`
+lalu dirilis sebagai `ba87666`), CI hijau. BELUM dipasang di cabang mana pun (masih perlu APK baru).**
 
 Laporan Owner: kasir yang ditugaskan ke lebih dari satu cabang hanya bisa beraktivitas di satu
 cabang. Audit menyeluruh menemukan **satu syarat yang salah dipakai di lima layar**: pemilih cabang
