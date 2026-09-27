@@ -23,7 +23,7 @@ object AttendancePhotos {
     }
 
     fun stamp(file: File, stage: String, staffName: String, branchName: String, atMs: Long = Clock.nowMs()): String? = runCatching {
-        val raw = BitmapFactory.decodeFile(file.absolutePath) ?: return null
+        val raw = BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inMutable = true }) ?: return null
         val maxWidth = 1920
         val image = if (raw.width > maxWidth) {
             val height = (raw.height * (maxWidth.toFloat() / raw.width)).toInt().coerceAtLeast(1)
