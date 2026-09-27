@@ -671,10 +671,12 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
         // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
         // Profil: angka di layar ini bisa belum sama dengan server.
         item { SyncNotice() }
-        if (canViewAllBranches(s)) {
+        if (BranchPicker.visible(canViewAllBranches(s), s.allowedBranchIds)) {
             // Pemilih cabang harus ada di layar ini. Sebelumnya layar hanya meminta "Pilih satu
             // cabang" tanpa menyediakan pemilihnya, sehingga Owner yang melihat semua cabang
             // menemui jalan buntu dan harus memilih cabang di tab Antrian lebih dulu.
+            // Kini kasir multi-cabang pun mendapat pemilihnya; sebelumnya syaratnya hanya
+            // `canViewAllBranches`, jadi kasir dua cabang tidak punya cara berpindah cabang.
             item {
                 FilterBar(
                     label = "Cabang",

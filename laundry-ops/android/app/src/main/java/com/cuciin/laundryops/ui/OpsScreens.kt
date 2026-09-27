@@ -138,6 +138,9 @@ internal fun HomeScreen(nav: NavHostController) {
     // yang dipilih pengguna, jadi tanggal mana pun bisa dibandingkan tanpa mengubah nota.
     val periodStart = Clock.periodStartMs(period)
     val bid = if (canViewAllBranches(s)) store.viewBranch.value else (if (s.allowedBranchIds.size == 1) s.allowedBranchIds.first() else store.viewBranch.value.takeIf { it in s.allowedBranchIds } ?: "all")
+    // Kasir multi-cabang harus bisa berpindah cabang dari layar ini. Sebelumnya syaratnya
+    // `canViewAllBranches` saja, sehingga kasir dua cabang hanya melihat satu baris statis.
+    val bolehPilihCabang = BranchPicker.visible(canViewAllBranches(s), s.allowedBranchIds)
     val scoped = all.filter { nota ->
         val inRange = if (customRange) {
             rangeValid && DisplayDates.isInSelectedMinute(nota.createdAtMs, from, until)
@@ -272,6 +275,13 @@ internal fun HomeScreen(nav: NavHostController) {
                 store.branches.forEach { branch ->
                     FilterSheetRow(bid == branch.id, branch.name, "${all.count { it.branchId == branch.id }} pesanan") { store.viewBranch.value = branch.id; store.touchStatus(); showBranchSheet = false }
                 }
+            } else if (bolehPilihCabang) {
+                // Kasir dengan lebih dari satu cabang penugasan memilih di antara cabangnya
+                // sendiri, bukan terkunci pada satu baris statis.
+                FilterSheetRow(bid == "all", "Semua cabang saya", "${s.allowedBranchIds.size} cabang") { store.viewBranch.value = "all"; store.touchStatus(); showBranchSheet = false }
+                BranchPicker.options(false, s.allowedBranchIds, store.branches).forEach { branch ->
+                    FilterSheetRow(bid == branch.id, branch.name, "${all.count { it.branchId == branch.id }} pesanan") { store.viewBranch.value = branch.id; store.touchStatus(); showBranchSheet = false }
+                }
             } else {
                 FilterSheetRow(true, store.branch(bid).name, "Cabang tugas Anda") { showBranchSheet = false }
             }
@@ -369,7 +379,7 @@ internal fun NotaScreen(nav: NavHostController, toast: (String) -> Unit) {
         LazyColumn(Modifier.weight(1f).padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
             item { ScreenHeader("Service baru", store.branch(selectedBranchId).name, onBack = { nav.popBackStack() }) }
             item { StepProgress(if (cust == null) 0 else 1) }
-            if (canViewAllBranches(s)) item {
+            if (BranchPicker.visible(canViewAllBranches(s), s.allowedBranchIds)) item {
                 FilterBar(
                     label = "Cabang transaksi",
                     value = store.branch(selectedBranchId).name,
@@ -1066,7 +1076,7 @@ internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
     }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Perubahan stok massal", store.branch(branchId).name, onBack = { nav.popBackStack() }) }
-        if (canViewAllBranches(session)) item {
+        if (BranchPicker.visible(canViewAllBranches(session), session.allowedBranchIds)) item {
             FilterBar(
                 label = "Cabang yang diperbarui",
                 value = if (targetBranches.size == 1) store.branch(targetBranches.first()).name.removePrefix("Cuciin ") else "${targetBranches.size} cabang dipilih",
@@ -1106,7 +1116,7 @@ internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
         item {
             PrimaryBtn("Simpan ${validChanges.size} perubahan", enabled = validChanges.isNotEmpty() && validChanges.size == changes.size, icon = Icons.Outlined.Check) {
                 if (date.isAfter(LocalDateTime.now(Clock.ZONE))) { toast("Waktu perubahan tidak boleh di masa depan"); return@PrimaryBtn }
-                val targets = if (canViewAllBranches(session)) targetBranches else setOf(branchId)
+                val targets = BranchPicker.writeTargets(canViewAllBranches(session), session.allowedBranchIds, targetBranches, branchId)
                 if (targets.isEmpty()) { toast("Pilih minimal satu cabang"); return@PrimaryBtn }
                 val saved = store.editStocks(validChanges, targets, kind, date.atZone(Clock.ZONE).toInstant().toEpochMilli())
                 if (saved == CuciinStore.TOLAK_STOK) { toast("Akses Catat stok dicabut untuk role akun ini"); return@PrimaryBtn }
@@ -1119,7 +1129,9 @@ internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
             Text("Bisa memilih lebih dari satu. Setiap cabang akan menerima mutasi sendiri.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp))
-            store.branches.forEach { branch ->
+            store.branches
+                .let { BranchPicker.options(canViewAllBranches(session), session.allowedBranchIds, it) }
+                .forEach { branch ->
                 FilterSheetRow(branch.id in targetBranches, branch.name, null) {
                     targetBranches = if (branch.id in targetBranches) targetBranches - branch.id else targetBranches + branch.id
                 }
@@ -1165,7 +1177,7 @@ internal fun StockHistoryScreen(nav: NavHostController) {
                 }
             }
         }
-        if (canViewAllBranches(session)) item {
+        if (BranchPicker.visible(canViewAllBranches(session), session.allowedBranchIds)) item {
             FilterBar(
                 label = "Cabang",
                 value = if (branchIds.isEmpty()) "Semua cabang" else "${branchIds.size} cabang dipilih",
@@ -1225,7 +1237,7 @@ internal fun StockHistoryScreen(nav: NavHostController) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Pilih cabang", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
             FilterSheetRow(branchIds.isEmpty(), "Semua cabang", "${store.branches.size} cabang") { branchIds = emptySet(); showBranchSheet = false }
-            store.branches.forEach { branch ->
+            BranchPicker.options(canViewAllBranches(session), session.allowedBranchIds, store.branches).forEach { branch ->
                 FilterSheetRow(branch.id in branchIds, branch.name, null) { branchIds = if (branch.id in branchIds) branchIds - branch.id else branchIds + branch.id }
             }
             PrimaryBtn("Selesai", Modifier.padding(horizontal = 18.dp, vertical = 8.dp)) { showBranchSheet = false }
