@@ -194,9 +194,10 @@ describe('background.js vault writes', () => {
   it('retries a cloud push without a stale token', async () => {
     await unlock({ entries: [], settings: {} })
     harness.sessionData.cloudToken = 'token-from-an-older-secret'
-    const seen: { auth: string | null; credentials: string | undefined }[] = []
-    vi.stubGlobal('fetch', async (_url: string, init?: RequestInit) => {
+    const seen: { url: string; auth: string | null; credentials: string | undefined }[] = []
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
       seen.push({
+        url: String(url),
         auth: new Headers(init?.headers).get('authorization'),
         credentials: init?.credentials,
       })
@@ -206,13 +207,21 @@ describe('background.js vault writes', () => {
     })
     try {
       await ask(listener, { type: 'SAVE_LOGIN', capture: { url: 'https://x.com', username: 'u', password: 'p' } }, 3)
-      expect(seen[0]!.auth).toMatch(/^Bearer /)
-      expect(seen[1]!.auth).toBeNull()
+      // Only the vault PUT counts. Importing background.js runs startExtensionSync(),
+      // which calls the local helper's /health, and `vi.resetModules()` in
+      // loadBackground makes that happen again for every test in this file — so the
+      // first entry in `seen` is that health check, not the push. Asserting on
+      // `seen[0]` only ever passed because some other test file happened to leave
+      // state behind that skipped the health call; standalone it failed 3 runs out of 3.
+      const pushes = seen.filter((s) => s.url.endsWith('/api/vault'))
+      expect(pushes).toHaveLength(2)
+      expect(pushes[0]!.auth).toMatch(/^Bearer /)
+      expect(pushes[1]!.auth).toBeNull()
       // Without `credentials: 'include'` a cross-origin fetch from the extension
       // carries no cookie, so the retry would have no credential to fall back on and
       // the stale header would be the only thing it ever tried.
-      expect(seen[0]!.credentials).toBe('include')
-      expect(seen[1]!.credentials).toBe('include')
+      expect(pushes[0]!.credentials).toBe('include')
+      expect(pushes[1]!.credentials).toBe('include')
       // The dead token is cleared, so the next push does not repeat the mistake.
       expect(harness.sessionData.cloudToken).toBe('')
     } finally {

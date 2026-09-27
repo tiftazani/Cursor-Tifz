@@ -495,9 +495,12 @@ function barStyles() {
       border-radius: 12px;
       box-shadow: 0 16px 40px rgba(0,0,0,.4);
       padding: 10px 12px;
+      box-sizing: border-box;
       display: flex;
       gap: 10px;
       align-items: center;
+      flex-wrap: wrap;
+      width: 100%;
       min-width: min(420px, 92vw);
     }
     .mark {
@@ -505,13 +508,22 @@ function barStyles() {
       display: grid; place-items: center;
       background: #16332e; color: #3ee0c3;
     }
-    .copy { flex: 1; min-width: 0; }
+    /* Without a floor the copy is the only item that can give, so a row of long
+       account labels squeezed it to zero width and the heading broke into one letter
+       per line. Holding a minimum keeps the title readable and makes the action row
+       wrap under it instead. */
+    .copy { flex: 1 1 auto; min-width: min(180px, 100%); }
     .copy strong { display: block; font-size: 13px; }
-    .copy span { color: #8b97a8; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .copy span { display: block; color: #8b97a8; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .copy .notice { display: block; margin-top: 4px; font-style: normal; font-size: 12px; line-height: 1.35; color: #f0b46b; }
+    /* Long labels are the normal case here: an account label is an email address.
+       Let a label wrap rather than push the card wider than the viewport. */
     button {
       appearance: none; border: 1px solid rgba(255,255,255,.1); background: #1b232e;
-      color: #eef3f8; border-radius: 8px; padding: 7px 10px; cursor: pointer; font: inherit; height: 32px;
+      color: #eef3f8; border-radius: 8px; padding: 7px 10px; cursor: pointer; font: inherit;
+      min-height: 32px; height: auto; flex: 0 1 auto;
+      max-width: 100%; min-width: 0;
+      overflow-wrap: anywhere; text-align: left;
     }
     button.primary { background: #3ee0c3; color: #06241d; border-color: transparent; font-weight: 650; }
   `
@@ -521,7 +533,7 @@ function mountBar(existing, { title, subtitle, notice, actions, sticky }) {
   existing?.remove()
   const host = document.createElement('div')
   host.dataset.kunciBar = sticky ? 'save' : 'other'
-  host.style.cssText = 'position:fixed;z-index:2147483646;top:12px;left:50%;transform:translateX(-50%);max-width:min(420px,100vw - 24px)'
+  host.style.cssText = 'position:fixed;z-index:2147483646;top:12px;left:50%;transform:translateX(-50%);width:min(420px,100vw - 24px)'
   const shadow = host.attachShadow({ mode: 'closed' })
   const wrap = document.createElement('div')
   wrap.className = 'bar'
