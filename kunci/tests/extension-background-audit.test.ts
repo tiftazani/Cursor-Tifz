@@ -59,7 +59,7 @@ function makeChrome() {
       onStartup: { addListener: () => undefined },
       onInstalled: { addListener: () => undefined },
       reload: () => reloads.push(-1),
-      getManifest: () => ({ version: '1.4.6' }),
+      getManifest: () => ({ version: '1.4.7' }),
     },
     tabs: {
       query: async () => [],
