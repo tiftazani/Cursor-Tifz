@@ -1,19 +1,72 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 25 September 2026 (oleh Hermes).
+Terakhir diperbarui: 27 September 2026 (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
-**Keadaan `main` per 25 Sep: `0c3938f`** (rilis 1.10.39, sudah di-push ke `origin/main`).
+**Keadaan `main` per 27 Sep: `a59de2f`** (perbaikan kasir multi-cabang, sudah di-push ke `origin/main`; CI hijau).
 
 | Commit | Isi |
 | --- | --- |
+| `a59de2f` | Kasir multi-cabang: pemilih cabang di semua layar kerja |
+| `efa15ee` | Papan status: bukti uji 1.10.39 (user baru dari aplikasi bisa login) |
 | `0c3938f` | Rilis 1.10.39: layar Tambah user kini membuat akun login Firebase |
 | `dee4ec8` | Dokumen rilis 1.10.38: versi Worker terbaru dan tes dedupe jurnal |
 | `f63b779` | Rilis 1.10.38: absensi per cabang untuk kasir multi-cabang |
-| `2f7438d` | Papan status: rilis 1.10.37 dan akar masalah hak akses peran |
-| `444f57f` | Rilis 1.10.37: penyamaan hak akses memakai endpoint `/v1/snapshot` |
+
+## 0s. Kasir multi-cabang hanya muncul di satu cabang (27 Sep, Hermes)
+
+**Status: SELESAI. Kode diperbaiki, teruji, dan dibuktikan di emulator; sudah di `main` (`a59de2f`),
+CI hijau. BELUM dipasang di cabang mana pun (masih perlu APK baru).**
+
+Laporan Owner: kasir yang ditugaskan ke lebih dari satu cabang hanya bisa beraktivitas di satu
+cabang. Audit menyeluruh menemukan **satu syarat yang salah dipakai di lima layar**: pemilih cabang
+dikunci di balik `canViewAllBranches(s)`, yang sebenarnya berarti izin `analytics.view` (melihat
+laporan semua cabang). Preset **Kasir tidak memuat** izin itu, jadi kelima layar mengunci kasir
+multi-cabang di cabang pertama (`session.branchId`).
+
+| Layar | Gejala sebelum perbaikan |
+| --- | --- |
+| Antrian | Hanya satu baris statis "Cabang tugas Anda", tidak bisa berpindah |
+| Service baru | Pemilih "Cabang transaksi" tidak muncul |
+| Tutup kas | Pemilih cabang tidak muncul |
+| Perubahan stok massal | Pemilih "Cabang yang diperbarui" tidak muncul |
+| Laporan perubahan stok | Pemilih cabang tidak muncul |
+
+Perbaikan: aturan dipindahkan ke fungsi murni baru `ui/BranchPicker.kt`
+(`visible`, `options`, `writeTargets`) dan dipakai sebagai gerbang tunggal di semua layar.
+`writeTargets` juga menyaring tujuan tulis massal dengan cabang penugasan, supaya akun tidak bisa
+menulis ke cabang di luar penugasannya walau pilihan itu datang dari layar.
+
+**Lapisan store dan server sudah benar sejak awal** (tidak diubah): `visibleNotas`,
+`visibleAttendance`, `saveNota`, `editStocks`, `closeCash`, `checkIn`/`checkOut` memakai seluruh
+`allowedBranchIds`; `command-sync.ts` `staffJournalScopes` menulis satu entri jurnal per cabang;
+`pullChanges` menyaring jurnal dengan `branch_id IN (cabang pengguna)`.
+
+Bukti emulator (kasir `ujibranch.hermes@gmail.com`, 2 cabang: laupay-dayeuh + laupay-kirab):
+
+| Titik uji | Hasil |
+| --- | --- |
+| Antrian | Sheet "Semua cabang saya · 2 cabang" + Kirab 2 pesanan + Dayeuh 1 pesanan; pilih Kirab → pindah |
+| Service baru | Sheet "Pilih cabang transaksi" berisi 2 cabang; pilih Kirab → berpindah |
+| Tutup kas | Sheet berisi 2 cabang; pilih Kirab → piutang berubah Rp 11.000 → Rp 0 |
+| Perubahan stok massal | Sheet multi-pilih 2 cabang, keduanya bisa dicentang |
+| Laporan perubahan stok | "2 cabang dipilih"; laporan memuat entri Kirab DAN Dayeuh |
+| Tulis nyata | Softener +5 di Kirab tersimpan di D1 `stock_moves` `branch_id='laupay-kirab'` |
+| Absensi | Sheet "Pilih cabang kerja" berisi 2 cabang |
+
+Tes: **334 tes Android lulus** (naik dari 320; +14 dari `BranchPickerTest`), **82 tes Worker lulus**.
+`BranchPickerTest` terbukti merah lebih dulu saat aturan `BranchPicker.visible` dibalikkan sementara.
+
+**Catatan uji:** akun uji harus ditulis lewat **jurnal `sync_changes`**, bukan langsung ke tabel
+`staff`. Baris yang ditulis langsung tanpa entri jurnal tidak pernah ditarik perangkat (gejalanya:
+akun bisa login tetapi bar bawah hanya menampilkan "Modul" karena terbaca nol izin). Skrip:
+`/tmp/ceklogin/tulis_jurnal.py` (sementara, tidak di repo).
+
+**BELUM dibuktikan:** layar Laporan dengan rentang sendiri masih memakai `store.notas` mentah
+(bukan `visibleNotas`), sehingga Supervisor multi-cabang bisa memilih cabang non-penugasan di
+sheet laporan. Perlu keputusan apakah itu memang perilaku yang diinginkan.
 
 ## 0r. Perbaikan DARURAT: beberapa akun tidak bisa login (25 Sep, Hermes)
 
