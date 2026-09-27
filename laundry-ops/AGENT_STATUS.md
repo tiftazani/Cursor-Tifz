@@ -64,9 +64,14 @@ Tes: **334 tes Android lulus** (naik dari 320; +14 dari `BranchPickerTest`), **8
 akun bisa login tetapi bar bawah hanya menampilkan "Modul" karena terbaca nol izin). Skrip:
 `/tmp/ceklogin/tulis_jurnal.py` (sementara, tidak di repo).
 
-**BELUM dibuktikan:** layar Laporan dengan rentang sendiri masih memakai `store.notas` mentah
-(bukan `visibleNotas`), sehingga Supervisor multi-cabang bisa memilih cabang non-penugasan di
-sheet laporan. Perlu keputusan apakah itu memang perilaku yang diinginkan.
+**Diperiksa dan TIDAK menjadi masalah:** layar Laporan dengan rentang sendiri memakai `store.notas`
+mentah (bukan `visibleNotas`), yang sempat dicurigai bisa membocorkan cabang non-penugasan.
+Ternyata **server sudah menyaring lebih dulu**: `visibleSnapshot` di `index.ts` (184-197) memangkas
+seluruh `BRANCH_DATASETS` (termasuk `notas`, `expenses`, `stockMoves`, `attendance`, `cashCloses`)
+ke `identity.branchIds` sebelum dikirim. Dibuktikan pada data perangkat kasir 2 cabang: cabang di
+perangkat = hanya 2 cabang penugasan, dan `notas`/`expenses`/`stockMoves`/`attendance`/`cashCloses`
+tidak memuat satu baris pun di luar penugasan. Jadi data yang tidak berhak tidak pernah ada di
+perangkat, dan penyaringan kedua di UI tidak diperlukan.
 
 ## 0r. Perbaikan DARURAT: beberapa akun tidak bisa login (25 Sep, Hermes)
 
