@@ -861,31 +861,75 @@ function pageHosts() {
   return hosts
 }
 
+/** The bare host of a URL, or '' when it cannot be read. */
+function hostOf(raw) {
+  try {
+    return new URL(raw).hostname.replace(/^www\./, '').toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
 /** True when the submitted URL belongs to this page or to a login frame on it. */
 function pendingBelongsHere(submitted) {
-  let target = ''
-  try {
-    target = new URL(submitted).hostname.replace(/^www\./, '').toLowerCase()
-  } catch {
-    return true
-  }
+  const target = hostOf(submitted)
   if (!target) return true
   return pageHosts().includes(target)
 }
 
+/**
+ * True when the TOP frame is the one that should act on this save.
+ *
+ * Only the top frame can read the whole page, so this is the one question a child frame
+ * can answer about it: does the save belong to the top frame's own host? A cross-origin
+ * top frame throws on `location`, and then the answer is no, because this frame is the
+ * only one that can reach the form.
+ */
+function topHostClaims(submitted) {
+  const target = hostOf(submitted)
+  if (!target) return true
+  try {
+    return hostOf(window.top.location.href) === target
+  } catch {
+    return false
+  }
+}
+
 async function restorePendingSave() {
   // A pending save is keyed by TAB, and the content scripts now run in every frame, so
-  // each frame would read the same entry. Showing the bar from every frame would stack
-  // it once per frame; letting every frame judge it would let a frame whose host does
-  // not match DISMISS the save before the right frame read it. Only the top frame acts,
-  // which is also the frame the user is looking at.
-  if (window !== window.top) return
+  // every frame reads the same entry. Left unguarded, a frame whose host does not match
+  // would call DISMISS_SAVE and throw away the save the right frame was about to offer,
+  // and the bar would render once per frame. Exactly one frame acts:
+  //
+  //   - the top frame, when the save belongs to the host it is showing (agoda, where the
+  //     login frame sits on the same host);
+  //   - otherwise the child frame whose own host matches, which is the case when the
+  //     form lives in a login iframe on another host, and the top frame could not read
+  //     that form anyway;
+  //   - a frame that stands down returns without dismissing, so it cannot clear the
+  //     entry before the owning frame reads it.
+  const ownHost = hostOf(location.href)
+  const peek = await send({ type: 'GET_PENDING_SAVE' })
+  if (peek?.pending?.capture) {
+    const submittedPeek = peek.pending.capture.submittedUrl || peek.pending.capture.url || ''
+    // Nobody on this page can claim it: dismiss, or it would surface later on an
+    // unrelated page in this tab.
+    if (!pendingBelongsHere(submittedPeek)) {
+      void send({ type: 'DISMISS_SAVE' })
+      return
+    }
+    if (window === window.top) {
+      if (!topHostClaims(submittedPeek)) return
+    } else if (topHostClaims(submittedPeek) || hostOf(submittedPeek) !== ownHost) {
+      return
+    }
+  }
   // The save that this page is about to be told about may still be landing: the tab
   // that logged in sent QUEUE_SAVE as it was being torn down, and this page's
   // GET_PENDING_SAVE can arrive before the write finishes. The read used to lose that
   // race every single time (0/8 runs) and the bar never appeared. Give the write a few
   // chances before concluding there is nothing to restore.
-  let res = await send({ type: 'GET_PENDING_SAVE' })
+  let res = peek
   for (let i = 0; i < 6 && !res?.pending?.capture; i++) {
     await sleep(150)
     res = await send({ type: 'GET_PENDING_SAVE' })

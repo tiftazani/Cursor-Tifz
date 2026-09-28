@@ -61,14 +61,31 @@ describe('a login form inside an iframe', () => {
   it('does not let a frame that is not the page throw the save away', () => {
     // A pending save is keyed by TAB, so every frame reads the same entry. A frame
     // whose host does not match would call DISMISS_SAVE and clear the save the top
-    // frame was about to offer.
+    // frame was about to offer, and the bar would render once per frame.
     const start = content.indexOf('async function restorePendingSave()')
     expect(start).toBeGreaterThan(-1)
     const body = content.slice(start, content.indexOf('\nfunction hookNavigation', start))
-    const guard = body.indexOf('if (window !== window.top) return')
-    expect(guard).toBeGreaterThan(-1)
-    // The guard has to come before the first read, not after it.
-    expect(guard).toBeLessThan(body.indexOf("type: 'GET_PENDING_SAVE'"))
+    // Exactly one frame acts, and the decision is made before the retry loop that would
+    // otherwise put a bar on screen.
+    expect(body).toContain('if (window === window.top) {')
+    expect(body).toContain('} else if (topHostClaims(submittedPeek) || hostOf(submittedPeek) !== ownHost) {')
+    expect(body.indexOf('if (!pendingBelongsHere(submittedPeek))')).toBeLessThan(
+      body.indexOf('for (let i = 0; i < 6'),
+    )
+    // A page nobody on it can claim gets dismissed, instead of surfacing later on an
+    // unrelated page in the same tab.
+    expect(body).toContain("if (!pendingBelongsHere(submittedPeek)) {\n      void send({ type: 'DISMISS_SAVE' })")
+  })
+
+  it('still lets the frame that owns the form act, when the top frame cannot', () => {
+    // The case the guard must NOT block: a login form in a cross-origin iframe. The top
+    // frame cannot read it, so that frame is the only one that can offer the save.
+    expect(content).toContain('function topHostClaims(submitted)')
+    const start = content.indexOf('function topHostClaims(submitted)')
+    const body = content.slice(start, content.indexOf('\nasync function restorePendingSave', start))
+    // A cross-origin top frame throws on `location`, and that must read as "not mine".
+    expect(body).toContain('catch {')
+    expect(body).toContain('return false')
   })
 
   it('judges the save against the frames on the page, not only the top host', () => {
