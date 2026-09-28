@@ -8,4 +8,4 @@
  * suffix, so `pelindo-kpi-monitoring.surge.sh` and `surge.sh` are different sites while
  * one string contains the other. See extension/public-suffix.js for the rule data.
  */
-export { isPublicSuffix, registrableDomain, siteLabel } from '../../extension/site.js'
+export { isPublicSuffix, registrableDomain, siteLabel, storedUrl } from '../../extension/site.js'

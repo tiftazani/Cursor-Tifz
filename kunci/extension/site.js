@@ -102,3 +102,30 @@ export function isPublicSuffix(host) {
   if (!labels.length) return false
   return suffixLabels(labels) === labels.length
 }
+
+/**
+ * The URL worth keeping for a saved login. Not `location.href`.
+ *
+ * A login page routinely carries one-time material in its query string: agoda's sign-in
+ * URL is `/account/signin.html?ottoken=<JWT>&returnurl=…`. Storing that puts a live token
+ * in the vault, and because the token is new on every visit the entry's url list grew by
+ * one per login instead of settling on one address.
+ *
+ * Dropping the query changes nothing about which entries get offered: `domainsMatch`
+ * reads the host and `layerFromUrl` reads the path, and neither looks at the query.
+ * Userinfo is dropped too, by reading `origin`, because `https://user:pass@host/` should
+ * never reach the vault.
+ */
+export function storedUrl(raw) {
+  const trimmed = String(raw ?? '').trim()
+  if (!trimmed) return ''
+  try {
+    const url = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`)
+    if (!url.hostname || url.origin === 'null') return trimmed
+    return `${url.origin}${url.pathname === '/' ? '' : url.pathname}`
+  } catch {
+    // Unparseable input is kept as it came: dropping it would lose the address, and
+    // there is no query to strip from something that is not a URL.
+    return trimmed
+  }
+}

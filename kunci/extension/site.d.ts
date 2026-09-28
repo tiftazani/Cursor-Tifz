@@ -6,3 +6,4 @@
 export declare function siteLabel(host: string): string
 export declare function registrableDomain(host: string): string
 export declare function isPublicSuffix(host: string): boolean
+export declare function storedUrl(raw: string): string

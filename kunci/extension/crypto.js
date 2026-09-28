@@ -1,4 +1,4 @@
-import { isPublicSuffix, siteLabel } from './site.js'
+import { isPublicSuffix, siteLabel, storedUrl } from './site.js'
 
 function b64ToBytes(b64) {
   const bin = atob(b64)
@@ -232,7 +232,10 @@ export function applyLoginCapture(entries, capture, now = Date.now()) {
   if (decision.action === 'skip') return { entries, changed: 'skip', decision }
   const username = (capture.username || '').trim()
   const tenant = (capture.tenant || '').trim()
-  const url = (capture.url || '').split('#')[0]
+  // The query string is dropped here, not at capture time: a login page carries one-time
+  // material (`?ottoken=…` on agoda) that must not reach the vault, and keeping it made
+  // `urls` grow by one on every login. See storedUrl in site.js.
+  const url = storedUrl(capture.url)
   if (decision.action === 'update') {
     const prev = entries.find((e) => e.id === decision.entryId)
     if (!prev) return { entries, changed: 'skip', decision }
@@ -241,14 +244,18 @@ export function applyLoginCapture(entries, capture, now = Date.now()) {
         ? [{ id: newEntryId(), username: prev.username, password: prev.password, changedAt: now }, ...(prev.history || [])].slice(0, 50)
         : prev.history || []
     const named = tenant && !tenantTitleCovers(prev, tenant)
+    // prev.url and prev.urls go through storedUrl too, so an entry that already carries a
+    // one-time token from an earlier save is cleaned the next time it is used. Without
+    // this, the old token would stay in the vault forever.
+    const prevUrl = storedUrl(prev.url || '')
     const saved = {
       ...prev,
       name: named ? `${prev.name} · ${tenant}` : prev.name,
       username: username || prev.username,
       password: capture.password,
       appName: tenant || prev.appName,
-      url: prev.url || url,
-      urls: [...new Set([...(prev.urls || []), url, prev.url].filter(Boolean))],
+      url: prevUrl || url,
+      urls: [...new Set([...(prev.urls || []).map(storedUrl), url, prevUrl].filter(Boolean))],
       customFields: withTenantField(prev, tenant, now),
       history,
       updatedAt: now,
