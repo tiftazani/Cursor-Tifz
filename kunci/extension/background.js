@@ -277,14 +277,19 @@ async function injectContentScripts() {
           // declare the same top-level consts, so the whole batch is discarded. The
           // page keeps running the old, now-orphaned content script and autofill
           // quietly stops working until the tab is reloaded. Reload is the fix.
-          const [probe] = await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
+          const results = await chrome.scripting.executeScript({
+            target: { tabId: tab.id, allFrames: true },
             func: () => Boolean(globalThis.kunciContentLoaded),
           })
-          if (probe?.result) return
-          await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ['content.css'] })
+          // One result per frame. Only the frames that are still bare may be injected:
+          // a second copy in a frame that already has the scripts dies with
+          // "Identifier 'outcome' has already been declared" and that frame keeps
+          // running the orphaned copy. Frame ids, not the whole tab.
+          const bare = (results || []).filter((r) => r?.result === false).map((r) => r.frameId)
+          if (!bare.length) return
+          await chrome.scripting.insertCSS({ target: { tabId: tab.id, frameIds: bare }, files: ['content.css'] })
           await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
+            target: { tabId: tab.id, frameIds: bare },
             files: ['ext-api.js', 'login-intent.js', 'login-outcome.js', 'icon-place.js', 'content.js'],
           })
         } catch {

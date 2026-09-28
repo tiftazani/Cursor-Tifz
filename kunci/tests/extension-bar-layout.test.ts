@@ -24,7 +24,10 @@ function barRule(selector: string): string {
   const start = content.indexOf('function barStyles()')
   expect(start).toBeGreaterThan(-1)
   const css = content.slice(start, content.indexOf('`\n}', start))
-  const i = css.indexOf(`${selector} {`)
+  // Anchor on the rule's own indentation. A plain `indexOf('button {')` also matches
+  // inside a descendant selector like `.accounts button {`, which sits earlier in the
+  // sheet, so it returned the wrong rule's declarations.
+  const i = css.indexOf(`\n    ${selector} {`)
   expect(i, `rule not found: ${selector}`).toBeGreaterThan(-1)
   return css.slice(i, css.indexOf('}', i))
 }

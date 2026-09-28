@@ -460,7 +460,16 @@ function showMenu(anchor, matches) {
     for (const m of matches) {
       const item = document.createElement('button')
       item.type = 'button'
-      item.textContent = `${m.name}${m.username ? ' · ' + m.username : ''}`
+      // Two lines, not one: a site with several accounts for the same person differs
+      // only in the username, and a single joined label made the rows indistinguishable.
+      const who = document.createElement('strong')
+      who.textContent = m.name || m.username || 'Tanpa nama'
+      item.appendChild(who)
+      if (m.username) {
+        const user = document.createElement('span')
+        user.textContent = m.username
+        item.appendChild(user)
+      }
       item.addEventListener('click', () => {
         fill(m)
         lastFilled = m
@@ -516,6 +525,22 @@ function barStyles() {
     .copy strong { display: block; font-size: 13px; }
     .copy span { display: block; color: #8b97a8; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .copy .notice { display: block; margin-top: 4px; font-style: normal; font-size: 12px; line-height: 1.35; color: #f0b46b; }
+    /* The account list. One account per row, and the row has to say WHICH username it
+       carries: a row of side-by-side buttons cannot do that once the labels are email
+       addresses, and the third one onwards simply did not fit. A long list scrolls
+       inside the card instead of running off it. */
+    .accounts {
+      flex: 1 1 100%;
+      display: grid;
+      gap: 6px;
+      max-height: 240px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-right: 2px;
+    }
+    .accounts button { display: grid; gap: 2px; width: 100%; }
+    .accounts .who { font-weight: 600; }
+    .accounts .user { color: #8b97a8; font-size: 12px; }
     /* Long labels are the normal case here: an account label is an email address.
        Let a label wrap rather than push the card wider than the viewport. */
     button {
@@ -529,7 +554,7 @@ function barStyles() {
   `
 }
 
-function mountBar(existing, { title, subtitle, notice, actions, sticky }) {
+function mountBar(existing, { title, subtitle, notice, actions, accounts, sticky }) {
   existing?.remove()
   const host = document.createElement('div')
   host.dataset.kunciBar = sticky ? 'save' : 'other'
@@ -543,17 +568,47 @@ function mountBar(existing, { title, subtitle, notice, actions, sticky }) {
   const noticeEl = wrap.querySelector('.notice')
   if (notice) noticeEl.textContent = notice
   else noticeEl.remove()
-  for (const action of actions) {
+  const close = () => {
+    if (sticky) return
+    host.remove()
+    if (otherBarHost === host) otherBarHost = null
+  }
+  // One row per account, each naming its username. Side-by-side buttons could not do
+  // that: an account label is an email address, so a row of them ran off the card and
+  // the third match onwards was unreachable. A long list scrolls inside the card.
+  if (accounts?.length) {
+    const list = document.createElement('div')
+    list.className = 'accounts'
+    for (const account of accounts) {
+      const btn = document.createElement('button')
+      const who = document.createElement('span')
+      who.className = 'who'
+      who.textContent = account.name || account.username || 'Tanpa nama'
+      btn.appendChild(who)
+      if (account.username) {
+        const user = document.createElement('span')
+        user.className = 'user'
+        user.textContent = account.username
+        btn.appendChild(user)
+      }
+      btn.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        close()
+        account.onClick()
+      })
+      list.appendChild(btn)
+    }
+    wrap.appendChild(list)
+  }
+  for (const action of actions || []) {
     const btn = document.createElement('button')
     if (action.primary) btn.className = 'primary'
     btn.textContent = action.label
     btn.addEventListener('click', (e) => {
       e.preventDefault()
       e.stopPropagation()
-      if (!sticky) {
-        host.remove()
-        if (otherBarHost === host) otherBarHost = null
-      }
+      close()
       action.onClick()
     })
     wrap.appendChild(btn)
@@ -646,13 +701,21 @@ function keepSaveBar() {
 async function maybeAutofill() {
   if (autofillTried || autofilled || isKunciPage()) return
   const passwords = loginPasswordFields()
-  if (!passwords.length) return
+  // A username-first step has no password box yet, but it is still a login the vault
+  // can answer. Agoda's sign-in page keeps its email box in an iframe and asks for the
+  // password on the next screen; with only the password branch, nothing appeared there.
+  const userOnly = passwords.length ? null : usernameOnlyField()
+  if (!passwords.length && !userOnly) return
   autofillTried = true
   if (passwords.some((el) => el.value)) return
+  if (userOnly?.value) return
   const res = await send({ type: 'MATCHES', url: location.href })
   if (res?.locked || !res?.matches?.length) return
   if (res.settings?.autoFillWeb === false) return
-  if (res.matches.length === 1) {
+  // Only a real password step is filled silently. A username-first step shows the list
+  // first: filling it blind would put an email in the box with no sign of which account
+  // it came from, and the user has not reached the password prompt yet.
+  if (res.matches.length === 1 && !userOnly) {
     fill(res.matches[0])
     lastFilled = res.matches[0]
     autofilled = true
@@ -661,9 +724,9 @@ async function maybeAutofill() {
   showOtherBar({
     title: 'Pilih login Kunci',
     subtitle: `${res.matches.length} akun untuk ${location.hostname}`,
-    actions: res.matches.slice(0, 3).map((m) => ({
-      label: m.username || m.name,
-      primary: false,
+    accounts: res.matches.map((m) => ({
+      name: m.name,
+      username: m.username,
       onClick: () => {
         fill(m)
         lastFilled = m
@@ -773,7 +836,50 @@ function sleep(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
+/**
+ * The host of this page, plus the host of every iframe on it, read from the DOM.
+ *
+ * A site may keep its whole login form in an iframe on another host (a sign-in
+ * service), and the iframe's `src` attribute is readable from the top document even
+ * when the frame itself is cross-origin. Without this the top frame would judge the
+ * pending save as belonging to a different site and dismiss it.
+ */
+function pageHosts() {
+  const hosts = [location.hostname.replace(/^www\./, '').toLowerCase()]
+  try {
+    for (const frame of document.querySelectorAll('iframe[src]')) {
+      try {
+        const host = new URL(frame.getAttribute('src'), location.href).hostname.replace(/^www\./, '').toLowerCase()
+        if (host) hosts.push(host)
+      } catch {
+        /* unparsable src */
+      }
+    }
+  } catch {
+    /* no DOM */
+  }
+  return hosts
+}
+
+/** True when the submitted URL belongs to this page or to a login frame on it. */
+function pendingBelongsHere(submitted) {
+  let target = ''
+  try {
+    target = new URL(submitted).hostname.replace(/^www\./, '').toLowerCase()
+  } catch {
+    return true
+  }
+  if (!target) return true
+  return pageHosts().includes(target)
+}
+
 async function restorePendingSave() {
+  // A pending save is keyed by TAB, and the content scripts now run in every frame, so
+  // each frame would read the same entry. Showing the bar from every frame would stack
+  // it once per frame; letting every frame judge it would let a frame whose host does
+  // not match DISMISS the save before the right frame read it. Only the top frame acts,
+  // which is also the frame the user is looking at.
+  if (window !== window.top) return
   // The save that this page is about to be told about may still be landing: the tab
   // that logged in sent QUEUE_SAVE as it was being torn down, and this page's
   // GET_PENDING_SAVE can arrive before the write finishes. The read used to lose that
@@ -787,7 +893,7 @@ async function restorePendingSave() {
   if (!res?.pending?.capture) return
   await sleep(400)
   const submitted = res.pending.capture.submittedUrl || res.pending.capture.url || location.href
-  if (typeof outcome.sameSiteHost === 'function' && !outcome.sameSiteHost(submitted, location.href)) {
+  if (!pendingBelongsHere(submitted)) {
     void send({ type: 'DISMISS_SAVE' })
     return
   }
