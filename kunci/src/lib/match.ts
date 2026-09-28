@@ -1,3 +1,5 @@
+import { isPublicSuffix, siteLabel } from './site'
+
 export function normalizeUrl(raw: string): string | null {
   const trimmed = raw.trim()
   if (!trimmed) return null
@@ -146,7 +148,13 @@ export function domainsMatch(a: string, b: string): boolean {
   const longer = shorter === ha ? hb : ha
   // A bare label ("com", "co", "io") is not a site; only a dotted name may be a suffix.
   if (!shorter.includes('.')) return false
-  return longer.endsWith(`.${shorter}`)
+  if (!longer.endsWith(`.${shorter}`)) return false
+  // One host ends with the other, but that only means the same site when the shorter
+  // one is a real site rather than a shared suffix. `surge.sh` gives every customer a
+  // name under it, so `pelindo-kpi-monitoring.surge.sh` is somebody else's page and the
+  // login saved for `surge.sh` must not be offered there. Same for github.io, netlify.app,
+  // s3.amazonaws.com and every other public suffix.
+  return !isPublicSuffix(shorter)
 }
 
 function isSecureUrl(raw: string): boolean {
@@ -175,17 +183,11 @@ function isInsecureUrl(raw: string): boolean {
  * The label a host actually owns: the site name in front of its public suffix.
  *
  * `app.slack.com` -> "slack", `bank.com.au` -> "bank", `gmail.evil.com` -> "evil".
+ * `siteLabel` itself lives in extension/site.js, backed by the real Public Suffix List,
+ * because reading the last two labels got shared hosts wrong: it called
+ * `pelindo-kpi-monitoring.surge.sh` a subdomain of `surge.sh`.
  */
-export function siteLabel(host: string): string {
-  const parts = host.split('.')
-  if (parts.length <= 2) return parts[0] ?? ''
-  const last = parts[parts.length - 1] ?? ''
-  const second = parts[parts.length - 2] ?? ''
-  // A country-code second level ("co.uk", "com.au", "co.id") pushes the site label
-  // one position further left.
-  if (last.length === 2 && second.length <= 3) return parts[parts.length - 3] ?? ''
-  return second
-}
+export { siteLabel }
 
 export function nameMatchesHost(name: string, host: string): boolean {
   if (!name || !host) return false
@@ -197,11 +199,20 @@ export function nameMatchesHost(name: string, host: string): boolean {
   if (!token) return false
   if (token === host) return true
   // The name as a domain suffix of the host: gmail.com -> mail.gmail.com
-  if (token.includes('.') && host.endsWith(`.${token}`)) return true
+  //
+  // Only when the name is a real site. A name that is itself a public suffix
+  // ("surge.sh", "github.io") covers every customer's name beneath it, so accepting it
+  // would offer that one entry on any of their pages: exactly the bug this file is
+  // fixing, reached through the name instead of the URL.
+  if (token.includes('.') && !isPublicSuffix(token) && host.endsWith(`.${token}`)) return true
   // A bare service name ("gmail", "slack") stands in for the site it names, and only
   // for that site: the label the host actually owns. The old any-label rule accepted
   // "gmail" on gmail.evil.com, because the host split to ["gmail","evil","com"], so an
   // attacker's subdomain got the real password autofilled with no interaction.
+  //
+  // siteLabel is what keeps a shared host honest here too. An entry named "Surge" is not
+  // offered on `pelindo-kpi-monitoring.surge.sh`, because that host's own label is
+  // `pelindo-kpi-monitoring`; the login still matches on `surge.sh` itself.
   return siteLabel(host) === token
 }
 

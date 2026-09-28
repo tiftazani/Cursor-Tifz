@@ -1,3 +1,5 @@
+import { isPublicSuffix, siteLabel } from './site.js'
+
 function b64ToBytes(b64) {
   const bin = atob(b64)
   const out = new Uint8Array(bin.length)
@@ -54,7 +56,12 @@ export function domainsMatch(a, b) {
   const longer = shorter === ha ? hb : ha
   // A bare label ("com", "co", "io") is not a site; only a dotted name may be a suffix.
   if (!shorter.includes('.')) return false
-  return longer.endsWith(`.${shorter}`)
+  if (!longer.endsWith(`.${shorter}`)) return false
+  // One host ends with the other, but that only means the same site when the shorter one
+  // is a real site rather than a shared suffix: `surge.sh` gives every customer a name
+  // under it, so a login saved for `surge.sh` must not be offered on
+  // `pelindo-kpi-monitoring.surge.sh`. Mirrors src/lib/match.ts.
+  return !isPublicSuffix(shorter)
 }
 
 // A name is a label or a full domain, never a fragment. `name.includes(host)` let an
@@ -63,22 +70,20 @@ export function domainsMatch(a, b) {
 // `host.split('.').includes(token)` accepted "gmail" on gmail.evil.com, so an
 // attacker's subdomain got the real password with no interaction. Mirrors
 // src/lib/match.ts; tests/match-parity.test.ts guards it.
-function siteLabel(host) {
-  const parts = host.split('.')
-  if (parts.length <= 2) return parts[0] || ''
-  const last = parts[parts.length - 1] || ''
-  const second = parts[parts.length - 2] || ''
-  if (last.length === 2 && second.length <= 3) return parts[parts.length - 3] || ''
-  return second
-}
-
+//
+// siteLabel comes from site.js, which reads the real Public Suffix List. The hand-rolled
+// version this replaced took the last two labels, which called
+// `pelindo-kpi-monitoring.surge.sh` a subdomain of `surge.sh` and offered one Surge
+// customer's login on another customer's page.
 function nameMatchesHost(name, host) {
   if (!name || !host) return false
   if (name.includes('@')) return false
   const token = name.replace(/\s+/g, '').replace(/^www\./, '')
   if (!token) return false
   if (token === host) return true
-  if (token.includes('.') && host.endsWith(`.${token}`)) return true
+  // Only when the name is a real site: a name that is itself a public suffix
+  // ("surge.sh", "github.io") covers every customer beneath it.
+  if (token.includes('.') && !isPublicSuffix(token) && host.endsWith(`.${token}`)) return true
   return siteLabel(host) === token
 }
 
