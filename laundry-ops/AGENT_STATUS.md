@@ -1,11 +1,45 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 27 September 2026 (oleh Hermes).
+Terakhir diperbarui: 29 September 2026 (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
-**Keadaan `main` per 29 Sep: `8f0c028`** (rilis 1.10.40 + katalog test case; semua sudah di-push ke `origin/main`).
+**Keadaan `main` per 29 Sep: `8f0c028`** (rilis 1.10.40 + katalog test case; semua sudah di-push ke `origin/main`). Pekerjaan absensi harian 29 Sep ada di commit SETELAH baris ini; cek `git log --oneline -3`.
+
+## 0u. Aturan absensi harian: satu catatan per karyawan per cabang per hari (29 Sep, Hermes)
+
+**Status: SELESAI di kode dan teruji di kedua sisi. BELUM di-commit saat baris ini ditulis, BELUM dipasang di HP cabang mana pun.**
+
+Aturan pemilik (29 Sep): absen pagi dan sore adalah **satu catatan harian**; datanya masuk ke **data sekarang dan historis**; **tidak boleh ada yang menimpa**; absen **hari ini** menampilkan foto dan data hari ini; **foto dan data kemarin/historis disimpan**.
+
+Audit menemukan bug nyata: **merge dan bootstrap bisa mengosongkan jam pulang yang sudah tercatat.** Titik bocornya ada di 4 tempat, bukan di UI:
+
+| Titik | Berkas | Sebelum | Sesudah |
+| --- | --- | --- | --- |
+| Merge perubahan masuk (Android) | `data/SyncProtocol.kt` `apply()` | Baris lama dibuang lalu diganti kiriman; jam pulang hilang bila kiriman tidak membawanya | Baris lama dipakai sebagai dasar, `gabungAbsensi(lama, baru)`; jam masuk/pulang yang sudah tercatat tidak pernah ditimpa |
+| Materialisasi jurnal (Worker) | `src/index.ts` `applyJournalToSnapshot` | Kiriman tanpa jam pulang mengosongkan jam pulang di snapshot | Sama: `gabungAbsensi` + baris kembar dibuang lewat identitas |
+| SQL upsert (Worker) | `src/command-sync.ts`, `src/index.ts` `projectSnapshot` | `check_out_at=excluded.check_out_at` | `check_in_at=attendance.check_in_at`, `check_out_at=COALESCE(attendance.check_out_at,excluded.check_out_at)`, note lama dipertahankan bila baru kosong; berlaku juga untuk `ON CONFLICT(staff_email,work_date,branch_id)` |
+| Jurnal (Worker) | `src/command-sync.ts` `planGeneric` | Jurnal mencatat nilai MENTAH kiriman, sehingga perangkat lain menerima cerita yang salah | Jurnal mencatat nilai HASIL GABUNGAN (`gabungAbsensiTersimpan`), label jam diisi bila kosong |
+
+**Identitas absensi = (staffEmail lowercase, workDate, branchId), bukan `id`.** Perangkat lama (1.10.37 ke bawah) memakai id acak, perangkat baru deterministik. Tanpa identitas, satu catatan yang sama bisa menjadi dua baris di snapshot, atau kehilangan jam pulang saat skema id-nya berbeda.
+
+**Foto historis.** Foto absensi hanya ada di perangkat pencatat; server tidak menyimpannya. Sebelumnya foto dipasang ulang hanya lewat `id` baris, sehingga foto hilang dari layar ketika skema id berubah. Sekarang pencariannya lewat `id` dulu, lalu fallback ke identitas (`AttendanceScope.localPhotos`, dipakai `CuciinStore.kt`). `LocalJson.kt` menghapus folder `attendance/` hanya saat endpoint cloud berubah (isolasi debug/release) — itu memang tujuannya, bukan kehilangan data harian.
+
+**Bukti merah-dulu (semua terbukti gagal sebelum ditambal, lalu hijau):**
+
+- Android: `AttendanceTidakTertimpaTest` — 4 tes (bootstrap, pull, id acak vs deterministik, jam masuk tidak diganti). Awalnya 2 gagal (`AssertionError` baris 39 & 60).
+- Android: `AttendanceMultiBranchTest` +3 tes foto; terbukti merah saat logika identitas dilepas (1 gagal), hijau saat dipulihkan.
+- Worker: `command-sync.test.mjs` +2 tes (kiriman tanpa jam pulang; jurnal mencatat nilai gabungan). Jurnal: terbukti merah saat `gabungAbsensiTersimpan` dilepas.
+- Worker: `attendance-journal-dedupe.test.mjs` — 2 tes baru + 1 tes lama yang diperbaiki. Tes lama berjudul "penghapusan absensi membersihkan baris kembarannya juga" ternyata mengharapkan baris kembaran TETAP ADA (lulus tanpa membuktikan apa pun); sekarang mengharapkan baris terhapus lewat identitas, dan terbukti merah saat pencocokan identitas dilepas.
+
+**Angka gate:** Android **343 debug + 343 release, 0 gagal** (naik dari 336); Worker **88 tes, 0 gagal** (naik dari 84); `tsc --noEmit` bersih; lint lulus.
+
+**Belum terbukti:** absen nyata pagi+sore oleh karyawan asli di HP cabang dengan kamera asli; pemasangan APK di HP cabang; dan baris teks `check_out_at` 27 Sep (`salsabilayumna2006@gmail.com`) masih menunggu keputusan pembersihan.
+
+**Berkas yang Hermes pegang (pekerjaan 0u):** `android/.../data/SyncProtocol.kt`, `data/CuciinStore.kt`, `data/AttendanceScope.kt`, `app/src/test/.../AttendanceTidakTertimpaTest.kt`, `AttendanceMultiBranchTest.kt`, `cloudflare/src/command-sync.ts`, `cloudflare/src/index.ts`, `cloudflare/tests/command-sync.test.mjs`, `cloudflare/tests/attendance-journal-dedupe.test.mjs`. **Agen lain: jangan sentuh berkas itu sampai baris ini diperbarui.**
+
+## Riwayat commit terakhir di `main`
 
 | Commit | Isi |
 | --- | --- |
@@ -1382,6 +1416,11 @@ laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/AccessPolicy.kt
 laundry-ops/cloudflare/migrations/0006_asset_types.sql
 laundry-ops/cloudflare/migrations/0007_access_roles.sql
 laundry-ops/cloudflare/migrations/0008_owner_name_neutral.sql
+laundry-ops/android/app/src/main/java/com/cuciin/laundryops/data/SyncProtocol.kt
+laundry-ops/android/app/src/test/java/com/cuciin/laundryops/data/AttendanceTidakTertimpaTest.kt
+laundry-ops/cloudflare/src/command-sync.ts
+laundry-ops/cloudflare/src/index.ts
+laundry-ops/cloudflare/tests/command-sync.test.mjs
 ```
 
 ## 0b. Riwayat klaim sebelumnya (16 Sep, Hermes)

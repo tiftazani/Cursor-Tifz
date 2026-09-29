@@ -241,10 +241,13 @@ object CuciinStore {
         fill(audit, s.audit)
         fill(cashCloses, s.cashCloses)
         fill(payments, s.payments)
-        val localAttendancePhotos = attendance.associate { it.id to (it.checkInPhotoPath to it.checkOutPhotoPath) }
+        // Foto absensi hanya ada di perangkat yang mencatatnya. Pencariannya dilakukan lewat id,
+        // dan bila id-nya berbeda (perangkat lama memakai id acak, perangkat baru deterministik),
+        // dicari lagi lewat (karyawan, tanggal, cabang). Tanpa cadangan itu, foto absensi hilang
+        // dari layar hanya karena skema id barisnya berubah — padahal berkasnya masih ada.
         fill(attendance, s.attendance.map { remote ->
-            val local = localAttendancePhotos[remote.id]
-            remote.copy(checkInPhotoPath = local?.first.orEmpty(), checkOutPhotoPath = local?.second.orEmpty())
+            val (photoIn, photoOut) = AttendanceScope.localPhotos(attendance, remote)
+            remote.copy(checkInPhotoPath = photoIn, checkOutPhotoPath = photoOut)
         })
         fill(accessPolicies, s.accessPolicies)
         fill(accessRoles, s.accessRoles.ifEmpty { AccessCatalog.builtInRoles() })

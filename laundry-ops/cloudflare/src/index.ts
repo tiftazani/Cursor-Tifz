@@ -264,22 +264,51 @@ function attendanceIdentity(row:JsonRecord):string|null {
  * lengkap: baris yang sudah punya jam pulang menang atas yang belum, dan bila keduanya sama
  * lengkap, yang jam masuknya paling akhir.
  */
+/** Baris absensi yang sudah punya jam pulang (atau jam masuk lebih baru) dianggap lebih lengkap. */
+function absensiLebihLengkap(baru:JsonRecord,lama:JsonRecord):boolean {
+  const pulangBaru=num(baru,"checkOutAtMs") > 0;
+  const pulangLama=num(lama,"checkOutAtMs") > 0;
+  if(pulangBaru!==pulangLama) return pulangBaru;
+  return num(baru,"checkInAtMs") >= num(lama,"checkInAtMs");
+}
+
 function dedupeAttendance(rows:JsonRecord[]):JsonRecord[] {
   const best=new Map<string,JsonRecord>();
   const passthrough:JsonRecord[]=[];
-  const lebihLengkap=(baru:JsonRecord,lama:JsonRecord):boolean=>{
-    const pulangBaru=num(baru,"checkOutAtMs") > 0;
-    const pulangLama=num(lama,"checkOutAtMs") > 0;
-    if(pulangBaru!==pulangLama) return pulangBaru;
-    return num(baru,"checkInAtMs") >= num(lama,"checkInAtMs");
-  };
   for(const row of rows) {
     const key=attendanceIdentity(row);
     if(!key) { passthrough.push(row); continue; }
     const previous=best.get(key);
-    if(!previous || lebihLengkap(row,previous)) best.set(key,row);
+    if(!previous || absensiLebihLengkap(row,previous)) best.set(key,row);
   }
   return [...passthrough,...best.values()];
+}
+
+/**
+ * Menggabungkan kiriman absensi dengan baris yang sudah ada tanpa mengosongkan isinya.
+ *
+ * Aturan pemilik: absen pagi dan sore adalah SATU catatan harian, dan "tidak boleh ada yang
+ * menimpa". Kiriman berikutnya untuk catatan yang sama boleh mengisi jam pulang, tetapi tidak
+ * boleh mengosongkan jam masuk, jam pulang, atau catatan yang sudah tercatat. Tanpa aturan ini,
+ * perangkat yang belum menarik perubahan (atau perangkat lama yang mengirim ulang barisnya)
+ * menghapus jam pulang yang sudah dicatat perangkat lain.
+ */
+function gabungAbsensi(lama:JsonRecord|null,baru:JsonRecord):JsonRecord {
+  if(!lama) return baru;
+  const hasil={...baru};
+  // Jam masuk dan jam pulang yang SUDAH tercatat tidak pernah ditimpa. Ini sejalan dengan SQL
+  // `ON CONFLICT ... check_in_at=attendance.check_in_at, check_out_at=COALESCE(...)`, supaya isi
+  // tabel dan isi snapshot tidak pernah berbeda cerita.
+  if(num(lama,"checkInAtMs")>0) {
+    hasil.checkInAtMs=num(lama,"checkInAtMs");
+    if(str(lama,"checkInAt")) hasil.checkInAt=str(lama,"checkInAt");
+  }
+  if(num(lama,"checkOutAtMs")>0) {
+    hasil.checkOutAtMs=num(lama,"checkOutAtMs");
+    if(str(lama,"checkOutAt")) hasil.checkOutAt=str(lama,"checkOutAt");
+  }
+  if(!str(baru,"note") && str(lama,"note")) hasil.note=str(lama,"note");
+  return hasil;
 }
 
 export function applyJournalToSnapshot(base:JsonRecord,changes:SnapshotJournalChange[],revision:number):JsonRecord {
@@ -290,13 +319,26 @@ export function applyJournalToSnapshot(base:JsonRecord,changes:SnapshotJournalCh
     const parsed=change.payload_json ? JSON.parse(change.payload_json) as unknown : null;
     const incoming=parsed && typeof parsed==="object" && !Array.isArray(parsed) ? parsed as JsonRecord : null;
     const attendanceKey=dataset==="attendance" && incoming ? attendanceIdentity(incoming) : null;
-    const rows=list(snapshot,dataset).filter(row=>{
+    const existing=list(snapshot,dataset);
+    // Aturan pemilik: absensi tidak boleh saling menimpa. Baris yang sudah ada dipakai sebagai
+    // dasar penggabungan, bukan dibuang lalu diganti kiriman yang belum lengkap: kiriman tanpa
+    // jam pulang tidak boleh menghapus jam pulang yang sudah tercatat di snapshot. Bila ada dua
+    // baris kembar untuk catatan yang sama, yang dipakai sebagai dasar adalah yang paling lengkap.
+    const sebelumnya=dataset==="attendance" && incoming
+      ? existing
+          .filter(row=>journalEntityId(dataset,row)===change.entity_id
+            || (attendanceKey !== null && attendanceIdentity(row)===attendanceKey))
+          .reduce<JsonRecord|null>((acc,row)=>acc===null || absensiLebihLengkap(row,acc) ? row : acc,null)
+      : null;
+    const rows=existing.filter(row=>{
       if(journalEntityId(dataset,row)===change.entity_id) return false;
       // Id berbeda, catatan sama: jangan sisakan baris kembar.
       if(attendanceKey && attendanceIdentity(row)===attendanceKey) return false;
       return true;
     });
-    if(change.operation!=="delete" && incoming) rows.push(incoming);
+    if(change.operation!=="delete" && incoming) {
+      rows.push(dataset==="attendance" ? gabungAbsensi(sebelumnya,incoming) : incoming);
+    }
     snapshot[dataset]=dataset==="attendance" ? dedupeAttendance(rows) : rows;
     if(change.entity_type==="nota" || change.entity_type==="order") {
       const deleted=new Set(listOfStrings(snapshot.deletedNotaIds));
@@ -401,7 +443,9 @@ async function projectSnapshot(env: Env, snapshot: JsonRecord, updatedAt: number
   // cabang+tanggal) dan (staff_email, work_date, branch_id) (dipakai perangkat versi lama yang
   // masih mengirim id acak). Tanpa klausa kedua, absen dari aplikasi lama akan menabrak batas
   // unik dan ditolak 409, lalu antreannya macet.
-  for (const row of list(snapshot, "attendance")) statements.push(env.DB.prepare("INSERT INTO attendance(id,organization_id,branch_id,staff_email,staff_name,work_date,check_in_at,check_out_at,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,staff_name=excluded.staff_name,work_date=excluded.work_date,check_in_at=excluded.check_in_at,check_out_at=excluded.check_out_at,note=excluded.note,updated_at=excluded.updated_at ON CONFLICT(staff_email,work_date,branch_id) DO UPDATE SET staff_name=excluded.staff_name,check_in_at=excluded.check_in_at,check_out_at=excluded.check_out_at,note=excluded.note,updated_at=excluded.updated_at").bind(str(row,"id"),ORG_ID,str(row,"branchId"),str(row,"staffEmail").toLowerCase(),str(row,"staffName"),str(row,"workDate"),num(row,"checkInAtMs"),typeof row.checkOutAtMs === "number" ? row.checkOutAtMs : null,str(row,"note"),version));
+  // Aturan pemilik: absensi tidak boleh saling menimpa. Jalur snapshot pun menahan jam masuk
+  // yang sudah tercatat, mengisi jam pulang yang masih kosong, dan tidak menghapus catatan.
+  for (const row of list(snapshot, "attendance")) statements.push(env.DB.prepare("INSERT INTO attendance(id,organization_id,branch_id,staff_email,staff_name,work_date,check_in_at,check_out_at,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,staff_name=excluded.staff_name,work_date=excluded.work_date,check_in_at=attendance.check_in_at,check_out_at=COALESCE(attendance.check_out_at,excluded.check_out_at),note=CASE WHEN excluded.note='' THEN attendance.note ELSE excluded.note END,updated_at=excluded.updated_at ON CONFLICT(staff_email,work_date,branch_id) DO UPDATE SET staff_name=excluded.staff_name,check_in_at=attendance.check_in_at,check_out_at=COALESCE(attendance.check_out_at,excluded.check_out_at),note=CASE WHEN excluded.note='' THEN attendance.note ELSE excluded.note END,updated_at=excluded.updated_at").bind(str(row,"id"),ORG_ID,str(row,"branchId"),str(row,"staffEmail").toLowerCase(),str(row,"staffName"),str(row,"workDate"),num(row,"checkInAtMs"),typeof row.checkOutAtMs === "number" ? row.checkOutAtMs : null,str(row,"note"),version));
   for (const policy of list(snapshot, "accessPolicies")) statements.push(env.DB.prepare("INSERT INTO access_policies(email,organization_id,payload_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(email,organization_id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(policy,"email").toLowerCase(),ORG_ID,JSON.stringify(policy),version));
   for (const template of list(snapshot, "whatsappTemplates")) statements.push(env.DB.prepare("INSERT INTO whatsapp_templates(id,organization_id,payload_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(id,organization_id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at").bind(str(template,"id","business"),ORG_ID,JSON.stringify(template),version));
   for (const assetType of list(snapshot, "assetTypes")) statements.push(env.DB.prepare("INSERT INTO asset_types(id,organization_id,code,name,active,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET code=excluded.code,name=excluded.name,active=excluded.active,updated_at=excluded.updated_at").bind(str(assetType,"id"),ORG_ID,str(assetType,"code").toUpperCase(),str(assetType,"name"),assetType.active===false?0:1,version));

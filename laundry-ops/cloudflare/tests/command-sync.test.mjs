@@ -529,6 +529,78 @@ test("absen pulang tanpa angka tetap diterima dan disimpan kosong", async () => 
   assert.equal(baris[0].check_out_at,null,"label teks tidak boleh masuk kolom angka");
 });
 
+test("kiriman absen tanpa jam pulang tidak mengosongkan jam pulang yang sudah tercatat", async () => {
+  // Aturan pemilik: absen pagi dan sore adalah satu catatan harian, dan tidak boleh ada yang
+  // menimpa. Perangkat yang belum sempat menarik jam pulang bisa mengirim ulang baris yang sama
+  // tanpa `checkOutAtMs` — misalnya saat memulihkan data lokalnya, atau saat pengawas mengoreksi
+  // catatan. Kiriman itu TIDAK boleh mengosongkan jam pulang di server.
+  const env=fakeD1(); seedBaseline(env);
+  const kirim=(commandId,entityId,payload)=>pushCommands(commandRequest([{
+    commandId,type:"attendance.upsert",entityId,branchId:"melati",payload,
+  }]),env,identities.kasir);
+  const dasar={id:"att-melati-2026-09-24-7",branchId:"melati",staffEmail:"kasir@cuciin.id",staffName:"Kasir Melati",workDate:"2026-09-24",checkInAtMs:1789000000000,note:""};
+
+  const pulang=await (await kirim("absen-jaga-0001","att-melati-2026-09-24-7",{...dasar,checkOutAtMs:1789033200000})).json();
+  assert.equal(pulang.results[0].accepted,true,"absen pulang pertama harus diterima");
+
+  const tanpaPulang=await (await kirim("absen-jaga-0002","att-melati-2026-09-24-7",{...dasar})).json();
+  assert.equal(tanpaPulang.results[0].accepted,true,"kiriman tanpa jam pulang tetap harus diterima, bukan ditolak");
+  assert.equal(
+    rows(env,"SELECT check_out_at FROM attendance WHERE staff_email='kasir@cuciin.id'")[0].check_out_at,
+    1789033200000,
+    "jam pulang tidak boleh dikosongkan lewat jalur id yang sama",
+  );
+
+  // Perangkat versi lama memakai id acak untuk catatan yang sama; itu menempuh kunci unik kedua.
+  const idAcak=await (await kirim("absen-jaga-0003","att-acak-dari-perangkat-lama",{...dasar,id:"att-acak-dari-perangkat-lama"})).json();
+  assert.equal(idAcak.results[0].accepted,true,"id acak dari perangkat lama tidak boleh ditolak 409");
+
+  const baris=rows(env,"SELECT check_out_at,typeof(check_out_at) AS tipe FROM attendance WHERE staff_email='kasir@cuciin.id'");
+  assert.equal(baris.length,1,"satu karyawan, satu tanggal, satu cabang tetap satu baris");
+  assert.equal(baris[0].check_out_at,1789033200000,"jam pulang tidak boleh dikosongkan lewat kunci unik karyawan+tanggal+cabang");
+  assert.equal(baris[0].tipe,"integer","kolom jam pulang harus tetap angka");
+});
+
+test("jurnal absen mencatat nilai gabungan, bukan nilai mentah kiriman", async () => {
+  // Jurnal (`sync_changes`) adalah sumber snapshot semua perangkat. Kalau jurnal mencatat nilai
+  // mentah kiriman, perangkat lain menerima cerita yang salah walau tabel `attendance` sudah
+  // benar: jam pulang yang sudah tercatat akan hilang di layar semua orang. Karena itu jurnal
+  // wajib memuat nilai HASIL GABUNGAN.
+  const env=fakeD1(); seedBaseline(env);
+  const kirim=(commandId,entityId,payload)=>pushCommands(commandRequest([{
+    commandId,type:"attendance.upsert",entityId,branchId:"melati",payload,
+  }]),env,identities.kasir);
+  const dasar={id:"att-melati-2026-09-24-9",branchId:"melati",staffEmail:"kasir@cuciin.id",staffName:"Kasir Melati",workDate:"2026-09-24",checkInAtMs:1789000000000,note:""};
+
+  await (await kirim("absen-jurnal-0001","att-melati-2026-09-24-9",{...dasar,checkOutAtMs:1789033200000})).json();
+  await (await kirim("absen-jurnal-0002","att-melati-2026-09-24-9",{...dasar})).json();
+
+  const jurnal=rows(env,"SELECT payload_json FROM sync_changes WHERE entity_type='attendance' ORDER BY sequence");
+  const terakhir=JSON.parse(jurnal[jurnal.length-1].payload_json);
+  assert.equal(terakhir.checkOutAtMs,1789033200000,"jurnal harus memuat jam pulang yang sudah tercatat, bukan null dari kiriman terakhir");
+  assert.ok(terakhir.checkOutAt,"jurnal harus memuat label jam pulang supaya perangkat bisa langsung menampilkannya");
+  assert.equal(terakhir.checkInAtMs,1789000000000,"jam masuk harus ikut terbawa di jurnal");
+});
+
+test("jam masuk yang sudah tercatat tidak diganti kiriman berikutnya", async () => {
+  // "Tidak boleh ada yang menimpa" juga berlaku untuk jam masuk. Baris absensi dibuat sekali saat
+  // karyawan menekan Absen masuk; kiriman sesudahnya (perangkat kedua, pemulihan data lokal, atau
+  // jam perangkat yang berbeda) tidak boleh memindahkan jam masuk itu.
+  const env=fakeD1(); seedBaseline(env);
+  const kirim=(commandId,entityId,payload)=>pushCommands(commandRequest([{
+    commandId,type:"attendance.upsert",entityId,branchId:"melati",payload,
+  }]),env,identities.kasir);
+  const dasar={id:"att-melati-2026-09-24-8",branchId:"melati",staffEmail:"kasir@cuciin.id",staffName:"Kasir Melati",workDate:"2026-09-24",note:""};
+
+  await (await kirim("absen-masuk-0001","att-melati-2026-09-24-8",{...dasar,checkInAtMs:1789000000000})).json();
+  await (await kirim("absen-masuk-0002","att-melati-2026-09-24-8",{...dasar,checkInAtMs:1789007200000})).json();
+  await (await kirim("absen-masuk-0003","att-acak-dari-perangkat-lama",{...dasar,id:"att-acak-dari-perangkat-lama",checkInAtMs:1789009000000})).json();
+
+  const baris=rows(env,"SELECT check_in_at FROM attendance WHERE staff_email='kasir@cuciin.id'");
+  assert.equal(baris.length,1,"satu karyawan, satu tanggal, satu cabang tetap satu baris");
+  assert.equal(baris[0].check_in_at,1789000000000,"jam masuk pertama harus dipertahankan, bukan diganti kiriman berikutnya");
+});
+
 test("migrasi 0009 mengganti kunci absensi menjadi per cabang", () => {
   const sql=readFileSync(new URL("../migrations/0009_attendance_per_branch.sql", import.meta.url), "utf8");
   assert.match(sql,/UNIQUE \(staff_email, work_date, branch_id\)/,"kunci baru harus menyertakan branch_id");

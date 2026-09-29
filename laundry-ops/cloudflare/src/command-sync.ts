@@ -605,6 +605,64 @@ async function planPayment(db:D1Database, command:SyncCommand, identity:SyncIden
   return {statements,entityType:"payment",entityId:id,branchId,changePayload:payload,updatedAt:now};
 }
 
+type AttendanceRow={id:string;staff_email:string;branch_id:string;work_date:string;check_in_at:number;check_out_at:number|null;note:string};
+
+/**
+ * Mencari baris absensi yang sudah ada untuk kiriman ini.
+ *
+ * Dua kunci unik dipakai sekaligus, sama seperti SQL upsert-nya: `id` (perangkat baru,
+ * deterministik) dan (staff_email, work_date, branch_id) (perangkat lama, id acak). Tanpa
+ * pencarian kunci kedua, kiriman dari perangkat lama tidak mengenali barisnya sendiri sehingga
+ * jam pulang yang sudah tercatat tidak ikut terjaga saat digabungkan.
+ */
+async function findExistingAttendance(db:D1Database,id:string,p:JsonRecord):Promise<AttendanceRow|null> {
+  const byId=await db.prepare("SELECT id,staff_email,branch_id,work_date,check_in_at,check_out_at,note FROM attendance WHERE id=? AND organization_id=?").bind(id,ORG_ID).first<AttendanceRow>();
+  if(byId) return byId;
+  const email=optionalString(p,"staffEmail",254).toLowerCase();
+  const workDate=optionalString(p,"workDate",20);
+  const branchId=optionalString(p,"branchId",100);
+  if(!email || !workDate || !branchId) return null;
+  return await db.prepare("SELECT id,staff_email,branch_id,work_date,check_in_at,check_out_at,note FROM attendance WHERE organization_id=? AND lower(staff_email)=? AND work_date=? AND branch_id=?").bind(ORG_ID,email,workDate,branchId).first<AttendanceRow>();
+}
+
+const NAMA_BULAN_SINGKAT=["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+
+/** Label jam yang sama dengan format perangkat ("27 Sep 2026, 14.48", zona WIB). */
+function labelAbsen(ms:number):string {
+  const shifted=new Date(ms+7*60*60*1000);
+  const tanggal=shifted.getUTCDate();
+  const bulan=NAMA_BULAN_SINGKAT[shifted.getUTCMonth()] ?? "";
+  const jam=String(shifted.getUTCHours()).padStart(2,"0");
+  const menit=String(shifted.getUTCMinutes()).padStart(2,"0");
+  return `${tanggal} ${bulan} ${shifted.getUTCFullYear()}, ${jam}.${menit}`;
+}
+
+/** Label teks yang sudah ada di payload, tanpa melempar bila bentuknya bukan teks. */
+function labelTeks(row:JsonRecord,key:string):string {
+  const value=row[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * Nilai absensi yang benar-benar tersimpan setelah penggabungan, untuk ditulis ke jurnal.
+ *
+ * Jurnal adalah sumber snapshot semua perangkat. Kalau jurnal mencatat nilai mentah kiriman
+ * (misalnya jam pulang kosong dari perangkat yang belum menarik perubahan), perangkat lain
+ * menerima cerita yang salah walau tabelnya sudah benar. Karena itu jurnal memakai nilai hasil
+ * gabungan: jam yang sudah tercatat dipertahankan, dan labelnya diisi bila kosong.
+ */
+function gabungAbsensiTersimpan(lama:AttendanceRow|null,p:JsonRecord):JsonRecord {
+  const masukBaru=typeof p.checkInAt === "number"?p.checkInAt:(typeof p.checkInAtMs === "number"?p.checkInAtMs:0);
+  const pulangBaru=typeof p.checkOutAt === "number"?p.checkOutAt:(typeof p.checkOutAtMs === "number"?p.checkOutAtMs:null);
+  const masuk= lama && lama.check_in_at>0 ? lama.check_in_at : masukBaru;
+  const pulang= lama?.check_out_at && lama.check_out_at>0 ? lama.check_out_at : pulangBaru;
+  const catatan=typeof p.note==="string" && p.note.trim() ? p.note : (lama?.note ?? "");
+  const hasil:JsonRecord={...p,checkInAtMs:masuk,checkOutAtMs:pulang,note:catatan};
+  if(masuk>0 && !labelTeks(hasil,"checkInAt")) hasil.checkInAt=labelAbsen(masuk);
+  if(pulang && pulang>0 && !labelTeks(hasil,"checkOutAt")) hasil.checkOutAt=labelAbsen(pulang);
+  return hasil;
+}
+
 async function planGeneric(db:D1Database, command:SyncCommand, identity:SyncIdentity, token:string, now:number):Promise<Plan> {
   const p=command.payload;
   const id=command.entityId || requiredString(p,"id",100);
@@ -620,7 +678,7 @@ async function planGeneric(db:D1Database, command:SyncCommand, identity:SyncIden
   if(!config.branch) branchId=null;
   const existingBranch=config.branch ? await existingBranchForEntity(db,config.table,id) : null;
   const previousStaffBranches=kind==="staff" ? (await db.prepare("SELECT branch_id FROM staff_branches WHERE lower(staff_email)=lower(?) ORDER BY branch_id").bind(id).all<{branch_id:string}>()).results.map(row=>row.branch_id) : [];
-  const existingAttendance=kind==="attendance" ? await db.prepare("SELECT staff_email,branch_id,work_date FROM attendance WHERE id=? AND organization_id=?").bind(id,ORG_ID).first<{staff_email:string;branch_id:string;work_date:string}>() : null;
+  const existingAttendance=kind==="attendance" ? await findExistingAttendance(db,id,p) : null;
   if(deleting && config.branch && !branchId) branchId=existingBranch;
   // Absensi milik sendiri boleh dicatat di cabang mana pun yang ditugaskan ke akun itu, bukan
   // hanya cabang pertama. Sebelumnya `assertBranch` sudah menerima seluruh `branchIds`, jadi
@@ -648,7 +706,7 @@ async function planGeneric(db:D1Database, command:SyncCommand, identity:SyncIden
     return {statements,entityType:config.entity,entityId:id,branchId,operation:"delete",changePayload:kind==="attendance"?{staffEmail:existingAttendance?.staff_email ?? "",workDate:existingAttendance?.work_date ?? "",branchId:existingAttendance?.branch_id ?? branchId ?? ""}:null,journaled:kind==="staff"};
   }
   if(kind==="expense") statements.push(db.prepare(`INSERT INTO expenses(id,organization_id,branch_id,category,amount,occurred_at,officer,note,updated_at) SELECT ?,?,?,?,?,?,?,?,? WHERE ${gate} ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,category=excluded.category,amount=excluded.amount,occurred_at=excluded.occurred_at,officer=excluded.officer,note=excluded.note,updated_at=excluded.updated_at`).bind(id,ORG_ID,branchId,requiredString(p,"category",100),integer(p,"amount",1),typeof p.occurredAt === "number"?integer(p,"occurredAt",1):integer(p,"occurredAtMs",1),identity.email.toLowerCase(),optionalString(p,"note",500),now,command.commandId,ORG_ID,token));
-  else if(kind==="attendance") statements.push(db.prepare(`INSERT INTO attendance(id,organization_id,branch_id,staff_email,staff_name,work_date,check_in_at,check_out_at,note,updated_at) SELECT ?,?,?,?,?,?,?,?,?,? WHERE ${gate} ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,staff_name=excluded.staff_name,work_date=excluded.work_date,check_in_at=excluded.check_in_at,check_out_at=excluded.check_out_at,note=excluded.note,updated_at=excluded.updated_at ON CONFLICT(staff_email,work_date,branch_id) DO UPDATE SET staff_name=excluded.staff_name,check_in_at=excluded.check_in_at,check_out_at=excluded.check_out_at,note=excluded.note,updated_at=excluded.updated_at`).bind(id,ORG_ID,branchId,requiredString(p,"staffEmail",254).toLowerCase(),requiredString(p,"staffName",160),requiredString(p,"workDate",20),typeof p.checkInAt === "number"?integer(p,"checkInAt",1):integer(p,"checkInAtMs",1),typeof p.checkOutAt === "number"?integer(p,"checkOutAt",1):(typeof p.checkOutAtMs === "number"?integer(p,"checkOutAtMs",1):null),optionalString(p,"note",500),now,command.commandId,ORG_ID,token));
+  else if(kind==="attendance") statements.push(db.prepare(`INSERT INTO attendance(id,organization_id,branch_id,staff_email,staff_name,work_date,check_in_at,check_out_at,note,updated_at) SELECT ?,?,?,?,?,?,?,?,?,? WHERE ${gate} ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,staff_name=excluded.staff_name,work_date=excluded.work_date,check_in_at=attendance.check_in_at,check_out_at=COALESCE(attendance.check_out_at,excluded.check_out_at),note=CASE WHEN excluded.note='' THEN attendance.note ELSE excluded.note END,updated_at=excluded.updated_at ON CONFLICT(staff_email,work_date,branch_id) DO UPDATE SET staff_name=excluded.staff_name,check_in_at=attendance.check_in_at,check_out_at=COALESCE(attendance.check_out_at,excluded.check_out_at),note=CASE WHEN excluded.note='' THEN attendance.note ELSE excluded.note END,updated_at=excluded.updated_at`).bind(id,ORG_ID,branchId,requiredString(p,"staffEmail",254).toLowerCase(),requiredString(p,"staffName",160),requiredString(p,"workDate",20),typeof p.checkInAt === "number"?integer(p,"checkInAt",1):integer(p,"checkInAtMs",1),typeof p.checkOutAt === "number"?integer(p,"checkOutAt",1):(typeof p.checkOutAtMs === "number"?integer(p,"checkOutAtMs",1):null),optionalString(p,"note",500),now,command.commandId,ORG_ID,token));
   else if(kind==="customer") statements.push(db.prepare(`INSERT INTO customers(id,organization_id,name,phone,address,updated_at) SELECT ?,?,?,?,?,? WHERE ${gate} ON CONFLICT(id) DO UPDATE SET name=excluded.name,phone=excluded.phone,address=excluded.address,updated_at=excluded.updated_at`).bind(id,ORG_ID,requiredString(p,"name",200),optionalString(p,"phone",40),optionalString(p,"address",500),now,command.commandId,ORG_ID,token));
   else if(kind==="branch") statements.push(db.prepare(`INSERT INTO branches(id,organization_id,code,name,address,maps_query,updated_at) SELECT ?,?,?,?,?,?,? WHERE ${gate} ON CONFLICT(id) DO UPDATE SET code=excluded.code,name=excluded.name,address=excluded.address,maps_query=excluded.maps_query,updated_at=excluded.updated_at`).bind(id,ORG_ID,requiredString(p,"code",40),requiredString(p,"name",200),firstString(p,["address","location"],false,500),optionalString(p,"mapsQuery",500),now,command.commandId,ORG_ID,token));
   else if(kind==="staff") {
@@ -669,7 +727,11 @@ async function planGeneric(db:D1Database, command:SyncCommand, identity:SyncIden
   const { passwordHash: _passwordHash, ...withoutLocalPassword } = p;
   const safePayload=kind==="staff" ? withoutLocalPassword : p;
   const actorPayload=kind==="expense" ? {...safePayload,by:identity.name} : safePayload;
-  const changePayload={...actorPayload,id,...(config.branch?{branchId}:{}),updatedAt:now};
+  // Jurnal absensi memakai nilai hasil penggabungan, bukan nilai mentah kiriman: kalau kiriman
+  // tidak membawa jam pulang sedangkan baris sudah punya, jurnal harus tetap memuat jam pulang
+  // itu. Jurnal inilah yang diputar ulang menjadi snapshot semua perangkat.
+  const jurnalPayload=kind==="attendance" ? gabungAbsensiTersimpan(existingAttendance,p) : actorPayload;
+  const changePayload={...jurnalPayload,id,...(config.branch?{branchId}:{}),updatedAt:now};
   let journaled=false;
   if(kind==="staff") {
     const nextStaffBranches=Array.isArray(p.branchIds)?[...new Set(p.branchIds.filter((x):x is string=>typeof x==="string"&&x.length>0))]:[];

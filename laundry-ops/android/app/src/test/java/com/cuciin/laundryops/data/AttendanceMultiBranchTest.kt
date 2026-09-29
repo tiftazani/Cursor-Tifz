@@ -184,6 +184,50 @@ class AttendanceMultiBranchTest {
         )
     }
 
+    // --- foto lokal (historis harus tersimpan) -----------------------------
+
+    @Test
+    fun fotoLokalTetapTerpasangWalauIdBarisBerbeda() {
+        // Perangkat lama menyimpan baris berid acak; server mengirim baris berid deterministik
+        // untuk catatan yang sama. Foto ada di berkas perangkat, bukan di server — pemasangannya
+        // tidak boleh bergantung pada id baris saja.
+        val lokal = listOf(
+            row("att-9f2c1a44-aaaa-bbbb-cccc-000000000001", bunayya, checkIn = 1_000).copy(
+                checkInPhotoPath = "/data/absensi/masuk-lama.jpg",
+                checkOutPhotoPath = "/data/absensi/pulang-lama.jpg",
+            ),
+        )
+        val dariServer = row(AttendanceScope.idFor(bunayya, tanggal, email), bunayya, checkIn = 1_000, checkOut = 2_000)
+
+        val (fotoMasuk, fotoPulang) = AttendanceScope.localPhotos(lokal, dariServer)
+
+        assertEquals("/data/absensi/masuk-lama.jpg", fotoMasuk)
+        assertEquals("/data/absensi/pulang-lama.jpg", fotoPulang)
+    }
+
+    @Test
+    fun fotoLokalDitemukanLewatIdBilaIdnyaSama() {
+        val lokal = listOf(
+            row("att-a", bunayya, checkIn = 1_000).copy(checkInPhotoPath = "/data/absensi/masuk.jpg"),
+        )
+
+        val (fotoMasuk, fotoPulang) = AttendanceScope.localPhotos(lokal, row("att-a", bunayya, checkIn = 1_000))
+
+        assertEquals("/data/absensi/masuk.jpg", fotoMasuk)
+        assertEquals("", fotoPulang)
+    }
+
+    @Test
+    fun fotoKaryawanAtauCabangLainTidakDipakai() {
+        val lokal = listOf(
+            row("att-a", kirab, checkIn = 1_000).copy(checkInPhotoPath = "/data/absensi/cabang-lain.jpg"),
+        )
+
+        val (fotoMasuk, _) = AttendanceScope.localPhotos(lokal, row("att-b", bunayya, checkIn = 1_000))
+
+        assertEquals("cabang lain tidak boleh menyumbang foto", "", fotoMasuk)
+    }
+
     @Test
     fun idBarisBerbedaAntarCabangDanAntarTanggal() {
         val dasar = AttendanceScope.idFor(bunayya, tanggal, email)

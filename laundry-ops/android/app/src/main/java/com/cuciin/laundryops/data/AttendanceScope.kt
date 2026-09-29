@@ -86,4 +86,25 @@ internal object AttendanceScope {
         branchId in allowedBranchIds -> null
         else -> "Cabang absensi tidak sesuai akun"
     }
+
+    /**
+     * Foto lokal yang harus dipertahankan saat snapshot dari server diterapkan.
+     *
+     * Foto absensi hanya ada di perangkat yang mencatatnya; server tidak menyimpannya. Pencarian
+     * pertama lewat `id` baris. Bila id-nya berbeda — perangkat lama memakai id acak, perangkat
+     * baru deterministik per (karyawan, tanggal, cabang) — pencarian diulang lewat identitas
+     * catatan. Tanpa cadangan itu, foto absensi hilang dari layar hanya karena skema id barisnya
+     * berubah, padahal berkasnya masih ada di perangkat. Aturan pemilik: foto dan data
+     * kemarin/historis disimpan.
+     */
+    fun localPhotos(existing: List<AttendanceRecord>, remote: AttendanceRecord): Pair<String, String> {
+        val byId = existing.firstOrNull { it.id == remote.id }
+        val byIdentity = existing.firstOrNull {
+            it.staffEmail.equals(remote.staffEmail, true) &&
+                it.workDate == remote.workDate && it.branchId == remote.branchId
+        }
+        val checkIn = byId?.checkInPhotoPath?.takeIf { it.isNotBlank() } ?: byIdentity?.checkInPhotoPath.orEmpty()
+        val checkOut = byId?.checkOutPhotoPath?.takeIf { it.isNotBlank() } ?: byIdentity?.checkOutPhotoPath.orEmpty()
+        return checkIn to checkOut
+    }
 }

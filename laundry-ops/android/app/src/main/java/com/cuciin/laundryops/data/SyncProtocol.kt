@@ -8,9 +8,11 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -481,8 +483,21 @@ object SyncProjection {
         changes.forEach { change ->
             val spec = specs[change.entityType] ?: return@forEach
             val rows = (root[spec.field] as? JsonArray).orEmpty().toMutableList()
-            rows.removeAll { row -> (row as? JsonObject)?.let(spec.id) == change.entityId }
-            if (change.operation.lowercase() != "delete" && change.payload is JsonObject) rows += change.payload
+            val identity = if (change.entityType == "attendance") attendanceIdentity(change.payload) else null
+            // Baris lama dipakai sebagai dasar penggabungan, bukan dibuang. Aturan pemilik:
+            // absen pagi dan sore adalah satu catatan harian, dan data yang sudah tercatat tidak
+            // boleh dikosongkan oleh kiriman berikutnya.
+            val lama = if (identity == null) null else rows
+                .mapNotNull { it as? JsonObject }
+                .filter { attendanceIdentity(it) == identity }
+                .reduceOrNull { acc, obj -> if (attendanceLebihLengkap(obj, acc)) obj else acc }
+            rows.removeAll { row ->
+                val obj = row as? JsonObject ?: return@removeAll false
+                spec.id(obj) == change.entityId || (identity != null && attendanceIdentity(obj) == identity)
+            }
+            if (change.operation.lowercase() != "delete" && change.payload is JsonObject) {
+                rows += if (change.entityType == "attendance") gabungAbsensi(lama, change.payload) else change.payload
+            }
             root[spec.field] = JsonArray(rows)
         }
         root["updatedAt"] = JsonPrimitive(updatedAt)
@@ -577,6 +592,62 @@ object SyncProjection {
         accessRoles = server.accessRoles,
         accessPolicies = server.accessPolicies,
     )
+
+    /**
+     * Identitas absensi: (karyawan, tanggal, cabang). `null` bila salah satunya kosong.
+     *
+     * Sama dengan aturan di Worker: absensi tidak dikenali dari `id` saja, karena perangkat lama
+     * memakai id acak sedangkan perangkat baru memakai id deterministik untuk catatan yang sama.
+     */
+    private fun attendanceIdentity(element: JsonElement?): String? {
+        val obj = element as? JsonObject ?: return null
+        val email = obj["staffEmail"]?.jsonPrimitive?.contentOrNull?.lowercase().orEmpty()
+        val workDate = obj["workDate"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val branchId = obj["branchId"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        if (email.isBlank() || workDate.isBlank() || branchId.isBlank()) return null
+        return "$email|$workDate|$branchId"
+    }
+
+    /** Baris absensi yang sudah punya jam pulang (atau jam masuk lebih baru) dianggap lebih lengkap. */
+    private fun attendanceLebihLengkap(baru: JsonObject, lama: JsonObject): Boolean {
+        fun pulang(obj: JsonObject): Long = obj["checkOutAtMs"]?.jsonPrimitive?.longOrNull ?: 0L
+        fun masuk(obj: JsonObject): Long = obj["checkInAtMs"]?.jsonPrimitive?.longOrNull ?: 0L
+        val pulangBaru = pulang(baru) > 0
+        val pulangLama = pulang(lama) > 0
+        if (pulangBaru != pulangLama) return pulangBaru
+        return masuk(baru) >= masuk(lama)
+    }
+
+    /**
+     * Menggabungkan kiriman absensi dengan baris yang sudah ada tanpa mengosongkan isinya.
+     *
+     * Aturan pemilik: absen pagi dan sore adalah SATU catatan harian, dan "tidak boleh ada yang
+     * menimpa". Kiriman berikutnya boleh mengisi jam pulang, tetapi tidak boleh mengosongkan jam
+     * masuk, jam pulang, atau catatan yang sudah tercatat.
+     */
+    private fun gabungAbsensi(lama: JsonObject?, baru: JsonObject): JsonObject {
+        if (lama == null) return baru
+        val hasil = baru.toMutableMap()
+        // Jam masuk dan jam pulang yang SUDAH tercatat tidak pernah ditimpa. Ini sejalan dengan
+        // SQL `ON CONFLICT ... check_in_at=attendance.check_in_at, check_out_at=COALESCE(...)`,
+        // supaya isi tabel dan isi snapshot tidak pernah berbeda cerita.
+        val masukLama = lama["checkInAtMs"]?.jsonPrimitive?.longOrNull ?: 0L
+        if (masukLama > 0) {
+            hasil["checkInAtMs"] = JsonPrimitive(masukLama)
+            lama["checkInAt"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                ?.let { hasil["checkInAt"] = JsonPrimitive(it) }
+        }
+        val pulangLama = lama["checkOutAtMs"]?.jsonPrimitive?.longOrNull ?: 0L
+        if (pulangLama > 0) {
+            hasil["checkOutAtMs"] = JsonPrimitive(pulangLama)
+            lama["checkOutAt"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                ?.let { hasil["checkOutAt"] = JsonPrimitive(it) }
+        }
+        val catatanBaru = baru["note"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val catatanLama = lama["note"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        if (catatanBaru.isBlank() && catatanLama.isNotBlank()) hasil["note"] = JsonPrimitive(catatanLama)
+        return JsonObject(hasil)
+    }
 
     private fun stableId(value: JsonObject): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(value.toString().toByteArray())
