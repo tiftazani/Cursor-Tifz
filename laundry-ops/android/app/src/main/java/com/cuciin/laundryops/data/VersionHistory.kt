@@ -12,10 +12,19 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.40"
-    val currentCode: Int = 59
+    val currentName: String = "1.10.41"
+    val currentCode: Int = 60
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.41", code = 60, date = "29 Sep 2026",
+            notes = listOf(
+                "Absensi harian: absen masuk dan absen pulang kini selalu menjadi SATU catatan per karyawan per cabang per hari. Sebelumnya jam pulang yang sudah tercatat bisa terhapus sendiri saat data disinkronkan atau saat aplikasi dibuka ulang, sehingga catatan shift tampak belum selesai.",
+                "Jam masuk dan jam pulang yang sudah tercatat tidak pernah ditimpa lagi, baik oleh data dari perangkat lain maupun oleh pemuatan ulang dari server. Kalau kiriman berikutnya tidak membawa jam pulang, jam yang lama tetap dipakai.",
+                "Satu catatan absensi kini dikenali dari karyawan, tanggal, dan cabangnya, bukan dari nomor barisnya. Perangkat lama dan perangkat baru tetap sepakat bahwa itu satu catatan yang sama, jadi tidak ada lagi dua baris untuk hari yang sama.",
+                "Foto absensi tidak hilang lagi saat data dari server dimuat ulang. Foto masuk dan foto pulang dicari ulang lewat karyawan, tanggal, dan cabang bila nomor barisnya berbeda. Foto absensi tetap tersimpan di perangkat.",
+            ),
+        ),
         AppRelease(
             name = "1.10.40", code = 59, date = "27 Sep 2026",
             notes = listOf(

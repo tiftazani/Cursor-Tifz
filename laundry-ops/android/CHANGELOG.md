@@ -2,6 +2,39 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.41 — 29 Sep 2026 (versionCode 60)
+
+### Absensi harian: jam dan foto yang sudah tercatat tidak boleh tertimpa
+
+Aturan pemilik (29 Sep): absen pagi dan sore adalah **satu catatan harian** per karyawan per cabang;
+datanya masuk ke **data sekarang dan historis**; **tidak boleh ada yang menimpa**; absen **hari ini**
+menampilkan foto dan data hari ini; **foto dan data kemarin/historis disimpan**.
+
+Audit menemukan bug nyata: **merge dan bootstrap bisa MENGOSONGKAN jam pulang yang sudah tercatat.**
+Titik bocornya ada di empat tempat, bukan di UI:
+
+| Titik | Berkas | Sebelum | Sesudah |
+| --- | --- | --- | --- |
+| Merge perubahan masuk (Android) | `data/SyncProtocol.kt` `apply()` | Baris lama dibuang lalu diganti kiriman; jam pulang hilang bila kiriman tidak membawanya | Baris lama dipakai sebagai dasar, `gabungAbsensi(lama, baru)`; jam yang sudah tercatat tidak pernah ditimpa |
+| Materialisasi jurnal (Worker) | `src/index.ts` `applyJournalToSnapshot` | Kiriman tanpa jam pulang mengosongkan jam pulang di snapshot | Sama: `gabungAbsensi` + baris kembar dibuang lewat identitas |
+| SQL upsert (Worker) | `src/command-sync.ts`, `src/index.ts` `projectSnapshot` | `check_out_at=excluded.check_out_at` | `check_in_at=attendance.check_in_at`, `check_out_at=COALESCE(attendance.check_out_at,excluded.check_out_at)`, note lama dipertahankan bila baru kosong; berlaku juga untuk `ON CONFLICT(staff_email,work_date,branch_id)` |
+| Jurnal (Worker) | `src/command-sync.ts` `planGeneric` | Jurnal mencatat nilai MENTAH kiriman, sehingga perangkat lain menerima cerita yang salah | Jurnal mencatat nilai HASIL GABUNGAN (`gabungAbsensiTersimpan`) |
+
+**Identitas absensi = (staffEmail lowercase, workDate, branchId), bukan `id`.** Perangkat lama
+memakai id acak, perangkat baru deterministik. Tanpa identitas, satu catatan yang sama bisa menjadi
+dua baris, atau kehilangan jam pulang saat skema id-nya berbeda.
+
+**Foto historis.** Foto absensi hanya ada di perangkat pencatat; server tidak menyimpannya.
+Pencariannya kini lewat `id` dulu, lalu fallback ke identitas (`AttendanceScope.localPhotos`).
+
+Bukti emulator (akun `ujibranch.hermes@gmail.com`, 29 Sep 11.15 WIB): absen masuk lalu pulang di
+Laupay Dayeuh = **satu baris** `2026-09-29 laupay-dayeuh` dengan dua foto; sesudah `am force-stop`
+dan buka ulang, baris hari itu dan dua baris 27 Sep tetap utuh dengan fotonya. D1 debug menerima
+angka (`typeof(check_out_at)=integer`), jurnal mencatat nilai gabungan.
+
+Tes: **343 tes Android** (+7), **88 tes Worker** (+4). Bukti merah-dulu: 6 tes gagal saat tambalan
+dilepas, hijau saat dipasang kembali.
+
 ## 1.10.40 — 27 Sep 2026 (versionCode 59)
 
 ### Kasir multi-cabang bisa bekerja di semua cabangnya
