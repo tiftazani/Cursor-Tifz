@@ -9,7 +9,9 @@ Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **
 
 ## 0u. Aturan absensi harian: satu catatan per karyawan per cabang per hari (29 Sep, Hermes)
 
-**Status: SELESAI di kode dan teruji di kedua sisi. BELUM di-commit saat baris ini ditulis, BELUM dipasang di HP cabang mana pun.**
+**Status: SELESAI di kode, teruji di kedua sisi, dan diuji di perangkat emulator. COMMIT `3465748` di `main` (belum di-push, belum di-deploy, belum dipasang di HP cabang).**
+
+**Bukti perangkat (emulator-5554, 29 Sep 11.15 WIB, akun `ujibranch.hermes@gmail.com`):** absen masuk lalu absen pulang di Laupay Dayeuh menghasilkan **satu baris** `2026-09-29 laupay-dayeuh` dengan jam masuk dan jam pulang, **kedua foto tersimpan**; sesudah `am force-stop` dan buka ulang, baris hari itu dan dua baris 27 Sep (Laupay Dayeuh, Laupay Kirab) **tetap utuh dengan fotonya**. D1 debug menerima baris itu sebagai angka (`typeof(check_in_at)=integer`, `check_out_at=integer`); jurnal mencatat nilai gabungan (seq 1085 = jam masuk saja, seq 1087 = sudah lengkap). Berkas foto di `files/attendance/` berjumlah 8: 5 foto lama 27 Sep + 1 masuk + 1 pulang 29 Sep + 1 lain. Antrean `pending` 0, `rejected` 0.
 
 Aturan pemilik (29 Sep): absen pagi dan sore adalah **satu catatan harian**; datanya masuk ke **data sekarang dan historis**; **tidak boleh ada yang menimpa**; absen **hari ini** menampilkan foto dan data hari ini; **foto dan data kemarin/historis disimpan**.
 
