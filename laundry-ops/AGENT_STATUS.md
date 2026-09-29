@@ -5,11 +5,15 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
-**Keadaan `main` per 29 Sep: `8f0c028`** (rilis 1.10.40 + katalog test case; semua sudah di-push ke `origin/main`). Pekerjaan absensi harian 29 Sep ada di commit SETELAH baris ini; cek `git log --oneline -3`.
+**Keadaan `main` per 29 Sep: `279c7d1`** (rilis 1.10.41 — perbaikan absensi harian; semua sudah di-push ke `origin/main`). Rincian di bagian 0u di bawah.
 
 ## 0u. Aturan absensi harian: satu catatan per karyawan per cabang per hari (29 Sep, Hermes)
 
-**Status: SELESAI di kode, teruji di kedua sisi, dan diuji di perangkat emulator. COMMIT `3465748` di `main` (belum di-push, belum di-deploy, belum dipasang di HP cabang).**
+**Status: SELESAI dan TERKIRIM. Commit `3465748`..`279c7d1` sudah di-push ke `origin/main`; Worker produksi dan debug sudah di-deploy; APK 1.10.41 sudah dibangun dan diuji jalan di emulator. Belum dipasang di HP cabang.**
+
+**Deploy Worker (29 Sep):** produksi `8313ae24-6be4-4f2e-9a8e-56eae60ee6a6` (bundle deterministik `d0fcb07e…`, memuat `gabungAbsensiTersimpan`, `COALESCE(attendance.check_out_at`, `findExistingAttendance`), health OK, hitungan tabel produksi identik sebelum/sesudah (orders 113, payments 109, staff 12, branches 5, roles 3, changes 1541, attendance 14). Debug `1e724bac-7738-44f7-9b2d-1ae15a52285e`.
+
+**Rilis 1.10.41 (code 60):** kandidat di `releases/1.10.41-candidate/` (README + SHA256SUMS; APK/AAB tidak dilacak). Salinan akar `releases/cuciin-debug.apk` + `cuciin-release.apk` diperbarui dan hash-nya cocok. APK rilis dipasang di emulator: versi 60, jalan tanpa crash, layar Riwayat versi menampilkan catatan 1.10.41.
 
 **Bukti perangkat (emulator-5554, 29 Sep 11.15 WIB, akun `ujibranch.hermes@gmail.com`):** absen masuk lalu absen pulang di Laupay Dayeuh menghasilkan **satu baris** `2026-09-29 laupay-dayeuh` dengan jam masuk dan jam pulang, **kedua foto tersimpan**; sesudah `am force-stop` dan buka ulang, baris hari itu dan dua baris 27 Sep (Laupay Dayeuh, Laupay Kirab) **tetap utuh dengan fotonya**. D1 debug menerima baris itu sebagai angka (`typeof(check_in_at)=integer`, `check_out_at=integer`); jurnal mencatat nilai gabungan (seq 1085 = jam masuk saja, seq 1087 = sudah lengkap). Berkas foto di `files/attendance/` berjumlah 8: 5 foto lama 27 Sep + 1 masuk + 1 pulang 29 Sep + 1 lain. Antrean `pending` 0, `rejected` 0.
 
