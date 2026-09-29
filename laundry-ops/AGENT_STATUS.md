@@ -5,10 +5,11 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
-**Keadaan `main` per 27 Sep: `ba87666`** (rilis 1.10.40: kasir multi-cabang, foto absensi, jam pulang sebagai angka; sudah di-push ke `origin/main`).
+**Keadaan `main` per 29 Sep: `8f0c028`** (rilis 1.10.40 + katalog test case; semua sudah di-push ke `origin/main`).
 
 | Commit | Isi |
 | --- | --- |
+| `8f0c028` | Katalog test case Cuciin: 164 TC untuk 14 modul (hasil eksekusi 163 LULUS, 1 tidak diuji) |
 | `ba87666` | Rilis 1.10.40: kasir multi-cabang, foto absensi, jam pulang tersimpan sebagai angka |
 | `2eae19a` | Foto absensi: baca bitmap yang boleh diubah agar cap waktu bisa digambar |
 | `de69107` | Papan status: koreksi — laporan aman karena server sudah menyaring per cabang |
