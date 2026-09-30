@@ -29,9 +29,17 @@ val cloudProperties = Properties().apply {
 }
 // Konfigurasi release memakai Worker produksi. Debug selalu memakai Worker dan D1 test
 // agar data uji tidak dapat masuk ke database operasional.
+//
+// PENTING (1 Okt 2026): env var yang ADA TAPI KOSONG diperlakukan seperti tidak diisi
+// (`takeIf { it.isNotBlank() }`). Perintah build kandidat 1.10.43 mengekspor
+// CUCIIN_DEBUG_CLOUD_URL="$CUCIIN_CLOUD_URL"; tanpa penjaga ini, nilai itu menang dan
+// APK debug memuat URL PRODUKSI, sehingga setiap transaksi uji menjadi mutasi data
+// operasional (terbukti: tiga entri accessRole naik ke D1 produksi, revision 3417 -> 3420).
 val releaseCloudUrl = providers.environmentVariable("CUCIIN_CLOUD_URL").orNull
+    ?.takeIf { it.isNotBlank() }
     ?: cloudProperties.getProperty("cloudUrl").orEmpty()
 val debugCloudUrl = providers.environmentVariable("CUCIIN_DEBUG_CLOUD_URL").orNull
+    ?.takeIf { it.isNotBlank() }
     ?: cloudProperties.getProperty("debugCloudUrl")
     ?: "https://cuciin-api-debug.tiftazani-cuciin.workers.dev/api/cuciin"
 val cloudKey = providers.environmentVariable("CUCIIN_CLOUD_KEY").orNull
@@ -44,6 +52,14 @@ tasks.configureEach {
             val endpoint = if (name == "preDebugBuild") debugCloudUrl else releaseCloudUrl
             check(endpoint.isNotBlank()) {
                 "Endpoint cloud untuk varian $name kosong."
+            }
+            // Isolasi debug runtuh begitu endpoint debug bertemu endpoint produksi, dan
+            // kerusakannya tidak terlihat: APK debug tampak normal, tetapi setiap transaksi
+            // uji menjadi mutasi data operasional. Karena itu build DITOLAK, bukan sekadar
+            // diperingatkan.
+            check(debugCloudUrl.trimEnd('/') != releaseCloudUrl.trimEnd('/')) {
+                "Endpoint debug sama dengan endpoint produksi: $debugCloudUrl. " +
+                    "Debug wajib memakai Worker dan D1 test yang terpisah."
             }
         }
     }

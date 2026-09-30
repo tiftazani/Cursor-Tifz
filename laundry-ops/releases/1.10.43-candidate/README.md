@@ -7,10 +7,12 @@ Dibangun 1 Okt 2026 dari commit `49f9f32` di branch `main`.
 | Berkas | Ukuran | SHA-256 |
 | --- | --- | --- |
 | `cuciin-1.10.43-release.apk` | 6.090.879 B | `64b4feb1e5445aaaabb79a0b49af955d0aafa1f7fcf471518a41b7fb9ecc590f` |
-| `cuciin-1.10.43-debug.apk` | 23.059.958 B | `091042032deb3f86bcc24ae58701ad038c19c11be53c94f9d4231ae7a517da69` |
+| `cuciin-1.10.43-debug.apk` | 23.987.131 B | `15a798678d008883b91183ec01985e8b534e82d7f93e42f88e279210c5384cf6` |
 | `cuciin-1.10.43-release.aab` | 9.277.878 B | `2cbe7d958136b72e2b43f8328a77bdc84c2109786306146c718b475b8342bbed` |
 
 APK rilis lolos `verify_release.py`: tanda tangan v2, non-debuggable, target SDK 36, izin minimum, ZIP/ELF selaras 16 KB. Sertifikat SHA-256 `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`.
+
+**Endpoint artefak, diperiksa dari dalam dex:** APK rilis memuat `cuciin-api.tiftazani-cuciin.workers.dev` dan TIDAK memuat host debug. APK debug memuat `cuciin-api-debug.tiftazani-cuciin.workers.dev` dan TIDAK memuat host produksi. Cara memeriksa ulang: `python3 android/scripts/guard_endpoint.py <apk> --expect <host> [--forbid <host>]`.
 
 ## Apa yang berubah di versi ini
 
@@ -51,12 +53,28 @@ Dua bug uang ditemukan saat menguji jalur pembatalan, keduanya ditulis sebagai t
 1. **`order.put` bisa menghapus penanda batal.** Perangkat yang belum menerima pembatalan mengirim salinan lamanya, dan server menimpa penanda itu. Akibatnya nota hidup lagi di semua perangkat sementara pengembalian dananya sudah tercatat: uang keluar dua kali.
 2. **`order.put` bisa menulis penanda batal.** Kasir pemegang `service.correct` bisa membatalkan nota berbayar lewat jalur koreksi biasa, tanpa pemeriksaan Owner dan tanpa pengembalian dana.
 
+## Insiden endpoint debug (1 Okt 2026) dan penjaganya
+
+APK debug kandidat pertama memuat URL Worker **PRODUKSI**. Akar masalahnya bukan kode aplikasi: perintah build kandidat sendiri mengekspor `CUCIIN_DEBUG_CLOUD_URL="$CUCIIN_CLOUD_URL"` (URL produksi). Bukti: `~/.hermes/logs/process-results/proc_e1bfb39a088c.json`. APK debug itu dipasang di emulator, login sebagai Owner, dan mendorong tiga entri `accessRole` (katalog peran v3) ke D1 produksi: revision 3417 → 3420. Tidak ada data transaksi uji yang bocor ke produksi (diperiksa: orders/expenses/payments/sync_changes ber-id uji = 0 baris).
+
+Tiga lapis penjaga yang sekarang ada:
+
+| Lapis | Isi |
+| --- | --- |
+| Rantai env | env var kosong diperlakukan seperti tidak diisi (`?.takeIf { it.isNotBlank() }`) untuk `CUCIIN_CLOUD_URL` dan `CUCIIN_DEBUG_CLOUD_URL` |
+| Penolakan build | `preDebugBuild`/`preReleaseBuild` GAGAL bila endpoint debug sama dengan endpoint produksi |
+| Jalur build resmi | `scripts/build_cuciin.sh` membersihkan env cloud, lalu `scripts/guard_endpoint.py` memeriksa endpoint di dalam dex APK hasil build |
+
+Penjaga dikunci `app/src/test/.../ui/BuildEndpointGuardTest.kt` (3 tes). Bukti: ketiga tes GAGAL sebelum penjaga dipasang; build debug dengan `CUCIIN_DEBUG_CLOUD_URL="$CUCIIN_CLOUD_URL"` ditolak dengan pesan "Endpoint debug sama dengan endpoint produksi"; APK debug lama terdeteksi memuat host produksi di `classes3.dex` dan `classes7.dex`.
+
+APK debug dibangun ulang lewat `scripts/build_cuciin.sh debug` dengan env cloud dibersihkan. Isinya identik dengan build lama KECUALI tiga dex yang memuat URL (`classes3.dex`, `classes4.dex`, `classes7.dex`; total selisih 219 byte terkompresi). Ukuran berkas naik 927.159 byte karena padding zip, bukan konten.
+
 ## Hasil gate
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| `testDebugUnitTest` | 369 tes, 0 gagal |
-| `testReleaseUnitTest` | 369 tes, 0 gagal |
+| `testDebugUnitTest` | 372 tes, 0 gagal |
+| `testReleaseUnitTest` | 372 tes, 0 gagal |
 | `lintDebug` | 0 error, 20 warning |
 | `lintRelease` | 0 error, 20 warning |
 | Worker `npm test` | 97 tes, 0 gagal |
