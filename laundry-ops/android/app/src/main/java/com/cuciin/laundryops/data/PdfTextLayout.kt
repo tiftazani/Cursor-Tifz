@@ -65,3 +65,16 @@ internal fun receiptPageLineCounts(lineCount: Int): List<Int> {
     }
     return pages
 }
+
+/** Tinggi blok ringkasan nota (judul, kotak pembayaran, kotak status) dalam point. */
+internal const val TINGGI_RINGKASAN_NOTA = 160f
+
+/** Garis footer nota digambar di y=792 pada kertas 595x842; isi halaman tidak boleh melewatinya. */
+internal const val BATAS_FOOTER_NOTA = 792f
+
+/**
+ * True bila blok ringkasan tidak muat lagi di atas garis footer dan harus pindah ke halaman baru.
+ * Dipakai `ReportPdf.renderNota` supaya kotak TOTAL dan kotak status tidak menimpa footer.
+ */
+internal fun ringkasanButuhHalamanBaru(top: Float): Boolean =
+    top + TINGGI_RINGKASAN_NOTA > BATAS_FOOTER_NOTA

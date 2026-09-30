@@ -943,6 +943,7 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
                         GhostBtn("Teks", Modifier.weight(1f)) { FileExports.shareText(ctx, store.notaText(n)) }
                         GhostBtn("Excel", Modifier.weight(1f)) { FileExports.shareCsv(ctx, n) }
                         GhostBtn("PDF", Modifier.weight(1f)) { FileExports.sharePdf(ctx, n) }
+                        GhostBtn("JPEG", Modifier.weight(1f)) { FileExports.shareJpeg(ctx, n) }
                     }
                 }
             }

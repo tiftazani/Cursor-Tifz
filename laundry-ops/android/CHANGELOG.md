@@ -2,6 +2,51 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.42 — 30 Sep 2026 (versionCode 61)
+
+### Bagikan nota: tambah keluaran JPEG
+
+Permintaan pemilik (30 Sep): keluaran berbagi nota selain Teks, Excel, dan PDF juga tersedia **JPEG**.
+
+Baris "Bagikan nota" di layar detail Service kini punya empat tombol: Teks, Excel, PDF, JPEG.
+
+| Aspek | Keputusan | Alasan |
+| --- | --- | --- |
+| Sumber gambar | `ReportJpeg.nota` mencetak dulu berkas PDF yang sama (`ReportPdf.nota`), lalu merendernya dengan `PdfRenderer` | Tata letak nota hanya hidup di `ReportPdf.renderNota`; gambar dan PDF tidak mungkin berbeda isi |
+| Banyak halaman | Seluruh halaman digabung tegak jadi satu berkas `.jpg` | Pelanggan menerima satu gambar utuh, bukan beberapa lampiran |
+| Skala render | 2x (setara 144 dpi), diturunkan otomatis bila halamannya banyak (`NotaJpeg.skalaEfektif`) | Tulisan kecil tetap tajam, tetapi tinggi gambar gabungan tidak pernah melewati 8.000 px |
+| Mutu JPEG | 92 | Teks nota tetap terbaca tanpa berkas membengkak |
+| Berkas | `cacheDir/share/<id nota>.jpg` lewat FileProvider yang sudah mengizinkan `cache-path share/` | Sama seperti PDF, tidak perlu izin berkas baru |
+
+Catatan teknis: `PdfRenderer.Page.render` **tidak** menskalakan sendiri. Tanpa `Matrix.setScale`,
+halaman dirender 1:1 di pojok kiri atas bitmap yang lebih besar sehingga nota tampak kecil.
+Karena itu `ReportJpeg` merender dengan matriks skala, dan tes kontrak menjaga baris itu.
+
+### Perbaikan: pratinjau berkas di lembar berbagi
+
+Tombol berbagi (Teks, Excel, PDF, JPEG) kini menyertakan `clipData` di Intent-nya. Lembar berbagi
+Android hanya menerima izin baca berkas lewat `clipData`; tanpa itu pratinjau berkas gagal dibuka
+(logcat: `Permission Denial: opening provider FileProvider`) meskipun berkasnya sendiri utuh.
+Perbaikan ada di `FileExports.shareFile`, jadi berlaku untuk keempat tombol sekaligus.
+
+Tes: `NotaJpegTest` (4 tes aturan ukuran), `NotaJpegContractTest` (5 tes kontrak tombol + sambungan).
+Bukti merah-dulu: (1) saat tombol JPEG, `shareJpeg`, dan matriks skala dilepas, keempat tes kontrak
+gagal; (2) saat `clipData` dilepas, tes `berkasDibagikanDenganIzinBacaLewatClipData` gagal.
+
+### Perbaikan: ringkasan nota tidak lagi menimpa footer
+
+Ditemukan saat uji JPEG di emulator: pada nota dengan 6 layanan ke atas, kotak TOTAL dan kotak
+status pengerjaan menimpa garis footer dan teks "Terima kasih...". Bug ini juga ada di PDF aslinya
+(bukan akibat JPEG), karena `ReportPdf.renderNota` mencetak ringkasan tanpa memeriksa sisa ruang.
+
+Aturan baru: bila sisa ruang di atas garis footer tidak cukup, blok ringkasan pindah ke halaman
+baru lengkap dengan pita kepala dan nomor halaman. Batasnya hidup di `PdfTextLayout`
+(`ringkasanButuhHalamanBaru`) supaya bisa diuji tanpa Android.
+
+Tes: `NotaRingkasanTest` (4 tes: pindah halaman, tetap di halaman, batas tepat, kontrak render).
+Bukti merah-dulu: saat penjaga dilepas dari `ReportPdf`, tes `renderNotaMemakaiPenjagaRingkasan`
+gagal.
+
 ## 1.10.41 — 29 Sep 2026 (versionCode 60)
 
 ### Absensi harian: jam dan foto yang sudah tercatat tidak boleh tertimpa

@@ -1,5 +1,6 @@
 package com.cuciin.laundryops.data
 
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -432,6 +433,11 @@ object FileExports {
         shareFile(ctx, ReportPdf.nota(ctx, n), "application/pdf")
     }
 
+    /** JPEG nota: gambar yang sama dengan PDF, dirender dari berkas PDF yang sama. */
+    fun shareJpeg(ctx: Context, n: Nota) {
+        shareFile(ctx, ReportJpeg.nota(ctx, n), "image/jpeg")
+    }
+
     private fun shareFile(ctx: Context, file: File, type: String) {
         val uri = FileProvider.getUriForFile(ctx, "${BuildConfig.APPLICATION_ID}.files", file)
         ctx.startActivity(
@@ -439,6 +445,9 @@ object FileExports {
                 Intent(Intent.ACTION_SEND).apply {
                     this.type = type
                     putExtra(Intent.EXTRA_STREAM, uri)
+                    // Lembar berbagi Android hanya menerima izin baca berkas lewat clipData.
+                    // Tanpa ini pratinjau berkas di lembar berbagi gagal dibuka (Permission Denial).
+                    clipData = ClipData.newUri(ctx.contentResolver, file.name, uri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 },
                 "Kirim file",

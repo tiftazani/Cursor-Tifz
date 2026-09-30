@@ -919,12 +919,8 @@ internal object ReportPdf {
             canvas.put(nota.id, 555f, 826f, paint(8f, bold = true, color = muted, align = Paint.Align.RIGHT))
         }
 
-        if (lines.size <= firstCount) cursor = summary(cursor + 18f)
-        footer()
-        pdf.finishPage(page)
-
-        val rest = lines.drop(firstCount)
-        rest.chunked(11).forEachIndexed { extraIndex, pageLines ->
+        // Halaman lanjutan dipakai ulang oleh ringkasan yang tidak muat di halaman sebelumnya.
+        fun bannerHalaman(subtitle: String): Float {
             pageNumber += 1
             page = pdf.startPage(PdfDocument.PageInfo.Builder(595, 842, pageNumber).create())
             canvas = page.canvas
@@ -933,18 +929,52 @@ internal object ReportPdf {
             BitmapFactory.decodeResource(ctx.resources, R.drawable.cuciin_logo)
                 ?.let { canvas.drawBitmap(it, null, Rect(42, 40, 79, 77), null) }
             canvas.put(branch.name.uppercase(), 91f, 60f, paint(18f, bold = true, color = Color.WHITE))
-            canvas.put("Nota laundry · rincian lanjutan", 91f, 84f, paint(10f, color = Color.WHITE))
+            canvas.put(subtitle, 91f, 84f, paint(10f, color = Color.WHITE))
             canvas.put(nota.id, 555f, 52f, paint(9.6f, bold = true, color = Color.WHITE, align = Paint.Align.RIGHT))
             canvas.put("Halaman $pageNumber / $total", 555f, 84f, paint(9.6f, bold = true, color = Color.WHITE, align = Paint.Align.RIGHT))
-            cursor = tableHead(132f)
-            cursor = drawServiceRows(cursor, pageLines, firstCount + extraIndex * 11)
-            if (extraIndex == rest.chunked(11).lastIndex) {
-                cursor = summary(cursor + 14f)
-            } else {
-                canvas.put("Rincian berlanjut ke halaman berikutnya.", 48f, cursor + 18f, paint(8.6f, color = muted))
-            }
+            return 132f
+        }
+
+        // Ringkasan tidak boleh menimpa footer. Halaman yang sedang berjalan ditutup lebih dulu,
+        // lalu ringkasan dicetak di halaman baru. Batasnya diuji di `NotaRingkasanTest`.
+        fun halamanRingkasan() {
             footer()
             pdf.finishPage(page)
+            summary(bannerHalaman("Nota laundry · ringkasan") + 20f)
+            footer()
+            pdf.finishPage(page)
+        }
+
+        if (lines.size <= firstCount) {
+            if (ringkasanButuhHalamanBaru(cursor + 18f)) {
+                halamanRingkasan()
+            } else {
+                summary(cursor + 18f)
+                footer()
+                pdf.finishPage(page)
+            }
+        } else {
+            footer()
+            pdf.finishPage(page)
+        }
+
+        val rest = lines.drop(firstCount)
+        val lanjutan = rest.chunked(11)
+        lanjutan.forEachIndexed { extraIndex, pageLines ->
+            cursor = bannerHalaman("Nota laundry · rincian lanjutan")
+            cursor = tableHead(cursor)
+            cursor = drawServiceRows(cursor, pageLines, firstCount + extraIndex * 11)
+            if (extraIndex != lanjutan.lastIndex) {
+                canvas.put("Rincian berlanjut ke halaman berikutnya.", 48f, cursor + 18f, paint(8.6f, color = muted))
+                footer()
+                pdf.finishPage(page)
+            } else if (ringkasanButuhHalamanBaru(cursor + 14f)) {
+                halamanRingkasan()
+            } else {
+                summary(cursor + 14f)
+                footer()
+                pdf.finishPage(page)
+            }
         }
         return pageNumber
     }

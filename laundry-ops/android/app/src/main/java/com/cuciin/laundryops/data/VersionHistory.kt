@@ -12,10 +12,20 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.41"
-    val currentCode: Int = 60
+    val currentName: String = "1.10.42"
+    val currentCode: Int = 61
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.42", code = 61, date = "30 Sep 2026",
+            notes = listOf(
+                "Bagikan nota kini punya tombol keempat: JPEG. Gambar yang dikirim persis sama dengan berkas PDF karena keduanya dicetak dari tata letak nota yang sama, jadi tidak ada dua versi nota yang bisa berbeda isi.",
+                "Nota banyak halaman digabung tegak menjadi satu gambar, jadi pelanggan menerima satu gambar utuh, bukan beberapa lampiran terpisah.",
+                "Ukuran gambar menyesuaikan sendiri: nota satu halaman dirender dua kali lipat supaya tulisan kecil tetap tajam, dan saat halamannya bertambah skala diturunkan otomatis agar gambar tidak melebihi batas memori HP cabang.",
+                "Lembar berbagi kini menampilkan pratinjau nota yang akan dikirim, jadi isinya bisa diperiksa dulu sebelum dikirim. Sebelumnya pratinjau berkas gagal dibuka karena izin baca berkas tidak ikut ke lembar berbagi.",
+                "Ringkasan pembayaran nota tidak lagi menimpa tulisan di bagian bawah: pada nota dengan layanan banyak, kotak TOTAL dan status pengerjaan kini pindah ke halaman baru bila ruangnya tidak cukup. Sebelumnya keduanya bisa menumpuk dengan ucapan terima kasih dan kode nota.",
+            ),
+        ),
         AppRelease(
             name = "1.10.41", code = 60, date = "29 Sep 2026",
             notes = listOf(

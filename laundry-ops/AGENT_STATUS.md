@@ -1,11 +1,48 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 29 September 2026 (oleh Hermes).
+Terakhir diperbarui: 30 September 2026 (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
 **Keadaan `main` per 29 Sep: `279c7d1`** (rilis 1.10.41 — perbaikan absensi harian; semua sudah di-push ke `origin/main`). Rincian di bagian 0u di bawah.
+
+## 0v. Bagikan nota: keluaran JPEG (30 Sep, Hermes)
+
+**Status: SELESAI di kode dan teruji di emulator; belum di-commit, belum di-push, belum ada artefak 1.10.42.** Permintaan pemilik (30 Sep): selain Teks, Excel, dan PDF, berbagi nota juga menyediakan **JPEG**.
+
+Baris "Bagikan nota" di layar detail Service kini punya empat tombol: Teks, Excel, PDF, JPEG.
+
+| Aspek | Keputusan | Alasan |
+| --- | --- | --- |
+| Sumber gambar | `data/ReportJpeg.kt` mencetak berkas PDF yang sama (`ReportPdf.nota`) lalu merendernya dengan `PdfRenderer` | Tata letak nota hanya hidup di `ReportPdf.renderNota`; gambar dan PDF tidak mungkin berbeda isi |
+| Banyak halaman | Seluruh halaman digabung tegak jadi satu `.jpg` | Pelanggan menerima satu gambar utuh, bukan beberapa lampiran |
+| Ukuran | `data/NotaJpeg.kt`: skala 2x (144 dpi), batas tinggi 8.000 px, mutu 92; skala turun otomatis saat halaman bertambah | Tulisan kecil tetap tajam, tetapi gambar tidak melewati batas memori HP cabang |
+
+**Bukti emulator (30 Sep, emulator-5554, data fixture, jaringan dimatikan lebih dulu):**
+
+| Nota | Hasil | Dimensi |
+| --- | --- | --- |
+| 2 layanan (biasa) | 1 halaman, nota utuh, teks jelas | 1190 x 1684 |
+| 12 layanan | 2 halaman digabung tegak, kedua halaman utuh | 1190 x 3368 |
+| 40 layanan | 5 halaman (4 rincian + 1 ringkasan), tanpa OOM | 1130 x 8000 (skala turun otomatis) |
+
+Lembar berbagi menampilkan **pratinjau gambar** dan judul "Sharing image"; `Permission Denial` di logcat = 0 (sebelumnya gagal, lihat temuan di bawah).
+
+**Dua bug nyata ditemukan saat uji dan diperbaiki sekalian:**
+
+1. **Pratinjau berkas di lembar berbagi gagal** (`Permission Denial: opening provider FileProvider`). Sebab: `Intent.createChooser` hanya memindahkan izin baca ke lembar berbagi lewat `clipData`; kode lama hanya mengisi `EXTRA_STREAM`. Diperbaiki di `FileExports.shareFile` dengan `ClipData.newUri` — berlaku untuk Teks, Excel, PDF, dan JPEG sekaligus. Terbukti: sebelum perbaikan pratinjau kosong (tangkapan layar), sesudahnya muncul; `Permission Denial` 0.
+2. **Ringkasan nota menimpa footer** pada nota **6 layanan ke atas** (kotak TOTAL dan status pengerjaan menumpuk ucapan terima kasih dan kode nota). Ini **bug lama `ReportPdf`**, terbukti juga pada PDF aslinya, bukan akibat JPEG. Diperbaiki: bila sisa ruang di atas garis footer tidak cukup, blok ringkasan pindah ke halaman baru lengkap dengan pita kepala dan nomor halaman. Batasnya hidup di `PdfTextLayout.ringkasanButuhHalamanBaru` supaya bisa diuji tanpa Android.
+
+**Dampak ke data produksi:** maksimum layanan per nota di D1 produksi = **5** (distribusi: 1 layanan 51 nota, 2 layanan 50, 3 layanan 46, 4 layanan 27, 5 layanan 18), jadi bug ringkasan belum pernah muncul di nota nyata. Perbaikan tetap dilakukan karena JPEG memakai tata letak yang sama.
+
+**Angka gate (30 Sep):** Android **356 debug + 356 release, 0 gagal** (naik dari 351), lint 0 error; Worker **88 tes, 0 gagal**. Tes baru: `NotaJpegTest` (4), `NotaJpegContractTest` (5), `NotaRingkasanTest` (4).
+
+**Bukti merah-dulu:** (1) tombol JPEG + `shareJpeg` + matriks skala dilepas → 4 tes kontrak gagal; (2) `clipData` dilepas → tes `berkasDibagikanDenganIzinBacaLewatClipData` gagal; (3) penjaga ringkasan dilepas dari `ReportPdf` → tes `renderNotaMemakaiPenjagaRingkasan` gagal.
+
+**Belum terbukti:** JPEG di HP cabang (semua uji di emulator); nota dengan lebih dari 40 layanan; pratinjau di aplikasi penerima selain lembar berbagi Android (mis. WhatsApp asli).
+
+**Berkas yang Hermes pegang (pekerjaan 0v):** `data/NotaJpeg.kt`, `data/ReportJpeg.kt`, `data/FileExports.kt`, `data/PdfTextLayout.kt`, `data/ReportPdf.kt`, `ui/OpsScreens.kt`, `app/src/test/.../data/NotaJpegTest.kt`, `data/NotaRingkasanTest.kt`, `ui/NotaJpegContractTest.kt`, `data/VersionHistory.kt`, `app/build.gradle.kts`, `android/CHANGELOG.md`. **Agen lain: jangan sentuh berkas itu sampai baris ini diperbarui.**
 
 ## 0u. Aturan absensi harian: satu catatan per karyawan per cabang per hari (29 Sep, Hermes)
 
