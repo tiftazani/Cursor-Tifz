@@ -5,7 +5,39 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
-**Keadaan `main` per 30 Sep: `affef30`** (rilis 1.10.42 — keluaran JPEG untuk berbagi nota; semua sudah di-push ke `origin/main`). Rincian di bagian 0v di bawah. Sebelumnya: `279c7d1` (rilis 1.10.41) dan `6f8338d` (kode JPEG).
+**Keadaan `main` per 1 Okt: `49f9f32`** (rilis 1.10.43 — tutup kas rinci produk + pembatalan nota; belum di-push saat baris ini ditulis). Rincian di bagian 0w di bawah. Sebelumnya: `affef30` (rilis 1.10.42 — JPEG), `279c7d1` (rilis 1.10.41), `6f8338d` (kode JPEG).
+
+## 0w. Tutup kas rinci produk + pembatalan nota berbayar (1 Okt, Hermes)
+
+**Status: kode SELESAI, gate hijau, artefak 1.10.43 dibangun dan diuji di emulator. Worker BELUM di-deploy ke produksi.**
+
+Permintaan pemilik: (a) Tutup Kas merinci penjualan produk per cabang + sisa stok, (b) nota berbayar bisa dibatalkan oleh Owner saja, (c) pengembalian dana dicatat sebagai pengeluaran hari ini (Opsi B) supaya laporan tanggal lampau tidak berubah.
+
+| Aspek | Keputusan |
+| --- | --- |
+| Izin pembatalan | Fungsi katalog baru `service.cancel`, Owner-only, terpisah dari `service.delete`. `AccessCatalog.VERSION` 2→3, total **42 fungsi** |
+| Nota batal | DITANDAI (`canceledAtMs`/`canceledAt`/`canceledBy`/`cancelReason`), tidak dihapus |
+| Uang kembali | Pengeluaran `ExpenseCategory.PengembalianDana` bertanggal hari pembatalan (Opsi B) |
+| Laporan lampau | Tidak berubah: `reportNotas()` tetap memuat nota batal, `periodNotas()` menyambung ke situ |
+| Perintah server | `order.cancel` (baru), dipetakan dari `syncIntent:"cancel"` yang dikirim perangkat |
+| Rincian tutup kas | Dihitung sekali di `closeCashPreview()` lalu dipakai ulang `closeCash()` |
+
+**Dua bug uang ditemukan saat menguji jalur ini**, keduanya ditutup dengan tes merah-dulu:
+
+1. `order.put` bisa **menghapus** penanda batal — perangkat yang belum menerima pembatalan mengirim salinan lamanya, server menimpanya, nota hidup lagi padahal dananya sudah dikembalikan. Perbaikan: payload kanonik memakai nilai dari baris tersimpan.
+2. `order.put` bisa **menulis** penanda batal — kasir pemegang `service.correct` bisa membatalkan nota berbayar tanpa pemeriksaan Owner dan tanpa pengembalian dana. Perbaikan: `canceledAtMs` dari payload perangkat diabaikan.
+
+Selain itu `order.status`, `order.payment`, dan `order.handover` kini ditolak `409` pada nota batal, dan store Android menolak `updateNotaLines`/`markWaSent`/`advanceLaundry`/`markLunas`/`markPickedUp` pada nota batal.
+
+**Angka gate (1 Okt):** Android **369 debug + 369 release, 0 gagal** (naik dari 368); lint 0 error / 20 warning per varian; Worker **97 tes, 0 gagal** (naik dari 94), `tsc` bersih.
+
+**Bukti emulator (1 Okt, emulator-5554, APK rilis 1.10.43, mode pesawat):** versi terpasang 62/1.10.43; layar Riwayat versi menampilkan `v1.10.43 · build 62` beserta lima catatan rilisnya. Antrean perangkat 137 perubahan tertahan (data uji lama) dan dibiarkan dalam mode pesawat.
+
+**Artefak 1.10.43:** `releases/1.10.43-candidate/{README.md, SHA256SUMS, cuciin-1.10.43-release.apk (6.090.879 B), -debug.apk (23.059.958 B), -release.aab (9.277.878 B)}`; salinan akar `releases/cuciin-{release,debug}.apk` diperbarui (hash cocok). APK/AAB kandidat tidak dilacak Git.
+
+**Belum terbukti:** Worker belum di-deploy (produksi maupun debug), jadi fitur ini belum hidup di server; alur pembatalan belum dijalankan di D1 produksi; pembatalan belum diuji di emulator dengan nota sungguhan; skenario dua perangkat (satu membatalkan, satu masih memegang salinan lama) baru diuji di tingkat perintah.
+
+**Berkas yang Hermes pegang (pekerjaan 0w):** `data/CuciinStore.kt`, `data/Models.kt`, `data/SyncProtocol.kt`, `data/AccessCatalog.kt`, `data/VersionHistory.kt`, `ui/OpsScreens.kt`, `ui/AnalyticsReportScreen.kt`, `ui/MoreScreens.kt`, `cloudflare/src/command-sync.ts`, `cloudflare/tests/command-sync.test.mjs`, `cloudflare/tests/support/d1-harness.mjs`, `mockup/app.js`, `app/src/test/.../data/CancelNotaTest.kt`, `app/src/test/.../data/AccessFunctionEnforcementTest.kt`, `app/build.gradle.kts`, `android/CHANGELOG.md`. **Agen lain: jangan sentuh berkas itu sampai baris ini diperbarui.**
 
 ## 0v. Bagikan nota: keluaran JPEG (30 Sep, Hermes)
 
