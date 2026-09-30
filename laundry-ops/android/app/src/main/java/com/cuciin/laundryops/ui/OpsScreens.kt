@@ -94,6 +94,7 @@ import com.cuciin.laundryops.ui.components.SectionLabel
 import com.cuciin.laundryops.ui.components.SelectChip
 import com.cuciin.laundryops.ui.theme.Amber
 import com.cuciin.laundryops.ui.theme.Coral
+import com.cuciin.laundryops.ui.theme.CuciinShape
 import com.cuciin.laundryops.ui.theme.Gold
 import com.cuciin.laundryops.ui.theme.Green
 import com.cuciin.laundryops.ui.theme.Ink
@@ -829,6 +830,20 @@ internal fun QueueEditScreen(nav: NavHostController, id: String, toast: (String)
     }
 }
 
+/**
+ * Alasan pembatalan nota.
+ *
+ * Daftar tetap (bukan teks bebas) supaya alasan bisa direkap di laporan. Kasir memilih satu,
+ * lalu boleh menambah catatan bila perlu.
+ */
+private val cancelReasons = listOf(
+    "Pelanggan membatalkan pesanan",
+    "Salah input, cucian belum dikerjakan",
+    "Cucian tidak dapat diselesaikan",
+    "Pelanggan tidak mengambil cucian",
+    "Lainnya",
+)
+
 @Composable
 internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (String) -> Unit) {
     val ui = rememberUi()
@@ -838,6 +853,11 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
     var finishConfirm by remember { mutableStateOf(false) }
     var paidConfirm by remember { mutableStateOf(false) }
     var handoverConfirm by remember { mutableStateOf(false) }
+    // Dialog pembatalan: alasan dipilih dari daftar tetap (sama dengan mockup yang disetujui
+    // Owner), catatan boleh kosong.
+    var cancelOpen by remember { mutableStateOf(false) }
+    var cancelReason by remember { mutableStateOf(cancelReasons.first()) }
+    var cancelNote by remember { mutableStateOf("") }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) toast(if (store.addLocalProof(id, uri) != null) "Bukti tersimpan di perangkat" else "Bukti belum berhasil disimpan")
     }
@@ -845,13 +865,34 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
     val done = n.laundry == LaundryStatus.Selesai
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ScreenHeader("Detail Service", n.id, onBack = { nav.popBackStack() }) }
+        // Nota yang sudah dibatalkan masih bisa dibuka dari laporan (ia harus tetap ada supaya
+        // laporan tanggal lampau tidak berubah), jadi layar ini harus mengatakannya dengan jelas.
+        // Tanpa penanda ini, Owner melihat nota yang tampak normal dan tombol yang pasti gagal.
+        if (n.canceled) item {
+            Surface(color = Coral.copy(alpha = .10f), shape = CuciinShape.badge, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Cancel, null, tint = Coral, modifier = Modifier.size(18.dp))
+                        Text("Service ini sudah dibatalkan", color = Coral, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                    Text(
+                        "Dibatalkan ${n.canceledAt} oleh ${n.canceledBy}." +
+                            (if (n.cancelReason.isNotBlank()) " Alasan: ${n.cancelReason}." else "") +
+                            " Uang ${rp(n.paid)} sudah dikembalikan sebagai pengeluaran Pengembalian dana," +
+                            " dan stok produknya sudah kembali ke cabang.",
+                        color = Muted,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
         item {
             Surface(color = if (done) Green.copy(alpha = .08f) else Mist, shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Icon(if (done) Icons.Outlined.CheckCircle else Icons.Outlined.LocalLaundryService, null, tint = if (done) Green else Teal, modifier = Modifier.size(32.dp))
                     Text(n.laundry.label, color = if (done) Green else Teal, fontWeight = FontWeight.Bold, fontSize = 22.sp)
                     Text(if (done) "Cucian telah selesai ditangani." else "Service masuk antrian dan akan dikerjakan.", color = Muted, fontSize = 13.sp)
-                    if (!done) PrimaryBtn("Tandai selesai", icon = Icons.Outlined.Check) { finishConfirm = true }
+                    if (!done && !n.canceled) PrimaryBtn("Tandai selesai", icon = Icons.Outlined.Check) { finishConfirm = true }
                 }
             }
         }
@@ -880,13 +921,13 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
                 }
                 Text(rp(n.total), fontWeight = FontWeight.Bold, fontSize = 28.sp)
                 Text("${n.payMethod.label} · diterima ${rp(n.paid)}", color = Muted, fontSize = 13.sp)
-                if (n.pay != PayStatus.Lunas) {
+                if (n.pay != PayStatus.Lunas && !n.canceled) {
                     Text("Sisa tagihan ${rp((n.total - n.paid).coerceAtLeast(0))}", color = Amber, fontWeight = FontWeight.SemiBold)
                     if (store.canTakePayment()) GhostBtn("Catat pelunasan", icon = Icons.Outlined.Payments) { paidConfirm = true }
                 }
             }
         }
-        if (done) item {
+        if (done && !n.canceled) item {
             CardBlock {
                 SectionLabel("Serah terima pelanggan")
                 if (n.pickedUpAt != null) {
@@ -912,7 +953,22 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
                 if (store.canTakePayment()) GhostBtn("Tambah foto dari galeri", icon = Icons.Outlined.AddPhotoAlternate) { pick.launch("image/*") }
             }
         }
-        if (store.canAccess("service", "service.correct")) {
+        if (store.canAccess("service", "service.cancel") && !n.canceled) {
+            item {
+                CardBlock {
+                    SectionLabel("Pembatalan nota")
+                    Text(
+                        "Dipakai bila cucian batal, misalnya mesin cuci bermasalah dan pelanggan minta uangnya kembali. " +
+                            "Stok produk retail yang terjual dikembalikan ke cabang, dan uang yang sudah diterima dikembalikan " +
+                            "sebagai pengeluaran Pengembalian dana hari ini.",
+                        color = Muted,
+                        fontSize = 12.sp,
+                    )
+                    DangerBtn("Batalkan nota ini") { cancelOpen = true }
+                }
+            }
+        }
+        if (store.canAccess("service", "service.correct") && !n.canceled) {
             item {
                 CardBlock {
                     SectionLabel("Koreksi Service")
@@ -952,6 +1008,60 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
     if (finishConfirm) AlertDialog(onDismissRequest = { finishConfirm = false }, icon = { Icon(Icons.Outlined.CheckCircle, null, tint = Teal) }, title = { Text(if (n.laundry == LaundryStatus.Masuk) "Mulai pengerjaan?" else "Selesaikan pesanan?") }, text = { Text(if (n.laundry == LaundryStatus.Masuk) "Status akan berubah menjadi sedang dikerjakan." else "Pastikan cucian ${n.customer} sudah selesai ditangani. Status pembayaran tetap dicatat terpisah.") }, confirmButton = { TextButton(onClick = { finishConfirm = false; store.advanceLaundry(id)?.let(toast) ?: toast(if (n.laundry == LaundryStatus.Masuk) "Pengerjaan dimulai" else "Pesanan ditandai selesai") }) { Text(if (n.laundry == LaundryStatus.Masuk) "Mulai" else "Ya, selesai") } }, dismissButton = { TextButton(onClick = { finishConfirm = false }) { Text("Kembali") } })
     if (paidConfirm) AlertDialog(onDismissRequest = { paidConfirm = false }, title = { Text("Catat pelunasan?") }, text = { Text("Pastikan sisa ${rp((n.total - n.paid).coerceAtLeast(0))} telah diterima melalui ${n.payMethod.label}.") }, confirmButton = { TextButton(onClick = { paidConfirm = false; store.markLunas(id, n.payMethod)?.let(toast) ?: toast("Pembayaran tercatat lunas") }) { Text("Sudah diterima") } }, dismissButton = { TextButton(onClick = { paidConfirm = false }) { Text("Kembali") } })
     if (handoverConfirm) AlertDialog(onDismissRequest = { handoverConfirm = false }, title = { Text("Tutup Service ini?") }, text = { Text("Tutup Service hanya setelah cucian diterima pelanggan. Waktu penutupan disimpan di sistem dan tidak dicetak pada nota.") }, confirmButton = { TextButton(onClick = { handoverConfirm = false; store.markPickedUp(id)?.let(toast) ?: toast("Service berhasil ditutup") }) { Text("Ya, tutup Service") } }, dismissButton = { TextButton(onClick = { handoverConfirm = false }) { Text("Kembali") } })
+    if (cancelOpen) {
+        // Alasan pembatalan memakai daftar tetap supaya laporan bisa dibaca seragam, dan
+        // catatan bebas untuk hal yang tidak tercakup daftar itu.
+        var reasonExpanded by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { cancelOpen = false },
+            title = { Text("Batalkan nota ini?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("${n.id} · ${n.customer} · ${store.branch(n.branchId).name}", color = Muted, fontSize = 12.sp)
+                    Text("Nilai nota  ${rp(n.total)}")
+                    Text("Uang yang harus dikembalikan  ${rp(n.paid)}", fontWeight = FontWeight.SemiBold)
+                    Text("Pembayarannya dicatat sebagai pengeluaran Pengembalian dana hari ini, sehingga laporan tanggal sebelumnya tidak berubah.", color = Muted, fontSize = 12.sp)
+                    Box {
+                        OutlinedTextField(
+                            value = cancelReason,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Alasan pembatalan") },
+                            trailingIcon = { Icon(Icons.Outlined.ArrowDropDown, null) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        // Kotak transparan di atas kolom: kolom readOnly tidak menerima tap
+                        // dengan andal, jadi area kliknya disediakan terpisah.
+                        Box(Modifier.matchParentSize().clickable { reasonExpanded = true })
+                        DropdownMenu(expanded = reasonExpanded, onDismissRequest = { reasonExpanded = false }) {
+                            cancelReasons.forEach { opsi ->
+                                DropdownMenuItem(text = { Text(opsi) }, onClick = { cancelReason = opsi; reasonExpanded = false })
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = cancelNote,
+                        onValueChange = { cancelNote = it },
+                        label = { Text("Catatan (boleh kosong)") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text("Nota yang dibatalkan hilang dari antrian dan laporan kerja, tetapi jejaknya tetap ada di audit trail. Tindakan ini tidak bisa dibatalkan sendiri.", color = Muted, fontSize = 11.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val alasan = listOf(cancelReason, cancelNote.trim()).filter { it.isNotBlank() }.joinToString(" · ")
+                    cancelOpen = false
+                    store.cancelNota(id, alasan)?.let(toast) ?: run {
+                        toast("Nota $id dibatalkan")
+                        nav.popBackStack()
+                    }
+                }) { Text("Ya, batalkan nota", color = Coral, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = { TextButton(onClick = { cancelOpen = false }) { Text("Kembali") } },
+            shape = CuciinShape.card,
+        )
+    }
 }
 
 @Composable

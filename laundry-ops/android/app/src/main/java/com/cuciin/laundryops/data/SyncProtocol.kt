@@ -227,6 +227,13 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
             if (source.entityType == "nota" && current != null && payload is JsonObject && actorRole == Role.Supervisor && statusOnly(old?.payload, current.payload)) {
                 payload = JsonObject(payload + ("syncIntent" to JsonPrimitive("status")))
             }
+            // Pembatalan nota dikirim lewat entitas `nota` yang sama dengan koreksi biasa, karena
+            // perangkat mengirim selisih snapshot, bukan nama perintah. Server membedakannya lewat
+            // `syncIntent` (lihat `parseCommand` di command-sync.ts). Tanpa penanda ini, pembatalan
+            // akan sampai sebagai `order.put` dan hanya dianggap koreksi.
+            if (source.entityType == "nota" && current != null && payload is JsonObject && canceledNow(old?.payload, current.payload)) {
+                payload = JsonObject(payload + ("syncIntent" to JsonPrimitive("cancel")))
+            }
             val expectedUpdatedAt = (old?.payload as? JsonObject)
                 ?.get("updatedAtMs")?.jsonPrimitive?.content?.toLongOrNull()?.takeIf { it > 0 }
             created += SyncCommand(
@@ -431,6 +438,21 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
         val next = current as? JsonObject ?: return false
         val ignored = setOf("laundry", "completedAt", "updatedAtMs")
         return (previous.keys + next.keys).all { key -> key in ignored || previous[key] == next[key] }
+    }
+
+    /**
+     * Apakah pembatalan BARU saja terjadi pada nota ini.
+     *
+     * Dibaca dari perpindahan penanda `canceledAtMs`: nol di payload lama, terisi di payload baru.
+     * Nota yang sudah batal sejak awal tidak dihitung, supaya koreksi lain pada nota batal tidak
+     * ikut terkirim sebagai pembatalan ulang.
+     */
+    private fun canceledNow(old: JsonElement?, current: JsonElement): Boolean {
+        val previous = old as? JsonObject ?: return false
+        val next = current as? JsonObject ?: return false
+        val before = previous["canceledAtMs"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0
+        val after = next["canceledAtMs"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0
+        return before == 0L && after > 0L
     }
 }
 

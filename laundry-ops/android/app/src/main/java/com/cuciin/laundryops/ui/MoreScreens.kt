@@ -69,6 +69,7 @@ import com.cuciin.laundryops.ui.components.SyncNotice
 import com.cuciin.laundryops.ui.theme.Ink
 import com.cuciin.laundryops.ui.theme.Muted
 import com.cuciin.laundryops.ui.theme.Teal
+import com.cuciin.laundryops.ui.theme.Coral
 import com.cuciin.laundryops.ui.theme.Green
 import com.cuciin.laundryops.ui.theme.Amber
 import com.cuciin.laundryops.ui.theme.OnPrim
@@ -696,6 +697,52 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
                 Text("Piutang  ${rp(store.piutang(store.notas.filter { bid == "all" || it.branchId == bid }))}")
             }
         }
+        if (bid != "all") {
+            // Rincian ini dihitung dari data yang sama dengan yang akan disimpan `closeCash`,
+            // jadi angka di layar dan angka di riwayat tidak bisa berbeda.
+            val produkTerjual = store.closeCashPreview(bid)
+            item {
+                CardBlock {
+                    SectionLabel("Produk retail terjual hari ini")
+                    if (produkTerjual.isEmpty()) {
+                        Text("Belum ada produk retail terjual hari ini.", color = Muted, fontSize = 13.sp)
+                    } else {
+                        produkTerjual.forEach { p ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("${p.name}  ${p.qty} pcs", fontSize = 13.sp)
+                                Text(rp(p.nilai), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total produk", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(rp(produkTerjual.sumOf { it.nilai }), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+            val sisaStok = store.branchStockPreview(bid)
+            item {
+                CardBlock {
+                    SectionLabel("Sisa stok cabang")
+                    if (sisaStok.isEmpty()) {
+                        Text("Belum ada produk retail di cabang ini.", color = Muted, fontSize = 13.sp)
+                    } else {
+                        sisaStok.forEach { p ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(p.name, fontSize = 13.sp)
+                                Text(
+                                    "${p.sisa} pcs" + if (p.sisa <= 8) "  · rendah" else "",
+                                    fontSize = 13.sp,
+                                    color = if (p.sisa <= 8) Coral else Ink,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                        }
+                    }
+                    Text("Angka produk dan sisa stok ikut tersimpan di riwayat tutup kas, jadi bisa diperiksa lagi kapan saja.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+                }
+            }
+        }
         if (bid == "all") {
             item { EmptyHint("Pilih satu cabang", "Tutup kas dibuat per cabang agar penerimaan dan piutang tidak tercampur.") }
         } else {
@@ -717,9 +764,40 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
             }
         }
         if (store.cashCloses.isNotEmpty()) {
-            item { Text("Riwayat", fontWeight = FontWeight.Bold) }
+            item { Text("Riwayat tutup kas", fontWeight = FontWeight.Bold) }
             items(store.cashCloses.take(12), key = { it.id }) { c ->
-                Text("${c.at} · ${c.by} · tunai ${rp(c.tunai)}", color = Muted, fontSize = 13.sp)
+                CardBlock {
+                    Text(c.at, fontWeight = FontWeight.SemiBold)
+                    Text("${c.by} · ${store.branch(c.branchId).name}", color = Muted, fontSize = 12.sp)
+                    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Tunai", fontSize = 13.sp); Text(rp(c.tunai), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("QRIS", fontSize = 13.sp); Text(rp(c.qris), fontSize = 13.sp)
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Transfer", fontSize = 13.sp); Text(rp(c.transfer), fontSize = 13.sp)
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Piutang", fontSize = 13.sp); Text(rp(c.piutang), fontSize = 13.sp)
+                    }
+                    if (c.produk.isNotEmpty()) {
+                        SectionLabel("Produk terjual")
+                        c.produk.forEach { p ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("${p.name}  ${p.qty} pcs", fontSize = 13.sp); Text(rp(p.nilai), fontSize = 13.sp)
+                            }
+                        }
+                    }
+                    if (c.stok.isNotEmpty()) {
+                        SectionLabel("Sisa stok saat ditutup")
+                        c.stok.forEach { p ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(p.name, fontSize = 13.sp); Text("${p.sisa} pcs", fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
             }
         }
         item { Spacer(Modifier.height(16.dp)) }

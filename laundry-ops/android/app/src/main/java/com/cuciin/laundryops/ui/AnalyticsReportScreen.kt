@@ -122,7 +122,10 @@ internal fun AnalyticsReportScreen(nav: NavHostController) {
 
     val from = DisplayDates.parse(fromValue) ?: LocalDateTime.now(Clock.ZONE).withHour(0).withMinute(0)
     val until = DisplayDates.parse(untilValue) ?: LocalDateTime.now(Clock.ZONE).withHour(23).withMinute(59)
-    val scope = store.visibleNotas()
+    // Laporan memakai `reportNotas()`, BUKAN `visibleNotas()`: nota yang dibatalkan tetap ikut
+    // supaya laporan tanggal lampau tidak berubah. Uang yang dikembalikan muncul sebagai
+    // pengeluaran `PengembalianDana` pada tanggal pembatalan (keputusan Owner, Opsi B).
+    val scope = store.reportNotas()
     val rangeStartMs = if (customRange) Long.MIN_VALUE else if (period == "semua") Long.MIN_VALUE else Clock.periodStartMs(period)
 
     fun inRange(atMs: Long): Boolean =

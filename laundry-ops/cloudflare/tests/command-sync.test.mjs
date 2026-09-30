@@ -601,6 +601,295 @@ test("jam masuk yang sudah tercatat tidak diganti kiriman berikutnya", async () 
   assert.equal(baris[0].check_in_at,1789000000000,"jam masuk pertama harus dipertahankan, bukan diganti kiriman berikutnya");
 });
 
+test("order.cancel menandai nota batal, mencatat pengembalian dana hari ini, dan tidak menyentuh jurnal pembayaran", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  const created=await (await pushCommands(commandRequest([{
+    commandId:"nota-batal-create-1",type:"order.create",entityId:"MLT-7",branchId:"melati",
+    payload:{id:"MLT-7",branchId:"melati",customerName:"Pelanggan Batal",phone:"0813",total:30000,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:3,unit:"kg",unitPrice:10000}]},
+  }]),env,identities.owner)).json();
+  assert.equal(created.results[0].accepted,true);
+  const paid=await (await pushCommands(commandRequest([{
+    commandId:"nota-batal-pay-1",type:"order.payment",entityId:"MLT-7",branchId:"melati",
+    payload:{paid:30000,paymentStatus:"Lunas",paymentMethod:"Tunai"},
+  }]),env,identities.owner)).json();
+  assert.equal(paid.results[0].accepted,true);
+  const paymentsBefore=rows(env,"SELECT COUNT(*) AS n FROM payments WHERE order_id='MLT-7'")[0].n;
+
+  const cancelled=await (await pushCommands(commandRequest([{
+    commandId:"nota-batal-0001",type:"order.cancel",entityId:"MLT-7",branchId:"melati",
+    payload:{reason:"Pelanggan salah ukur"},
+  }]),env,identities.owner)).json();
+  assert.equal(cancelled.results[0].accepted,true,"Owner harus bisa membatalkan nota berbayar");
+
+  // Nota TIDAK dihapus: barisnya tetap ada, ditandai batal.
+  const stored=JSON.parse(rows(env,"SELECT payload_json FROM orders WHERE id='MLT-7'")[0].payload_json);
+  assert.equal(Number(stored.canceledAtMs) > 0,true,"nota harus bertanda batal");
+  assert.equal(stored.canceledBy,"Tiftazani Khara");
+  assert.equal(stored.cancelReason,"Pelanggan salah ukur");
+  assert.equal(stored.customer,"Pelanggan Batal","payload lama tidak boleh hilang saat pembatalan");
+  assert.equal(stored.lines.length,1,"rincian layanan tidak boleh hilang");
+
+  // Jurnal pembayaran TIDAK dihapus: laporan tanggal lampau harus tetap seperti saat ditutup.
+  assert.equal(rows(env,"SELECT COUNT(*) AS n FROM payments WHERE order_id='MLT-7'")[0].n,paymentsBefore,"jurnal pembayaran tidak boleh dihapus");
+
+  // Pengembalian dana tercatat sebagai pengeluaran baru bertanggal sekarang.
+  const refund=rows(env,"SELECT category,amount,branch_id FROM expenses WHERE id='refund-MLT-7'");
+  assert.equal(refund.length,1,"pengembalian dana harus tercatat sebagai pengeluaran");
+  assert.equal(refund[0].category,"PengembalianDana");
+  assert.equal(refund[0].amount,30000,"nominalnya sebesar yang sudah dibayar");
+  assert.equal(refund[0].branch_id,"melati");
+
+  // Jurnal memuat entri nota batal dan entri pengeluaran, supaya perangkat lain ikut melihat.
+  // Entri `expense` ditulis di dalam batch, entri `nota` ditulis dari changePayload sesudahnya,
+  // jadi urutannya tidak dipatok: yang penting keduanya ada dan nota terakhir sudah bertanda batal.
+  const types=rows(env,"SELECT entity_type FROM sync_changes WHERE entity_id IN ('MLT-7','refund-MLT-7') ORDER BY sequence").map(row=>row.entity_type);
+  assert.equal(types.includes("expense"),true,"pengembalian dana harus dijurnal sebagai expense");
+  const notaJournal=rows(env,"SELECT payload_json FROM sync_changes WHERE entity_id='MLT-7' AND entity_type IN ('nota','order') ORDER BY sequence DESC LIMIT 1")[0];
+  assert.equal(Number(JSON.parse(notaJournal.payload_json).canceledAtMs) > 0,true,"entri jurnal terakhir harus memuat tanda batal supaya perangkat lain melihatnya");
+});
+
+test("order.cancel hanya Owner dan idempoten", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  await pushCommands(commandRequest([{
+    commandId:"nota-batal2-create",type:"order.create",entityId:"MLT-8",branchId:"melati",
+    payload:{id:"MLT-8",branchId:"melati",customerName:"Pelanggan Batal 2",phone:"0814",total:10000,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:10000}]},
+  }]),env,identities.owner);
+  await pushCommands(commandRequest([{
+    commandId:"nota-batal2-pay",type:"order.payment",entityId:"MLT-8",branchId:"melati",
+    payload:{paid:10000,paymentStatus:"Lunas",paymentMethod:"Tunai"},
+  }]),env,identities.owner);
+
+  // Kasir dan Supervisor ditolak, alasannya "owner".
+  for (const actor of [identities.kasir, identities.spv]) {
+    const denied=await (await pushCommands(commandRequest([{
+      commandId:`nota-batal2-${actor.role}`,type:"order.cancel",entityId:"MLT-8",branchId:"melati",
+      payload:{reason:"coba"},
+    }]),env,actor)).json();
+    assert.equal(denied.results[0].accepted,false,`${actor.role} tidak boleh membatalkan nota`);
+    assert.equal(denied.results[0].code,403);
+  }
+
+  const first=await (await pushCommands(commandRequest([{
+    commandId:"nota-batal2-0001",type:"order.cancel",entityId:"MLT-8",branchId:"melati",
+    payload:{reason:"salah cuci"},
+  }]),env,identities.owner)).json();
+  assert.equal(first.results[0].accepted,true);
+  const refundAfterFirst=rows(env,"SELECT COUNT(*) AS n FROM expenses WHERE id='refund-MLT-8'")[0].n;
+  assert.equal(refundAfterFirst,1);
+
+  // Membatalkan lagi dengan commandId berbeda: diterima tanpa efek, dan pengembalian dana tidak dobel.
+  const second=await (await pushCommands(commandRequest([{
+    commandId:"nota-batal2-0002",type:"order.cancel",entityId:"MLT-8",branchId:"melati",
+    payload:{reason:"salah cuci"},
+  }]),env,identities.owner)).json();
+  assert.equal(second.results[0].accepted,true,"pembatalan ulang harus diterima sebagai no-op");
+  assert.equal(rows(env,"SELECT COUNT(*) AS n FROM expenses WHERE id='refund-MLT-8'")[0].n,1,"pengembalian dana tidak boleh dicatat dua kali");
+});
+
+test("order.cancel menolak nota yang belum menerima pembayaran", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  await pushCommands(commandRequest([{
+    commandId:"nota-batal3-create",type:"order.create",entityId:"MLT-9",branchId:"melati",
+    payload:{id:"MLT-9",branchId:"melati",customerName:"Belum Bayar",phone:"0815",total:10000,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:10000}]},
+  }]),env,identities.owner);
+
+  const body=await (await pushCommands(commandRequest([{
+    commandId:"nota-batal3-0001",type:"order.cancel",entityId:"MLT-9",branchId:"melati",
+    payload:{reason:"salah"},
+  }]),env,identities.owner)).json();
+  assert.equal(body.results[0].accepted,false,"nota tanpa pembayaran tidak perlu dibatalkan");
+  assert.equal(body.results[0].code,422);
+  assert.equal(rows(env,"SELECT COUNT(*) AS n FROM expenses WHERE id='refund-MLT-9'")[0].n,0,"tidak boleh ada pengembalian dana untuk nota yang belum dibayar");
+  assert.equal(rows(env,"SELECT COUNT(*) AS n FROM payments WHERE order_id='MLT-9'")[0].n,0);
+});
+
+test("order.cancel mengembalikan stok produk yang terjual di nota itu", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`
+    INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+      VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);
+    INSERT INTO products(id,organization_id,name,minimum_stock,kind,unit,updated_at)
+      VALUES('detergen','cuciin','Detergen',1,'BahanHabisPakai','pcs',1);
+    INSERT INTO branch_stocks(branch_id,product_id,quantity,updated_at) VALUES('melati','detergen',10,1);
+  `);
+  // Nota dengan satu baris layanan retail; stok dikurangi 2 saat nota dibuat.
+  const created=await (await pushCommands(commandRequest([{
+    commandId:"nota-batal4-create",type:"order.create",entityId:"MLT-10",branchId:"melati",
+    payload:{id:"MLT-10",branchId:"melati",customerName:"Beli Detergen",phone:"0816",total:10000,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:10000}]},
+  }]),env,identities.owner)).json();
+  assert.equal(created.results[0].accepted,true);
+  await pushCommands(commandRequest([{
+    commandId:"nota-batal4-pay",type:"order.payment",entityId:"MLT-10",branchId:"melati",
+    payload:{paid:10000,paymentStatus:"Lunas",paymentMethod:"Tunai"},
+  }]),env,identities.owner);
+
+  const cancelled=await (await pushCommands(commandRequest([{
+    commandId:"nota-batal4-0001",type:"order.cancel",entityId:"MLT-10",branchId:"melati",
+    payload:{reason:"batal"},
+  }]),env,identities.owner)).json();
+  assert.equal(cancelled.results[0].accepted,true);
+  // Nota ini tidak punya baris retail, jadi stok tidak berubah. Yang dibuktikan: pembatalan
+  // tidak menyentuh stok sama sekali dan tetap berhasil (jalur retailAdjustments aman untuk nol).
+  assert.equal(rows(env,"SELECT quantity FROM branch_stocks WHERE branch_id='melati' AND product_id='detergen'")[0].quantity,10);
+  assert.equal(rows(env,"SELECT COUNT(*) AS n FROM stock_moves")[0].n,0,"tidak ada mutasi stok yang muncul dari nota tanpa retail");
+});
+
+test("envelope Android dengan syncIntent cancel dipetakan ke order.cancel, bukan order.put", () => {
+  // Perangkat mengirim selisih snapshot: entitas `nota` yang sama dipakai untuk koreksi biasa
+  // maupun pembatalan. Tanpa pemetaan ini, pembatalan akan dikirim sebagai `order.put`.
+  const cancel=parseCommand({commandId:"device-cancel-0001",entityType:"nota",entityId:"MLT-1",operation:"upsert",branchId:"melati",payload:{id:"MLT-1",syncIntent:"cancel",cancelReason:"mesin rusak"}});
+  assert.equal(cancel.type,"order.cancel","syncIntent cancel harus jadi order.cancel");
+  assert.equal(cancel.wireEntityType,"nota");
+  const biasa=parseCommand({commandId:"device-put-0001",entityType:"nota",entityId:"MLT-1",operation:"upsert",branchId:"melati",payload:{id:"MLT-1"}});
+  assert.equal(biasa.type,"order.put","tanpa syncIntent tetap koreksi biasa");
+  const status=parseCommand({commandId:"device-status-01",entityType:"nota",entityId:"MLT-1",operation:"upsert",branchId:"melati",payload:{id:"MLT-1",syncIntent:"status"}});
+  assert.equal(status.type,"order.put","syncIntent status tetap order.put supaya Supervisor tidak kehilangan jalurnya");
+});
+
+test("pembatalan lewat envelope perangkat benar-benar tercatat", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  await pushCommands(commandRequest([{
+    commandId:"env-create-0001",type:"order.create",entityId:"MLT-11",branchId:"melati",
+    payload:{id:"MLT-11",branchId:"melati",customerName:"Pelanggan Envelope",phone:"0817",total:10000,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:10000}]},
+  }]),env,identities.owner);
+  await pushCommands(commandRequest([{
+    commandId:"env-pay-000001",type:"order.payment",entityId:"MLT-11",branchId:"melati",
+    payload:{paid:10000,paymentStatus:"Lunas",paymentMethod:"Tunai"},
+  }]),env,identities.owner);
+
+  // Persis bentuk yang dikirim perangkat: entityType + operation + payload bersyncIntent.
+  const body=await (await pushCommands(commandRequest([{
+    commandId:"env-cancel-0001",entityType:"nota",entityId:"MLT-11",operation:"upsert",branchId:"melati",
+    payload:{id:"MLT-11",branchId:"melati",syncIntent:"cancel",cancelReason:"Pelanggan membatalkan"},
+  }]),env,identities.owner)).json();
+  assert.equal(body.results[0].accepted,true,`ditolak: ${JSON.stringify(body.results[0])}`);
+  const stored=JSON.parse(rows(env,"SELECT payload_json FROM orders WHERE id='MLT-11'")[0].payload_json);
+  assert.equal(Number(stored.canceledAtMs) > 0,true,"nota harus bertanda batal");
+  assert.equal(stored.cancelReason,"Pelanggan membatalkan");
+  assert.equal(rows(env,"SELECT COUNT(*) AS n FROM expenses WHERE id='refund-MLT-11'")[0].n,1,"pengembalian dana harus tercatat");
+
+  // Kasir ditolak walau memakai jalur envelope yang sama.
+  const denied=await (await pushCommands(commandRequest([{
+    commandId:"env-cancel-0002",entityType:"nota",entityId:"MLT-11",operation:"upsert",branchId:"melati",
+    payload:{id:"MLT-11",syncIntent:"cancel"},
+  }]),env,identities.kasir)).json();
+  assert.equal(denied.results[0].accepted,false,"kasir tidak boleh membatalkan lewat envelope");
+});
+
+test("order.put tidak dapat menghidupkan kembali nota yang sudah dibatalkan", async () => {
+  // Celah uang: nota batal masih ada di tabel `orders` (hanya ditandai), dan `order.put`
+  // menyusun payload kanonik dari `...p` — payload kiriman perangkat. Perangkat yang masih
+  // memegang salinan lama (belum menerima pembatalan) akan mengirim nota tanpa penanda batal,
+  // dan server akan MENGHAPUS penanda itu. Akibatnya nota hidup lagi di semua perangkat
+  // sementara pengembalian dananya sudah tercatat: uang keluar dua kali.
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  await pushCommands(commandRequest([{
+    commandId:"hidup-create-01",type:"order.create",entityId:"MLT-20",branchId:"melati",
+    payload:{id:"MLT-20",branchId:"melati",customerName:"Pelanggan Hidup",phone:"0819",total:10000,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:10000}]},
+  }]),env,identities.owner);
+  await pushCommands(commandRequest([{
+    commandId:"hidup-pay-0001",type:"order.payment",entityId:"MLT-20",branchId:"melati",
+    payload:{paid:10000,paymentStatus:"Lunas",paymentMethod:"Tunai"},
+  }]),env,identities.owner);
+  const cancelled=await (await pushCommands(commandRequest([{
+    commandId:"hidup-cancel-01",type:"order.cancel",entityId:"MLT-20",branchId:"melati",
+    payload:{cancelReason:"Pelanggan membatalkan"},
+  }]),env,identities.owner)).json();
+  assert.equal(cancelled.results[0].accepted,true);
+
+  // Perangkat lain yang belum menerima pembatalan mengirim koreksi biasa dengan salinan lamanya.
+  const resurrect=await (await pushCommands(commandRequest([{
+    commandId:"hidup-put-0001",type:"order.put",entityId:"MLT-20",branchId:"melati",
+    payload:{id:"MLT-20",branchId:"melati",customerName:"Pelanggan Hidup",phone:"0819",total:10000,paid:10000,paymentStatus:"Lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:10000}]},
+  }]),env,identities.owner)).json();
+  assert.equal(resurrect.results[0].accepted,false,"order.put atas nota yang sudah dibatalkan harus ditolak");
+  const stored=JSON.parse(rows(env,"SELECT payload_json FROM orders WHERE id='MLT-20'")[0].payload_json);
+  assert.equal(Number(stored.canceledAtMs) > 0,true,"penanda batal tidak boleh hilang karena order.put");
+  assert.equal(rows(env,"SELECT COUNT(*) AS n FROM expenses WHERE id='refund-MLT-20'")[0].n,1,"pengembalian dana tidak boleh bertambah");
+});
+
+test("order.put tidak dapat membatalkan nota diam-diam tanpa pengembalian dana", async () => {
+  // Arah sebaliknya: kalau `order.put` boleh menulis penanda batal, kasir bisa membatalkan nota
+  // berbayar lewat jalur koreksi biasa — tanpa pemeriksaan Owner dan tanpa pengembalian dana.
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  await pushCommands(commandRequest([{
+    commandId:"sisip-create-01",type:"order.create",entityId:"MLT-21",branchId:"melati",
+    payload:{id:"MLT-21",branchId:"melati",customerName:"Pelanggan Sisip",phone:"0820",total:10000,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:10000}]},
+  }]),env,identities.owner);
+  await pushCommands(commandRequest([{
+    commandId:"sisip-pay-0001",type:"order.payment",entityId:"MLT-21",branchId:"melati",
+    payload:{paid:10000,paymentStatus:"Lunas",paymentMethod:"Tunai"},
+  }]),env,identities.owner);
+
+  const smuggled=await (await pushCommands(commandRequest([{
+    commandId:"sisip-put-0001",type:"order.put",entityId:"MLT-21",branchId:"melati",
+    payload:{id:"MLT-21",branchId:"melati",customerName:"Pelanggan Sisip",phone:"0820",total:10000,paid:10000,paymentStatus:"Lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,canceledAtMs:Date.now(),canceledBy:"Kasir",cancelReason:"dibuat sendiri",lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:10000}]},
+  }]),env,identities.owner)).json();
+  const stored=JSON.parse(rows(env,"SELECT payload_json FROM orders WHERE id='MLT-21'")[0].payload_json);
+  assert.equal(Number(stored.canceledAtMs ?? 0),0,"penanda batal tidak boleh ditulis lewat order.put");
+  assert.equal(rows(env,"SELECT COUNT(*) AS n FROM expenses WHERE id='refund-MLT-21'")[0].n,0,"order.put tidak boleh membuat pengembalian dana");
+  assert.equal(smuggled.results[0].accepted,true,"koreksi lain tetap boleh, yang dibuang hanya penanda batalnya");
+});
+
+test("order.payment, order.status, dan order.handover tidak dapat mengubah nota yang sudah dibatalkan", async () => {
+  // Nota batal tetap ada di tabel `orders` (hanya ditandai), jadi jalur koreksi biasa masih
+  // bisa menemukannya. Tanpa penjagaan ini, nota yang uangnya sudah dikembalikan masih bisa
+  // menerima pembayaran baru, diubah statusnya, atau diserahkan ke pelanggan.
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  await pushCommands(commandRequest([{
+    commandId:"guard-create-01",type:"order.create",entityId:"MLT-30",branchId:"melati",
+    payload:{id:"MLT-30",branchId:"melati",customerName:"Pelanggan Jaga",phone:"0821",total:10000,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:10000}]},
+  }]),env,identities.owner);
+  await pushCommands(commandRequest([{
+    commandId:"guard-pay-0001",type:"order.payment",entityId:"MLT-30",branchId:"melati",
+    payload:{paid:10000,paymentStatus:"Lunas",paymentMethod:"Tunai"},
+  }]),env,identities.owner);
+  const cancelled=await (await pushCommands(commandRequest([{
+    commandId:"guard-cancel-01",type:"order.cancel",entityId:"MLT-30",branchId:"melati",
+    payload:{cancelReason:"Salah input"},
+  }]),env,identities.owner)).json();
+  assert.equal(cancelled.results[0].accepted,true);
+
+  // 1. Pembayaran baru di atas nota yang sudah dibatalkan.
+  const bayarLagi=await (await pushCommands(commandRequest([{
+    commandId:"guard-pay-0002",type:"order.payment",entityId:"MLT-30",branchId:"melati",
+    payload:{paid:10000,paymentStatus:"Lunas",paymentMethod:"Tunai"},
+  }]),env,identities.owner)).json();
+  assert.equal(bayarLagi.results[0].accepted,false,"order.payment atas nota batal harus ditolak");
+  assert.equal(rows(env,"SELECT paid FROM orders WHERE id='MLT-30'")[0].paid,10000,"nilai bayar tidak boleh berubah");
+
+  // 2. Perubahan status pengerjaan di atas nota yang sudah dibatalkan.
+  const statusLagi=await (await pushCommands(commandRequest([{
+    commandId:"guard-status-01",type:"order.status",entityId:"MLT-30",branchId:"melati",
+    payload:{workStatus:"Sedang dicuci"},
+  }]),env,identities.owner)).json();
+  assert.equal(statusLagi.results[0].accepted,false,"order.status atas nota batal harus ditolak");
+  assert.equal(rows(env,"SELECT work_status FROM orders WHERE id='MLT-30'")[0].work_status,"Masuk antrian","status kerja tidak boleh berubah");
+
+  // 3. Serah terima nota yang sudah dibatalkan.
+  const serahLagi=await (await pushCommands(commandRequest([{
+    commandId:"guard-hand-0001",type:"order.handover",entityId:"MLT-30",branchId:"melati",
+    payload:{pickedUpAt:"1 Okt 2026, 10.00"},
+  }]),env,identities.owner)).json();
+  assert.equal(serahLagi.results[0].accepted,false,"order.handover atas nota batal harus ditolak");
+  assert.equal(rows(env,"SELECT picked_up_at FROM orders WHERE id='MLT-30'")[0].picked_up_at,null,"waktu serah terima tidak boleh diisi");
+  assert.equal(rows(env,"SELECT COUNT(*) AS n FROM expenses WHERE id='refund-MLT-30'")[0].n,1,"pengembalian dana tidak boleh bertambah");
+});
+
 test("migrasi 0009 mengganti kunci absensi menjadi per cabang", () => {
   const sql=readFileSync(new URL("../migrations/0009_attendance_per_branch.sql", import.meta.url), "utf8");
   assert.match(sql,/UNIQUE \(staff_email, work_date, branch_id\)/,"kunci baru harus menyertakan branch_id");

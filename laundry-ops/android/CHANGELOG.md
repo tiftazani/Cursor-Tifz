@@ -2,6 +2,49 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.43 — 1 Okt 2026 (versionCode 62)
+
+### Tutup kas: rincian penjualan produk dan sisa stok
+
+Tutup kas kini mencatat, per cabang, **produk apa saja yang terjual** beserta nilainya dan **sisa stok saat kas ditutup**, di samping pemisahan Tunai, QRIS, Transfer, dan Piutang yang sudah ada.
+
+Angka rincian dihitung sekali di `CuciinStore.closeCashPreview()` lalu dipakai ulang oleh `closeCash()`, jadi angka yang dilihat kasir di layar tidak mungkin berbeda dari yang tersimpan. Modelnya `CashCloseProduct` dan `CashCloseStock` di `Models.kt`.
+
+### Pembatalan nota berbayar (Owner saja)
+
+Nota yang sudah menerima pembayaran tidak dapat dihapus, jadi pembatalannya butuh operasi baru: perintah **`order.cancel`** di Worker dan fungsi **`cancelNota`** di store. Izinnya fungsi katalog baru **`service.cancel`** (katalog naik ke `VERSION=3`, 42 fungsi), Owner-only secara bawaan, terpisah dari `service.delete`.
+
+Aturan uangnya (**Opsi B**, keputusan Owner):
+
+| Aspek | Perilaku |
+| --- | --- |
+| Nota | Ditandai batal (`canceledAtMs`, `canceledAt`, `canceledBy`, `cancelReason`), **tidak dihapus** |
+| Jurnal `payments` | Dibiarkan; FK `payments → orders` adalah `ON DELETE RESTRICT` |
+| Uang kembali | Pengeluaran `ExpenseCategory.PengembalianDana` bertanggal **hari pembatalan** |
+| Laporan lampau | **Tidak berubah**: `reportNotas()` tetap memuat nota batal, dan `periodNotas()` menyambung ke situ |
+| Piutang | Nota batal dibuang dari `piutang()` |
+| Stok retail | Dikembalikan ke cabang, dengan jalur produk yang sama seperti `deleteNota` |
+| Antrean kerja | Nota batal dibuang dari `visibleNotas()` |
+
+### Penjaga: nota batal tidak dapat diubah lagi
+
+Karena nota batal tetap ada di tabel `orders` dan di daftar `notas`, jalur koreksi biasa masih bisa menemukannya. Dua sisi dijaga:
+
+**Worker** (`command-sync.ts`) — `order.put` ditolak `409`, dan `order.status` / `order.payment` / `order.handover` juga ditolak `409`. Payload kanonik `order.put` memakai nilai penanda batal dari **baris tersimpan**, bukan dari kiriman perangkat, sehingga koreksi biasa tidak bisa menghapus penanda itu. Arah sebaliknya juga ditutup: `canceledAtMs` yang disisipkan ke payload `order.put` **diabaikan**, jadi kasir tidak bisa membatalkan nota diam-diam tanpa pemeriksaan Owner dan tanpa pengembalian dana.
+
+**Android** (`CuciinStore.kt`) — `updateNotaLines`, `markWaSent`, `advanceLaundry`, `markLunas`, dan `markPickedUp` menolak nota batal. Di layar detail, nota batal menampilkan banner merah berisi waktu, pelaku, dan alasan pembatalan; tombol yang pasti gagal (tandai selesai, catat pelunasan, serah terima, koreksi, batalkan, WA) tidak ditampilkan.
+
+### Dua bug uang yang ditemukan saat menguji jalur ini
+
+Keduanya ditemukan dari pertanyaan "kalau `order.put` bisa menghidupkan kembali nota batal, apa lagi yang bisa?". Ditulis sebagai tes merah-dulu lebih dulu, lalu ditutup:
+
+1. **`order.put` bisa menghapus penanda batal** — perangkat yang belum menerima pembatalan mengirim salinan lamanya, dan server menimpa penanda itu. Nota hidup lagi di semua perangkat sementara pengembalian dananya sudah tercatat.
+2. **`order.put` bisa menulis penanda batal** — kasir pemegang `service.correct` bisa membatalkan nota berbayar lewat jalur koreksi biasa, tanpa pemeriksaan Owner dan tanpa pengembalian dana.
+
+### Angka gate
+
+Android **368 debug + 368 release**, lint 0 error. Worker **97 tes**, `tsc` bersih. Tes baru: `CancelNotaTest` (13) dan 3 tes Worker (`order.put` arah hidupkan ulang, `order.put` arah sisipkan batal, dan `order.payment`/`order.status`/`order.handover`).
+
 ## 1.10.42 — 30 Sep 2026 (versionCode 61)
 
 ### Bagikan nota: tambah keluaran JPEG

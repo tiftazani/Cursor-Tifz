@@ -12,10 +12,20 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.42"
-    val currentCode: Int = 61
+    val currentName: String = "1.10.43"
+    val currentCode: Int = 62
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.43", code = 62, date = "1 Okt 2026",
+            notes = listOf(
+                "Tutup kas kini merinci penjualan produk per cabang dan sisa stok saat kas ditutup, di samping pemisahan Tunai, QRIS, Transfer, dan Piutang yang sudah ada. Rincian ini dihitung sekali lalu dipakai ulang oleh layar dan oleh data yang disimpan, jadi angka yang dilihat kasir selalu sama dengan yang tersimpan.",
+                "Nota berbayar kini bisa dibatalkan, dan hanya Owner yang boleh melakukannya. Nota tidak dihapus: ia ditandai batal, stok produk yang terjual dikembalikan ke cabang, dan uang yang sudah diterima dicatat sebagai pengeluaran Pengembalian dana pada tanggal pembatalan.",
+                "Laporan tanggal lampau tidak berubah karena pembatalan. Nota yang dibatalkan tetap ikut dihitung di laporan pada tanggal aslinya, dan pengembalian dananya muncul di hari pembatalan, sehingga laporan yang sudah ditutup tetap sama seperti saat kas ditutup.",
+                "Nota yang sudah dibatalkan tidak bisa lagi diubah, dibayar, dikirim lewat WhatsApp, dipindah statusnya, atau diserahkan ke pelanggan, baik di aplikasi maupun di server. Bila nota seperti itu dibuka dari laporan, layar menampilkan keterangan pembatalannya beserta alasan dan siapa yang membatalkan.",
+                "Hapus Service dan Batalkan nota adalah dua izin yang berbeda: menghapus membuang nota yang belum dibayar, sedangkan membatalkan mengembalikan uang nota yang sudah dibayar.",
+            ),
+        ),
         AppRelease(
             name = "1.10.42", code = 61, date = "30 Sep 2026",
             notes = listOf(

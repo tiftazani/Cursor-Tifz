@@ -17,7 +17,7 @@ package com.cuciin.laundryops.data
  * 3. Modul `owner` dipecah menjadi `branch`, `staff`, `serviceCatalog`, dan `access`, supaya
  *    "boleh menambah user" tidak lagi menuntut "boleh mengubah cabang".
  *
- * Angka 15 modul dan 41 fungsi itu bukan tulisan bebas: keduanya adalah jumlah entri di
+ * Angka 15 modul dan 42 fungsi itu bukan tulisan bebas: keduanya adalah jumlah entri di
  * [modules] dan [allFunctionKeys], dan test penegakan membandingkannya dengan kenyataan kode
  * sehingga komentar ini tidak bisa menyimpang tanpa ada test yang gagal.
  *
@@ -33,8 +33,10 @@ object AccessCatalog {
      * Dipakai [AccessCatalog] untuk menambal role bawaan yang sudah tersimpan di server TEPAT
      * SEKALI per versi. Tanpa penanda ini, fungsi yang sengaja dicabut Owner akan hidup kembali
      * setiap aplikasi dibuka.
+     *
+     * Versi 3 menambahkan `service.cancel` (pembatalan nota berbayar, Owner saja).
      */
-    const val VERSION: Int = 2
+    const val VERSION: Int = 3
 
     data class FunctionDef(val key: String, val label: String, val detail: String)
     data class ModuleDef(val key: String, val label: String, val detail: String, val functions: List<FunctionDef>)
@@ -53,6 +55,7 @@ object AccessCatalog {
             fn("service.price", "Ubah harga Service", "Mengganti harga layanan pada satu transaksi dari harga katalog"),
             fn("service.correct", "Koreksi Service", "Mengubah layanan dan jumlah pada transaksi yang sudah tercatat"),
             fn("service.delete", "Hapus Service", "Menghapus transaksi beserta pengembalian stoknya"),
+            fn("service.cancel", "Batalkan nota", "Membatalkan nota berbayar: uang dikembalikan sebagai biaya hari ini dan stok retail dikembalikan ke cabang"),
             fn("service.correctSent", "Koreksi Service yang sudah dikirim", "Mengubah atau menghapus nota yang sudah dikirim ke pelanggan"),
         )),
         ModuleDef("customer", "Pelanggan", "Kontak pelanggan laundry", listOf(
@@ -140,6 +143,7 @@ object AccessCatalog {
         "stock.product", "stock.productDelete",
         "inventory.type",
         "service.delete",
+        "service.cancel",
         "customer.delete",
         "attendance.correct",
         "access.role", "access.assign",

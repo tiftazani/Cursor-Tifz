@@ -180,8 +180,22 @@ data class Nota(
     val kasirEmail: String = "",
     /** Versi server terakhir untuk mencegah koreksi dari dua perangkat saling menimpa. */
     val updatedAtMs: Long = 0,
+    /**
+     * Jejak pembatalan nota. Nol berarti nota masih berlaku.
+     *
+     * Nota yang dibatalkan TIDAK dihapus, dan jurnal pembayarannya juga tidak dihapus: laporan
+     * tanggal lampau harus tetap sama seperti saat kas ditutup. Uang yang dikembalikan dicatat
+     * sebagai pengeluaran `PengembalianDana` pada tanggal pembatalan.
+     */
+    val canceledAtMs: Long = 0,
+    val canceledAt: String = "",
+    val canceledBy: String = "",
+    val cancelReason: String = "",
 ) {
     val hanging: Boolean get() = laundry != LaundryStatus.Selesai || pay != PayStatus.Lunas || pickedUpAt == null
+
+    /** Nota yang sudah dibatalkan tidak lagi dikerjakan, ditagih, maupun dikirim WA. */
+    val canceled: Boolean get() = canceledAtMs > 0
 }
 
 @Serializable
@@ -288,6 +302,7 @@ enum class ExpenseCategory(val label: String) {
     BahanLaundry("Bahan laundry"),
     Transportasi("Transportasi"),
     Pemasaran("Pemasaran"),
+    PengembalianDana("Pengembalian dana"),
     Lainnya("Lainnya"),
 }
 
@@ -343,6 +358,31 @@ data class CashClose(
     val qris: Int,
     val transfer: Int,
     val piutang: Int,
+    /**
+     * Rincian produk retail terjual hari itu, disimpan SAAT kas ditutup.
+     *
+     * Sengaja disimpan, bukan dihitung ulang saat dibaca: harga produk dan isi riwayat stok bisa
+     * berubah sesudahnya, jadi angka yang dihitung ulang tidak akan sama dengan yang dilihat kasir
+     * ketika ia menutup kas.
+     */
+    val produk: List<CashCloseProduct> = emptyList(),
+    /** Sisa stok cabang saat kas ditutup; alasan penyimpanannya sama dengan [produk]. */
+    val stok: List<CashCloseStock> = emptyList(),
+)
+
+/** Satu baris produk retail terjual pada saat kas ditutup. */
+@Serializable
+data class CashCloseProduct(
+    val name: String,
+    val qty: Int,
+    val nilai: Int,
+)
+
+/** Sisa stok satu produk pada saat kas ditutup. */
+@Serializable
+data class CashCloseStock(
+    val name: String,
+    val sisa: Int,
 )
 
 /** Pembayaran append-only agar kas dihitung dari waktu uang diterima, bukan waktu nota dibuat. */

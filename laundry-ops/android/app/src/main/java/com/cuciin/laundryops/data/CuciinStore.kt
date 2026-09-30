@@ -664,9 +664,17 @@ object CuciinStore {
             ?: branches.firstOrNull()?.id.orEmpty().also { stockBranchId.value = it }
     }
 
+    /**
+     * Nota yang masih berlaku untuk layar kerja.
+     *
+     * Nota yang dibatalkan TIDAK dibuang dari daftar `notas` — ia harus tetap ada supaya laporan
+     * tanggal lampau tidak berubah dan jejaknya bisa diaudit. Yang dibuang hanya dari pandangan
+     * kerja: nota batal tidak boleh muncul lagi di antrian, WA, atau pilihan pembatalan.
+     */
     fun visibleNotas(): List<Nota> {
         val s = session.value ?: return emptyList()
         return notas.filter { n ->
+            if (n.canceled) return@filter false
             when (s.role) {
                 Role.Owner -> (viewBranch.value == "all" || n.branchId == viewBranch.value) &&
                     (viewKasir.value == "all" || n.kasir == viewKasir.value)
@@ -676,11 +684,40 @@ object CuciinStore {
         }
     }
 
+    /**
+     * Nota untuk layar laporan: TERMASUK yang sudah dibatalkan.
+     *
+     * Ini yang menjaga janji Opsi B: pembatalan hari ini tidak boleh mengubah laporan tanggal
+     * lampau. Nota yang dibatalkan tetap dihitung pada periode saat ia dibuat, dan uang yang
+     * dikembalikan muncul sebagai pengeluaran `PengembalianDana` pada tanggal pembatalan.
+     * Kalau nota batal dibuang dari sini, laporan kemarin ikut berubah setiap kali ada pembatalan.
+     */
+    fun reportNotas(): List<Nota> {
+        val s = session.value ?: return emptyList()
+        return notas.filter { n ->
+            when (s.role) {
+                Role.Owner -> (viewBranch.value == "all" || n.branchId == viewBranch.value) &&
+                    (viewKasir.value == "all" || n.kasir == viewKasir.value)
+                else -> n.branchId in s.allowedBranchIds
+            }
+        }
+    }
+
+    /**
+     * Nota dalam periode laporan.
+     *
+     * Nota yang dibatalkan TETAP ikut: pembatalan hari ini tidak boleh menghapus riwayat penjualan
+     * kemarin, dan nota batal masih dibutuhkan layar laporan untuk menghitung omzet serta piutang
+     * apa adanya. Yang memisahkannya adalah penanda `canceled`, bukan penyaringan di sini.
+     */
     fun periodNotas(): List<Nota> {
         val start = Clock.periodStartMs(reportPeriod.value)
         val s = session.value ?: return emptyList()
         val selected = reportBranchIds.value
-        return notas.filter {
+        // Sumbernya `reportNotas()` supaya nota yang dibatalkan tetap ikut. Laporan tanggal lampau
+        // harus tetap sama seperti saat kas ditutup; uang yang dikembalikan muncul sebagai
+        // pengeluaran `PengembalianDana` pada tanggal pembatalan, bukan dengan mengubah periode ini.
+        return reportNotas().filter {
             it.createdAtMs >= start && when (s.role) {
                 Role.Owner -> selected.isEmpty() || it.branchId in selected
                 else -> it.branchId in s.allowedBranchIds
@@ -745,7 +782,7 @@ object CuciinStore {
     fun collected(rows: List<Nota> = periodNotas()): Int = rows.sumOf { it.paid }
 
     fun piutang(rows: List<Nota> = visibleNotas()): Int =
-        rows.sumOf { (it.total - it.paid).coerceAtLeast(0) }
+        rows.filterNot { it.canceled }.sumOf { (it.total - it.paid).coerceAtLeast(0) }
 
     fun todayCollected(branchId: String? = null): Int {
         val start = Clock.todayStartMs()
@@ -1568,6 +1605,9 @@ object CuciinStore {
             return "Akun ini tidak dapat mengoreksi Service tersebut"
         }
         if (old.waSent && !canCorrectSentNota()) return tolak("service.correctSent", "Service sudah dikirim ke pelanggan; hanya Owner yang dapat mengoreksi")
+        // Nota yang sudah dibatalkan uangnya sudah dikembalikan; mengubah rinciannya membuat
+        // laporan dan stok bercerita beda dengan kenyataan.
+        if (old.canceled) return "Service ini sudah dibatalkan dan tidak dapat diubah lagi"
         val clean = newLines.map {
             it.copy(
                 qty = it.qty.coerceAtLeast(0.0),
@@ -1680,6 +1720,8 @@ object CuciinStore {
     fun markWaSent(id: String): String? {
         if (!boleh("whatsapp", "whatsapp.send")) return tolak("whatsapp.send", "Akun ini tidak dapat mengirim WhatsApp")
         val n = notas.find { it.id == id } ?: return null
+        // Nota batal tidak dikirim ke pelanggan: isinya sudah tidak berlaku.
+        if (n.canceled) return "Service ini sudah dibatalkan"
         val t = Clock.nowMs()
         n.waSent = true
         n.waAt = Clock.nowLabel(t)
@@ -1692,6 +1734,7 @@ object CuciinStore {
         if (!boleh("queue", "queue.status")) return tolak("queue.status", "Akun ini tidak dapat mengubah status pengerjaan")
         val s = session.value ?: return "Silakan masuk kembali"
         val n = notas.find { it.id == id } ?: return "Service tidak ditemukan"
+        if (n.canceled) return "Service ini sudah dibatalkan"
         if (s.role != Role.Owner && n.branchId !in s.allowedBranchIds) return "Cabang Service tidak sesuai akun"
         val next = n.laundry.next ?: return "Service sudah selesai"
         n.laundry = next
@@ -1704,6 +1747,9 @@ object CuciinStore {
     fun markLunas(id: String, method: PayMethod = PayMethod.Tunai): String? {
         val s = session.value ?: return "Silakan masuk kembali"
         val n = notas.find { it.id == id } ?: return "Service tidak ditemukan"
+        // Uang nota batal sudah dikembalikan; menerima pembayaran baru di atasnya menagih
+        // pelanggan untuk pekerjaan yang sudah dibatalkan.
+        if (n.canceled) return "Service ini sudah dibatalkan"
         if (!boleh("service", "service.payment")) {
             return tolak("service.payment", "Akun ini tidak dapat mencatat pembayaran Service tersebut")
         }
@@ -1723,6 +1769,7 @@ object CuciinStore {
     fun markPickedUp(id: String): String? {
         if (!boleh("queue", "queue.handover")) return tolak("queue.handover", "Akun ini tidak dapat menyerahkan pesanan ke pelanggan")
         val n = notas.find { it.id == id } ?: return "Nota tidak ditemukan"
+        if (n.canceled) return "Service ini sudah dibatalkan"
         if (n.laundry != LaundryStatus.Selesai) return "Pesanan belum selesai dikerjakan"
         if (n.pay != PayStatus.Lunas) return "Lunasi pembayaran sebelum serah terima"
         if (n.pickedUpAt != null) return "Pesanan sudah diserahkan"
@@ -1817,6 +1864,46 @@ object CuciinStore {
         return null
     }
 
+    /**
+     * Produk retail yang terjual di satu cabang hari ini, siap disimpan ke tutup kas.
+     *
+     * Dipakai BERSAMA oleh layar (supaya kasir melihat angkanya sebelum menutup) dan oleh
+     * [closeCash] (supaya angka yang tersimpan sama persis). Menghitung dua kali dengan cara
+     * berbeda membuat layar dan riwayat bisa berbeda, dan itu tidak boleh terjadi di layar uang.
+     */
+    fun closeCashPreview(branchId: String): List<CashCloseProduct> {
+        val hariIni = Clock.todayStartMs()
+        return stockMoves
+            .filter { it.branchId == branchId && it.kind == StockKind.Jual && it.atMs >= hariIni }
+            .groupBy { it.product }
+            .map { (produk, moves) ->
+                val qty = moves.sumOf { -it.qty }
+                val harga = products.firstOrNull { it.key == produk || it.name == produk }
+                    ?.let { product -> services.firstOrNull { it.productKey == product.key }?.price }
+                    ?: services.firstOrNull { it.name.equals(produk, true) }?.price
+                    ?: 0
+                CashCloseProduct(produk, qty, qty * harga)
+            }
+            .filter { it.qty > 0 }
+            .sortedByDescending { it.nilai }
+    }
+
+    /** Sisa stok retail satu cabang, siap disimpan ke tutup kas. */
+    fun branchStockPreview(branchId: String): List<CashCloseStock> = branchStocks
+        .filter { it.branchId == branchId }
+        .mapNotNull { balance ->
+            val product = products.firstOrNull { it.key == balance.productKey } ?: return@mapNotNull null
+            CashCloseStock(product.name, balance.stock)
+        }
+        .sortedBy { it.name }
+
+    /**
+     * Menutup kas satu cabang untuk hari ini.
+     *
+     * Rincian produk terjual dan sisa stok disimpan DI BARIS INI, bukan dihitung ulang saat dibaca:
+     * harga produk dan riwayat stok bisa berubah sesudahnya, jadi angka yang dihitung ulang tidak
+     * akan sama dengan yang dilihat kasir ketika ia menutup kas.
+     */
     fun closeCash(branchId: String = ""): CashClose? {
         val s = session.value ?: return null
         if (cashCloseReject(branchId) != null) return null
@@ -1833,6 +1920,8 @@ object CuciinStore {
             qris = received.filter { it.method == PayMethod.Qris }.sumOf { it.amount },
             transfer = received.filter { it.method == PayMethod.Transfer }.sumOf { it.amount },
             piutang = piutang(notas.filter { it.branchId == bid }),
+            produk = closeCashPreview(bid),
+            stok = branchStockPreview(bid),
         )
         cashCloses.add(0, row)
         // bid tidak mungkin "all" di sini karena baris di atasnya sudah mengembalikan null.
@@ -1844,6 +1933,84 @@ object CuciinStore {
         )
         bump()
         return row
+    }
+
+    /**
+     * Membatalkan nota BERBAYAR. Nota tidak dihapus, hanya ditandai batal.
+     *
+     * Kenapa bukan [deleteNota]: nota yang sudah menerima pembayaran tidak boleh dihapus (baris
+     * `payments` di server ber-FK RESTRICT ke `orders`), dan laporan tanggal lampau harus tetap
+     * sama seperti saat kas ditutup. Karena itu jurnal pembayarannya DIBIARKAN, dan uang yang
+     * dikembalikan dicatat sebagai pengeluaran [ExpenseCategory.PengembalianDana] bertanggal
+     * HARI INI. Itu keputusan Owner (Opsi B).
+     *
+     * Stok produk retail yang terjual di nota itu dikembalikan ke cabang, sama seperti [deleteNota].
+     */
+    fun cancelNota(id: String, reason: String = ""): String? {
+        val s = session.value ?: return "Silakan masuk kembali"
+        val old = notas.firstOrNull { it.id == id } ?: return "Service tidak ditemukan"
+        if (!boleh("service", "service.cancel")) {
+            return tolak("service.cancel", "Akun ini tidak dapat membatalkan Service")
+        }
+        if (s.role == Role.Supervisor || (s.role != Role.Owner && old.branchId !in s.allowedBranchIds)) {
+            return "Akun ini tidak dapat membatalkan Service tersebut"
+        }
+        if (old.canceled) return "Service ini sudah dibatalkan"
+        // Nota tanpa pembayaran tidak perlu dibatalkan: tidak ada uang yang harus dikembalikan,
+        // dan [deleteNota] sudah menangani kasus itu. Pesannya mengarahkan, bukan sekadar menolak.
+        if (old.paid <= 0) return "Service ini belum menerima pembayaran; gunakan Hapus Service untuk membuangnya"
+        val now = Clock.nowMs()
+        val label = Clock.nowLabel(now)
+        // Stok retail dikembalikan ke cabang asal. Produknya dicari dengan jalur yang sama
+        // seperti [deleteNota] supaya koreksi transaksi lama mengembalikan produk yang tepat.
+        old.lines.forEach { line ->
+            val product = productForKey(line.productKey).takeIf { line.productKey.isNotBlank() }
+                ?: services.firstOrNull { it.id == line.serviceId }?.let(::linkedProduct)
+                ?: productForName(line.name)
+                ?: return@forEach
+            val qty = line.qty.toInt()
+            if (qty <= 0) return@forEach
+            val balance = branchStocks.firstOrNull { it.branchId == old.branchId && it.productKey == product.key }
+                ?: BranchStock(old.branchId, product.key, 0).also { branchStocks.add(it) }
+            balance.stock += qty
+            stockMoves.add(
+                0,
+                StockMove(
+                    Clock.nowLabel(now), now, product.name, StockKind.Tambah, qty, s.name, old.branchId,
+                    "Nota $id dibatalkan", id, balance.stock, syncEventId(), requiresDeletedNota = false,
+                ),
+            )
+        }
+        // Penanda pembatalan ditulis ke nota itu sendiri; nota TETAP ada di daftar.
+        // `updatedAtMs` sengaja TIDAK dinolkan: nilai itu dipakai sebagai penjaga versi
+        // (`expectedUpdatedAt`) saat perangkat mengirim perintah, dan jawaban server akan
+        // menimpanya dengan versi terbaru begitu pembatalan diterima.
+        val index = notas.indexOfFirst { it.id == id }
+        if (index >= 0) {
+            notas[index] = notas[index].copy(
+                canceledAtMs = now,
+                canceledAt = label,
+                canceledBy = s.name,
+                cancelReason = reason.trim(),
+            )
+        }
+        // Pengembalian dana = pengeluaran HARI INI, bukan penghapusan penerimaan kemarin.
+        expenses.add(
+            0,
+            Expense(
+                id = "refund-$id",
+                branchId = old.branchId,
+                category = ExpenseCategory.PengembalianDana,
+                amount = old.paid,
+                occurredAtMs = now,
+                occurredAt = label,
+                note = "Pengembalian dana nota $id · ${old.customer}",
+                by = s.name,
+            ),
+        )
+        log("Service $id dibatalkan · ${old.customer} · ${rp(old.paid)} dikembalikan", old.branchId, id)
+        bump()
+        return null
     }
 
     fun changeMyPassword(currentPassword: String, newPassword: String): String? {

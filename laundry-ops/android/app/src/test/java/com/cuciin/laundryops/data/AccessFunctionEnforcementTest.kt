@@ -37,7 +37,7 @@ class AccessFunctionEnforcementTest {
         "queue.view", "queue.status", "queue.handover",
         // service
         "service.create", "service.payment", "service.price",
-        "service.correct", "service.delete", "service.correctSent",
+        "service.correct", "service.delete", "service.cancel", "service.correctSent",
         // pelanggan
         "customer.view", "customer.write", "customer.delete",
         // produk & stok
@@ -117,6 +117,9 @@ class AccessFunctionEnforcementTest {
         "expense.write" to ("boleh" to 1),     // addExpense
         "expense.delete" to ("boleh" to 1),    // deleteExpense
         "cash.close" to ("boleh" to 1),        // closeCash
+        // service.cancel diperiksa di `cancelNota`; pembatalan nota berbayar adalah
+        // keputusan uang, jadi ia punya fungsi katalognya sendiri.
+        "service.cancel" to ("boleh" to 1),    // cancelNota
         // laporan & ekspor
         "analytics.export" to ("canAccess" to 1), // canExportData
         // master data: satu modul per jenis data sejak 1.10.30

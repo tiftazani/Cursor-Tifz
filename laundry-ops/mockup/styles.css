@@ -1,23 +1,28 @@
+/* Palet mengikuti tema "Biru Cuciin" di aplikasi (ui/theme/Theme.kt, palet Terang).
+   Nama variabel lama dipertahankan supaya seluruh aturan di bawah tidak perlu diubah. */
 :root {
-  --teal: #ec4899;
-  --teal-deep: #1e1a4a;
-  --mint: #f9a8d4;
-  --mint-soft: #fce7f3;
-  --foam: #fff4f8;
+  --teal: #0048b4;          /* prim */
+  --teal-deep: #00306e;     /* primDeep */
+  --mint: #0048b4;          /* aksen aktif, mis. switch menyala */
+  --mint-soft: #e3edfb;     /* primSoft */
+  --foam: #f4f8fd;          /* bg */
   --card: #ffffff;
-  --ink: #1e1a4a;
-  --muted: #8b7a88;
-  --line: #f3d4e4;
-  --amber: #d97706;
-  --amber-bg: #fff7ed;
-  --blue: #6366f1;
-  --blue-bg: #eef2ff;
-  --green: #059669;
-  --green-bg: #ecfdf5;
-  --danger: #e11d48;
-  --navy: #1e1a4a;
-  --shadow: 0 16px 36px rgba(236, 72, 153, 0.14);
-  --radius: 24px;
+  --ink: #0b1a2e;
+  --muted: #54637a;
+  --line: #dce6f2;          /* garis dekoratif (lineSoft) */
+  --line-strong: #6e7c90;   /* batas kontrol (line) */
+  --amber: #8a5a00;
+  --amber-bg: rgba(138, 90, 0, 0.1);
+  --blue: #0054c0;
+  --blue-bg: rgba(0, 72, 180, 0.1);
+  --green: #1f7a4d;
+  --green-bg: rgba(31, 122, 77, 0.1);
+  --danger: #b3261e;
+  --danger-bg: rgba(179, 38, 30, 0.1);
+  --navy: #00306e;          /* heroA, dasar bilah tab */
+  --gold: #f7ca3a;          /* navSelected */
+  --shadow: 0 16px 36px rgba(0, 48, 110, 0.14);
+  --radius: 20px;
   --phone-w: 390px;
   --phone-h: 844px;
 }
@@ -25,16 +30,18 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
 body {
-  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background:
-    radial-gradient(900px 500px at 0% 0%, #fbcfe8 0%, transparent 50%),
-    radial-gradient(800px 400px at 100% 100%, #fce7f3 0%, transparent 45%),
-    #f9a8d4;
+    radial-gradient(900px 500px at 0% 0%, #d8e4f0 0%, transparent 50%),
+    radial-gradient(800px 400px at 100% 100%, #e3edfb 0%, transparent 45%),
+    #f4f8fd;
   color: var(--ink);
 }
 
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
+/* Tombol kartu ringkasan tidak boleh mewarisi gaya tombol bawaan. */
+button.stat { font: inherit; color: inherit; }
 h1, h2, h3, p { margin: 0; }
 
 .studio {
@@ -71,7 +78,7 @@ h1, h2, h3, p { margin: 0; }
   text-decoration: none;
   box-shadow: var(--shadow);
 }
-.apk-dl:hover { background: #2a2460; }
+.apk-dl:hover { background: #0054c0; }
 .field span { display: block; font-size: 12px; font-weight: 700; margin-bottom: 8px; color: var(--muted); }
 .segment {
   display: flex;
@@ -125,10 +132,10 @@ h1, h2, h3, p { margin: 0; }
 .phone {
   width: var(--phone-w);
   height: var(--phone-h);
-  background: #0b1f1d;
+  background: #0b1a2e;
   border-radius: 44px;
   padding: 12px;
-  box-shadow: var(--shadow), 0 0 0 10px #0f2a27;
+  box-shadow: var(--shadow), 0 0 0 10px #16263f;
   position: relative;
 }
 .phone-notch {
@@ -138,7 +145,7 @@ h1, h2, h3, p { margin: 0; }
   transform: translateX(-50%);
   width: 120px;
   height: 28px;
-  background: #0b1f1d;
+  background: #0b1a2e;
   border-radius: 20px;
   z-index: 5;
 }
@@ -169,7 +176,17 @@ h1, h2, h3, p { margin: 0; }
 }
 #app::-webkit-scrollbar { width: 0; }
 
-.screen { padding: 4px 18px 18px; animation: rise 0.28s ease; }
+/* Lapisan panel konfirmasi. Terpisah dari #app supaya panel tidak ikut tergulung
+   dan selalu menutup penuh layar HP. */
+#overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+}
+#overlay > * { pointer-events: auto; }
+
+.screen { padding: 4px 18px 28px; animation: rise 0.28s ease; }
 .screen.has-fab { padding-bottom: 92px; }
 @keyframes rise {
   from { transform: translateY(10px); }
@@ -179,24 +196,105 @@ h1, h2, h3, p { margin: 0; }
 .top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   margin-bottom: 16px;
 }
-.top h1 { font-size: 26px; letter-spacing: -0.03em; }
+/* Beranda: judul kiri, logo kanan. */
+.top.spread { justify-content: space-between; }
+.top h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; }
 .top .sub { font-size: 13px; color: var(--muted); font-weight: 500; }
-.icon-btn {
-  width: 40px;
-  height: 40px;
-  border: 0;
-  border-radius: 14px;
+
+/* Logo asli aplikasi di kanan atas. */
+.brand-logo {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+/* Dua kotak filter periode & cabang di bawah judul. */
+.filter-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.filter-box {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--line);
   background: #fff;
+  border-radius: 14px;
+  padding: 10px 12px;
+  min-height: 48px;
+  text-align: left;
+}
+.filter-box .grow { flex: 1; min-width: 0; }
+/* Label kecil di atas nilai, sama seperti FilterBar di aplikasi. */
+.filter-box .k { font-size: 11px; font-weight: 700; color: var(--muted); }
+.filter-box .v { font-size: 13px; font-weight: 600; color: var(--ink); margin-top: 2px; }
+.filter-box svg { width: 18px; height: 18px; flex: 0 0 auto; }
+
+/* Baris pilihan di dalam panel (periode, cabang). */
+.pick-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+.pick-row.on { background: var(--mint-soft); border-color: var(--mint); }
+.pick-row .grow { flex: 1; }
+.pick-row .name { font-weight: 700; font-size: 14px; }
+.pick-row .meta { white-space: normal; margin-top: 2px; }
+
+/* Kartu ringkasan: ikon di atas, angka besar, label di bawah, sama seperti StatusCard. */
+.stat {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 84px;
+  border-radius: 20px;
+  padding: 12px 10px;
+}
+.stat .ico { width: 20px; height: 20px; flex: 0 0 auto; }
+.stat .v { font-size: 22px; font-weight: 800; letter-spacing: -0.03em; color: var(--ink); }
+.stat .k { font-size: 11px; line-height: 14px; color: var(--muted); font-weight: 600; }
+/* Kartu terpilih: latar ikut berwarna tipis, bukan hanya garis. */
+.stat.on { background: rgba(0, 72, 180, 0.12); border-color: var(--teal); border-width: 2px; }
+
+/* Kondisi kosong: ikon dalam lingkaran biru muda. */
+.empty-state { text-align: center; padding: 28px 12px 12px; }
+.empty-state .ico {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: var(--mint-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+}
+.empty-state .ico svg { width: 34px; height: 34px; }
+.empty-state .t { font-weight: 700; font-size: 15px; }
+.empty-state .d { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--mint-soft);
   color: var(--ink);
-  box-shadow: 0 1px 0 var(--line);
 }
 
 .hero {
-  background: linear-gradient(145deg, #1e1a4a 0%, #4c1d45 70%, #ec4899 160%);
+  background: linear-gradient(145deg, #00306e 0%, #0054c0 100%);
   color: #fff;
   border-radius: 28px;
   padding: 18px 18px 16px;
@@ -222,7 +320,7 @@ h1, h2, h3, p { margin: 0; }
   background: #fff;
   border-radius: 18px;
   padding: 12px 10px;
-  box-shadow: 0 1px 0 var(--line);
+  border: 1px solid var(--line);
 }
 .stat .k { font-size: 11px; color: var(--muted); font-weight: 600; }
 .stat .v { font-size: 22px; font-weight: 800; letter-spacing: -0.03em; margin-top: 4px; }
@@ -240,12 +338,32 @@ h1, h2, h3, p { margin: 0; }
 }
 .section-label span { color: var(--muted); font-weight: 600; font-size: 12px; }
 
+/* Baris judul daftar dengan tombol di kanan, seperti layar Antrian di aplikasi. */
+.row-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 10px;
+}
+.row-title .name { font-weight: 700; font-size: 15px; }
+.row-title .meta { white-space: normal; }
+.btn.primary.small {
+  width: auto;
+  margin-top: 0;
+  padding: 10px 14px;
+  min-height: 44px;
+  font-size: 13px;
+  border-radius: 14px;
+}
+
 .card {
   background: #fff;
   border-radius: var(--radius);
   padding: 14px;
   margin-bottom: 10px;
-  box-shadow: 0 1px 0 var(--line);
+  /* Aplikasi asli memakai bingkai tipis (1dp LineSoft), bukan bayangan. */
+  border: 1px solid var(--line);
 }
 .card.tap { width: 100%; text-align: left; border: 0; display: block; }
 .row { display: flex; gap: 12px; align-items: center; }
@@ -263,6 +381,22 @@ h1, h2, h3, p { margin: 0; }
 .grow { flex: 1; min-width: 0; }
 .name { font-weight: 700; }
 .meta { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Kalimat penjelasan panjang: harus turun baris, bukan terpotong elipsis seperti .meta. */
+.note { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+
+/* Peringatan sinkronisasi, sama seperti SyncNotice di aplikasi: kotak amber tanpa bayangan. */
+.sync-notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: rgba(138, 90, 0, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.sync-notice .t { font-size: 13px; font-weight: 700; color: var(--ink); }
+.sync-notice .d { font-size: 12px; line-height: 1.4; color: var(--muted); margin-top: 2px; }
+.sync-notice svg { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 1px; }
 
 .chip {
   display: inline-flex;
@@ -280,12 +414,11 @@ h1, h2, h3, p { margin: 0; }
 
 .search {
   width: 100%;
-  border: 0;
+  border: 1px solid var(--line);
   background: #fff;
-  border-radius: 16px;
+  border-radius: 14px;
   padding: 12px 14px;
   margin-bottom: 12px;
-  box-shadow: 0 1px 0 var(--line);
 }
 
 .fab {
@@ -333,11 +466,11 @@ h1, h2, h3, p { margin: 0; }
 .svc .t { font-weight: 800; font-size: 14px; }
 .svc .d { font-size: 11px; color: var(--muted); line-height: 1.35; flex: 1; }
 .svc .p { font-size: 12px; font-weight: 700; color: var(--teal); }
-.svc.on { outline: 2px solid #ec4899; background: #fff7fb; }
+.svc.on { outline: 2px solid var(--teal); background: var(--mint-soft); }
 .bars { display: flex; align-items: flex-end; gap: 6px; height: 88px; margin: 8px 0 14px; }
 .bars i {
   flex: 1;
-  background: linear-gradient(180deg, #f9a8d4, #ec4899);
+  background: linear-gradient(180deg, #7fb4ff, #0048b4);
   border-radius: 8px 8px 4px 4px;
   display: block;
   min-height: 8px;
@@ -366,18 +499,51 @@ h1, h2, h3, p { margin: 0; }
   border-bottom: 1px solid var(--foam);
 }
 .cart-item:last-of-type { border-bottom: 0; }
+/* Baris total dipisah garis tegas supaya jelas piutang tidak ikut dijumlahkan. */
+.cart-item.total {
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+  margin-top: 4px;
+  padding-top: 10px;
+  font-weight: 800;
+  font-size: 14px;
+}
+/* Penanda kecil pada label, misalnya piutang yang belum masuk kas. */
+.tag-soft {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--amber);
+  background: var(--amber-bg);
+  border-radius: 6px;
+  padding: 2px 6px;
+  margin-left: 4px;
+}
+/* Label kecil di dalam kartu, misalnya "Tunai hari ini" pada Tutup kas. */
+.k-label { font-size: 12px; color: var(--muted); font-weight: 600; }
+/* Angka besar di dalam kartu, misalnya Tunai hari ini pada Tutup kas. */
+.v-big {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
 .btn {
   width: 100%;
   border: 0;
-  border-radius: 16px;
+  border-radius: 14px;
   padding: 14px;
   font-weight: 700;
   margin-top: 10px;
+  min-height: 52px;
 }
 .btn.primary { background: var(--teal); color: #fff; }
 .btn.ghost { background: var(--mint-soft); color: var(--teal-deep); }
 .btn.wa { background: #075e54; color: #fff; }
-.btn.danger { background: #fef2f2; color: var(--danger); }
+.btn.danger { background: var(--danger-bg); color: var(--danger); }
+.btn.danger.solid { background: var(--danger); color: #fff; }
+.btn.ghost.outline { background: #fff; border: 1px solid var(--line); }
 
 label.form {
   display: block;
@@ -444,13 +610,13 @@ label.form input, label.form textarea, label.form select {
   line-height: 1.55;
   white-space: pre-wrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #1e3a37;
+  color: var(--ink);
 }
 
 .sheet-bg {
   position: absolute;
   inset: 0;
-  background: rgba(11, 31, 29, 0.45);
+  background: rgba(11, 26, 46, 0.45);
   display: flex;
   align-items: flex-end;
   z-index: 6;
@@ -479,8 +645,8 @@ label.form input, label.form textarea, label.form select {
   background: var(--navy);
   display: flex;
   border-top: 0;
-  margin: 0 10px 10px;
-  border-radius: 22px;
+  margin: 0;
+  border-radius: 0;
   padding: 8px 6px 10px;
 }
 .tabbar[hidden] { display: none; }
@@ -496,14 +662,16 @@ label.form input, label.form textarea, label.form select {
   align-items: center;
   gap: 4px;
 }
-.tabbar button.on { color: #fff; }
+.tabbar button.on { color: var(--gold); }
+/* Menu aktif: kapsul lonjong dengan ikon kuning, sama seperti NavigationBar asli. */
 .tabbar button.on svg {
-  background: #ec4899;
+  background: rgba(255, 255, 255, 0.16);
   border-radius: 999px;
-  padding: 5px;
-  width: 28px;
-  height: 28px;
+  padding: 5px 16px;
+  width: 24px;
+  height: 24px;
   box-sizing: content-box;
+  color: var(--gold);
 }
 .tabbar svg { width: 22px; height: 22px; }
 
@@ -512,7 +680,7 @@ label.form input, label.form textarea, label.form select {
   padding: 48px 24px 24px;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #fce7f3 0%, var(--foam) 48%);
+  background: linear-gradient(180deg, #d8e4f0 0%, var(--foam) 48%);
 }
 .mark {
   width: 64px;
@@ -563,7 +731,7 @@ label.form input, label.form textarea, label.form select {
 }
 
 body.film {
-  background: #071614;
+  background: #0b1a2e;
 }
 body.film .studio {
   display: flex;
@@ -695,8 +863,8 @@ body.film .stage { padding: 0; }
   font-size: 12px;
 }
 .methods button.on { border-color: var(--teal); background: var(--mint-soft); color: var(--teal-deep); }
-.card.warn { border: 1px solid #fbd38d; background: var(--amber-bg); }
-.card.hang { outline: 1px solid #f9a8d4; }
+.card.warn { border: 1px solid var(--amber); background: var(--amber-bg); }
+.card.hang { outline: 1px solid var(--teal); }
 .due { color: var(--amber) !important; font-weight: 700; }
 .row-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .row-actions .btn { margin-top: 0; padding: 10px; flex: 1; min-width: 0; }

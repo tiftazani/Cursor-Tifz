@@ -3,10 +3,14 @@ const AUTH = ["login", "register", "pending", "rejected"];
 
 const ICONS = {
   home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-7H10v7H5a1 1 0 0 1-1-1z"/></svg>`,
-  kasir: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h6M7 13h10"/></svg>`,
+  // Ikon tab mengikuti CuciinNav.kt: PointOfSale (mesin kasir), Chat, Inventory2, GridView.
+  kasir: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M7 8V5.5h10V8"/><path d="M4.5 8h15v3.5h-15z"/><path d="M6 11.5h12V20H6z"/><path d="M9 14.5h6M9 17.5h3"/></svg>`,
+  wa: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6.5A1.5 1.5 0 0 1 5.5 5h13A1.5 1.5 0 0 1 20 6.5v8a1.5 1.5 0 0 1-1.5 1.5H10l-4 3.5V16H5.5A1.5 1.5 0 0 1 4 14.5z"/><path d="M8 9.5h8M8 12.5h5"/></svg>`,
   people: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M4 19a5 5 0 0 1 10 0"/><circle cx="17" cy="9" r="2"/><path d="M20 19a4 4 0 0 0-4-4"/></svg>`,
-  box: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8 12 4l9 4-9 4-9-4z"/><path d="M3 8v8l9 4 9-4V8"/></svg>`,
-  more: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/></svg>`,
+  // Inventory2: kotak terbuka, bukan kubus miring.
+  box: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8.5h16V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M3 5.5h18v3H3z"/><path d="M10 12.5h4"/></svg>`,
+  // GridView: empat kotak.
+  more: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>`,
 };
 
 const LAUNDRY = [
@@ -62,6 +66,22 @@ const MODULES = [
   { id: "profil", label: "Profil" },
 ];
 
+// Fungsi per modul, sejajar dengan AccessCatalog di aplikasi. Entri yang ditandai
+// `owner: true` bawaannya hanya Owner dan ditolak server untuk role lain.
+const FUNCS = {
+  transaksi: [
+    { key: "service.create", label: "Buat nota" },
+    { key: "service.payment", label: "Catat pembayaran" },
+    { key: "service.correct", label: "Koreksi nota" },
+    { key: "service.cancel", label: "Batalkan nota", owner: true, detail: "Membatalkan nota yang sudah dibayar, mengembalikan stok, dan membatalkan uang yang diterima" },
+    { key: "service.delete", label: "Hapus nota", owner: true },
+  ],
+  kas: [
+    { key: "cash.close", label: "Tutup kas" },
+    { key: "cash.view", label: "Lihat riwayat kas" },
+  ],
+};
+
 const state = {
   role: "kasir",
   screen: "login",
@@ -91,6 +111,36 @@ const state = {
   stockEditKind: "tambah",
   activeQueueId: "MEL-2409-0042",
   searchQ: "",
+  cancelOpen: false,
+  syncPending: 137,
+  todayLabel: "Kamis, 10 September 2026",
+  period: "hari",
+  periodOpen: false,
+  branchPickOpen: false,
+  cashCloses: [
+    {
+      at: "09 Sep 2026, 21.04",
+      by: "Rina",
+      branch: "melati",
+      tunai: 386000,
+      qris: 154000,
+      transfer: 0,
+      piutang: 82000,
+      produk: [{ name: "Sabun", qty: 2, nilai: 16000 }, { name: "Softener", qty: 1, nilai: 10000 }],
+      stok: [{ name: "Sabun", sisa: 22 }, { name: "Softener", sisa: 16 }, { name: "Parfum uk 100", sisa: 10 }],
+    },
+    {
+      at: "08 Sep 2026, 20.51",
+      by: "Rina",
+      branch: "melati",
+      tunai: 412000,
+      qris: 98000,
+      transfer: 120000,
+      piutang: 54000,
+      produk: [{ name: "Parfum uk 100", qty: 1, nilai: 15000 }],
+      stok: [{ name: "Sabun", sisa: 24 }, { name: "Softener", sisa: 17 }, { name: "Parfum uk 100", sisa: 11 }],
+    },
+  ],
   actor: "Rina",
   roles: [
     { name: "Owner", modules: MODULES.map((m) => m.id), owner: true },
@@ -134,18 +184,20 @@ const state = {
   ],
 };
 
+// Tab mengikuti NavTabs.kt aplikasi asli: Antrian, Service, WA, Stok, Modul.
+// Tab disembunyikan bila role tidak punya akses modul/fungsinya.
 const TABS = {
   owner: [
     { id: "home", label: "Antrian", icon: "home" },
-    { id: "analytics", label: "Data", icon: "kasir" },
-    { id: "customers", label: "Pelanggan", icon: "people" },
+    { id: "kasir", label: "Service", icon: "kasir" },
+    { id: "wa-outbox", label: "WA", icon: "wa" },
     { id: "inventory", label: "Stok", icon: "box" },
     { id: "more", label: "Modul", icon: "more" },
   ],
   kasir: [
     { id: "home", label: "Antrian", icon: "home" },
-    { id: "kasir", label: "Nota", icon: "kasir" },
-    { id: "wa-outbox", label: "WA", icon: "people" },
+    { id: "kasir", label: "Service", icon: "kasir" },
+    { id: "wa-outbox", label: "WA", icon: "wa" },
     { id: "inventory", label: "Stok", icon: "box" },
   ],
   supervisor: [{ id: "home", label: "Antrian", icon: "home" }],
@@ -164,6 +216,7 @@ const JUMPS = [
   { id: "analytics", label: "Analytics Owner" },
   { id: "inventory", label: "Stok" },
   { id: "stok-history", label: "Mutasi stok" },
+  { id: "tutup-kas", label: "Tutup kas" },
   { id: "audit", label: "Audit trail" },
   { id: "modules", label: "Modul" },
 ];
@@ -372,6 +425,18 @@ function backBtn(to) {
   return `<button class="icon-btn" data-back aria-label="Kembali">←</button>`;
 }
 
+// Sama seperti SyncNotice di aplikasi: muncul hanya saat sinkronisasi tertunda.
+function syncNotice() {
+  if (!state.syncPending) return "";
+  return `<div class="sync-notice">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17h9a4 4 0 0 0 .6-7.96A5.5 5.5 0 0 0 6.1 9.4A3.8 3.8 0 0 0 7 17z" stroke="#8a5a00" stroke-width="1.6"/><path d="M3 3l18 18" stroke="#8a5a00" stroke-width="1.6"/></svg>
+    <div>
+      <div class="t">${state.syncPending} perubahan belum terkirim</div>
+      <div class="d">Perubahan aman di perangkat ini dan akan dikirim saat koneksi pulih. Angka di layar bisa belum sama dengan server.</div>
+    </div>
+  </div>`;
+}
+
 function chipStatus(id, label) {
   return `<span class="chip ${id}">${label}</span>`;
 }
@@ -501,12 +566,12 @@ function screenHome() {
   const all = visibleQueue();
   const gantung = all.filter(hanging);
   const done = all.filter((q) => !hanging(q));
-  const list = state.queueFilter === "selesai" ? done : state.queueFilter === "do" ? all.filter((q) => q.dropOut) : gantung;
+  const list = state.queueFilter === "selesai" ? done : state.queueFilter === "telat" ? all.filter((q) => q.late) : gantung;
   const waPend = all.filter((q) => !q.waSent).length;
   const b = currentBranch();
 
   if (state.role === "supervisor") {
-    return `<div class="screen has-fab">
+    return `<div class="screen">
       <div class="top">${backBtn()}<div><p class="sub">SPV · ${b.name}</p><h1>Antrian</h1></div></div>
       <p class="meta" style="margin-bottom:10px">${b.location}</p>
       <div class="stats">
@@ -522,41 +587,62 @@ function screenHome() {
     </div>`;
   }
 
-  return `<div class="screen has-fab">
-    <div class="top">${backBtn()}<div>
-      <p class="sub">${state.role === "owner" ? state.ownerName : currentActor() + " · " + b.name}</p>
-      <h1>Antrian</h1>
-    </div></div>
-    ${branchPicker()}
-    ${kasirPicker()}
-    ${
-      state.role === "owner"
-        ? `<button class="card tap" data-go="analytics"><div class="name">Analytics keuangan</div><div class="meta">Harian · mingguan · bulanan · tahunan per cabang & kasir</div></button>`
-        : ""
-    }
-    ${state.role === "owner" && pending ? `<button class="card tap warn" data-go="users"><div class="name">${pending} pengajuan akun</div><div class="meta">Kasir / SPV per cabang</div></button>` : ""}
-    ${
-      state.role !== "supervisor"
-        ? `<div class="hero">
-            <div class="k">${state.role === "owner" ? "Gabungan kasir di cabang ini" : "Shift " + currentActor()}</div>
-            <div class="v">${Rp(state.viewBranch === "cibaduyut" ? 28000 : 1284000)}</div>
-            <div class="hero-row">
-              <span class="pill">${gantung.length} menggantung</span>
-              <span class="pill">${waPend} WA pending</span>
-              <span class="pill">${done.length} beres</span>
-            </div>
-          </div>`
-        : ""
-    }
-    <div class="segment tight">
-      <button class="${state.queueFilter === "gantung" ? "on" : ""}" data-qfilter="gantung">Menggantung</button>
-      <button class="${state.queueFilter === "selesai" ? "on" : ""}" data-qfilter="selesai">Selesai</button>
-      <button class="${state.queueFilter === "do" ? "on" : ""}" data-qfilter="do">Drop Out</button>
+  const telat = all.filter((q) => q.late).length;
+
+  return `<div class="screen">
+    <div class="top spread">
+      <div>
+        <h1>Antrian laundry</h1>
+        <p class="sub">${state.todayLabel}</p>
+      </div>
+      <img class="brand-logo" src="cuciin-logo.png" alt="Cuciin" />
     </div>
-    <p class="section-label">Gantung = laundry atau bayar belum beres</p>
-    ${list.map(queueCard).join("") || `<p class="empty">Tidak ada nota di filter ini</p>`}
+    <div class="filter-row">
+      <button class="filter-box" data-open-period>
+        <div class="grow"><div class="k">Periode</div><div class="v">${periodLabel()}</div></div>
+        <svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="5" width="17" height="15" rx="3" stroke="#00306e" stroke-width="1.6"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" stroke="#00306e" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <button class="filter-box" data-open-branch>
+        <div class="grow"><div class="k">Cabang</div><div class="v">${state.viewBranch === "all" ? "Semua cabang" : branchOf(state.viewBranch).name.replace("Cuciin ", "")}</div></div>
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 9.5V19a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19V9.5" stroke="#00306e" stroke-width="1.6"/><path d="M3 9.5 5 4h14l2 5.5" stroke="#00306e" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.5 20.5v-6h5v6" stroke="#00306e" stroke-width="1.6"/></svg>
+      </button>
+    </div>
+    <div class="stats">
+      <button class="stat ${state.queueFilter === "gantung" ? "on" : ""}" data-qfilter="gantung">
+        <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M7 3.5h10a2 2 0 0 1 2 2v15l-3-1.6-2 1.6-2-1.6-2 1.6-3-1.6v-15a2 2 0 0 1 2-2z" stroke="#0048b4" stroke-width="1.6"/><path d="M9.5 8h5M9.5 11.5h5" stroke="#0048b4" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <div class="v">${gantung.length}</div>
+        <div class="k">Sedang dikerjakan</div>
+      </button>
+      <button class="stat ${state.queueFilter === "telat" ? "on" : ""}" data-qfilter="telat">
+        <svg class="ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="#b3261e" stroke-width="1.7"/><path d="M12 7.5V12l3 1.8" stroke="#b3261e" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <div class="v">${telat}</div>
+        <div class="k">Cucian telat</div>
+      </button>
+      <button class="stat ${state.queueFilter === "selesai" ? "on" : ""}" data-qfilter="selesai">
+        <svg class="ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="#1f7a4d" stroke-width="1.7"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8" stroke="#1f7a4d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="v">${done.length}</div>
+        <div class="k">Selesai</div>
+      </button>
+    </div>
+    <div class="row-title">
+      <div>
+        <div class="name">${state.queueFilter === "selesai" ? "Cucian selesai" : state.queueFilter === "telat" ? "Cucian telat" : "Sedang dikerjakan"}</div>
+        <div class="meta">${list.length} pesanan · Hari ini</div>
+      </div>
+      ${state.role !== "supervisor" ? `<button class="btn primary small" data-go="kasir">+ Service baru</button>` : ""}
+    </div>
+    ${syncNotice()}
+    ${list.map(queueCard).join("") || emptyQueue()}
     ${state.role === "kasir" || state.role === "owner" ? `<button class="btn ghost" data-go="tutup-kas">Tutup kas</button>` : ""}
-    ${state.role !== "supervisor" ? `<button class="fab" data-go="kasir">+ Nota baru</button>` : ""}
+  </div>`;
+}
+
+// Kondisi kosong, sama seperti aplikasi: ikon di dalam lingkaran biru muda.
+function emptyQueue() {
+  return `<div class="empty-state">
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none"><rect x="4.5" y="3.5" width="15" height="17" rx="3" stroke="#0048b4" stroke-width="1.6"/><circle cx="12" cy="13" r="4" stroke="#0048b4" stroke-width="1.6"/><path d="M12 8.6v1.4" stroke="#0048b4" stroke-width="1.6" stroke-linecap="round"/><path d="M8 3.5h8" stroke="#0048b4" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+    <div class="t">Tidak ada cucian dikerjakan</div>
+    <div class="d">Pesanan baru akan muncul setelah Anda membuat nota.</div>
   </div>`;
 }
 
@@ -821,9 +907,103 @@ function screenQueueDetail() {
       <button class="btn ghost" data-nota-export="text">Teks</button>
       <button class="btn ghost" data-nota-export="xlsx">Excel</button>
       <button class="btn ghost" data-nota-export="pdf">PDF</button>
+      <button class="btn ghost" data-nota-export="jpeg">JPEG</button>
     </div>
     ${!o.waSent ? `<button class="btn wa" data-wa="nota">Kirim WA nota</button>` : `<button class="btn ghost" data-go="wa-archive">Sudah di archive WA</button>`}
     ${o.laundry === "selesai" ? `<button class="btn wa" data-wa="siap">WA siap diambil</button>` : ""}
+    ${
+      state.role === "owner"
+        ? `<p class="section-label">Pembatalan nota <span>Owner saja</span></p>
+    <div class="card">
+      <p class="note" style="margin-top:0">Dipakai bila cucian batal, misalnya mesin cuci bermasalah dan pelanggan minta uangnya kembali. Stok produk retail yang terjual dikembalikan ke cabang, dan uang yang sudah diterima ikut dibatalkan.</p>
+      <button class="btn danger solid" data-cancel-open>Batalkan nota ini</button>
+    </div>`
+        : ""
+    }
+  </div>`;
+}
+
+// Label periode aktif, dipakai di kotak filter layar Antrian.
+function periodLabel() {
+  return { hari: "Hari ini", kemarin: "Kemarin", "7hari": "7 hari terakhir", bulan: "Bulan ini" }[state.period] || "Hari ini";
+}
+
+function cancelSheet() {
+  if (!state.cancelOpen) return "";
+  const o = activeQueue();
+  const b = branchOf(o.branch);
+  const refund = o.paid;
+  const alasan = [
+    "Mesin cuci bermasalah",
+    "Pelanggan membatalkan",
+    "Salah input kasir",
+    "Lainnya",
+  ];
+  return `<div class="sheet-bg" data-close-cancel>
+    <div class="sheet" data-stop>
+      <div class="grab"></div>
+      <h2>Batalkan nota?</h2>
+      <p class="meta">${o.id} · ${o.customer} · ${b.name}</p>
+      <div class="card">
+        <div class="cart-item"><span>Nilai nota</span><b>${Rp(o.total)}</b></div>
+        <div class="cart-item"><span>Uang yang harus dikembalikan</span><b>${Rp(refund)}</b></div>
+        <div class="cart-item"><span>Metode penerimaan</span><b>${o.pay === "lunas" ? "Tunai" : "Belum lunas"}</b></div>
+      </div>
+      <label class="form"><span>Alasan pembatalan</span>
+        <select id="cancel-reason">${alasan.map((a) => `<option>${a}</option>`).join("")}</select>
+      </label>
+      <label class="form"><span>Catatan (boleh kosong)</span><input id="cancel-note" placeholder="contoh: mesin 2 rusak" /></label>
+      <p class="note">Nota yang dibatalkan hilang dari antrian kerja, tetapi TETAP ikut di laporan supaya angka tanggal lampau tidak berubah. Uang yang dikembalikan dicatat sebagai pengeluaran Pengembalian dana hari ini, dan jejaknya ada di audit trail. Tindakan ini tidak bisa dibatalkan sendiri.</p>
+      <button class="btn danger solid" data-cancel-confirm="${o.id}">Ya, batalkan nota</button>
+      <button class="btn ghost outline" data-cancel-close>Kembali</button>
+    </div>
+  </div>`;
+}
+
+// Panel pilih periode, sama seperti layar Antrian aplikasi.
+function periodSheet() {
+  if (!state.periodOpen) return "";
+  const opsi = [
+    ["hari", "Hari ini", "Semua nota hari ini"],
+    ["kemarin", "Kemarin", "Nota hari sebelumnya"],
+    ["7hari", "7 hari terakhir", "Termasuk hari ini"],
+    ["bulan", "Bulan ini", "1 sampai akhir bulan"],
+  ];
+  return `<div class="sheet-bg" data-period-close>
+    <div class="sheet" data-stop>
+      <div class="grab"></div>
+      <h2>Pilih periode</h2>
+      ${opsi
+        .map(
+          ([id, nama, ket]) => `<button class="pick-row ${state.period === id ? "on" : ""}" data-period="${id}">
+        <div class="grow"><div class="name">${nama}</div><div class="meta">${ket}</div></div>
+        ${state.period === id ? '<span class="chip lunas">Aktif</span>' : ""}
+      </button>`
+        )
+        .join("")}
+      <button class="btn ghost outline" data-period-close>Kembali</button>
+    </div>
+  </div>`;
+}
+
+// Panel pilih cabang untuk Owner.
+function branchSheet() {
+  if (!state.branchPickOpen) return "";
+  return `<div class="sheet-bg" data-branch-close>
+    <div class="sheet" data-stop>
+      <div class="grab"></div>
+      <h2>Pilih cabang</h2>
+      ${[["all", "Semua cabang", "Gabungan semua cabang"]]
+        .concat(BRANCHES.map((b) => [b.id, b.name.replace("Cuciin ", ""), b.location]))
+        .map(
+          ([id, nama, ket]) => `<button class="pick-row ${state.viewBranch === id ? "on" : ""}" data-branch-pick="${id}">
+        <div class="grow"><div class="name">${nama}</div><div class="meta">${ket}</div></div>
+        ${state.viewBranch === id ? '<span class="chip lunas">Aktif</span>' : ""}
+      </button>`
+        )
+        .join("")}
+      <button class="btn ghost outline" data-branch-close>Kembali</button>
+    </div>
   </div>`;
 }
 
@@ -964,13 +1144,35 @@ function screenUsers() {
 }
 
 function screenRoles() {
-  return `<div class="screen">
-    <div class="top">${backBtn()}<div><p class="sub">Modular per modul</p><h1>Role</h1></div></div>
-    ${state.roles.map((r) => `
+  const rows = [];
+  state.roles.forEach((r) => {
+    rows.push(`
       <div class="card">
         <div class="name">${r.name} ${r.owner ? '<span class="chip pipe">bukan daftar publik</span>' : ""}</div>
         <div class="meta">${r.modules.map((id) => MODULES.find((m) => m.id === id)?.label).join(" · ")}</div>
-      </div>`).join("")}
+      </div>`);
+    // Fungsi yang tercakup modul role ini, plus fungsi Owner yang sengaja tidak diberikan.
+    r.modules.forEach((mid) => {
+      const list = FUNCS[mid];
+      if (!list) return;
+      rows.push(`
+      <div class="card">
+        <p class="section-label" style="margin-top:0">${MODULES.find((m) => m.id === mid)?.label} <span>fungsi</span></p>
+        ${list
+          .map(
+            (f) =>
+              `<div class="toggle">${f.label} ${
+                f.owner && !r.owner ? '<span class="chip belum">Owner saja</span>' : f.owner ? '<span class="chip lunas">penuh</span>' : ""
+              }<button class="switch ${r.owner || !f.owner ? "on" : ""}" type="button" ${r.owner ? "" : 'data-toggle-switch'}><i></i></button></div>`
+          )
+          .join("")}
+      </div>`);
+    });
+  });
+  return `<div class="screen">
+    <div class="top">${backBtn()}<div><p class="sub">Modular per modul</p><h1>Role</h1></div></div>
+    <p class="note">Pembatalan nota ada di modul Nota sebagai fungsi "Batalkan nota". Bawaannya hanya Owner, dan server ikut menolaknya untuk role lain walau centangnya dinyalakan.</p>
+    ${rows.join("")}
     <div class="card">
       <div class="name">Tambah role</div>
       <label class="form"><span>Nama role</span><input id="new-role-name" placeholder="contoh: Setrika" /></label>
@@ -1099,19 +1301,72 @@ function screenModules() {
 }
 
 function screenTutupKas() {
+  const b = currentBranch();
+  const moves = state.stockMoves.filter((m) => m.branch === b.id);
+  const jual = moves.filter((m) => m.kind === "jual");
+  const produk = state.products.map((p) => {
+    const svc = SERVICES.find((s) => s.name === p.name);
+    const qty = jual.filter((m) => m.product === p.name).reduce((s, m) => s + Math.abs(m.qty), 0);
+    return { name: p.name, qty, nilai: qty * (svc ? svc.price : 0), sisa: p.stock, unit: svc ? svc.unit : "pcs" };
+  });
+  const terjual = produk.filter((p) => p.qty > 0);
+  const nilaiProduk = terjual.reduce((s, p) => s + p.nilai, 0);
   return `<div class="screen">
-    <div class="top">${backBtn()}<h1>Tutup kas</h1><span></span></div>
-    <p class="meta" style="margin-bottom:12px">${currentActor()} · ${currentBranch().name} · 10 Sep 2026</p>
+    <div class="top">${backBtn()}<div><h1>Tutup kas</h1><p class="sub">${currentActor()} · ${b.name}</p></div></div>
+    ${syncNotice()}
+    <button class="filter-box" data-open-branch style="width:100%;margin-bottom:12px">
+      <div class="grow"><div class="k">Cabang</div><div class="v">${b.name.replace("Cuciin ", "")}</div></div>
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 9.5V19a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19V9.5" stroke="#00306e" stroke-width="1.6"/><path d="M3 9.5 5 4h14l2 5.5" stroke="#00306e" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.5 20.5v-6h5v6" stroke="#00306e" stroke-width="1.6"/></svg>
+    </button>
     <div class="card">
-      <div class="cart-item"><span>Modal awal</span><b>${Rp(300000)}</b></div>
-      <div class="cart-item"><span>Tunai sistem</span><b>${Rp(420000)}</b></div>
+      <div class="k-label">Tunai hari ini</div>
+      <div class="v-big">${Rp(420000)}</div>
       <div class="cart-item"><span>QRIS</span><b>${Rp(185000)}</b></div>
       <div class="cart-item"><span>Transfer</span><b>${Rp(90000)}</b></div>
-      <div class="cart-item"><span>Piutang menggantung</span><b>${Rp(54000)}</b></div>
+      <div class="cart-item"><span>Piutang <span class="tag-soft">belum masuk kas</span></span><b>${Rp(54000)}</b></div>
+      <div class="cart-item total"><span>Total masuk</span><b>${Rp(695000)}</b></div>
     </div>
-    <label class="form"><span>Tunai di laci (hitung)</span><input value="420000" /></label>
-    <p class="sisa">Selisih <b>Rp 0</b></p>
-    <button class="btn primary" data-toast="Kas ditutup" data-go="home">Tutup shift</button>
+    <p class="section-label">Produk terjual hari ini <span>cabang ini</span></p>
+    <div class="card">
+      ${
+        terjual.length
+          ? terjual.map((p) => `<div class="cart-item"><span>${p.name} ${p.qty} × ${Rp(p.nilai / p.qty)}</span><b>${Rp(p.nilai)}</b></div>`).join("") +
+            `<div class="cart-item"><span>Total produk</span><b>${Rp(nilaiProduk)}</b></div>`
+          : `<p class="meta">Belum ada produk retail terjual hari ini.</p>`
+      }
+    </div>
+    <p class="section-label">Sisa stok cabang <span>dicatat saat kas ditutup</span></p>
+    <div class="card">
+      ${produk
+        .map(
+          (p) =>
+            `<div class="cart-item"><span>${p.name}${p.sisa <= 8 ? ' <span class="chip belum">Rendah</span>' : ""}</span><b>${p.sisa} ${p.unit}</b></div>`
+        )
+        .join("")}
+    </div>
+    <p class="note">Angka produk dan sisa stok ikut tersimpan di riwayat tutup kas, jadi bisa diperiksa lagi kapan saja.</p>
+    <button class="btn primary" data-tutup-kas>Tutup kas hari ini</button>
+    <p class="section-label">Riwayat tutup kas <span>angka tersimpan</span></p>
+    ${state.cashCloses
+      .map(
+        (c) => `<div class="card">
+      <div class="name">${c.at} · ${c.by}</div>
+      <div class="meta">${branchOf(c.branch).name}</div>
+      <div class="cart-item"><span>Tunai</span><b>${Rp(c.tunai)}</b></div>
+      <div class="cart-item"><span>QRIS</span><b>${Rp(c.qris)}</b></div>
+      <div class="cart-item"><span>Transfer</span><b>${Rp(c.transfer)}</b></div>
+      <div class="cart-item"><span>Piutang</span><b>${Rp(c.piutang)}</b></div>
+      <p class="section-label" style="margin-top:10px">Produk terjual</p>
+      ${
+        c.produk.length
+          ? c.produk.map((p) => `<div class="cart-item"><span>${p.name} ${p.qty} pcs</span><b>${Rp(p.nilai)}</b></div>`).join("")
+          : `<p class="meta">Tidak ada produk terjual.</p>`
+      }
+      <p class="section-label" style="margin-top:10px">Sisa stok saat ditutup</p>
+      ${c.stok.map((p) => `<div class="cart-item"><span>${p.name}</span><b>${p.sisa} pcs</b></div>`).join("")}
+    </div>`
+      )
+      .join("")}
   </div>`;
 }
 
@@ -1219,7 +1474,11 @@ function renderJumps() {
 function render() {
   const app = document.getElementById("app");
   const view = SCREENS[state.screen] || screenHome;
-  app.innerHTML = view() + qtySheet() + (state.toast ? `<div class="toast">${state.toast}</div>` : "");
+  app.innerHTML = view() + (state.toast ? `<div class="toast">${state.toast}</div>` : "");
+  // Panel konfirmasi ditaruh di lapisan sendiri di atas layar HP. Kalau ditaruh di dalam
+  // #app, panel ikut tergulung bersama isi layar dan tidak menutup penuh.
+  const overlay = document.getElementById("overlay");
+  if (overlay) overlay.innerHTML = qtySheet() + cancelSheet() + periodSheet() + branchSheet();
   renderTabbar();
   renderJumps();
   syncUrl();
@@ -1439,6 +1698,44 @@ document.body.addEventListener("click", (e) => {
     render();
     return;
   }
+
+  if (e.target.closest("[data-open-period]")) {
+    state.periodOpen = true;
+    render();
+    return;
+  }
+  // Pilihan harus diperiksa lebih dulu daripada penutup panel, supaya klik pilihan
+  // tidak ikut menutup panel lewat lapisan latar.
+  const pd = e.target.closest("[data-period]");
+  if (pd) {
+    state.period = pd.dataset.period;
+    state.periodOpen = false;
+    render();
+    return;
+  }
+  if (e.target.closest("[data-period-close]") && !e.target.closest("[data-stop]")) {
+    state.periodOpen = false;
+    render();
+    return;
+  }
+  if (e.target.closest("[data-open-branch]")) {
+    state.branchPickOpen = true;
+    render();
+    return;
+  }
+  const bp = e.target.closest("[data-branch-pick]");
+  if (bp) {
+    state.viewBranch = bp.dataset.branchPick;
+    state.viewKasir = "all";
+    state.branchPickOpen = false;
+    render();
+    return;
+  }
+  if (e.target.closest("[data-branch-close]") && !e.target.closest("[data-stop]")) {
+    state.branchPickOpen = false;
+    render();
+    return;
+  }
   const uf = e.target.closest("[data-ufilter]");
   if (uf) {
     state.userFilter = uf.dataset.ufilter;
@@ -1586,10 +1883,77 @@ document.body.addEventListener("click", (e) => {
     sw.classList.toggle("on");
     return;
   }
+  if (e.target.closest("[data-cancel-open]")) {
+    state.cancelOpen = true;
+    render();
+    return;
+  }
+  if (e.target.closest("[data-cancel-close]")) {
+    state.cancelOpen = false;
+    render();
+    return;
+  }
+  if (e.target.closest("[data-close-cancel]") && !e.target.closest("[data-stop]")) {
+    state.cancelOpen = false;
+    render();
+    return;
+  }
+  const cancelOk = e.target.closest("[data-cancel-confirm]");
+  if (cancelOk) {
+    const id = cancelOk.dataset.cancelConfirm;
+    const o = state.queue.find((x) => x.id === id);
+    state.cancelOpen = false;
+    if (!o) {
+      showToast("Nota tidak ketemu");
+      return;
+    }
+    // Stok produk retail dikembalikan ke cabang asal, sama seperti alur Android.
+    const lines = o.items.split(" + ");
+    state.products.forEach((p) => {
+      const hit = lines.find((l) => l.startsWith(p.name + " "));
+      if (!hit) return;
+      const qty = Number((hit.match(/(\d+)\s*$/) || [])[1] || 0);
+      if (qty > 0) {
+        p.stock += qty;
+        state.stockMoves.unshift({ at: "10 Sep 11.05", product: p.name, kind: "tambah", qty, by: currentActor(), branch: o.branch, note: `Nota ${id} dibatalkan` });
+      }
+    });
+    state.queue = state.queue.filter((x) => x.id !== id);
+    pushAudit(`Nota ${id} dibatalkan Owner · ${o.customer} · ${Rp(o.total)} dikembalikan`, id);
+    state.activeQueueId = state.queue[0] ? state.queue[0].id : "";
+    showToast(`Nota ${id} dibatalkan`);
+    go("home");
+    return;
+  }
+  if (e.target.closest("[data-tutup-kas]")) {
+    const b = currentBranch();
+    const moves = state.stockMoves.filter((m) => m.branch === b.id && m.kind === "jual");
+    const produk = state.products
+      .map((p) => {
+        const svc = SERVICES.find((s) => s.name === p.name);
+        const qty = moves.filter((m) => m.product === p.name).reduce((s, m) => s + Math.abs(m.qty), 0);
+        return { name: p.name, qty, nilai: qty * (svc ? svc.price : 0), sisa: p.stock };
+      })
+      .filter((p) => p.qty > 0);
+    state.cashCloses.unshift({
+      at: "10 Sep 2026, 21.10",
+      by: currentActor(),
+      branch: b.id,
+      tunai: 420000,
+      qris: 185000,
+      transfer: 90000,
+      piutang: 54000,
+      produk,
+      stok: state.products.map((p) => ({ name: p.name, sisa: p.stock })),
+    });
+    pushAudit("Tutup kas · tunai Rp 420.000 · QRIS Rp 185.000 · transfer Rp 90.000", "");
+    showToast("Kas ditutup");
+    go("home");
+    return;
+  }
   const toastBtn = e.target.closest("[data-toast]");
   if (toastBtn && !toastBtn.dataset.go) showToast(toastBtn.dataset.toast);
 });
-
 document.body.addEventListener("input", (e) => {
   if (e.target.id === "paid-input") {
     state.paid = Number(String(e.target.value).replace(/\D/g, "")) || 0;

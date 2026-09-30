@@ -31,7 +31,7 @@ const MAX_CHANGE_LIMIT = 500;
 // menerimanya.
 const OWNER_ONLY = new Set(["branch.upsert", "staff.upsert", "service.upsert", "product.upsert", "assetType.upsert", "assetType.delete", "accessRole.upsert", "accessRole.delete", "accessPolicy.upsert", "accessPolicy.delete", "whatsappTemplate.upsert", "whatsappTemplate.delete"]);
 const KNOWN_COMMANDS = new Set([
-  "order.create", "order.update", "order.put", "order.delete", "order.status", "order.payment", "order.handover",
+  "order.create", "order.update", "order.put", "order.delete", "order.cancel", "order.status", "order.payment", "order.handover",
   "stock.batch", "expense.upsert", "expense.delete", "attendance.upsert", "attendance.delete", "customer.upsert",
   "payment.upsert", "payment.delete",
   "branch.upsert", "branch.delete", "staff.upsert", "staff.delete", "service.upsert", "service.delete", "product.upsert", "product.delete", "customer.delete", "inventory.upsert", "inventory.delete", "assetType.upsert", "assetType.delete", "accessRole.upsert", "accessRole.delete", "accessPolicy.upsert", "accessPolicy.delete", "whatsappTemplate.upsert", "whatsappTemplate.delete",
@@ -129,12 +129,17 @@ export function parseCommand(raw: unknown): SyncCommand {
   const wireEntityType=typeof raw.entityType === "string" ? raw.entityType.trim() : undefined;
   const operation=raw.operation === "delete" ? "delete" : "upsert";
   const aliases:Record<string,string>={branch:"branch",staff:"staff",customer:"customer",service:"service",product:"product",inventory:"inventory",assetType:"assetType",expense:"expense",attendance:"attendance",nota:"order",branchStock:"branchStock",stockMove:"stockMove",audit:"audit",cashClose:"cashClose",payment:"payment",accessRole:"accessRole",accessPolicy:"accessPolicy",whatsappTemplate:"whatsappTemplate"};
-  let type=typeof raw.type === "string" ? raw.type.trim() : "";
-  if(!type && wireEntityType && aliases[wireEntityType]) type=wireEntityType === "nota" ? (operation === "delete" ? "order.delete" : "order.put") : `${aliases[wireEntityType]}.${operation === "delete" ? "delete" : (wireEntityType === "branchStock" ? "put" : "upsert")}`;
-  if(!type) throw new CommandError(422,"type atau entityType wajib diisi");
-  if (!KNOWN_COMMANDS.has(type)) throw new CommandError(422, `Tipe command tidak didukung: ${type}`);
   const payload=isObject(raw.payload) ? raw.payload : (operation === "delete" ? {} : null);
   if (!payload) throw new CommandError(422, "payload harus berupa objek");
+  // Pembatalan nota datang lewat entitas `nota` yang SAMA dengan koreksi biasa, karena perangkat
+  // mengirim selisih snapshot, bukan nama perintah. Pembedaannya lewat `syncIntent` — pola yang
+  // sama sudah dipakai Supervisor untuk perubahan status (`syncIntent: "status"`). Tanpa ini,
+  // pembatalan akan dipetakan ke `order.put` dan server akan memperlakukannya sebagai koreksi.
+  const cancelIntent = wireEntityType === "nota" && payload.syncIntent === "cancel";
+  let type=typeof raw.type === "string" ? raw.type.trim() : "";
+  if(!type && wireEntityType && aliases[wireEntityType]) type=cancelIntent ? "order.cancel" : wireEntityType === "nota" ? (operation === "delete" ? "order.delete" : "order.put") : `${aliases[wireEntityType]}.${operation === "delete" ? "delete" : (wireEntityType === "branchStock" ? "put" : "upsert")}`;
+  if(!type) throw new CommandError(422,"type atau entityType wajib diisi");
+  if (!KNOWN_COMMANDS.has(type)) throw new CommandError(422, `Tipe command tidak didukung: ${type}`);
   const entityId = typeof raw.entityId === "string" ? raw.entityId.trim() : undefined;
   const branchId = typeof raw.branchId === "string" ? raw.branchId.trim() : undefined;
   const expectedUpdatedAt = typeof raw.expectedUpdatedAt === "number" && Number.isSafeInteger(raw.expectedUpdatedAt) ? raw.expectedUpdatedAt : undefined;
@@ -145,6 +150,10 @@ export function commandPermission(identity: SyncIdentity, type: string, branchId
   if (identity.bootstrap) return { allowed:true };
   if ((OWNER_ONLY.has(type) || ["branch.delete","staff.delete","customer.delete","service.delete","product.delete","stockMove.delete","audit.delete","cashClose.delete"].includes(type)) && identity.role !== "Owner") return { allowed:false,reason:"owner" };
   if (type === "order.delete" && identity.role !== "Owner") return { allowed:false,reason:"owner" };
+  // Pembatalan nota berbayar hanya Owner: uang yang sudah masuk ditarik keluar, dan itu keputusan
+  // pemilik. Aturannya sama dengan `order.delete`, tetapi jalurnya berbeda karena nota berbayar
+  // tidak boleh dihapus (baris `payments` ber-FK RESTRICT ke `orders`).
+  if (type === "order.cancel" && identity.role !== "Owner") return { allowed:false,reason:"owner" };
   if (["expense.upsert", "expense.delete", "cashClose.upsert", "cashClose.delete"].includes(type) && identity.role === "Supervisor") return { allowed:false,reason:"role" };
   if (["order.create", "order.update", "order.put", "order.payment", "order.handover"].includes(type) && identity.role === "Supervisor") return { allowed:false,reason:"role" };
   if (["customer.upsert", "customer.delete"].includes(type) && identity.role === "Supervisor") return { allowed:false,reason:"role" };
@@ -205,6 +214,9 @@ function customAccessRequirement(command: SyncCommand): { module: string; functi
     if (command.payload.waSent === true) return {module:"whatsapp",function:"whatsapp.send"};
     if (command.type === "order.payment") return {module:"service",function:"service.payment"};
     if (command.type === "order.delete") return {module:"service",function:"service.delete"};
+    // Pembatalan nota punya fungsi katalognya sendiri (`service.cancel`), terpisah dari
+    // `service.delete`: menghapus nota dan membatalkannya adalah dua keputusan berbeda.
+    if (command.type === "order.cancel") return {module:"service",function:"service.cancel"};
     return {module:"service",function:command.type === "order.create" ? "service.create" : "service.correct"};
   }
   if (command.type.startsWith("stock") || command.type.startsWith("branchStock")) return {module:"stock",function:"stock.write"};
@@ -353,8 +365,51 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
     return { statements, entityType: command.wireEntityType ?? "order", entityId: id, branchId, operation: "delete", changePayload: null, updatedAt:now };
   }
 
+  if (command.type === "order.cancel") {
+    // Membatalkan nota BERBAYAR tanpa menghapusnya. Nota yang belum menerima pembayaran
+    // tidak perlu dibatalkan: tidak ada uang yang harus dikembalikan, dan `order.delete`
+    // sudah menangani kasus itu.
+    if (!existing) throw new CommandError(404, "Service tidak ditemukan");
+    const storedCancel=existing.payload_json ? JSON.parse(existing.payload_json) as JsonRecord : null;
+    const sudahDibatalkan=Number(storedCancel?.canceledAtMs ?? 0) > 0;
+    if (sudahDibatalkan) {
+      // Idempoten: nota yang sudah dibatalkan tidak dibatalkan dua kali, dan pengembalian
+      // dananya tidak dicatat dua kali.
+      return { statements: [], entityType: command.wireEntityType ?? "nota", entityId: id, branchId, changePayload: null, updatedAt: now };
+    }
+    if (existing.paid <= 0) throw new CommandError(422, "Nota ini belum menerima pembayaran; gunakan Hapus Service untuk membuangnya");
+    const storedCancelLines=(await db.prepare("SELECT service_id,service_name,quantity,unit,unit_price,handler_email,handler_name,commission_per_unit FROM order_lines WHERE order_id=? ORDER BY line_no").bind(id).all<{service_id:string;service_name:string;quantity:number;unit:string;unit_price:number;handler_email:string;handler_name:string;commission_per_unit:number}>()).results;
+    // Perangkat mengirim `cancelReason` (nama field Kotlin `Nota.cancelReason`); bentuk pendek
+    // `reason` tetap diterima supaya pemanggil manual dan tes lama tidak pecah.
+    const alasan=optionalString(p,"reason",200) || optionalString(p,"cancelReason",200);
+    const labelBatal=optionalString(p,"canceledAt",80) || labelAbsen(now);
+    // Nota TIDAK dihapus dan jurnal `payments` miliknya juga tidak dihapus: laporan tanggal
+    // lampau harus tetap sama seperti saat kas ditutup. Uang yang dikembalikan dicatat
+    // sebagai pengeluaran `PengembalianDana` bertanggal HARI INI.
+    const dibatalkan:JsonRecord={...(storedCancel ?? {}),id,branchId:existing.branch_id,kasirEmail:existing.cashier_email,kasir:existing.cashier_name,customer:existing.customer_name,phone:existing.phone,total:existing.total,paid:existing.paid,pay:existing.payment_status,laundry:existing.work_status,payMethod:existing.payment_method,createdAt:typeof storedCancel?.createdAt==="string"?storedCancel.createdAt:String(existing.created_at),createdAtMs:existing.created_at,pickupAt:existing.estimated_finish,completedAt:existing.completed_at,pickedUpAt:existing.picked_up_at,waSent:existing.wa_sent===1,photos:[],lines:storedCancelLines.map(line=>({serviceId:line.service_id,name:line.service_name,qty:line.quantity,unit:line.unit,unitPrice:line.unit_price,handledByEmail:line.handler_email,handledByName:line.handler_name,commissionPerUnit:line.commission_per_unit})),canceledAtMs:now,canceledAt:labelBatal,canceledBy:identity.name,cancelReason:alasan,updatedAtMs:now};
+    delete (dibatalkan as JsonRecord).syncIntent;
+    statements.push(db.prepare(`UPDATE orders SET updated_at=?,payload_json=? WHERE id=? AND organization_id=? AND updated_at=? AND ${gate}`).bind(now,JSON.stringify(dibatalkan),id,ORG_ID,existing.updated_at,command.commandId,ORG_ID,token));
+    statements.push(guardPreviousMutation(db,command,token));
+    const cancelAdjustments=await retailAdjustments(db,id,[]);
+    appendRetailStock(db,statements,command,identity,token,branchId,cancelAdjustments,now);
+    const refundId=`refund-${id}`;
+    const refundNote=`Pengembalian dana nota ${id} · ${existing.customer_name}`;
+    statements.push(db.prepare(`INSERT INTO expenses(id,organization_id,branch_id,category,amount,occurred_at,officer,note,updated_at) SELECT ?,?,?,?,?,?,?,?,? WHERE ${gate} ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id,category=excluded.category,amount=excluded.amount,occurred_at=excluded.occurred_at,officer=excluded.officer,note=excluded.note,updated_at=excluded.updated_at`).bind(refundId,ORG_ID,branchId,"PengembalianDana",existing.paid,now,identity.email.toLowerCase(),refundNote,now,command.commandId,ORG_ID,token));
+    statements.push(journal(db,command,identity,token,"expense",refundId,"upsert",branchId,{id:refundId,branchId,category:"PengembalianDana",amount:existing.paid,occurredAtMs:now,occurredAt:labelBatal,note:refundNote,by:identity.name},now));
+    statements.push(audit(db,command,identity,token,branchId,`Membatalkan Service: ${existing.customer_name}`,id,now));
+    return { statements, entityType: command.wireEntityType ?? "nota", entityId: id, branchId, changePayload: dibatalkan, updatedAt: now };
+  }
+
   if (["order.status", "order.payment", "order.handover"].includes(command.type)) {
     if (!existing) throw new CommandError(404, "Service tidak ditemukan");
+    // Nota yang sudah dibatalkan tidak boleh diubah lagi lewat jalur koreksi biasa: uangnya
+    // sudah dikembalikan, jadi pembayaran baru, perubahan status, dan serah terima di atasnya
+    // hanya bisa membuat laporan dan stok bercerita beda dengan kenyataan.
+    // Catat pengembalian dana lewat jalur yang benar bila nota ini memang harus dipakai lagi.
+    {
+      const storedGuard=existing.payload_json ? JSON.parse(existing.payload_json) as JsonRecord : null;
+      if (Number(storedGuard?.canceledAtMs ?? 0) > 0) throw new CommandError(409, "Service ini sudah dibatalkan dan tidak dapat diubah lagi");
+    }
     // Snapshot materializer mengganti seluruh entity saat upsert, jadi payload parsial
     // akan menghapus field lain. Susun ulang payload lengkap dari baris tersimpan.
     const storedPayload=existing.payload_json ? JSON.parse(existing.payload_json) as JsonRecord : null;
@@ -427,7 +482,30 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
   const cashierEmail = identity.role === "Owner" || identity.bootstrap ? (firstString(p,["cashierEmail","kasirEmail"],false,254).toLowerCase() || identity.email.toLowerCase()) : identity.email.toLowerCase();
   const cashierName = identity.role === "Owner" || identity.bootstrap ? (firstString(p,["cashierName","kasir"],false,160) || identity.name) : identity.name;
   const canonicalLines=lines.map(line=>({serviceId:line.serviceId,name:line.serviceName,qty:line.quantity,unit:line.unit,unitPrice:line.unitPrice,handledByEmail:line.handlerEmail,handledByName:line.handlerName,commissionPerUnit:line.commissionPerUnit}));
-  const canonical = command.wireEntityType === "nota" ? { ...p,id,branchId,kasirEmail:cashierEmail,kasir:cashierName,total,lines:canonicalLines,photos:[],updatedAtMs:now } : { ...p, id, branchId, cashierEmail, cashierName, total, lines, updatedAt: now };
+  // Penanda pembatalan HANYA boleh berubah lewat `order.cancel`.
+  //
+  // Nota yang dibatalkan tidak dihapus, hanya ditandai, jadi ia masih bisa tiba di sini lewat
+  // `order.put` dari perangkat yang belum menerima pembatalannya. Payload kanonik dibangun dari
+  // `...p` (kiriman perangkat), sehingga tanpa penjagaan ini:
+  //   1. koreksi biasa akan MENGHAPUS penanda batal dan menghidupkan kembali nota yang uangnya
+  //      sudah dikembalikan, atau
+  //   2. siapa pun pemegang `service.correct` dapat membatalkan nota berbayar tanpa pemeriksaan
+  //      Owner dan tanpa pengembalian dana, cukup dengan menyisipkan `canceledAtMs` ke payload.
+  // Nilai dari baris tersimpan yang dipakai, jadi niat pembatalan hanya datang dari `order.cancel`.
+  const storedOrder=existing?.payload_json ? JSON.parse(existing.payload_json) as JsonRecord : null;
+  const batalTersimpan=Number(storedOrder?.canceledAtMs ?? 0);
+  if (batalTersimpan > 0 && command.type === "order.put") {
+    throw new CommandError(409, "Service ini sudah dibatalkan dan tidak dapat diubah lagi");
+  }
+  // Dua bentuk payload: perangkat mengirim `entityType: "nota"` (bentuk kanonik dengan `lines`),
+  // sedangkan pemanggil lama memakai `type: "order.put"` langsung. Penjagaan penanda batal harus
+  // berlaku di KEDUANYA, jadi nilai tersimpan dipasang di luar percabangan itu.
+  const kanonikDasar = command.wireEntityType === "nota"
+    ? { ...p,id,branchId,kasirEmail:cashierEmail,kasir:cashierName,total,lines:canonicalLines,photos:[],updatedAtMs:now }
+    : { ...p, id, branchId, cashierEmail, cashierName, total, lines, updatedAt: now };
+  const canonical:JsonRecord = command.type.startsWith("order.")
+    ? { ...kanonikDasar, canceledAtMs:batalTersimpan, canceledAt:storedOrder?.canceledAt ?? "", canceledBy:storedOrder?.canceledBy ?? "", cancelReason:storedOrder?.cancelReason ?? "" }
+    : kanonikDasar;
   const customerName=firstString(p,["customerName","customer"],true,200);
   const paymentStatus=firstString(p,["paymentStatus","pay"],true,50);
   const paymentMethod=firstString(p,["paymentMethod","payMethod"],true,50);
