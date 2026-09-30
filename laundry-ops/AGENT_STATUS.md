@@ -5,11 +5,11 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
-**Keadaan `main` per 29 Sep: `279c7d1`** (rilis 1.10.41 — perbaikan absensi harian; semua sudah di-push ke `origin/main`). Rincian di bagian 0u di bawah.
+**Keadaan `main` per 30 Sep: `affef30`** (rilis 1.10.42 — keluaran JPEG untuk berbagi nota; semua sudah di-push ke `origin/main`). Rincian di bagian 0v di bawah. Sebelumnya: `279c7d1` (rilis 1.10.41) dan `6f8338d` (kode JPEG).
 
 ## 0v. Bagikan nota: keluaran JPEG (30 Sep, Hermes)
 
-**Status: SELESAI di kode dan teruji di emulator; belum di-commit, belum di-push, belum ada artefak 1.10.42.** Permintaan pemilik (30 Sep): selain Teks, Excel, dan PDF, berbagi nota juga menyediakan **JPEG**.
+**Status: SELESAI — sudah di-commit (`6f8338d` kode + `affef30` rilis), di-push, CI hijau (`36678030077`), artefak 1.10.42 dibuat, dan APK rilis diuji di emulator.** Permintaan pemilik (30 Sep): selain Teks, Excel, dan PDF, berbagi nota juga menyediakan **JPEG**.
 
 Baris "Bagikan nota" di layar detail Service kini punya empat tombol: Teks, Excel, PDF, JPEG.
 
@@ -27,6 +27,8 @@ Baris "Bagikan nota" di layar detail Service kini punya empat tombol: Teks, Exce
 | 12 layanan | 2 halaman digabung tegak, kedua halaman utuh | 1190 x 3368 |
 | 40 layanan | 5 halaman (4 rincian + 1 ringkasan), tanpa OOM | 1130 x 8000 (skala turun otomatis) |
 
+Pengujian yang sama diulang dengan **APK rilis 1.10.42** (bukan hanya debug): nota 6 layanan menghasilkan JPEG 1190 x 3368 (2 halaman), lembar berbagi menampilkan pratinjau, `Permission Denial` = 0.
+
 Lembar berbagi menampilkan **pratinjau gambar** dan judul "Sharing image"; `Permission Denial` di logcat = 0 (sebelumnya gagal, lihat temuan di bawah).
 
 **Dua bug nyata ditemukan saat uji dan diperbaiki sekalian:**
@@ -40,7 +42,11 @@ Lembar berbagi menampilkan **pratinjau gambar** dan judul "Sharing image"; `Perm
 
 **Bukti merah-dulu:** (1) tombol JPEG + `shareJpeg` + matriks skala dilepas → 4 tes kontrak gagal; (2) `clipData` dilepas → tes `berkasDibagikanDenganIzinBacaLewatClipData` gagal; (3) penjaga ringkasan dilepas dari `ReportPdf` → tes `renderNotaMemakaiPenjagaRingkasan` gagal.
 
-**Belum terbukti:** JPEG di HP cabang (semua uji di emulator); nota dengan lebih dari 40 layanan; pratinjau di aplikasi penerima selain lembar berbagi Android (mis. WhatsApp asli).
+**Belum terbukti:** JPEG di HP cabang (semua uji di emulator, meski APK rilis sudah diuji di emulator); nota dengan lebih dari 40 layanan; pratinjau di aplikasi penerima selain lembar berbagi Android (mis. WhatsApp asli); kamera HP asli untuk absensi.
+
+**Artefak 1.10.42:** `releases/1.10.42-candidate/{README.md, SHA256SUMS, cuciin-1.10.42-release.apk (6.090.883 B), -debug.apk (23.401.366 B), -release.aab (9.250.603 B)}`; salinan akar `releases/cuciin-{release,debug}.apk` diperbarui (hash cocok); salinan `~/Downloads/cuciin-1.10.42-{release,debug}.apk`. APK/AAB kandidat tidak dilacak Git.
+
+**Pemeriksaan produksi sesudah uji (30 Sep):** orders 192, payments 189, staff 12, branches 5, access_roles 3, sync_changes 2527, attendance 20. Pertumbuhan orders 113 → 192 dan attendance 14 → 20 **berasal dari cabang nyata** (kasir Shofia/Aida/Dea; absen pagi Dea/Fia/Rochmatillah), bukan data uji: pencarian id nota uji (`LPD-2609-0001`…`-0007`) di D1 produksi = **0 baris**. Antrean 120 perintah tertunda di app rilis emulator (data uji lama dari 21 Sep) dikosongkan sebelum jaringan dinyalakan; cadangannya di `~/.hermes/cache/scratch/cuciin-jpeg/rel-sync-state-PENUH-sebelum-bersih.json`.
 
 **Berkas yang Hermes pegang (pekerjaan 0v):** `data/NotaJpeg.kt`, `data/ReportJpeg.kt`, `data/FileExports.kt`, `data/PdfTextLayout.kt`, `data/ReportPdf.kt`, `ui/OpsScreens.kt`, `app/src/test/.../data/NotaJpegTest.kt`, `data/NotaRingkasanTest.kt`, `ui/NotaJpegContractTest.kt`, `data/VersionHistory.kt`, `app/build.gradle.kts`, `android/CHANGELOG.md`. **Agen lain: jangan sentuh berkas itu sampai baris ini diperbarui.**
 

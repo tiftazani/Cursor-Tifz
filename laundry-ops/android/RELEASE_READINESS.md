@@ -1,17 +1,17 @@
-# Cuciin 1.10.41 — kesiapan rilis
+# Cuciin 1.10.42 — kesiapan rilis
 
-Status: kandidat rilis operasional yang menjalani ulang pemeriksaan kode, build, dan verifikasi cloud pada 29 September 2026. Owner tetap harus menyelesaikan validasi perangkat, rotasi akun, saldo awal, backup terjadwal pertama, dan keputusan go-live. APK bertanda tangan tidak menjamin hilangnya peringatan Play Protect pada distribusi di luar store.
+Status: kandidat rilis operasional yang menjalani ulang pemeriksaan kode, build, dan verifikasi cloud pada 30 September 2026. Owner tetap harus menyelesaikan validasi perangkat, rotasi akun, saldo awal, backup terjadwal pertama, dan keputusan go-live. APK bertanda tangan tidak menjamin hilangnya peringatan Play Protect pada distribusi di luar store.
 
-Dokumen ini terakhir diselaraskan saat rilis **1.10.41 (versionCode 60)**; sebelumnya masih menyebut 1.10.40. Bagian perpindahan identitas aplikasi di bawah tetap berlaku sebagai catatan sejarah, tetapi angka versi di dalamnya sudah tidak dipakai.
+Dokumen ini terakhir diselaraskan saat rilis **1.10.42 (versionCode 61)**; sebelumnya masih menyebut 1.10.41. Bagian perpindahan identitas aplikasi di bawah tetap berlaku sebagai catatan sejarah, tetapi angka versi di dalamnya sudah tidak dipakai.
 
-## Bukti verifikasi kandidat (1.10.41)
+## Bukti verifikasi kandidat (1.10.42)
 
-- Android: **343 unit test debug dan 343 unit test rilis lulus**, lint tanpa error, APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
-- APK rilis: non-debuggable, application ID `com.cuciin.laundryops`, versionCode `60`, versionName `1.10.41`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB. `verify_release.py` PASS.
+- Android: **356 unit test debug dan 356 unit test rilis lulus**, lint tanpa error, APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
+- APK rilis: non-debuggable, application ID `com.cuciin.laundryops`, versionCode `61`, versionName `1.10.42`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB. `verify_release.py` PASS.
 - SHA-256 sertifikat rilis cocok dengan fingerprint yang dicatat: `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`. Sertifikat **tidak berubah** sejak 1.10.1, jadi APK baru dapat menimpa pemasangan lama.
-- Worker: **88 test lulus** (`npm run check`), termasuk tes jurnal absensi nilai gabungan dan tes penghapusan baris kembaran.
-- Uji perangkat (emulator-5554, APK debug, akun kasir dua cabang): absen masuk lalu pulang = satu baris harian dengan dua foto; sesudah buka ulang aplikasi baris hari itu dan dua baris 27 Sep tetap utuh; D1 debug menerima angka. Rinciannya di `releases/1.10.41-candidate/README.md`.
-- Endpoint terverifikasi di artefak: rilis → Worker produksi, debug → Worker debug.
+- Worker: **88 test lulus** (`npm run check`). Tidak ada perubahan Worker di rilis ini.
+- Uji perangkat (emulator-5554, APK debug dan APK rilis, data fixture, jaringan dimatikan lebih dulu): berbagi nota kini punya empat tombol (Teks/Excel/PDF/JPEG); JPEG nota 2 layanan = 1190 x 1684, 12 layanan = 1190 x 3368 (2 halaman), 40 layanan = 1130 x 8000 (5 halaman, skala turun otomatis, tanpa OOM); lembar berbagi menampilkan pratinjau gambar, `Permission Denial` = 0; PDF nota 6 layanan kini 2 halaman dengan halaman ringkasan bersih. Rinciannya di `releases/1.10.42-candidate/README.md`.
+- Endpoint terverifikasi di artefak: rilis → Worker produksi, debug → Worker debug. Antrean data uji di emulator dikosongkan sebelum jaringan dinyalakan; produksi D1 diperiksa sesudahnya (orders 192, payments 189, staff 12, branches 5, access_roles 3, sync_changes 2527, attendance 20 — semua pertumbuhan dari cabang nyata, 0 nota uji bocor).
 
 ## Perpindahan identitas aplikasi (16 September 2026)
 
