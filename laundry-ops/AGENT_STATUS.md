@@ -5,11 +5,11 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
-**Keadaan `main` per 1 Okt: `49f9f32`** (rilis 1.10.43 — tutup kas rinci produk + pembatalan nota; belum di-push saat baris ini ditulis). Rincian di bagian 0w di bawah. Sebelumnya: `affef30` (rilis 1.10.42 — JPEG), `279c7d1` (rilis 1.10.41), `6f8338d` (kode JPEG).
+**Keadaan `main` per 1 Okt: `a6ce246`** (rilis 1.10.43 — tutup kas rinci produk + pembatalan nota; sudah di-push ke `origin/main`, CI hijau, Worker produksi+debug sudah di-deploy). Rincian di bagian 0w di bawah. Sebelumnya: `affef30` (rilis 1.10.42 — JPEG), `279c7d1` (rilis 1.10.41), `6f8338d` (kode JPEG).
 
 ## 0w. Tutup kas rinci produk + pembatalan nota berbayar (1 Okt, Hermes)
 
-**Status: kode SELESAI, gate hijau, artefak 1.10.43 dibangun dan diuji di emulator. Worker BELUM di-deploy ke produksi.**
+**Status: SELESAI dan TERKIRIM. Commit `49f9f32` + `a6ce246` sudah di-push ke `origin/main`; Worker produksi (`674f8b91`) dan debug (`a1eacd10`) sudah di-deploy; APK/AAB 1.10.43 dibangun, diverifikasi, dan APK rilisnya diuji jalan di emulator. Belum dipasang di HP cabang.**
 
 Permintaan pemilik: (a) Tutup Kas merinci penjualan produk per cabang + sisa stok, (b) nota berbayar bisa dibatalkan oleh Owner saja, (c) pengembalian dana dicatat sebagai pengeluaran hari ini (Opsi B) supaya laporan tanggal lampau tidak berubah.
 
@@ -35,7 +35,9 @@ Selain itu `order.status`, `order.payment`, dan `order.handover` kini ditolak `4
 
 **Artefak 1.10.43:** `releases/1.10.43-candidate/{README.md, SHA256SUMS, cuciin-1.10.43-release.apk (6.090.879 B), -debug.apk (23.059.958 B), -release.aab (9.277.878 B)}`; salinan akar `releases/cuciin-{release,debug}.apk` diperbarui (hash cocok). APK/AAB kandidat tidak dilacak Git.
 
-**Belum terbukti:** Worker belum di-deploy (produksi maupun debug), jadi fitur ini belum hidup di server; alur pembatalan belum dijalankan di D1 produksi; pembatalan belum diuji di emulator dengan nota sungguhan; skenario dua perangkat (satu membatalkan, satu masih memegang salinan lama) baru diuji di tingkat perintah.
+**Deploy Worker (1 Okt, sesudah push `a6ce246`):** produksi `674f8b91-784d-4427-97db-6a17d68d0a3b` (dari sebelumnya `8313ae24`), debug `a1eacd10-1c38-4fea-8cf3-5906cd9f77e3` (dari sebelumnya `1e724bac`). Bundle deterministik kedua config: `75f7dac3…` (114,36 KiB), memuat `order.cancel` (5 kemunculan), `service.cancel`, penolakan "tidak dapat diubah", `Pengembalian`, dan pola `refund-`. `/health` produksi OK (`revision 3417`) dan debug OK (`revision 1104`); probe jalur tulis produksi `POST /v1/registration` menjawab `401` (jalur tulis hidup). Hitungan tabel produksi **identik sebelum dan sesudah deploy**: 9.300 baris total (orders 213, payments 210, staff 12, branches 5, access_roles 3, sync_changes 2893, expenses 1). Tidak ada migrasi baru untuk rilis ini (9/9 sudah tercatat).
+
+**Belum terbukti:** perilaku `order.cancel` di produksi belum dijalankan dengan nota sungguhan (hanya diuji dengan D1 palsu di atas SQLite asli); pembatalan belum diuji di emulator dengan nota berbayar; skenario dua perangkat (satu membatalkan, satu masih memegang salinan lama) baru diuji di tingkat perintah; APK 1.10.43 belum dipasang di HP cabang mana pun.
 
 **Berkas yang Hermes pegang (pekerjaan 0w):** `data/CuciinStore.kt`, `data/Models.kt`, `data/SyncProtocol.kt`, `data/AccessCatalog.kt`, `data/VersionHistory.kt`, `ui/OpsScreens.kt`, `ui/AnalyticsReportScreen.kt`, `ui/MoreScreens.kt`, `cloudflare/src/command-sync.ts`, `cloudflare/tests/command-sync.test.mjs`, `cloudflare/tests/support/d1-harness.mjs`, `mockup/app.js`, `app/src/test/.../data/CancelNotaTest.kt`, `app/src/test/.../data/AccessFunctionEnforcementTest.kt`, `app/build.gradle.kts`, `android/CHANGELOG.md`. **Agen lain: jangan sentuh berkas itu sampai baris ini diperbarui.**
 

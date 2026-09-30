@@ -9,7 +9,7 @@ Dokumen ini terakhir diselaraskan saat rilis **1.10.43 (versionCode 62)**; sebel
 - Android: **369 unit test debug dan 369 unit test rilis lulus**, lint tanpa error (20 warning per varian), APK debug/rilis dan AAB rilis berhasil dibuat dengan JDK 17.
 - APK rilis: non-debuggable, application ID `com.cuciin.laundryops`, versionCode `62`, versionName `1.10.43`, target API 36, signature v2 valid, dan kompatibel dengan page size 16 KB. `verify_release.py` PASS.
 - SHA-256 sertifikat rilis cocok dengan fingerprint yang dicatat: `3a988c5378a373776625d79c2cd0db2851f1a685f39f0ac18e90d026dc2befee`. Sertifikat **tidak berubah** sejak 1.10.1, jadi APK baru dapat menimpa pemasangan lama.
-- Worker: **97 test lulus** (`npm run check`), termasuk 3 tes baru yang menutup celah `order.put` dan jalur `order.payment`/`order.status`/`order.handover` pada nota batal. **Worker BELUM di-deploy** ke produksi maupun debug pada saat dokumen ini ditulis.
+- Worker: **97 test lulus** (`npm run check`), termasuk 3 tes baru yang menutup celah `order.put` dan jalur `order.payment`/`order.status`/`order.handover` pada nota batal. Worker produksi (`674f8b91`) dan debug (`a1eacd10`) **sudah di-deploy** 1 Okt 2026; hitungan tabel produksi identik sebelum dan sesudah deploy (9.300 baris).
 - Uji perangkat (emulator-5554, APK rilis 1.10.43, mode pesawat): versi terpasang 62/1.10.43; layar Riwayat versi menampilkan `v1.10.43 · build 62` beserta lima catatan rilisnya. Alur pembatalan belum dijalankan di emulator.
 - Fitur baru: Tutup Kas merinci penjualan produk per cabang dan sisa stok; nota berbayar dapat dibatalkan Owner dengan pengembalian dana sebagai pengeluaran `PengembalianDana` bertanggal hari pembatalan (Opsi B). Rinciannya di `releases/1.10.43-candidate/README.md`.
 

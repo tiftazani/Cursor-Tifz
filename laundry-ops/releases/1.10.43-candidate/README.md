@@ -71,5 +71,11 @@ Bukti merah-dulu: (1) dua tes `order.put` gagal sebelum penjaga dipasang; (2) sa
 - **Uji di emulator untuk alur pembatalan baru belum dijalankan pada versi ini.** Semua bukti di atas berasal dari tes unit dan lint, bukan dari menjalankan APK 1.10.43 di perangkat.
 - **Pembatalan nota belum pernah dijalankan di D1 produksi.** Handler diuji dengan D1 palsu di atas SQLite asli.
 - **Perilaku Worker produksi tidak dapat diverifikasi dari CLI** (hanya `/health` dan `/v1/registration` yang terbuka; `/v1/registration` membuat akun jadi tidak boleh disentuh). Verifikasi perilaku menunggu perangkat dengan login Firebase.
-- **APK rilis belum dipasang di emulator** untuk versi ini; layar Riwayat versi belum dibuktikan menampilkan catatan 1.10.43.
 - **Skenario banyak perangkat**: satu perangkat membatalkan sementara perangkat lain masih memegang salinan lama. Penjaganya sudah ada dan diuji di tingkat perintah, tetapi belum diuji dengan dua perangkat sungguhan.
+
+## Sudah dibuktikan sesudah README ini ditulis (1 Okt 2026)
+
+- **Worker produksi dan debug sudah di-deploy.** Produksi `674f8b91-784d-4427-97db-6a17d68d0a3b` (100%), debug `a1eacd10-1c38-4fea-8cf3-5906cd9f77e3` (100%). Bundle `--dry-run` deterministik `75f7dac3…` (114,36 KiB) memuat penanda `order.cancel` (5 kemunculan), `service.cancel`, penolakan "tidak dapat diubah", `Pengembalian`, dan pola `refund-`.
+- **Deploy tidak menyentuh data produksi.** Hitungan tabel identik sebelum dan sesudah: total 9.300 baris (orders 213, payments 210, staff 12, branches 5, access_roles 3, sync_changes 2893). `/health` produksi `revision 3417`, debug `revision 1104`. Probe jalur tulis `POST /v1/registration` menjawab `401` (jalur tulis hidup). Tidak ada migrasi baru (9/9 tercatat).
+- **APK rilis 1.10.43 terpasang di emulator-5554** dan layar Riwayat versi menampilkan `v1.10.43 · build 62` beserta lima catatan rilisnya.
+- **Commit `49f9f32` dan `a6ce246` sudah di-push ke `origin/main`**; CI hijau (run `36750318689` Android APK, `36750318734` Cloudflare validation).
