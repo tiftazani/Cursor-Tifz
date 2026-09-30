@@ -5,7 +5,7 @@ Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
-**Keadaan `main` per 1 Okt: `a6ce246`** (rilis 1.10.43 — tutup kas rinci produk + pembatalan nota; sudah di-push ke `origin/main`, CI hijau, Worker produksi+debug sudah di-deploy). Rincian di bagian 0w di bawah. Sebelumnya: `affef30` (rilis 1.10.42 — JPEG), `279c7d1` (rilis 1.10.41), `6f8338d` (kode JPEG).
+**Keadaan `main` per 1 Okt: `31e6596`** (rilis 1.10.43 — tutup kas rinci produk + pembatalan nota + penjaga endpoint build; sudah di-push ke `origin/main`, CI hijau, Worker produksi+debug sudah di-deploy). Rincian di bagian 0w di bawah. Sebelumnya: `2727304` (bukti deploy Worker 1.10.43), `a6ce246` (artefak kandidat 1.10.43), `affef30` (rilis 1.10.42 — JPEG), `279c7d1` (rilis 1.10.41), `6f8338d` (kode JPEG).
 
 ## 0w. Tutup kas rinci produk + pembatalan nota berbayar (1 Okt, Hermes)
 
@@ -37,9 +37,51 @@ Selain itu `order.status`, `order.payment`, dan `order.handover` kini ditolak `4
 
 **Deploy Worker (1 Okt, sesudah push `a6ce246`):** produksi `674f8b91-784d-4427-97db-6a17d68d0a3b` (dari sebelumnya `8313ae24`), debug `a1eacd10-1c38-4fea-8cf3-5906cd9f77e3` (dari sebelumnya `1e724bac`). Bundle deterministik kedua config: `75f7dac3…` (114,36 KiB), memuat `order.cancel` (5 kemunculan), `service.cancel`, penolakan "tidak dapat diubah", `Pengembalian`, dan pola `refund-`. `/health` produksi OK (`revision 3417`) dan debug OK (`revision 1104`); probe jalur tulis produksi `POST /v1/registration` menjawab `401` (jalur tulis hidup). Hitungan tabel produksi **identik sebelum dan sesudah deploy**: 9.300 baris total (orders 213, payments 210, staff 12, branches 5, access_roles 3, sync_changes 2893, expenses 1). Tidak ada migrasi baru untuk rilis ini (9/9 sudah tercatat).
 
-**Belum terbukti:** perilaku `order.cancel` di produksi belum dijalankan dengan nota sungguhan (hanya diuji dengan D1 palsu di atas SQLite asli); pembatalan belum diuji di emulator dengan nota berbayar; skenario dua perangkat (satu membatalkan, satu masih memegang salinan lama) baru diuji di tingkat perintah; APK 1.10.43 belum dipasang di HP cabang mana pun.
+**Belum terbukti:** perilaku `order.cancel` di produksi belum dijalankan dengan nota sungguhan (hanya diuji dengan D1 palsu di atas SQLite asli); skenario dua perangkat (satu membatalkan, satu masih memegang salinan lama) baru diuji di tingkat perintah; APK 1.10.43 belum dipasang di HP cabang mana pun.
 
-**Berkas yang Hermes pegang (pekerjaan 0w):** `data/CuciinStore.kt`, `data/Models.kt`, `data/SyncProtocol.kt`, `data/AccessCatalog.kt`, `data/VersionHistory.kt`, `ui/OpsScreens.kt`, `ui/AnalyticsReportScreen.kt`, `ui/MoreScreens.kt`, `cloudflare/src/command-sync.ts`, `cloudflare/tests/command-sync.test.mjs`, `cloudflare/tests/support/d1-harness.mjs`, `mockup/app.js`, `app/src/test/.../data/CancelNotaTest.kt`, `app/src/test/.../data/AccessFunctionEnforcementTest.kt`, `app/build.gradle.kts`, `android/CHANGELOG.md`. **Agen lain: jangan sentuh berkas itu sampai baris ini diperbarui.**
+### 0w-2. Insiden endpoint debug APK dan penjaganya (1 Okt, Hermes)
+
+**Status: SELESAI. Commit `31e6596` sudah di-push, CI hijau (`36763078132`). APK debug 1.10.43 dibangun ulang, salinan kandidat/akar/`~/Downloads` sudah disamakan, dan APK debug terkoreksi sudah diuji di emulator.**
+
+**Insiden.** APK debug kandidat pertama (sha256 `09104203…`) memuat URL Worker **PRODUKSI**. Akar masalahnya BUKAN kode aplikasi dan bukan env shell sesi: **perintah build kandidat sendiri mengekspor `CUCIIN_DEBUG_CLOUD_URL="$CUCIIN_CLOUD_URL"`** (URL produksi). Bukti: `~/.hermes/logs/process-results/proc_e1bfb39a088c.json` (1 Okt 00:12). APK debug itu dipasang di emulator, login sebagai Owner, dan mendorong tiga entri `accessRole` (katalog peran v3) ke D1 produksi: revision 3417 → 3420. Enam APK debug sebelumnya (1.10.31–1.10.42) benar. Tidak ada data transaksi uji yang bocor ke produksi (diperiksa: orders/expenses/payments/sync_changes ber-id uji = 0 baris).
+
+**Tiga lapis penjaga yang sekarang ada:**
+
+| Lapis | Isi |
+| --- | --- |
+| Rantai env | env var yang ADA TAPI KOSONG diperlakukan seperti tidak diisi (`?.takeIf { it.isNotBlank() }`) untuk `CUCIIN_CLOUD_URL` dan `CUCIIN_DEBUG_CLOUD_URL` |
+| Penolakan build | `preDebugBuild`/`preReleaseBuild` GAGAL bila endpoint debug sama dengan endpoint produksi |
+| Jalur build resmi | `scripts/build_cuciin.sh` membersihkan env cloud (`env -u CUCIIN_DEBUG_CLOUD_URL -u CUCIIN_CLOUD_URL -u CUCIIN_CLOUD_PROPERTIES`), lalu `scripts/guard_endpoint.py` memeriksa endpoint di dalam dex APK hasil build |
+
+**Bukti penjaga (semua dijalankan, bukan diklaim):** `BuildEndpointGuardTest` (3 tes) GAGAL sebelum penjaga dipasang dan hijau sesudahnya; build debug dengan `CUCIIN_DEBUG_CLOUD_URL="$CUCIIN_CLOUD_URL"` DITOLAK dengan pesan "Endpoint debug sama dengan endpoint produksi: https://cuciin-api.tiftazani-cuciin.workers.dev/api/cuciin"; `guard_endpoint.py` mendeteksi host produksi di `classes3.dex`/`classes7.dex` APK debug lama; APK rilis kandidat terbukti memuat host produksi dan TIDAK memuat host debug.
+
+**APK debug terkoreksi:** sha256 `15a798678d008883b91183ec01985e8b534e82d7f93e42f88e279210c5384cf6` (23.987.131 B). Isinya identik dengan build lama KECUALI tiga dex yang memuat URL (`classes3.dex`, `classes4.dex`, `classes7.dex`; selisih 219 byte terkompresi). Ukuran berkas naik 927.159 byte karena padding zip, bukan konten.
+
+**Bukti perangkat:** APK terkoreksi dipasang di emulator-5554; `files/cuciin-cloud-environment.txt` yang sebelumnya berisi URL produksi sekarang berisi `https://cuciin-api-debug.tiftazani-cuciin.workers.dev/api/cuciin`.
+
+**Angka gate (1 Okt, sesudah penjaga):** Android **372 debug + 372 release, 0 gagal** (naik dari 369); lint 0 error / 20 warning per varian.
+
+### 0w-3. Uji UI pembatalan nota di emulator, D1 debug (1 Okt, Hermes)
+
+**Status: SELESAI dan TERBUKTI ujung-ke-ujung di D1 debug. Belum diuji di D1 produksi dan belum dipasang di HP cabang.**
+
+APK debug 1.10.43 terkoreksi, akun Owner `us.archuleta1207@gmail.com`, nota berbayar `LPK-2609-0002-10689` (Rp 32.000, Lunas, Laupay Kirab):
+
+| Titik uji | Hasil |
+| --- | --- |
+| Kartu "Pembatalan nota" tampil untuk Owner | Ya, dengan penjelasan stok dikembalikan dan dana jadi pengeluaran hari ini |
+| Tombol "Batalkan nota ini" → konfirmasi | Dua lapis: `DangerBtn` ("Hapus") lalu dialog pembatalan asli berisi nilai nota, uang kembali, alasan, catatan |
+| Daftar alasan | 5 pilihan tampil; dipilih "Cucian tidak dapat diselesaikan" |
+| Sesudah konfirmasi | Antrian 5 → 4, nota hilang dari daftar kerja, pengeluaran `PengembalianDana` Rp 32.000 tercatat |
+| Jurnal D1 debug | `#1109` audit, `#1110` expense `refund-LPK-2609-0002-10689`, `#1111`/`#1112` branchStock (stok retail kembali), `#1113` expense, `#1114` nota upsert, `#1115`–`#1120` stockMove + branchStock |
+| Baris nota di D1 debug | `canceledAtMs=1790795586124`, `canceledBy=Ustutifa`, `cancelReason=Cucian tidak dapat diselesaikan` |
+| Baris expense di D1 debug | `refund-LPK-2609-0002-10689`, laupay-kirab, 32000 |
+
+**Catatan penting:** saat pembatalan dijalankan, layar sempat menampilkan "Data belum tersinkron · Koneksi server belum tersedia" walau DNS emulator hidup (ping 50% loss). Perintahnya tetap terkirim: revision server debug naik 1108 → 1120. Jadi peringatan itu optimistis-tidak, bukan kegagalan.
+
+**Belum terbukti:** pembatalan nota di D1 **produksi** dengan nota sungguhan; skenario dua perangkat; APK di HP cabang.
+
+**Berkas yang Hermes pegang (pekerjaan 0w + 0w-2 + 0w-3):** `data/CuciinStore.kt`, `data/Models.kt`, `data/SyncProtocol.kt`, `data/AccessCatalog.kt`, `data/VersionHistory.kt`, `ui/OpsScreens.kt`, `ui/AnalyticsReportScreen.kt`, `ui/MoreScreens.kt`, `cloudflare/src/command-sync.ts`, `cloudflare/tests/command-sync.test.mjs`, `cloudflare/tests/support/d1-harness.mjs`, `mockup/app.js`, `app/src/test/.../data/CancelNotaTest.kt`, `app/src/test/.../data/AccessFunctionEnforcementTest.kt`, `app/src/test/.../ui/BuildEndpointGuardTest.kt`, `app/build.gradle.kts`, `android/scripts/build_cuciin.sh`, `android/scripts/guard_endpoint.py`, `android/CHANGELOG.md`. **Agen lain: jangan sentuh berkas itu sampai baris ini diperbarui.**
 
 ## 0v. Bagikan nota: keluaran JPEG (30 Sep, Hermes)
 
