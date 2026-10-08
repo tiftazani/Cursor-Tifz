@@ -1,11 +1,29 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 30 September 2026 (oleh Hermes).
+Terakhir diperbarui: 8 Oktober 2026 (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
 **Keadaan `main` per 1 Okt: `31e6596`** (rilis 1.10.43 — tutup kas rinci produk + pembatalan nota + penjaga endpoint build; sudah di-push ke `origin/main`, CI hijau, Worker produksi+debug sudah di-deploy). Rincian di bagian 0w di bawah. Sebelumnya: `2727304` (bukti deploy Worker 1.10.43), `a6ce246` (artefak kandidat 1.10.43), `affef30` (rilis 1.10.42 — JPEG), `279c7d1` (rilis 1.10.41), `6f8338d` (kode JPEG).
+
+## 0x. Pendaftaran gagal setelah user dihapus (8 Okt, Hermes)
+
+Status: pemeriksaan server selesai; kandidat lokal 1.10.44/build 63 siap. Kode perbaikan sudah di main (`11115a4`, `5d4f0d2`), server produksi sudah aktif. Dokumen, bukti, dan salinan APK distribusi masuk commit rilis lokal. Belum di-push; pemeriksaan HP pelapor masih menunggu pemilik. Bagian lama di bawah bersifat historis, bukan keadaan terbaru.
+
+- Laporan: layar Daftar muklis (`muklisjr36@gmail.com`, Kasir, Bunayya Permata) menampilkan pesan generik. Sebab yang ditemukan: penghapusan staff D1 meninggalkan akun Firebase sehingga pendaftaran ulang ditolak `EMAIL_EXISTS`.
+- Perbaikan Android: `PendaftaranAkun.kt`, `FirebaseCloud.kt`, `AuthScreens.kt`; pendaftaran ulang memakai akun lama setelah sandinya berhasil diverifikasi, dan sebab kegagalan ditampilkan.
+- Perbaikan server: `firebase-admin.ts`, `command-sync.ts`, `index.ts`; `staff.delete` juga mencoba menghapus akun Firebase. Ini best effort: gangguan Firebase tidak membatalkan penghapusan D1, jadi bukan jaminan tidak pernah ada akun tertinggal.
+- Bukti sebelumnya: uji penghapusan di produksi berhasil (`/tmp/uji-hapus-now2.txt`, akun uji dan baris D1 terhapus, pembersihan akun uji selesai). Tiga akun yatim dibersihkan pada sesi sebelumnya: muklisjr36, deccintaaulia180, ihsanibnuabdurrauf.
+- Jangan hapus atau ubah akun `rochnatillah22@gmail.com`, `ujibranch.hermes@gmail.com`, `tiftazani.khara@gmail.com`.
+- Pemeriksaan ulang 8 Okt 22.24 WIB: D1 produksi muklis aktif=1, approved=1, Kasir, cabang bunayya. Firebase akun ada, tidak ditandai disabled; dibuat 15.50.21 WIB, lastLoginAt 16.22.41 WIB. Login ke aplikasi di HP pelapor belum terbukti. Jangan mencoba sandi dari foto atau menyetel ulang sandi tanpa izin.
+- Deploy produksi yang terbaca: `0d01b2e1-0279-424a-b04a-7a37e0fed0a5`, 8 Okt 15.30 WIB. `npm run check` dijalankan ulang: 110 tes lulus, 0 gagal, typecheck dan skema lulus.
+- Android 1.10.44/build 63: gate berhasil, debug 382/0 dan release 382/0. Debug dijalankan ulang setelah cleanTestDebugUnitTest (bukan sekadar UP-TO-DATE). Lint kedua varian 0 error/20 warning. Build resmi kedua APK+AAB berhasil, endpoint dex sesuai, penanda PendaftaranAkun ada, verify_release.py PASS dengan sertifikat tetap.
+- Kandidat `releases/1.10.44-candidate/` berisi kedua APK, AAB, README, SHA256SUMS, dan bukti. Ketiga checksum OK. Salinan APK akar dan Downloads diperbarui serta hash cocok. Bukti sementara penghapusan produksi disalin ke `bukti/uji-hapus-server-produksi.json`; log gate/build disimpan di folder bukti yang sama.
+- Berkas yang berubah pada penyelesaian ini: `AGENT_STATUS.md`, `releases/1.10.44-candidate/`, salinan APK akar. Tidak ada perubahan kode aplikasi baru. File untracked dari pekerjaan lain tidak disentuh.
+- Uji emulator API 35 selesai: kedua APK terpasang dengan hash sama persis dengan kandidat. Versi tampil benar, validasi form kosong bekerja. APK rilis menampilkan pesan koneksi saat Wi-Fi+data mati. Daftar ulang UI debug memakai akun Firebase lama berhasil sampai Pendaftaran diterima; staff debug diverifikasi lalu dibersihkan. Buffer crash tidak memuat crash Cuciin. Bukti JSON/XML/PNG tersimpan di folder kandidat.
+- Insiden uji: mode pesawat tidak mematikan Wi-Fi yang sudah aktif. Form rilis sempat mendaftarkan akun dummy qa-no-submit@example.com ke produksi. Akun itu sudah dihapus dari Firebase dan staff D1; tombstone delete disimpan agar perangkat lain ikut membersihkannya. Tidak ada akun operasional atau sandi pengguna yang diubah. Kedua paket emulator dihentikan, Wi-Fi dan data dimatikan.
+- Belum terbukti: pendaftaran/login dari HP pelapor dan pemasangan APK di HP cabang. Sapu menu tidak diulang. Artefak/dokumen akan di-commit lokal, belum di-push. Tidak ada deploy baru. Jangan push/deploy baru tanpa izin pemilik.
 
 ## 0w. Tutup kas rinci produk + pembatalan nota berbayar (1 Okt, Hermes)
 

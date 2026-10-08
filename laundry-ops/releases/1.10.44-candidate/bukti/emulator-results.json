@@ -1,0 +1,14 @@
+{
+  "release_apk_installed_hash_matches": true,
+  "debug_apk_installed_hash_matches": true,
+  "release_registration_required_fields": true,
+  "release_registration_offline_error": true,
+  "debug_registration_required_fields": true,
+  "app_crashes": 0,
+  "production_test_account": "qa-no-submit@example.com",
+  "production_registration_accepted": true,
+  "cleanup_firebase_remaining": 0,
+  "cleanup_d1_staff_remaining": 0,
+  "cleanup_tombstone_retained": true,
+  "actual_reporter_phone_tested": false
+}

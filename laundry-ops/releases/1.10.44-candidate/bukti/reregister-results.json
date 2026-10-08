@@ -1,0 +1,7 @@
+{
+  "firebase_existing_account_created_before_ui": true,
+  "registration_accepted_ui": true,
+  "debug_staff_verified": true,
+  "debug_staff_cleaned": true,
+  "firebase_account_cleaned": true
+}

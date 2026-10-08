@@ -1,0 +1,30 @@
+[
+ [
+  "1. Owner uji siap",
+  "akun login + baris D1 dibuat"
+ ],
+ [
+  "2. korban siap",
+  "akun login ada: True, baris staff ada: True"
+ ],
+ [
+  "3. command hapus dikirim",
+  "{\"revision\": 19958, \"acknowledgedCommandIds\": [\"uji-hapus-1791456362442682000\"], \"results\": [{\"commandId\": \"uji-hapus-1791456362442682000\", \"accepted\": true, \"replayed\": false, \"entityType\": \"staff\", \"entityId\": \"ujihapus.hermes@gmail.com\", \"updatedAt\": 1791456362581, \"status\": \"applied\"}]}"
+ ],
+ [
+  "4. akun login korban",
+  "SUDAH TERHAPUS (berhasil)"
+ ],
+ [
+  "5. baris D1 korban",
+  "staff=0"
+ ],
+ [
+  "6. bersih-bersih",
+  "selesai"
+ ],
+ [
+  "7. verifikasi bersih",
+  "akun pemilik=False akun korban=False"
+ ]
+]
