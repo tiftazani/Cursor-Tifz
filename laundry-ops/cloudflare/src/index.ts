@@ -3,6 +3,8 @@ import { pullChanges, pushCommands, syncScopeKey } from "./command-sync.ts";
 interface Env {
   DB: D1Database;
   SYNC_SECRET?: string;
+  /** Kunci service account Firebase (JSON atau base64-nya). Dipakai Worker untuk menghapus akun login saat user dihapus. */
+  FIREBASE_SERVICE_ACCOUNT?: string;
   /** Satu project ID (format lama) atau beberapa dipisah koma. */
   FIREBASE_PROJECT_ID?: string;
   FIREBASE_PROJECT_IDS?: string;

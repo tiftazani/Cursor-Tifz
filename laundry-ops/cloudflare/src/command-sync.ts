@@ -1,4 +1,6 @@
-export interface CommandEnv { DB: D1Database }
+import { hapusAkunLogin } from "./firebase-admin.ts";
+
+export interface CommandEnv { DB: D1Database; FIREBASE_SERVICE_ACCOUNT?: string }
 export type SyncIdentity = {
   email: string;
   name: string;
@@ -858,6 +860,15 @@ async function executeCommand(env:CommandEnv, command:SyncCommand, identity:Sync
   const saved=await env.DB.prepare("SELECT request_hash,result_json FROM processed_commands WHERE command_id=? AND organization_id=?").bind(command.commandId,ORG_ID).first<{request_hash:string|null;result_json:string|null}>();
   if(!saved) throw new CommandError(500,"Command gagal dicatat");
   if(saved.request_hash && saved.request_hash!==requestHash) throw new CommandError(409,"commandId pernah dipakai untuk isi berbeda");
+  // Setelah barisnya terhapus dan hasilnya tersimpan, baru akun loginnya dibereskan. Urutannya
+  // penting: kegagalan di sini tidak boleh menggagalkan command yang sudah berhasil, karena
+  // command yang gagal memacetkan antrean perangkat. Akun yang tertinggal masih bisa dibersihkan
+  // belakangan, sedangkan antrean yang macet menghentikan seluruh sinkronisasi cabang itu.
+  if(command.type==="staff.delete") {
+    const email=String(command.entityId ?? "").trim().toLowerCase();
+    const keterangan=await hapusAkunLogin(env,email,now);
+    console.log(JSON.stringify({event:"staff.delete.akun",email,keterangan}));
+  }
   return saved.result_json ? JSON.parse(saved.result_json) as JsonRecord : result;
 }
 
