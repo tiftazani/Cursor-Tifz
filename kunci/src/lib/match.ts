@@ -12,6 +12,19 @@ export function normalizeUrl(raw: string): string | null {
   }
 }
 
+// Port is part of a site's identity on loopback. `127.0.0.1:5178` (some other
+// local app) and `127.0.0.1:8780` (Kunci itself) are two different applications
+// running on one machine, so a login saved for one must not be offered on the
+// other. Everywhere else the port is ignored, as before.
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])
+
+function hostKey(url: URL): string {
+  const host = url.hostname.replace(/^www\./i, '').toLowerCase()
+  // URL already drops the default port, so ":80"/":443" never shows up here.
+  if (LOOPBACK_HOSTS.has(host) && url.port) return `${host}:${url.port}`
+  return host
+}
+
 export function hostFromUrl(raw: string): string | null {
   const trimmed = raw.trim()
   if (!trimmed) return null
@@ -23,7 +36,7 @@ export function hostFromUrl(raw: string): string | null {
   if (!hasScheme && (trimmed.includes(' ') || trimmed.includes('@') || /%[0-9a-f]{2}/i.test(trimmed))) return null
   try {
     const url = new URL(hasScheme ? trimmed : `https://${trimmed}`)
-    return url.hostname.replace(/^www\./i, '').toLowerCase()
+    return hostKey(url)
   } catch {
     return null
   }

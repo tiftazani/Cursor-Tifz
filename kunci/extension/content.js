@@ -630,13 +630,7 @@ function showSaveBar(pending) {
   otherBarHost?.remove()
   otherBarHost = null
   const capture = pending.capture
-  const hostName = (() => {
-    try {
-      return new URL(capture.url).hostname.replace(/^www\./, '')
-    } catch {
-      return location.hostname.replace(/^www\./, '')
-    }
-  })()
+  const hostName = hostOf(capture.url) || hostOf(location.href)
   saveBarHost = mountBar(saveBarHost, {
     sticky: true,
     title: pending.action === 'update' ? 'Perbarui password masuk di Kunci?' : 'Simpan login ke Kunci?',
@@ -723,7 +717,7 @@ async function maybeAutofill() {
   }
   showOtherBar({
     title: 'Pilih login Kunci',
-    subtitle: `${res.matches.length} akun untuk ${location.hostname}`,
+    subtitle: `${res.matches.length} akun untuk ${hostOf(location.href)}`,
     accounts: res.matches.map((m) => ({
       name: m.name,
       username: m.username,
@@ -845,11 +839,11 @@ function sleep(ms) {
  * pending save as belonging to a different site and dismiss it.
  */
 function pageHosts() {
-  const hosts = [location.hostname.replace(/^www\./, '').toLowerCase()]
+  const hosts = [hostOf(location.href)]
   try {
     for (const frame of document.querySelectorAll('iframe[src]')) {
       try {
-        const host = new URL(frame.getAttribute('src'), location.href).hostname.replace(/^www\./, '').toLowerCase()
+        const host = hostOf(new URL(frame.getAttribute('src'), location.href).href)
         if (host) hosts.push(host)
       } catch {
         /* unparsable src */
@@ -861,10 +855,19 @@ function pageHosts() {
   return hosts
 }
 
-/** The bare host of a URL, or '' when it cannot be read. */
+// Port is part of a site's identity on loopback: `127.0.0.1:5178` (some other local
+// app) and `127.0.0.1:8780` (Kunci itself) are two different applications on one
+// machine, so a save made in one must not be claimed by the other. Mirrors
+// hostFromUrl in src/lib/match.ts.
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])
+
+/** The host of a URL, or '' when it cannot be read. */
 function hostOf(raw) {
   try {
-    return new URL(raw).hostname.replace(/^www\./, '').toLowerCase()
+    const url = new URL(raw)
+    const host = url.hostname.replace(/^www\./, '').toLowerCase()
+    // URL already drops the default port, so ":80"/":443" never shows up here.
+    return LOOPBACK_HOSTS.has(host) && url.port ? `${host}:${url.port}` : host
   } catch {
     return ''
   }

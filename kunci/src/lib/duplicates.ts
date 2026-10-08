@@ -52,7 +52,12 @@ function pickKeeper(group: Entry[], members: DuplicateMember[]): DuplicateMember
     // `www.` is stripped from BOTH sides: the host already arrives with it removed, so
     // comparing `www.agoda.com` against `agoda.com` unnormalised made the prefixed row
     // look like the more informative name and win the tier.
-    const stripWww = (s: string) => s.replace(/^www\./, '')
+    //
+    // The port is stripped too. `hostFromUrl` keeps it on loopback so two local apps
+    // stay separate, but a name of `localhost` still repeats `localhost:20128`: it
+    // tells the user nothing extra, and letting the port break this comparison made
+    // the bare row look informative and win the tier.
+    const stripWww = (s: string) => s.replace(/^www\./, '').replace(/:\d+$/, '')
     const bareHost = lower === host || stripWww(lower) === stripWww(host) || lower.startsWith(`${host}/`)
     const wwwNoise = /^www\./.test(lower) ? 0 : 1
     return [

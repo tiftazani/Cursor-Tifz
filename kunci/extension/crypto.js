@@ -29,6 +29,17 @@ export function isKunciAppUrl(raw) {
   }
 }
 
+// Port is part of a site's identity on loopback: `127.0.0.1:5178` and
+// `127.0.0.1:8780` are two different apps on one machine. Mirrors src/lib/match.ts.
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])
+
+function hostKey(url) {
+  const host = url.hostname.replace(/^www\./i, '').toLowerCase()
+  // URL already drops the default port, so ":80"/":443" never shows up here.
+  if (LOOPBACK_HOSTS.has(host) && url.port) return `${host}:${url.port}`
+  return host
+}
+
 export function hostFromUrl(raw) {
   try {
     const trimmed = String(raw ?? '').trim()
@@ -38,7 +49,7 @@ export function hostFromUrl(raw) {
     // would otherwise parse as host "gmail.com" and link unrelated entries.
     if (!hasScheme && (trimmed.includes(' ') || trimmed.includes('@') || /%[0-9a-f]{2}/i.test(trimmed))) return null
     const url = new URL(hasScheme ? trimmed : `https://${trimmed}`)
-    return url.hostname.replace(/^www\./i, '').toLowerCase()
+    return hostKey(url)
   } catch {
     return null
   }

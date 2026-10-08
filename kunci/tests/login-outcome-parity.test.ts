@@ -60,6 +60,13 @@ describe('login-outcome parity between src/lib and the extension', () => {
     'https://bank.example.com/dashboard',
     'https://federation-sts.accenture.com/',
     'not a url',
+    // Loopback: the port is part of the identity, so the two apps on one machine
+    // must not compare equal. These are in the list so a drift in either copy fails
+    // here rather than in the browser.
+    'http://127.0.0.1:5178/',
+    'http://127.0.0.1:8780/#preview-ui',
+    'http://localhost:3000/login',
+    'https://example.com:8443/x',
   ]
 
   it('agrees on login urls', () => {

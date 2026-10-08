@@ -28,12 +28,26 @@ export function looksLikeLoginUrl(url: string): boolean {
   }
 }
 
+/**
+ * The host of a URL, or '' when it cannot be read.
+ *
+ * The port is kept on loopback: `127.0.0.1:5178` and `127.0.0.1:8780` are two
+ * different applications on one machine, so a login that succeeded on one must not
+ * count as success on the other. Mirrors hostFromUrl in src/lib/match.ts.
+ */
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])
+
+function hostKey(url: URL): string {
+  const host = url.hostname.replace(/^www\./, '').toLowerCase()
+  // URL already drops the default port, so ":80"/":443" never shows up here.
+  return LOOPBACK_HOSTS.has(host) && url.port ? `${host}:${url.port}` : host
+}
+
 function authKey(url: string): string {
   try {
     const u = new URL(url)
-    const host = u.hostname.replace(/^www\./, '').toLowerCase()
     const path = (u.pathname.replace(/\/+$/, '') || '/').toLowerCase()
-    return `${host}${path}`
+    return `${hostKey(u)}${path}`
   } catch {
     return (url.split('?')[0] || url).toLowerCase()
   }
@@ -45,8 +59,8 @@ export function sameAuthPage(a: string, b: string): boolean {
 
 export function sameSiteHost(a: string, b: string): boolean {
   try {
-    const ha = new URL(a).hostname.replace(/^www\./, '').toLowerCase()
-    const hb = new URL(b).hostname.replace(/^www\./, '').toLowerCase()
+    const ha = hostKey(new URL(a))
+    const hb = hostKey(new URL(b))
     return Boolean(ha && ha === hb)
   } catch {
     return false

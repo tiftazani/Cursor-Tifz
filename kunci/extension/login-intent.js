@@ -219,8 +219,15 @@
     if (SIGNUP_PATH.test(url) || SIGNUP_BTN.test(btn) || /\bsignup|register|daftar\b/.test(hay)) {
       return { kind: 'signup', reason: 'tombol atau URL pendaftaran' }
     }
-    if (CHANGE_PATH.test(url) || CHANGE_BTN.test(btn)) {
+    if (CHANGE_PATH.test(url)) {
       return { kind: 'change-password', reason: 'pengaturan ganti password' }
+    }
+    // Tombol "Change Password" yang satu form dengan login (SAP ESS: Log On +
+    // Change Password dalam LOGIN_FORM yang sama) bukan dialog ganti password.
+    // Dialog yang asli punya minimal dua kotak password (lama + baru), jadi
+    // teks tombol saja tidak cukup untuk mengusir ikon dari form login.
+    if (CHANGE_BTN.test(btn) && passwords.length >= 2) {
+      return { kind: 'change-password', reason: 'tombol ganti password + dua field password' }
     }
     if (passwords.length === 0) {
       return { kind: 'other', reason: 'tidak ada field password' }
