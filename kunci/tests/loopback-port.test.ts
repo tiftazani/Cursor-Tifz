@@ -70,4 +70,18 @@ describe('loopback: port adalah bagian dari identitas situs', () => {
     expect(extOutcome.sameSiteHost('http://127.0.0.1:8780/', 'http://127.0.0.1:5178/')).toBe(false)
     expect(extOutcome.sameAuthPage('http://127.0.0.1:8780/x', 'http://127.0.0.1:5178/x')).toBe(false)
   })
+
+  it('nama entri loopback tidak menyeberang port', () => {
+    // Entri tanpa URL hanya punya nama. Di loopback nama polos seperti "localhost"
+    // tidak menyebut port, jadi tidak ada aplikasi lokal yang boleh diklaimnya.
+    const named = [
+      { id: 'a', type: 'login', name: '127.0.0.1', url: '' },
+      { id: 'b', type: 'login', name: 'localhost', url: '' },
+      { id: 'c', type: 'login', name: 'localhost', url: 'http://localhost:3000/' },
+    ]
+    expect(matchesForUrl(named, 'http://127.0.0.1:5178/').map((e: { id: string }) => e.id)).toEqual([])
+    expect(matchesForUrl(named, 'http://localhost:5178/').map((e: { id: string }) => e.id)).toEqual([])
+    // Yang punya URL tetap cocok di portnya sendiri.
+    expect(matchesForUrl(named, 'http://localhost:3000/').map((e: { id: string }) => e.id)).toEqual(['c'])
+  })
 })
