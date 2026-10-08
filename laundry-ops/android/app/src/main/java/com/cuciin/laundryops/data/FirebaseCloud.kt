@@ -130,26 +130,58 @@ object FirebaseCloud {
             CuciinStore.register(name, email, role, branchId, password)
             return ui { onDone("pending-local") }
         }
-        FirebaseAuth.getInstance().createUserWithEmailAndPassword(email.trim(), password)
-            .addOnSuccessListener {
-                CloudSync.submitRegistration(name, email, role, branchId) { error ->
-                    val auth = FirebaseAuth.getInstance()
-                    if (error == null) {
-                        CuciinStore.markRegistrationPending(name)
+        val auth = FirebaseAuth.getInstance()
+        val surel = email.trim()
+
+        // Kirim pendaftaran memakai sesi Firebase yang sedang aktif.
+        //
+        // hapusAkun: akun login yang BARU dibuat di percobaan ini boleh dibatalkan kalau
+        // pendaftaran ditolak server. Akun yang sudah ada sebelumnya tidak boleh — itu akun
+        // sungguhan milik orang lain, dan menghapusnya justru merusak.
+        fun kirim(hapusAkun: Boolean) {
+            CloudSync.submitRegistration(name, email, role, branchId) { error ->
+                if (error == null) {
+                    CuciinStore.markRegistrationPending(name)
+                    auth.signOut()
+                    onDone("pending")
+                    return@submitRegistration
+                }
+                if (hapusAkun) {
+                    auth.currentUser?.delete()?.addOnCompleteListener {
                         auth.signOut()
-                        onDone("pending")
-                    } else {
-                        auth.currentUser?.delete()?.addOnCompleteListener {
-                            auth.signOut()
-                            onDone(error)
-                        } ?: run {
-                            auth.signOut()
-                            onDone(error)
-                        }
+                        onDone(error)
+                    } ?: run {
+                        auth.signOut()
+                        onDone(error)
                     }
+                } else {
+                    auth.signOut()
+                    onDone(error)
                 }
             }
-            .addOnFailureListener { e -> ui { onDone(e.message ?: "gagal daftar") } }
+        }
+
+        auth.createUserWithEmailAndPassword(surel, password)
+            .addOnSuccessListener { kirim(hapusAkun = true) }
+            .addOnFailureListener { e ->
+                if (!PendaftaranAkun.emailSudahTerpakai(e.message)) {
+                    ui { onDone(PendaftaranAkun.sebab(e.message)) }
+                    return@addOnFailureListener
+                }
+                // Emailnya masih tersimpan di server identitas walau baris user-nya sudah
+                // dihapus Owner. Dulu ini jalan buntu: tidak bisa masuk karena baris user-nya
+                // tidak ada, dan tidak bisa daftar ulang karena emailnya terpakai. Orang yang
+                // melaporkannya hanya melihat "periksa koneksi" padahal koneksinya sehat.
+                //
+                // Jalan keluarnya: kalau sandi yang diketik cocok dengan akun lama itu, akun
+                // itu memang miliknya. Pakai akun yang ada untuk mengirim pendaftaran, jadi
+                // emailnya tidak lagi terkunci dan tidak perlu kunci admin.
+                auth.signInWithEmailAndPassword(surel, password)
+                    .addOnSuccessListener { kirim(hapusAkun = false) }
+                    .addOnFailureListener { ui { onDone(PendaftaranAkun.emailTerkunciTanpaSandiCocok()) } }
+                    .addOnCanceledListener { ui { onDone(PendaftaranAkun.emailTerkunciTanpaSandiCocok()) } }
+            }
+            .addOnCanceledListener { ui { onDone(PendaftaranAkun.sebab(null)) } }
     }
 
     /**

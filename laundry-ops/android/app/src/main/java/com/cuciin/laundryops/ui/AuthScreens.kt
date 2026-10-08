@@ -394,7 +394,10 @@ internal fun RegisterScreen(nav: NavHostController) {
                 FirebaseCloud.register(name, email, pass, role, branch) { result ->
                     busy = false
                     if (result == "pending" || result == "pending-local") nav.navigate("pending")
-                    else regError = "Pendaftaran belum berhasil. Periksa koneksi dan data akun."
+                    // Sebabnya dipakai apa adanya supaya orang tahu apa yang harus dilakukan.
+                    // Pesan generik lama menyembunyikan beda antara koneksi putus, sandi lemah,
+                    // dan email yang masih tersimpan di server identitas.
+                    else regError = result.ifBlank { "Pendaftaran belum berhasil. Periksa data akun." }
                 }
             }
             Spacer(Modifier.height(24.dp))
