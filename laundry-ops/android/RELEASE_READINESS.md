@@ -6,7 +6,7 @@ Kandidat 1.10.45/build 64: 409 tes debug dan 409 tes release lulus; lint 0 error
 
 Perbaikan: stok awal via stockMove, snapshot memulihkan saldo/inventory, asal kasir dan petugas lama dipertahankan, draft dibersihkan saat ganti akun dan outbox terikat akun. Owner tetap boleh menugaskan petugas.
 
-HP pelapor, dua perangkat dengan akun nyata, sapu menu dan layar Riwayat versi setelah login belum terbukti. 14 nota lama tidak diubah. Hasil push/deploy dicatat di AGENT_STATUS.md dan releases/1.10.45-candidate/README.md. Bagian berikut adalah riwayat, bukan status terbaru.
+HP pelapor, dua perangkat dengan akun nyata, sapu menu dan layar Riwayat versi setelah login belum terbukti. 14 nota lama tidak diubah. Push a756172, CI Android+Worker sukses, deploy produksi 7a2718f7 dan debug ca6f7017 aktif dengan /health ok. Rincian dan batas verifikasi hitungan data ada di AGENT_STATUS.md dan releases/1.10.45-candidate/README.md. Bagian berikut adalah riwayat, bukan status terbaru.
 
 Status: kandidat rilis operasional yang menjalani ulang pemeriksaan kode, build, dan verifikasi cloud pada 1 Oktober 2026. Owner tetap harus menyelesaikan validasi perangkat, rotasi akun, saldo awal, backup terjadwal pertama, dan keputusan go-live. APK bertanda tangan tidak menjamin hilangnya peringatan Play Protect pada distribusi di luar store.
 

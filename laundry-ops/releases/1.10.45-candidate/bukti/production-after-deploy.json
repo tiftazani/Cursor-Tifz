@@ -1,0 +1,32 @@
+[
+  {
+    "results": [
+      {
+        "orders": 1187,
+        "payments": 1188,
+        "staff": 11,
+        "branches": 5,
+        "access_roles": 3,
+        "sync_changes": 22566
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 2.0674
+      },
+      "duration": 2.0674,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 36597760,
+      "rows_read": 24960,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
