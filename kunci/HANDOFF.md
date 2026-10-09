@@ -1,260 +1,292 @@
-# Handoff: Kunci (password manager) — Cursor-Tifz
+# Serah terima Kunci ke Claude Code
 
-Dokumen ini untuk memindahkan kerjaan Kunci ke agent harness lain. Paste atau attach file ini sebagai konteks awal.
+Snapshot diperiksa 9 Oktober 2026. Ini menggantikan handoff lama. Path lama
+`/Users/tiftazani/Cursor-Tifz`, HEAD lama, angka 81 tes, dan backlog lama bukan kondisi
+terbaru. Saat dokumen dan kode berbeda, periksa kode dan jalankan tes.
 
-## Identitas
+## Mulai tanpa mengulang proyek
 
-| Item | Nilai |
-| --- | --- |
-| Owner | **Tiftazani** (PM). Chat bahasa Indonesia natural, bukan meeting-speak. |
-| Repo | `https://github.com/tiftazani/Cursor-Tifz` |
-| App folder | **`kunci/`** saja. Jangan ubah `cuan-yuk-guys/` kecuali diminta. |
-| Branch kerja | `cursor/kunci-password-manager-4eaf` |
-| HEAD saat handoff | `7e11689` — *Reuse a live Kunci OTP instead of emailing Gmail on dual localhost/HTTPS hits.* |
-| PR | https://github.com/tiftazani/Cursor-Tifz/pull/6 (base `main`, **OPEN**, bukan draft) |
-| Mac clone | `/Users/tiftazani/Cursor-Tifz` — **bukan** `~/tifz-apps`, **bukan** folder Finder bernama Cursor (itu app Cursor) |
-| Extension path | `/Users/tiftazani/Cursor-Tifz/kunci/extension` |
-| Production URL | `https://kunci.tiftazani-cuciin.workers.dev` |
-| Cloudflare | Worker `kunci` (akun `tiftazani.khara@gmail.com`), storage Durable Object |
-| Deploy preview | Tidak ada (Workers deploy langsung; cek lokal via `npx wrangler dev`) |
-| Localhost helper UI | `http://127.0.0.1:8780` |
-| Dev Vite | `http://127.0.0.1:5173` (+ `#preview-ui` untuk preview tanpa OTP) |
-| OTP allowlist | `tiftazani.khara@gmail.com` |
+Claude Code sudah tersedia di Mac ini: `claude --version` menjawab `2.1.286`.
+Login Claude belum diperiksa. Tidak ada migrasi data, clone, atau instalasi ulang yang
+diperlukan hanya untuk beralih agen pada Mac yang sama.
 
-## Apa itu Kunci
-
-Website-first password manager **zero-knowledge**: AES-256-GCM + PBKDF2 600k di klien. Server (Durable Object) cuma ciphertext. Gerbang publik = OTP Gmail + cookie sesi. Autofill: ekstensi Chrome (unpacked) + helper Mac (`Kunci Helper.app` + daemon LaunchAgent di `:8780`).
-
-Localhost dan URL publik memakai **satu blob terenkripsi** di Durable Object. Setelah OTP Gmail di salah satu tampilan, simpan/ubah entri muncul di yang lain (butuh kata sandi induk di masing-masing browser). Server tetap tidak melihat password.
-
-## Struktur penting
-
-```
-kunci/
-  src/                 React UI (views, state/VaultContext, lib/)
-  extension/           Chrome MV3 unpacked (manifest 1.4.11)
-  helper/              daemon.mjs, install-service, Mac AX fill, repo-paths.mjs
-  worker/              index.ts (API + KunciStore Durable Object)
-  scripts/             sync-branch, ambil-branch.sh, extension-status, gen-icons
-  tests/               vitest
-  wrangler.toml        build di folder kunci; publish dist + worker
-  README.md            dokumentasi produk
-  HANDOFF.md           file ini
+```sh
+cd /Users/tiftazani/Documents/Hermes-AI/Kunci
+claude
 ```
 
-Sumber path disk (jangan hardcode `~/tifz-apps`): `kunci/helper/repo-paths.mjs`
+`CLAUDE.md` di root memberi aturan proyek. Prompt awal yang bisa ditempel:
 
-- `KUNCI_ROOT` — folder `kunci/`
-- `REPO_ROOT` — parent clone
-- `EXTENSION_DIR` — `kunci/extension`
-- `KUNCI_BRANCH` — `cursor/kunci-password-manager-4eaf`
-- `extensionOnDisk()` / `refreshCommands()` — path, versi, stamp untuk auto-reload ekstensi
+> Baca CLAUDE.md, kunci/HANDOFF.md, dan kunci/docs/MAINTENANCE.md. Kerjakan hanya
+> Kunci pada tree lokal ini. Jangan clone ulang, checkout ulang branch, commit, push,
+> deploy, atau mengubah data vault untuk inisialisasi. Periksa git status dan sebutkan
+> kondisi terbaru serta batas yang belum diuji. Jangan menganggap proposal fitur tim
+> sudah dibuat. Setelah itu tunggu tugas saya.
 
-## Aturan pengelompokan duplikat
+Dokumen ini adalah pemindahan konteks, bukan pemindahan chat Hermes menjadi sesi
+Claude. Claude tidak otomatis memperoleh riwayat percakapan atau tools Hermes.
 
-Identitas sebuah entri hanya datang dari host-nya sendiri: `entry.url`, atau `urls[0]` kalau `url` kosong. Jangan pernah baca seluruh daftar `urls` sebagai identitas.
+## Identitas dan git
 
-Alasannya: `urls` adalah riwayat merge, bukan identitas. `mergeEntriesInto` menumpuk semua URL ke situ supaya autofill tetap jalan di alamat lama. Kalau seluruh daftar dibaca sebagai identitas, satu URL asing di dalamnya jadi jembatan antara dua situs berbeda.
+- Repo lokal: `/Users/tiftazani/Documents/Hermes-AI/Kunci`.
+- Root aplikasi: `/Users/tiftazani/Documents/Hermes-AI/Kunci/kunci`.
+- Origin: `https://github.com/tiftazani/Cursor-Tifz.git`.
+- Branch aktif: `cursor/kunci-password-manager-4eaf`.
+- HEAD diperiksa: `6bfa1b2` — `Lock in that a bare loopback name does not claim another port`.
+- Dibanding ref upstream lokal: ahead 49, behind 0. Tidak melakukan fetch pada serah
+  terima ini; kondisi server GitHub terkini belum diperiksa.
+- PR historis: https://github.com/tiftazani/Cursor-Tifz/pull/6. Status PR kini belum
+  diperiksa. Jangan menganggap masih OPEN atau mengubah body tanpa membaca edit manusia.
+- Dua file untracked sudah ada SEBELUM serah terima: `kunci/.audit/port-ab.mjs` dan
+  `kunci/.audit/port-live.mjs`. Bukan fitur baru; harness uji port. Jangan langsung
+  menjalankannya: keduanya mencoba bind 8780 yang kini dipakai daemon asli.
+- Tidak ada perubahan kode tracked sebelum serah terima. File dokumentasi baru dan
+  pembaruan handoff belum di-commit atau di-push.
 
-Gejalanya dulu: tujuh entri (Spotify, Sony, Google, Amazon, Dekkoo, Gagaoolala) muncul sebagai satu cluster "Situs yang sama" dengan 7 entri, padahal cuma dua baris Amazon yang benar-benar sepasang.
+Pakai clone lokal ini. Clone GitHub saja tidak membawa 49 commit lokal atau dokumen
+untracked. Jika nanti pindah mesin, minta keputusan pengguna tentang commit/push atau
+transfer repo lokal utuh. Jangan menyalin credential files atau vault ke paket konteks.
 
-Aturan sama berlaku di `src/lib/capture.ts` dan `extension/crypto.js` (`samePrimaryHost`): simpan di host X hanya boleh menimpa entri yang host utamanya X.
+Root repo juga menyimpan `cuan-yuk-guys/` (aplikasi lain). `package.json` ROOT
+mengarah ke aplikasi itu. Jangan menjalankan lint/build Kunci dari root, mengganti
+branch dengan `FETCH_HEAD`, atau memakai `refresh-local` hanya untuk mulai sesi.
+`sync-branch`, `ambil-branch`, dan `refresh-local` bisa fetch/stash/checkout; itu
+alur pembaruan clone lama, bukan langkah onboarding agen di tree ini.
 
-`name` juga bukan host, kecuali sisi lain tidak punya URL sama sekali. `nameMatchesHost` hanya boleh dipakai di kasus itu.
+## Produk, stack, dan batas
 
-## Env / secret Cloudflare
+Kunci adalah pengelola kata sandi personal. Brankas dienkripsi di perangkat.
+Web/PWA memakai React 19, TypeScript, dan Vite 8. Ekstensi Chromium adalah Manifest
+V3 dengan JavaScript biasa. Helper Mac memakai Node, LaunchAgent, JXA/Accessibility,
+dan app helper. Worker Cloudflare menyimpan satu blob terenkripsi dalam Durable
+Object `KunciStore`. Tidak ada Android app di repo; `android://` berasal dari impor
+CSV browser.
 
-Sudah di-set via `npx wrangler secret put` (tidak di repo, tidak di git). Contoh: `kunci/.env.example`.
+Dependency runtime hanya `react` dan `react-dom`. Tools pengembangan sudah tercantum
+di `package.json`: TypeScript, Vite, Vitest, oxlint, Playwright, Wrangler. Jangan
+mengganti stack atau menambah library untuk fitur bawaan. Versi Node saat pemeriksaan
+`v26.10.0`, npm `11.19.1`. Lockfile adalah acuan instalasi ulang, bukan angka di sini.
 
-Cek cepat: `npx wrangler secret list` — kalau `RESEND_API_KEY` tidak ada di daftar, OTP email akan jawab 500 `RESEND_API_KEY belum di-set`.
+Gerbang email hanya untuk email allowlist `tiftazani.khara@gmail.com`.
+OTP memberi akses ciphertext/cloud sync, bukan kunci untuk membukanya.
+Server saat ini tidak mendukung akun tim, People, Groups, permission, atau shared vault.
+`docs/TEAM-SECURITY-DESIGN.md` adalah proposal dengan syarat review keamanan dan
+prototype lintas pengguna. Jangan menyajikannya sebagai implementasi selesai.
 
-| Variabel | Isi |
-| --- | --- |
-| `KUNCI_SESSION_SECRET` | String acak ≥ 16 karakter (`openssl rand -base64 32`) |
-| `RESEND_API_KEY` | API key Resend untuk OTP. **Terisi** (dipasang lewat `npm run set-resend-key`, dibaca dari papan klip). Kalau kosong lagi: buat di resend.com/api-keys lalu jalankan perintah yang sama |
-| `KUNCI_FROM_EMAIL` | Opsional. Default `Kunci <onboarding@resend.dev>` |
+## Peta kode dan alur data
 
-Kalau `RESEND_API_KEY` kosong, gerbang OTP **tidak** memblokir localhost: kalau brankas sudah ada di IndexedDB `127.0.0.1:8780`, app langsung jalan dan perubahan hanya tersimpan lokal. Situs publik tetap butuh kode. Tombol "Buka gerbang kode email" ada di Pengaturan → Sesi.
+Semua path berikut relatif terhadap `kunci/`:
 
-Deploy: `npm run deploy` (= build + `wrangler deploy`). Lihat secret: `npx wrangler secret list`. Storage = Durable Object `KunciStore` (konsisten kuat, jadi cap percobaan OTP tidak bisa diakali).
+- `src/App.tsx`: gerbang sesi cloud, status setup/locked/unlocked, tema.
+- `src/state/VaultContext.tsx`: pusat unlock, persist, sync, backup, trash, recovery,
+  dan inactivity lock. Baca semua pemanggil bila mengubah hasil persist.
+- `src/types.ts`: Entry, Vault, EncryptedBlob, settings dan view ids.
+- `src/lib/crypto.ts`: PBKDF2-SHA256 600.000 iterasi, AES-256-GCM, DEK dan recovery
+  wraps. DEK adalah kunci acak yang mengenkripsi isi brankas.
+- `src/db/idb.ts`: IndexedDB `kunci-vault`, object store `kv`: ciphertext, backup,
+  hint, folder handle, dan reload session. Penyimpanan terikat origin browser.
+- `src/lib/refresh-session.ts`: key non-extractable di IndexedDB; sessionStorage hanya
+  tab id. Jangan menggantinya dengan raw/base64 key dalam web storage.
+- `src/lib/cloud.ts`: sesi cookie/bearer, retry stale token, baca/tulis cloud.
+- `src/extension/bridge.ts`: sinkronisasi app dan ekstensi.
+- `src/views/AppShell.tsx`: nav, list/detail, filter, draft, keyboard/multi-selection.
+- `src/views/DashboardView.tsx`, `HealthView.tsx`: ringkasan dan temuan kesehatan.
+- View personal lain: `GeneratorView.tsx`, `HistoryView.tsx`, `AutofillView.tsx`,
+  `BackupView.tsx`, `SettingsView.tsx`, `EntryPane.tsx`, `Gate.tsx`.
+- `src/lib/duplicates.ts`: kelompok dan pilihan duplikat.
+- `src/lib/match.ts`, `capture.ts`, `login-intent.ts`, `login-outcome.ts`: kecocokan
+  entri, target simpan, jenis form, bukti login berhasil.
+- `extension/crypto.js`, `login-intent.js`, `login-outcome.js`: salinan aturan web;
+  parity tests harus setuju. Bukan semua aturan boleh diubah hanya di TypeScript.
+- `extension/site.js`, `public-suffix.js`: aturan site bersama; `src/lib/site.ts`
+  re-export file JS yang sama. Data PSL dibuat oleh `scripts/gen-public-suffix.mjs`.
+- `extension/background.js`: storage ekstensi, antrean save, cloud push, pending save.
+- `extension/content.js` dan `content.css`: field detection, iframe, ikon/bar autofill,
+  tangkap login dan tawaran simpan. `popup.js`/`popup.html`: unlock/pilih akun.
+- `src/lib/dead-links.ts`, `dead-link-probe.ts`: cek domain yang berhenti resolve.
+- `helper/daemon.mjs`: UI lokal, proxy `/api/*`, health, token/origin gate, Mac fill.
+- `helper/repo-paths.mjs`: path dihitung dari file, versi/stamp, perintah refresh.
+- `helper/install-service.mjs`, `build-helper-app.mjs`, `mac-ax.mjs`: instalasi dan
+  pengisian native Mac. Jangan keylog aplikasi.
+- `worker/index.ts`: API, allowlist email, session, OTP/rate limit, sanitasi blob.
+- `wrangler.toml`: Worker `kunci`, assets `dist`, Durable Object, migrasi SQLite `v1`.
+- `public/sw.js`, `src/lib/pwa.ts`: service worker/cache; bisa menyebabkan UI lama.
+- `src/lib/preview-vault.ts`: fixture `#preview-ui`. Bukan data vault nyata.
+- `tests/`: 70 file tes saat pemeriksaan. `.audit/`: harness lama, bukan suite utama;
+  periksa port, path, syntax, storage dan side effect sebelum menjalankannya.
 
-**Migrasi blob dari Netlify.** Brankas lama ada di Netlify Blobs store `kunci-secure` (site `kunci-tifta`). Sudah disalin ke Durable Object Worker pada 2026-09-24; ciphertext diverifikasi identik byte-per-byte (570.384 byte `data`). Salinan cadangan: `~/.kunci/netlify-vault-20260924.json` (mode 600). Brankas Netlify lama **belum dihapus** — hapus setelah yakin Worker jalan.
+Saat startup, klien membaca IndexedDB dan cloud, lalu memilih blob berdasarkan
+`savedAt`. Ini sinkronisasi personal, bukan revision/CAS untuk beberapa pengguna.
+Persist mengantrekan enkripsi → IndexedDB → ekstensi → cloud → backup sesuai setting.
+Kegagalan cloud dapat membuat data hanya tersimpan lokal; jangan bilang sync berhasil
+hanya karena save lokal berhasil. Backup folder memakai izin File System Access.
 
-> Netlify sudah ditinggalkan (kredit akun habis, deploy diblokir). Jangan buat ulang `netlify.toml` / `.netlify`.
+## Status pekerjaan terakhir
 
-## Cara jalanin Mac (kritis)
+Perubahan berikut sudah berada di commit lokal, bukan daftar tugas untuk dibuat ulang:
 
-Clone sering `--single-branch` → **jangan** `git checkout origin/cursor/...` (fatal: not a commit). Fetch nulis commit ke `FETCH_HEAD`. Kalau working tree kotor (`.gitignore`, `README.md`, dll.), stash dulu.
+- `61b81fc`, `6bfa1b2`: loopback membedakan port. Login `127.0.0.1:8780` tidak boleh
+  ditawarkan di `127.0.0.1:5178`; nama polos `localhost` tidak boleh melompati port.
+  Guard: `tests/loopback-port.test.ts`.
+- `4eb1ad3`: URL simpan lewat `storedUrl`, buang query/fragment/userinfo agar one-time
+  token tidak ikut disimpan. Guard: `tests/saved-url.test.ts`.
+- `505971e`, `34d9939`: inject iframe, username-first, daftar akun vertikal, tepat satu
+  frame menawarkan pending save. Guard: iframe/reinject/username-only tests.
+- `c969b27`: Public Suffix List membedakan site shared-host seperti Surge/GitHub Pages.
+  Guard: `tests/public-suffix.test.ts`, `tests/match-parity.test.ts`.
+- `688563e`: LaunchAgent memakai path Node yang tahan upgrade Homebrew.
+- `6ce9708`: bar ekstensi tetap terbaca bila ada beberapa username panjang.
+- `57aa441`, `e66f7dc`: deteksi domain tidak resolve, ulang probe, simpan bukti harian.
+- `31d22b2`, `8632aca`: pilih beberapa entri dan Delete lewat keyboard.
+- `ea8a7eb`: pre-selection duplikat mengutamakan informasi terbaca, bukan hanya recency.
+- `305b658`: restore unlock sesudah refresh serta dua tahap login.
+- `8ca8f4e`, `8ca10f5`, `121d438`: frame laptop dan alur personal; dashboard kembali
+  ke arah v2 yang disetujui. Iterasi v8 historis bukan otomatis acuan terbaik.
+- Sebelumnya: failure toast, draft remount, permanent-delete confirmation, masking,
+  stale token retry, OTP write-order, Worker/daemon hardening, public bundle hygiene.
 
-Paste **satu blok**, pakai `&&`:
+Daftar backlog lama yang berkata duplikat lintas site belum diperbaiki sudah usang.
+Namun perbaikan kode tidak otomatis membersihkan seluruh entri lama. `storedUrl`
+membersihkan alamat entri terkait ketika alur simpan dipakai lagi, bukan migrasi global.
+Jangan mengubah isi vault pengguna secara otomatis untuk merapikan data.
 
-```bash
-cd /Users/tiftazani/Cursor-Tifz && \
-git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*" && \
-git fetch origin cursor/kunci-password-manager-4eaf && \
-(test -z "$(git status --porcelain)" || git stash push -u -m "sebelum kunci branch") && \
-git checkout -B cursor/kunci-password-manager-4eaf FETCH_HEAD && \
-test -f kunci/src/views/DashboardView.tsx && \
-cd kunci && npm install && npm run install-service
+Tidak ada tugas fitur baru yang diberikan dalam sesi migrasi ini. Kelanjutan ditentukan
+oleh pengguna. Batas nyata yang masih ada: fitur tim belum diimplementasikan, audit
+kriptografi independen belum dibuktikan, dan tidak ada klaim semua skenario browser
+atau semua data nyata bersih. Mockup asli tidak ditemukan dalam repo/scratch yang
+ diperiksa pada pencarian terbatas; bila perlu mengubah desain, minta acuan/approval,
+jangan mengarang parity.
+
+## Menjalankan dan menjaga data
+
+Dari root aplikasi:
+
+```sh
+cd /Users/tiftazani/Documents/Hermes-AI/Kunci/kunci
+npm run dev
 ```
 
-Alternatif setelah sudah di tree yang benar:
+Vite: `http://127.0.0.1:5173`. Preview fixture:
+`http://127.0.0.1:5173/#preview-ui`. Build preview: `npm run preview`, port 4173.
+Vite proxy `/api` mengarah ke CLOUD NYATA. Jangan memakai endpoint write produksi
+sebagai fixture. Preview UI mengubah state contoh; tidak membuktikan sync, crypto,
+jumlah entri nyata, cache pengguna, atau izin native.
 
-```bash
-cd /Users/tiftazani/Cursor-Tifz/kunci
-npm run sync-branch
-npm run install-service
-# atau
-npm run refresh-local
+Daemon asli sedang berjalan di `http://127.0.0.1:8780`, PID snapshot 41538.
+`/health` terverifikasi HTTP 200, `ok:true`, version/uiRevision/extensionVersion
+`1.4.11`, dan semua path mengarah ke clone lokal di atas.
+Jangan memulai `npm start`/helper kedua atau harness yang bind 8780.
+
+```sh
+launchctl print gui/$(id -u)/com.kunci.daemon
+launchctl kickstart -k gui/$(id -u)/com.kunci.daemon
 ```
 
-Sukses lokal:
+Plist: `~/Library/LaunchAgents/com.kunci.daemon.plist`.
+Log: `~/Library/Logs/kunci.log` dan `kunci.err.log`; jangan mencetak rahasia log.
+Jika benar-benar tidak terdaftar, bootstrap plist, bukan kickstart berulang:
 
-- `git branch --show-current` = `cursor/kunci-password-manager-4eaf`
-- ada `kunci/src/views/DashboardView.tsx`
-- sidebar **Ringkasan · 1.4.11** (dari `extension/VERSION`, bukan hardcode)
-- helper Mac hijau di `http://127.0.0.1:8780`
-- kartu Chrome **Versi 1.4.11**
-
-Stop helper: `npm run uninstall-service`.
-
-## Fitur yang sudah ada di branch
-
-1. **Ringkasan home** — skor, komposisi, baru diubah, rekomendasi duplikat + merge/delete (`DashboardView`, `duplicates.ts`, `VSplit` / `split.ts`). Credentials tetap di **Brankas**.
-2. **Save web hanya setelah login sukses** — `login-outcome.js` / `src/lib/login-outcome.ts`. Gagal (form masih ada, teks “password salah”, `aria-invalid`) → tidak nulis brankas. App Mac **tidak** keylog; helper hanya fill entri yang sudah ada.
-3. **Ekstensi auto-reload** — helper `/health` expose `extensionDir`, `extensionVersion`, `extensionStamp`. Service worker poll `127.0.0.1:8780` / `localhost:8780` → `chrome.runtime.reload()`. Load unpacked **sekali** ke `/Users/tiftazani/Cursor-Tifz/kunci/extension`. Permission `alarms` di manifest.
-4. **OTP dual-hit** — localhost + HTTPS reuse kode 2 menit (`src/lib/otp-policy.ts`, `tests/otp-policy.test.ts`). AuthGate cooldown 90s. LaunchAgent `KeepAlive` + `ThrottleInterval` 10.
-5. **Stale dist** — daemon mendeteksi `dist/` tanpa “Ringkasan” / “Keadaan akun” dan menampilkan halaman rebuild.
-6. **DEV preview** — `#preview-ui` + `previewVault()` melewati OTP untuk cek layout.
-
-## Cloudflare / production
-
-- Deploy: `npm run deploy` (build + `wrangler deploy`) → `https://kunci.tiftazani-cuciin.workers.dev`.
-- Storage: Durable Object `KunciStore` (migrasi `v1`, SQLite). Headers keamanan di `public/_headers`.
-- Secrets: `KUNCI_SESSION_SECRET`, `RESEND_API_KEY` (opsional `KUNCI_FROM_EMAIL`) via `wrangler secret put`.
-- Arsitektur: static SPA + `run_worker_first = ["/api/*", "/kunci-status"]`, jadi `/api/*` tidak pernah ditelan SPA fallback.
-
-## Verifikasi
-
-```bash
-cd kunci
-npm test          # ~81 tests (vitest)
-npm run extension-status
+```sh
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.kunci.daemon.plist
 ```
 
-Lint: `npm run lint` (oxlint).
+`npm run install-service` membangun UI, memasang LaunchAgent dan Helper.app.
+Tidak perlu dilakukan ulang untuk migrasi agen. App di `/Applications/Kunci Helper.app`
+dan `~/Applications`. Pengisian native memerlukan izin Accessibility oleh pengguna.
+Token helper di `~/.kunci/helper-token`; jangan baca atau bagikan nilainya.
+Jangan menghapus IndexedDB, browser profile, `~/.kunci/`, DO storage, atau backup.
+`localhost` dan `127.0.0.1` memiliki storage browser berbeda.
 
-## Perintah npm berguna
+Pengguna memakai Brave di Mac. Ekstensi unpacked harus dari
+`/Users/tiftazani/Documents/Hermes-AI/Kunci/kunci/extension`, lihat `brave://extensions`.
+Versi sumber `extension/VERSION`: `1.4.11`; manifest sama. Helper memeriksa stamp dan
+menyuruh reload. Versi sama belum menjamin file yang dimuat sama: cek folder/stamp.
+Memindahkan folder dapat mengubah extension id; periksa origin allowlist web, daemon,
+dan ekstensi, jangan membuka izin semua extension atau semua loopback origin.
+Safari punya installer, tetapi dukungan Safari kini belum diuji dalam serah terima.
 
-| Script | Fungsi |
-| --- | --- |
-| `npm run sync-branch` | Fetch + checkout `FETCH_HEAD` + cek DashboardView |
-| `npm run ambil-branch` | Bash equivalent (`scripts/ambil-branch.sh`) |
-| `npm run install-service` | Build dist + pasang LaunchAgent + Helper.app |
-| `npm run refresh-local` | sync-branch lalu install-service |
-| `npm run uninstall-service` | Stop daemon |
-| `npm run extension-status` | Cek versi manifest vs branch |
-| `npm run install-safari` | Safari temporary extension |
-| `npm run dev` | Vite 5173 |
-| `npm run build` | icons + tsc + vite build |
-| `npm run helper` / `npm start` | Daemon (+ serve UI) |
+## Tes dan hasil nyata pada snapshot ini
 
-## Larangan / preferensi product
+Dijalankan dari `kunci/`:
 
-- Jangan keylog native Mac apps.
-- Jangan commit compiled `Kunci Helper.app`.
-- Prefer `osacompile` JXA lalu Swift; jangan wajibkan `swiftc` saja.
-- Jangan merge ke `main` kecuali diminta (Vercel Cuan Yuk Guys di `main`, root `cuan-yuk-guys`).
-- Jangan hardcode secrets.
-- Netlify sudah ditinggalkan; abaikan `.netlify` di gitignore (legacy).
-- Kalau update PR lewat tool: **baca body GitHub dulu** dan preserve edit manusia. Body PR bisa usang (masih menyebut versi lama / `checkout origin/...`); fakta terkini: **1.4.11** + `FETCH_HEAD`.
+- `npx tsc -b`: lulus.
+- Run pertama `npx vitest run`: 69 file/484 tes lulus, satu timeout 5000ms pada
+  `tests/extension-background-audit.test.ts` → `serialises two SAVE_LOGIN calls so
+  neither entry is lost`.
+- File itu dijalankan sendiri: 6/6 tes lulus, sekitar 544ms.
+- Run penuh kedua: 70/70 file, 485/485 tes lulus, sekitar 1,09 detik.
+  Akar timeout pertama belum terbukti; jangan menyembunyikan atau menaikkan timeout
+  tanpa memeriksa fetch/helper/network harness.
+- `npm run lint`: exit 0, 11 warning, tidak ada error. Warning meliputi unused vars,
+  unnecessary escape, React Fast Refresh, set-state-in-effect dan immutability.
+- `npm run build`: lulus; JS `index-DoL3Sd-u.js` 470,20 kB dan CSS
+  `index-BwOlqZie.css` 34,10 kB. Generator mengubah empat PNG secara byte; perubahan
+  hasil build itu dikembalikan ke HEAD, bukan perubahan aplikasi.
+- `npm run extension-status`: branch/HEAD/path benar, manifest dan VERSION setuju.
+- LaunchAgent `state=running`, program `/opt/homebrew/bin/node`; `/health` 200.
+- Produksi melalui curl dengan User-Agent browser: `/api/ping` 200 `{"ok":true}`;
+  HTML 200 menunjuk `/assets/index-DoL3Sd-u.js`; asset HTTP 200 `text/javascript`,
+  470.209 byte, membawa string versi `1.4.11`. Hash asset sama dengan build lokal.
+  urllib tanpa User-Agent mendapat 403; jangan salah baca itu sebagai app mati.
 
-## Known issues / backlog
+Tidak melakukan deploy, restart service, commit, push, kirim OTP, cloud write, buka
+vault nyata, atau tes UI/autofill nyata pada sesi serah terima ini. Hasil unit/build
+bukan jaminan penuh keamanan atau seluruh flow pengguna.
 
-| Issue | Status |
-| --- | --- |
-| Deteksi duplikat terlalu longgar (cluster besar lintas situs, e.g. Adguard↔Admedika) | Belum dikeraskan |
-| Skor kesehatan 0 wajar kalau ratusan password lemah | By design penalti |
-| Chrome masih versi lama di Mac sampai Load unpacked sekali | User action |
-| PR description stale vs kode | Sync kalau sentuh PR lagi |
-| Tombol Errors di chrome://extensions | Sering bekas; Clear all. Sumber lama: `crypto.randomUUID()` di HTTP (sudah di-wrap) |
+## Rilis, cloud, dan secret
 
-## Alur ekstensi (ringkas)
+Produksi: `https://kunci.tiftazani-cuciin.workers.dev`, Worker `kunci`.
+Bukan Surge/Vercel. Netlify hanya sejarah migrasi. Jangan membuat ulang Netlify.
+Backup/migrasi Netlify pernah dicatat di handoff lama; keberadaan backup dan status
+salinan lama belum diperiksa ulang. Jangan menghapus salinan lama berdasarkan catatan itu.
 
-1. Pertama kali: `chrome://extensions` → Load unpacked → `/Users/tiftazani/Cursor-Tifz/kunci/extension`.
-2. Helper harus nyala (`install-service`).
-3. Setelah git pull / file di `extension/` berubah, SW melihat stamp baru dari `/health` dan reload sendiri.
-4. Kartu harus **1.4.11**. Reload manual Chrome ≠ ganti file Git.
-5. Save login: tunggu outcome sukses; jangan simpan saat submit gagal.
-6. Ikon toolbar: `was_pinned_by_default: false`, jadi **tidak** muncul sendiri. Pin lewat puzzle-piece → pin. Ini bukan bug kode.
+`wrangler.toml` menunjuk assets `dist` dan `run_worker_first` pada `/api/*` serta
+`/kunci-status`. Worker memakai satu DO dan key `vault`, email tunggal, sesi 12 jam.
+Jangan mengubah binding/migration atau menambahkan akun kedua tanpa desain isolasi.
 
-### Aturan duplikat
+Secret bernama `KUNCI_SESSION_SECRET`, `RESEND_API_KEY`, opsional `KUNCI_FROM_EMAIL`.
+Nilai tersimpan di Cloudflare, tidak disertakan dalam paket konteks.
+Status login Wrangler dan secret list belum diperiksa pada sesi ini.
+Jika diperlukan: `npx wrangler whoami`, `npx wrangler secret list` menampilkan metadata.
+Jangan merotasi secret yang ada untuk onboarding. Upload secret hanya lewat masukan
+aman milik pengguna, tidak melalui chat/argumen shell/log. `npm run set-resend-key`
+adalah script lama yang membaca clipboard dan membersihkannya; pakai hanya jika
+pengguna meminta pemasangan key dan mengetahui clipboard akan dikonsumsi.
 
-- Dua akun beda di host sama = bukan duplikat. Username beda selalu lolos.
-- Host harus **sama persis**. `accounts.google.com` ≠ `myaccount.google.com` ≠ `mail.google.com`. Jangan pakai domain family.
-- Layer URL (path) harus sama. `/login` dan `/transfer/confirm` = dua password berbeda.
-- Nama entri berisi email (`tiftazani@gmail.com`) **bukan** host. `hostFromUrl` menolak string tanpa scheme yang mengandung `@`; `nameMatchesHost` juga menolak nama ber-`@` supaya entri tidak ditawarkan di `gmail.com` hanya karena nama = alamat email.
-- Entri bernama OTP/TOTP/2FA/authenticator tidak pernah masuk cluster.
-- Cek: `npx vite-node .audit/dupe-ab.mjs`.
+Untuk perubahan runtime yang disetujui dirilis:
 
-### Layer password (satu situs, banyak prompt)
+1. Bila `extension/*.js` berubah, bump versi. `extension/VERSION` sumber utama;
+   selaraskan manifest, `scripts/extension-status.mjs`, README, HANDOFF, dan literal
+   mock di `tests/extension-background-audit.test.ts`. Views membaca injected version.
+2. Jalankan empat gate di atas dan tes browser terkait. Versi hanya penanda rilis,
+   bukan pengganti tes. Jangan deploy saat mutation test masih berjalan.
+3. `npm run deploy` = build baru + wrangler deploy. `wrangler deploy` sendirian
+   mengupload `dist` yang sudah ada, sehingga dapat merilis bundle lama.
+4. Bila code helper berubah, restart LaunchAgent. Jika installer/path berubah,
+   lakukan instalasi yang sesuai. Minta pengguna reload ekstensi bila stamp belum
+   terambil. Jangan klaim reload pengguna sudah terjadi tanpa bukti.
+5. Baca asset URL dari index.html LIVE, cek HTTP/content-type/ukuran/versi dan perilaku.
+   Asset lama yang tidak ada bisa dijawab HTML 200 oleh SPA fallback.
+6. Cek `/health` version/uiRevision. Bila sidebar masih lama, cek service worker/cache;
+   hard-refresh tidak sama dengan hapus storage. Jangan hapus vault untuk refresh.
 
-- `layerFromUrl(url)` = path tanpa trailing slash, huruf kecil. Dipakai bersama oleh `src/lib/match.ts` dan `extension/crypto.js`.
-- `matchesForUrl` **tidak menyembunyikan** match, hanya mengurutkan: entri yang path-nya sama persis dengan halaman naik ke atas, entri tanpa path/root jadi cadangan.
-- Popup ekstensi menampilkan layer di baris kedua (`username · /transfer/confirm`) supaya dua kredensial di satu host terbaca beda.
-- Simpan login juga pakai layer: `decideLoginSave` pilih entri yang path-nya sama dulu. Kalau tidak, PIN di `/transfer/confirm` akan menimpa login `/login` yang username-nya sama.
-- Layer bukan filter: entri lain di host sama tetap ditawarkan, hanya turun urutan.
-- Cek: `tests/match-parity.test.ts` (parity + urutan), `tests/capture.test.ts`, `tests/extension-crypto.test.ts`.
+Perubahan dokumen/tes saja tidak perlu deploy atau bump versi.
 
-### Kapan ikon Kunci muncul
+## Batas keamanan yang harus disebutkan
 
-- Ada field `password` + form terklasifikasi login → ikon di samping password.
-- Kotak kode sekali pakai (`autocomplete="one-time-code"`, `inputmode` numerik, nama `otp`/`totp`/`mfa`) → **tidak pernah**. Ini OTP, bukan password.
-- Satu field rahasia sendirian di halaman non-login (API key, token, webhook) → **tidak**. Aturan: `passwords.length === 1` + tanpa username yakin + tanpa sinyal login di tombol/URL. Contoh: modal OpenAI Compatible (Check/Create/Cancel).
-- Belum ada password tapi form jelas langkah login (tombol Continue/Next/Masuk, atau URL `/login` `/signin`) → ikon di samping kotak email. Contoh: `agoda.com/account/signin.html`.
-- Signup, reset, change-password, pencarian, pembayaran, newsletter → tidak pernah.
-- Cek: `node .audit/agoda-live.mjs`, `node .audit/modal-live.mjs`, `node .audit/otp-live.mjs`, dan `node .audit/ext-live.mjs` (Playwright, muat ekstensi sungguhan).
+Server menyimpan isi vault sebagai ciphertext. Ancaman phishing, malware/keylogger,
+XSS/origin yang dikuasai, password induk lemah, dan endpoint saat unlock tetap ada.
+Jangan mengklaim anti-hack 100%.
 
-## Alur Mac helper (ringkas)
+Fitur opsional email recovery adalah pengecualian penting: `src/lib/cloud.ts` →
+`POST /api/mail/recovery` → Worker menerima recovery key plaintext dan mengirim ke
+Resend/email. Jangan menyamakan alur ini dengan ciphertext-only penuh. Jangan menguji
+alur itu memakai key nyata atau menganggap sudah aman untuk shared vault.
 
-- Plist: `~/Library/LaunchAgents/com.kunci.daemon.plist`
-- Token: `~/.kunci/helper-token`
-- App: `/Applications/Kunci Helper.app` (+ salinan `~/Applications`)
-- Accessibility: centang **Kunci Helper**. Jangan klik app di Dock (spawn dialog).
-- Daemon proxy `/api/*` ke `https://kunci.tiftazani-cuciin.workers.dev`.
+## Referensi berikutnya
 
-## Prompt seed untuk harness baru
-
-```
-Kerjakan hanya di kunci/ pada branch cursor/kunci-password-manager-4eaf
-(repo tiftazani/Cursor-Tifz, PR #6). Baca kunci/HANDOFF.md duluan.
-
-Mac path: /Users/tiftazani/Cursor-Tifz.
-Jangan sentuh cuan-yuk-guys. Jangan merge main. Zero-knowledge: jangan
-hardcode secrets. Extension unpacked: kunci/extension (1.4.11). Helper:
-127.0.0.1:8780. Git Mac: fetch + checkout -B … FETCH_HEAD (bukan origin/branch).
-Bahasa chat: Indonesia natural.
-```
-
-## Referensi cepat file
-
-| Area | Path |
-| --- | --- |
-| Vault state | `src/state/VaultContext.tsx` |
-| Ringkasan UI | `src/views/DashboardView.tsx` |
-| Duplikat | `src/lib/duplicates.ts` |
-| Login save outcome | `src/lib/login-outcome.ts`, `extension/login-outcome.js`, `extension/content.js` |
-| OTP policy | `src/lib/otp-policy.ts` |
-| Paths / stamp | `helper/repo-paths.mjs` |
-| Daemon /health | `helper/daemon.mjs` |
-| Install Mac | `helper/install-service.mjs` |
-| Extension SW | `extension/background.js` |
-| Manifest | `extension/manifest.json` (`1.4.11`) |
-| Cloudflare worker + API | `worker/index.ts` |
-| Cloudflare config | `wrangler.toml` |
-
-## Catatan keamanan (produk)
-
-**Ditahan:** ciphertext-only di server; OTP allowlist + cookie; recovery reset di klien.
-
-**Tidak ditahan:** phishing master password; master lemah; Gmail dikuasai orang lain + recovery key ikut di Gmail; malware di Mac saat brankas terbuka.
+`docs/MAINTENANCE.md` memindahkan aturan/pitfall dari skill Kunci Hermes ke dokumen
+repo yang bisa dibaca Claude. `docs/TEAM-SECURITY-DESIGN.md` memberi syarat fitur tim.
+`README.md` menjelaskan pemakaian produk, tetapi masih memuat contoh path clone lama;
+untuk Mac ini, gunakan path snapshot di atas. Tidak perlu membaca seluruh repo dari
+nol: mulai dari peta area tugas, definisi/pemanggil, tes terkait, lalu gate penuh.
