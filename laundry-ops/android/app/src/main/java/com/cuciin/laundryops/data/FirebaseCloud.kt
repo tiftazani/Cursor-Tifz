@@ -14,17 +14,20 @@ import java.util.concurrent.TimeUnit
 object FirebaseCloud {
     private const val TAG = "CuciinFirebase"
     private const val PROVISION_APP = "cuciin-provision"
-    private val main = Handler(Looper.getMainLooper())
+    private val main by lazy { Handler(Looper.getMainLooper()) }
+    private val signInAttempt = java.util.concurrent.atomic.AtomicLong()
     private var appContext: Application? = null
     var enabled: Boolean = false
         private set
     val authenticated: Boolean get() = enabled && FirebaseAuth.getInstance().currentUser != null
+    val currentEmail: String? get() = if (enabled) FirebaseAuth.getInstance().currentUser?.email?.trim()?.lowercase() else null
 
     /** Dipanggil dari thread I/O untuk mengautentikasi API Cloudflare. */
     fun idTokenBlocking(): String? {
-        if (!authenticated) return null
+        if (!enabled) return null
+        val user = FirebaseAuth.getInstance().currentUser ?: return null
         return try {
-            Tasks.await(FirebaseAuth.getInstance().currentUser!!.getIdToken(false), 10, TimeUnit.SECONDS).token
+            Tasks.await(user.getIdToken(false), 10, TimeUnit.SECONDS).token
         } catch (e: Exception) {
             Log.w(TAG, "token Firebase belum tersedia", e)
             null
@@ -46,6 +49,7 @@ object FirebaseCloud {
     }
 
     fun signOut() {
+        signInAttempt.incrementAndGet()
         if (enabled) FirebaseAuth.getInstance().signOut()
     }
 
@@ -56,6 +60,7 @@ object FirebaseCloud {
         // perangkat yang layanan Google-nya tidak lengkap rantai itu tidak pernah selesai. Listener
         // sukses maupun gagal tidak dipanggil, jadi tombol Masuk berhenti tanpa penjelasan apa pun.
         // Karena itu jawaban selalu dipaksa keluar dari sini, bukan diserahkan ke Task.
+        val attempt = signInAttempt.incrementAndGet()
         val done = java.util.concurrent.atomic.AtomicBoolean(false)
         fun finish(ok: Boolean, pending: Boolean, msg: String) {
             if (!done.compareAndSet(false, true)) return
@@ -70,10 +75,19 @@ object FirebaseCloud {
         val watchdog = Runnable {
             finish(false, false, "Server identitas tidak menjawab. Periksa koneksi lalu coba lagi.")
         }
+        CloudSync.accountSwitchError(email)?.let {
+            finish(false, false, it)
+            return
+        }
         main.postDelayed(watchdog, 20_000)
         FirebaseAuth.getInstance().signInWithEmailAndPassword(email.trim(), password)
-            .addOnSuccessListener {
+            .addOnSuccessListener { result ->
+                if (done.get() || attempt != signInAttempt.get()) return@addOnSuccessListener
+                val authenticatedUser = result.user ?: return@addOnSuccessListener
+                if (FirebaseAuth.getInstance().currentUser?.uid != authenticatedUser.uid) return@addOnSuccessListener
                 CloudSync.verifyIdentity { identity, error ->
+                    if (done.get() || attempt != signInAttempt.get()) return@verifyIdentity
+                    if (FirebaseAuth.getInstance().currentUser?.uid != authenticatedUser.uid) return@verifyIdentity
                     main.removeCallbacks(watchdog)
                     if (identity == null) {
                         FirebaseAuth.getInstance().signOut()
@@ -87,8 +101,11 @@ object FirebaseCloud {
                         finish(false, false, "Akun belum memiliki cabang")
                         return@verifyIdentity
                     }
-                    CuciinStore.session.value = Session(identity.role, identity.name, identity.email, branchId, identity.branchIds)
-                    CuciinStore.viewBranch.value = if (identity.role == Role.Owner) "all" else branchId
+                    if (currentEmail != identity.email.trim().lowercase()) {
+                        finish(false, false, "Identitas akun berubah. Silakan masuk kembali.")
+                        return@verifyIdentity
+                    }
+                    CuciinStore.authenticateSession(Session(identity.role, identity.name, identity.email, branchId, identity.branchIds))
                     CuciinStore.bumpPublic()
                     CloudSync.onAuthenticated()
                     finish(true, false, "ok")

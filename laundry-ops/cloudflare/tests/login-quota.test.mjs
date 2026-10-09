@@ -117,3 +117,18 @@ test("email tidak dikenal tetap ditolak, bukan diloloskan", async () => {
 
   assert.equal(staff, null, "penyerapan galat tidak boleh meloloskan akun yang tidak terdaftar");
 });
+
+test("UID salah terhubung tidak boleh memilih nama atau peran email lain", async () => {
+  const env = fakeD1();
+  seedStaff(env, { email: "aida@example.com", name: "Aida", role: "Owner", uid: "uid-widad" });
+  env.db.prepare("INSERT INTO staff(email,organization_id,name,role,approved,active,firebase_uid,updated_at) VALUES(?,?,?,?,?,?,?,?)")
+    .run("widad@example.com", "cuciin", "Widad", "Kasir", 1, 1, null, 1);
+  const staff = await resolveStaff(env, { sub: "uid-widad", email: "WIDAD@example.com" });
+  assert.deepEqual({ ...staff }, { email: "widad@example.com", name: "Widad", role: "Kasir" });
+});
+
+test("UID dikenal dengan email tidak terdaftar tetap ditolak", async () => {
+  const env = fakeD1();
+  seedStaff(env, { email: "aida@example.com", uid: "uid-known" });
+  assert.equal(await resolveStaff(env, { sub: "uid-known", email: "unknown@example.com" }), null);
+});

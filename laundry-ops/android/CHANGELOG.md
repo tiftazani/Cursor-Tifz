@@ -2,6 +2,21 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.45 — 9 Okt 2026 (versionCode 64)
+
+- Stok awal produk dikirim lewat `stockMove` per cabang, bukan hanya saldo lokal yang diabaikan server.
+- Perubahan nota oleh kasir lain mempertahankan kasir pembuat dan petugas rincian yang sudah tersimpan.
+- Keranjang dibersihkan saat berganti akun. Antrean transaksi terikat akun pembuat agar tidak dikirim sebagai pengguna lain.
+- Pencocokan identitas server memeriksa email, bukan memakai UID yang menunjuk baris pengguna berbeda.
+- Catatan lama tidak diubah otomatis. Kasus spesifik di HP Widad masih perlu nomor nota dan pemeriksaan perangkat.
+
+## 1.10.44 — 8 Okt 2026 (versionCode 63)
+
+- Pendaftaran ulang memakai akun login lama setelah sandi diverifikasi saat email masih tersimpan.
+- Pesan gagal pendaftaran menyebut sebabnya.
+- Penghapusan pengguna mencoba menghapus login Firebase. Gangguan Firebase tidak membatalkan penghapusan staff.
+- Bukti rilis: `releases/1.10.44-candidate/README.md`.
+
 ## 1.10.43 — 1 Okt 2026 (versionCode 62)
 
 ### Tutup kas: rincian penjualan produk dan sisa stok

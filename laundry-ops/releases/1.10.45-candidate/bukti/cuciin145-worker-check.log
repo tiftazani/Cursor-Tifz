@@ -1,0 +1,185 @@
+
+> cuciin-cloud@1.0.0 check
+> tsc --noEmit && node scripts/validate-schema.mjs && npm test
+
+Skema valid: 19 tabel inti ditemukan.
+
+> cuciin-cloud@1.0.0 test
+> node --test tests/*.test.mjs
+
+✔ Owner dapat menyimpan kebijakan akses dan isinya tersimpan di tabel (26.746875ms)
+✔ non-Owner ditolak saat mengubah kebijakan akses maupun template (4.671958ms)
+✔ retry dengan commandId sama tidak menggandakan baris (8.645791ms)
+✔ memakai commandId lama dengan isi berbeda ditolak 409 (5.391834ms)
+✔ pembaruan kebijakan akses kedua menimpa baris yang sama, bukan menambah baris (3.949542ms)
+✔ kebijakan akses yang tersimpan langsung mengikat command berikutnya (4.295458ms)
+✔ kebijakan yang mengizinkan modul tidak menghalangi command yang sah (5.279041ms)
+✔ Owner selalu lolos walau ada kebijakan yang mencabut modul (5.314041ms)
+✔ template WhatsApp tersimpan dengan id yang tetap dan perubahan tercatat di journal (3.99675ms)
+✔ kebijakan dengan service.payment saja cukup untuk mencatat pembayaran (6.620084ms)
+✔ kebijakan tanpa service.payment tetap menolak pembayaran (4.974125ms)
+✔ absensi sendiri cukup dengan attendance.self tanpa attendance.view (4.952917ms)
+✔ jenis aset memakai inventory.type, bukan inventory.write (4.070959ms)
+✔ dua skema id untuk absensi yang sama tidak menghasilkan baris kembar di snapshot (1.659875ms)
+✔ cabang berbeda tetap menghasilkan baris terpisah (0.297834ms)
+✔ penghapusan absensi membersihkan baris kembarannya juga (0.089916ms)
+✔ jurnal absen tanpa jam pulang tidak mengosongkan jam pulang di snapshot (0.080833ms)
+✔ migrasi menyediakan metadata idempotensi, journal cabang, dan penjaga stok (2.23725ms)
+✔ token eksekusi membuat replay command mengubah saldo tepat satu kali (0.826792ms)
+✔ stok negatif membatalkan seluruh transaksi (0.558583ms)
+✔ dua penjualan retail yang berebut stok satu hanya menyimpan satu order (0.325125ms)
+✔ otorisasi membatasi role, cabang, dan absensi orang lain (0.172375ms)
+✔ komisi transaksi selalu berasal dari katalog server (0.114875ms)
+✔ jurnal pembayaran bersifat append-only dan tidak boleh melebihi penerimaan Service (0.087333ms)
+✔ tutup kas bersifat append-only dan menolak ID yang sudah ada (0.046917ms)
+✔ delta staf dan cabang non-Owner dibatasi ke penugasan cabangnya (16.319ms)
+✔ kursor klien yang di depan server dikembalikan ke revisi jurnal terakhir (0.972334ms)
+✔ pemindahan staf mengirim delete ke cabang lama dan upsert ke cabang baru (0.508417ms)
+✔ snapshot absensi non-Owner hanya memuat catatan akun sendiri (0.177416ms)
+✔ envelope Android dipetakan tanpa mengganti nama entity Kotlin (0.926291ms)
+✔ setiap entityType yang dikirim Android punya alias command (0.149916ms)
+✔ kegagalan D1 sementara tidak ditandai sebagai penolakan permanen (0.077791ms)
+✔ batch memberi status retryable saat eksekusi command mengalami gangguan D1 (1.099791ms)
+✔ payload riwayat memperoleh syncId stabil dan actor terverifikasi (0.141833ms)
+✔ mutasi stok kompensasi tetap sah setelah Nota dihapus lebih dahulu (0.045708ms)
+✔ versi OCC Service selalu naik walau jam berada pada milidetik sama (0.034583ms)
+✔ scope sinkronisasi stabil dan berubah saat akses cabang berubah (0.040917ms)
+✔ tombstone mencegah Nota lama hidup kembali (0.023167ms)
+✔ bootstrap materialisasi journal dan membawa revision yang sudah tercakup (0.181166ms)
+✔ snapshot PUT lama hanya tersedia untuk bootstrap privat (0.039583ms)
+✔ migrasi nama Owner mengganti nama lewat jurnal, bukan hanya tabel (0.247292ms)
+✔ jurnal staff ditulis satu entri per cabang, bukan satu saja (0.055292ms)
+✔ entri jurnal staff mengganti baris lama berdasarkan email (0.077792ms)
+✔ entri jurnal bertipe order tetap masuk ke notas saat materialisasi (0.070084ms)
+✔ order.payment tidak menghapus rincian Nota pada payload tersimpan (17.283917ms)
+✔ stock.batch menjurnal riwayat stok dan saldo sebagai entity yang dikenal perangkat (4.995917ms)
+✔ harga Service yang menyimpang dari katalog ditolak untuk pengirim non-Owner (4.005333ms)
+✔ harga Service sesuai katalog tetap diterima untuk non-Owner (4.326ms)
+✔ Owner tetap boleh memakai harga Service di luar katalog (4.34325ms)
+✔ reproject memakai revisi jurnal terbaru supaya versi entity tidak mundur (2.649792ms)
+✔ absensi satu karyawan dicatat per cabang, bukan satu per hari (6.336416ms)
+✔ absen di cabang di luar penugasan tetap ditolak (2.675417ms)
+✔ absen kedua di cabang yang sama pada hari yang sama memperbarui, bukan menabrak (4.518125ms)
+✔ jam pulang absensi disimpan sebagai angka, bukan label jam (3.991666ms)
+✔ absen pulang tanpa angka tetap diterima dan disimpan kosong (3.864917ms)
+✔ kiriman absen tanpa jam pulang tidak mengosongkan jam pulang yang sudah tercatat (4.441792ms)
+✔ jurnal absen mencatat nilai gabungan, bukan nilai mentah kiriman (5.180625ms)
+✔ jam masuk yang sudah tercatat tidak diganti kiriman berikutnya (5.147792ms)
+✔ order.cancel menandai nota batal, mencatat pengembalian dana hari ini, dan tidak menyentuh jurnal pembayaran (5.3005ms)
+✔ order.cancel hanya Owner dan idempoten (5.525542ms)
+✔ order.cancel menolak nota yang belum menerima pembayaran (3.845375ms)
+✔ order.cancel mengembalikan stok produk yang terjual di nota itu (4.921083ms)
+✔ envelope Android dengan syncIntent cancel dipetakan ke order.cancel, bukan order.put (0.1225ms)
+✔ pembatalan lewat envelope perangkat benar-benar tercatat (4.761167ms)
+✔ order.put tidak dapat menghidupkan kembali nota yang sudah dibatalkan (7.130917ms)
+✔ order.put tidak dapat membatalkan nota diam-diam tanpa pengembalian dana (6.929291ms)
+✔ order.payment, order.status, dan order.handover tidak dapat mengubah nota yang sudah dibatalkan (6.135458ms)
+✔ migrasi 0009 mengganti kunci absensi menjadi per cabang (0.285583ms)
+✔ kunci absensi per cabang benar-benar berlaku di basis data (3.4505ms)
+✔ daftar project menerima format lama satu project (1.192917ms)
+✔ daftar project memuat beberapa project saat masa peralihan (0.127583ms)
+✔ spasi dan koma berlebih tidak menghasilkan project kosong (0.064791ms)
+✔ FIREBASE_PROJECT_IDS diutamakan saat keduanya terisi (0.064708ms)
+✔ tanpa konfigurasi tidak ada project yang diterima (0.053667ms)
+✔ wrangler.toml memuat project baru dan lama selama peralihan (1.077458ms)
+✔ kunci service account dibaca dari JSON mentah (0.5375ms)
+✔ kunci service account dibaca dari base64 (0.37375ms)
+✔ kunci tanpa private_key dianggap tidak ada (0.146875ms)
+✔ tanpa kunci, tidak ada yang dikembalikan (0.071166ms)
+✔ token akses ditukar dengan tanda tangan asli (86.102875ms)
+✔ token yang ditolak Google dilaporkan sebagai kegagalan (26.826042ms)
+✔ akun login dicari lalu dihapus (38.189083ms)
+✔ akun yang sudah tidak ada bukan kegagalan (13.925542ms)
+✔ tanpa kunci, penghapusan dilewati tanpa melempar (0.155ms)
+✔ kegagalan jaringan dilaporkan, bukan dilempar (35.835666ms)
+{"event":"staff.delete.akun","email":"kasir@cuciin.id","keterangan":"dilewati: kunci admin belum dipasang"}
+✔ hapus user tetap berhasil walau kunci admin belum dipasang (5.9055ms)
+{"event":"staff.delete.akun","email":"kasir@cuciin.id","keterangan":"gagal: Invalid keyData"}
+✔ kunci admin rusak tidak menggagalkan penghapusan user (4.368ms)
+{"event":"staff.delete.akun","email":"kasir@cuciin.id","keterangan":"akun login dihapus"}
+✔ hapus user dengan kunci admin memanggil penghapusan akun (67.120416ms)
+Gagal menyambungkan firebase_uid, login tetap dilanjutkan Error: exceeded D1's free tier daily row write limit. wait until tomorrow (midnight UTC)
+    at Object.run (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/tests/login-quota.test.mjs:44:27)
+    at linkFirebaseUid (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/src/index.ts:101:117)
+    at resolveStaff (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/src/index.ts:114:22)
+    at async TestContext.<anonymous> (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/tests/login-quota.test.mjs:72:17)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+  code: 7500
+}
+Gagal menyambungkan firebase_uid, login tetap dilanjutkan Error: exceeded D1's free tier daily row write limit. wait until tomorrow (midnight UTC)
+    at Object.run (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/tests/login-quota.test.mjs:44:27)
+    at linkFirebaseUid (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/src/index.ts:101:117)
+    at TestContext.<anonymous> (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/tests/login-quota.test.mjs:83:28)
+    at Test.runInAsyncScope (node:async_hooks:226:14)
+    at Test.run (node:internal/test_runner/test:1402:25)
+    at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+    at Test.postRun (node:internal/test_runner/test:1542:19)
+    at Test.run (node:internal/test_runner/test:1467:12)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+  code: 7500
+}
+Gagal menyambungkan firebase_uid, login tetap dilanjutkan Error: exceeded D1's free tier daily row write limit. wait until tomorrow (midnight UTC)
+    at Object.run (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/tests/login-quota.test.mjs:44:27)
+    at linkFirebaseUid (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/src/index.ts:101:117)
+    at resolveStaff (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/src/index.ts:114:22)
+    at async TestContext.<anonymous> (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/tests/login-quota.test.mjs:102:3)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+  code: 7500
+}
+Gagal menyambungkan firebase_uid, login tetap dilanjutkan Error: UNIQUE constraint failed: staff.firebase_uid
+    at Object.run (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/tests/login-quota.test.mjs:48:27)
+    at linkFirebaseUid (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/src/index.ts:101:117)
+    at resolveStaff (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/src/index.ts:114:22)
+    at async TestContext.<anonymous> (file:///Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare/tests/login-quota.test.mjs:126:17)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+  code: 'ERR_SQLITE_ERROR',
+  errcode: 2067,
+  errstr: 'constraint failed'
+}
+✔ kuota tulis habis: staff tetap ditemukan dan login dilanjutkan (5.018083ms)
+✔ kuota tulis habis: linkFirebaseUid melaporkan gagal tanpa melempar (2.613541ms)
+✔ kuota tulis normal: firebase_uid benar-benar tersambung (2.499791ms)
+✔ kuota tulis pulih: percobaan berikutnya menyambungkan uid (4.90775ms)
+✔ email tidak dikenal tetap ditolak, bukan diloloskan (3.77525ms)
+✔ UID salah terhubung tidak boleh memilih nama atau peran email lain (4.486125ms)
+✔ UID dikenal dengan email tidak terdaftar tetap ditolak (2.648458ms)
+✔ Kasir lain mengoreksi rincian tanpa mengambil asal kasir dan petugas, rincian baru milik pengirim (31.156334ms)
+✔ Owner dapat menugaskan petugas baru tetapi kasir pembuat tetap aktor login (54.045792ms)
+✔ Owner boleh menugaskan petugas pada koreksi tetapi asal kasir tetap (10.524083ms)
+✔ duplikat layanan mempertahankan petugas per kemunculan dan duplikat tambahan dicap pengirim (5.93975ms)
+✔ Owner mengoreksi tanpa field petugas tetap mempertahankan petugas lama (5.830291ms)
+✔ nota tidak menyimpan alias asal palsu dalam payload atau jurnal (4.520583ms)
+✔ pembuatan langsung order.create juga membuang asal palsu (3.964208ms)
+✔ command bertipe tidak dikenal tidak menahan batch, sisanya tetap dijalankan (41.010917ms)
+✔ command ditolak permanen tidak menahan command sesudahnya (8.211875ms)
+✔ payment.delete dikenal dan menghapus baris pembayaran (5.001167ms)
+✔ payment.delete untuk baris yang sudah hilang dianggap selesai, bukan menahan antrean (6.491ms)
+✔ order.delete untuk Service yang belum pernah sampai server dianggap selesai (6.0455ms)
+✔ order.delete tetap ditolak bila Service sudah menerima pembayaran (8.32225ms)
+GALAT: hasil export tidak bisa dijalankan ulang.
+  pernyataan #0: no such table: attendance
+    INSERT INTO "attendance" ("id","staff_email") VALUES('att-1','kasir@contoh.id');
+  Database cadangan TIDAK boleh disentuh. Periksa database produksi atau versi wrangler yang dipakai.
+✔ export dengan urutan tabel kacau tetap lolos uji setelah dirapikan (164.621541ms)
+✔ CREATE TABLE ditulis sebelum INSERT yang merujuknya (31.823875ms)
+✔ baris induk ditulis sebelum baris anak yang merujuknya (28.442916ms)
+✔ trigger tidak menyala saat data dimuat (29.266292ms)
+✔ berkas yang tidak bisa dijalankan ulang ditolak, bukan diteruskan (32.829416ms)
+✔ snapshot tanpa baris sync_snapshots tetap membawa updatedAt, bukan 0 (6.094292ms)
+✔ updatedAt snapshot selalu terisi walau jurnal dan baris snapshot sama-sama kosong (3.556084ms)
+✔ penghapusan di server terbaca sebagai snapshot kosong yang layak diterima perangkat (4.315792ms)
+✔ Owner Update 10→25→0 ditarik Kasir cabang tujuan, snapshot sama dengan D1, replay tidak menggandakan (39.793291ms)
+✔ setiap tipe entitas perangkat dikenal Worker untuk upsert dan delete (0.966625ms)
+✔ command dengan tipe yang tidak dikenal tetap ditolak, bukan diterima diam-diam (0.225917ms)
+✔ delete tanpa payload tetap diterima karena perangkat mengirim payload null (0.0575ms)
+ℹ tests 120
+ℹ suites 0
+ℹ pass 120
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 509.83825

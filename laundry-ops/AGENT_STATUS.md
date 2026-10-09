@@ -1,11 +1,21 @@
 # Papan status & klaim file antar-agent
 
-Terakhir diperbarui: 8 Oktober 2026 (oleh Hermes).
+Terakhir diperbarui: 9 Oktober 2026 (oleh Hermes).
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
 
 **Keadaan `main` per 1 Okt: `31e6596`** (rilis 1.10.43 — tutup kas rinci produk + pembatalan nota + penjaga endpoint build; sudah di-push ke `origin/main`, CI hijau, Worker produksi+debug sudah di-deploy). Rincian di bagian 0w di bawah. Sebelumnya: `2727304` (bukti deploy Worker 1.10.43), `a6ce246` (artefak kandidat 1.10.43), `affef30` (rilis 1.10.42 — JPEG), `279c7d1` (rilis 1.10.41), `6f8338d` (kode JPEG).
+
+## 0y. Stok lintas perangkat dan identitas kasir (9 Okt, Hermes)
+
+Status: APK 1.10.45/build 64 dibangun dan diuji lokal. Android 409/0 per varian; lint 0 error/20 warning. Worker 120/0. verify_release.py PASS, endpoint dex benar, sertifikat tetap. APK rilis emulator API 35 offline: terpasang, terbuka, Versi 1.10.45 tampil, hash cocok, crash Cuciin 0. Owner memberi izin push dan deploy produksi/debug melalui clarify. Hasil deploy menyusul.
+
+Perbaikan stok awal via StockMove dan pemulihan snapshot saldo/inventory; asal kasir dipertahankan; koreksi Kasir mempertahankan petugas lama; Owner tetap boleh menugaskan petugas. Draft dibersihkan saat ganti akun, outbox actorEmail menghalangi pengiriman sebagai akun lain. Bukti jurnal read-only: 14 nota Widad→Aida; tidak diubah. Belum terbukti: HP pelapor, dua perangkat nyata, callback Firebase nyata, sapu menu dan Riwayat versi setelah login.
+
+- Klaim Hermes: Android `data/CuciinStore.kt`, `data/CloudSync.kt`, `data/SyncProtocol.kt`, `ui/AuthScreens.kt`, tes terkait, `app/build.gradle.kts`, `data/VersionHistory.kt`, CHANGELOG, RELEASE_READINESS, artefak kandidat dan status. Server `src/command-sync.ts`, `src/index.ts`, tes terkait bila bukti menuntutnya.
+- Implementasi tiga child selesai dengan pembagian file; parent meninjau diff dan menjalankan gate/build. Klaim file dilepas setelah commit.
+- Periksa penyebab stok Owner tidak diterima Kasir dan Widad tercatat sebagai Aida. Jangan mengubah stok nyata, akun, atau catatan lama tanpa bukti. Akun pengecualian bagian 0x tetap dilindungi.
 
 ## 0x. Pendaftaran gagal setelah user dihapus (8 Okt, Hermes)
 

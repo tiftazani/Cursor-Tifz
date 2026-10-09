@@ -12,10 +12,25 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.43"
-    val currentCode: Int = 62
+    val currentName: String = "1.10.45"
+    val currentCode: Int = 64
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.45", code = 64, date = "9 Okt 2026",
+            notes = listOf(
+                "Stok awal produk kini dikirim sebagai pencatatan stok per cabang, supaya saldonya diterima kasir cabang itu.",
+                "Mengubah nota tidak mengganti nama kasir pembuat atau petugas layanan lama dengan nama kasir yang mengedit.",
+                "Keranjang dibersihkan saat berganti akun. Transaksi yang belum terkirim tetap terikat pada akun pembuatnya.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.44", code = 63, date = "8 Okt 2026",
+            notes = listOf(
+                "Daftar ulang memakai akun login lama setelah sandi diverifikasi bila email masih tersimpan. Pesan pendaftaran menyebut sebab kegagalan.",
+                "Saat Owner menghapus pengguna, server juga mencoba menghapus akun loginnya. Gangguan layanan login dapat menunda penghapusan itu.",
+            ),
+        ),
         AppRelease(
             name = "1.10.43", code = 62, date = "1 Okt 2026",
             notes = listOf(

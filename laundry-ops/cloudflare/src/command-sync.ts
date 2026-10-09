@@ -443,12 +443,19 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
 
   const linesRaw = p.lines;
   if (!Array.isArray(linesRaw) || linesRaw.length < 1 || linesRaw.length > 80) throw new CommandError(422, "Service harus memiliki 1–80 rincian");
+  const storedCommissions=existing ? (await db.prepare("SELECT service_id,commission_per_unit,unit_price,handler_email,handler_name FROM order_lines WHERE order_id=? ORDER BY line_no").bind(id).all<{service_id:string;commission_per_unit:number;unit_price:number;handler_email:string;handler_name:string}>()).results : [];
+  const unmatchedLines=[...storedCommissions];
   const parsedLines = linesRaw.map((raw, index) => {
     if (!isObject(raw)) throw new CommandError(422, `Rincian ${index + 1} tidak valid`);
-    const handlerEmail = identity.role === "Owner" || identity.bootstrap ? firstString(raw,["handlerEmail","handledByEmail"],false,254).toLowerCase() : identity.email.toLowerCase();
-    const handlerName = identity.role === "Owner" || identity.bootstrap ? firstString(raw,["handlerName","handledByName"],false,160) : identity.name;
+    const serviceId=requiredString(raw,"serviceId",100);
+    // ponytail: tanpa ID rincian, cocokkan layanan/urutan; ID stabil diperlukan untuk membedakan duplikat yang ditukar.
+    const storedIndex=unmatchedLines.findIndex(line=>line.service_id===serviceId);
+    const storedLine=storedIndex<0 ? undefined : unmatchedLines.splice(storedIndex,1)[0];
+    const mayReassign=identity.role === "Owner" || identity.bootstrap;
+    const handlerEmail = mayReassign && ("handlerEmail" in raw || "handledByEmail" in raw) ? firstString(raw,["handlerEmail","handledByEmail"],false,254).toLowerCase() : storedLine?.handler_email ?? identity.email.toLowerCase();
+    const handlerName = mayReassign && ("handlerName" in raw || "handledByName" in raw) ? firstString(raw,["handlerName","handledByName"],false,160) : storedLine?.handler_name ?? identity.name;
     return {
-      serviceId: requiredString(raw,"serviceId",100), serviceName: firstString(raw,["serviceName","name"],true,200), quantity: typeof raw.quantity === "number" ? finiteNumber(raw,"quantity",0.001) : finiteNumber(raw,"qty",0.001),
+      serviceId, serviceName: firstString(raw,["serviceName","name"],true,200), quantity: typeof raw.quantity === "number" ? finiteNumber(raw,"quantity",0.001) : finiteNumber(raw,"qty",0.001),
       unit: requiredString(raw,"unit",40), unitPrice: integer(raw,"unitPrice"), handlerEmail, handlerName,
     };
   });
@@ -456,7 +463,6 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
   const commissions=(await db.prepare(`SELECT id,commission_per_unit,default_price FROM services WHERE organization_id=? AND active=1 AND id IN (${serviceIds.map(()=>"?").join(",")})`).bind(ORG_ID,...serviceIds).all<{id:string;commission_per_unit:number;default_price:number}>()).results;
   const commissionCatalogue=new Map(commissions.map(row=>[row.id,row.commission_per_unit]));
   const priceCatalogue=new Map(commissions.map(row=>[row.id,row.default_price]));
-  const storedCommissions=existing ? (await db.prepare(`SELECT service_id,commission_per_unit,unit_price FROM order_lines WHERE order_id=? AND service_id IN (${serviceIds.map(()=>"?").join(",")})`).bind(id,...serviceIds).all<{service_id:string;commission_per_unit:number;unit_price:number}>()).results : [];
   const historicalCommissions=new Map(storedCommissions.map(row=>[row.service_id,row.commission_per_unit]));
   const historicalPrices=new Map(storedCommissions.map(row=>[row.service_id,row.unit_price]));
   const lines=parsedLines.map(line=>({...line,commissionPerUnit:trustedCommission(line.serviceId,commissionCatalogue,historicalCommissions)}));
@@ -481,8 +487,8 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
   const paid = integer(p,"paid");
   if (paid > total) throw new CommandError(422, "Pembayaran melebihi grand total");
   if (existing && paid < existing.paid) throw new CommandError(422, "Pembayaran tercatat tidak dapat dikurangi tanpa pengembalian dana");
-  const cashierEmail = identity.role === "Owner" || identity.bootstrap ? (firstString(p,["cashierEmail","kasirEmail"],false,254).toLowerCase() || identity.email.toLowerCase()) : identity.email.toLowerCase();
-  const cashierName = identity.role === "Owner" || identity.bootstrap ? (firstString(p,["cashierName","kasir"],false,160) || identity.name) : identity.name;
+  const cashierEmail = existing?.cashier_email ?? identity.email.toLowerCase();
+  const cashierName = existing?.cashier_name ?? identity.name;
   const canonicalLines=lines.map(line=>({serviceId:line.serviceId,name:line.serviceName,qty:line.quantity,unit:line.unit,unitPrice:line.unitPrice,handledByEmail:line.handlerEmail,handledByName:line.handlerName,commissionPerUnit:line.commissionPerUnit}));
   // Penanda pembatalan HANYA boleh berubah lewat `order.cancel`.
   //
@@ -508,6 +514,8 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
   const canonical:JsonRecord = command.type.startsWith("order.")
     ? { ...kanonikDasar, canceledAtMs:batalTersimpan, canceledAt:storedOrder?.canceledAt ?? "", canceledBy:storedOrder?.canceledBy ?? "", cancelReason:storedOrder?.cancelReason ?? "" }
     : kanonikDasar;
+  delete canonical[command.wireEntityType === "nota" ? "cashierEmail" : "kasirEmail"];
+  delete canonical[command.wireEntityType === "nota" ? "cashierName" : "kasir"];
   const customerName=firstString(p,["customerName","customer"],true,200);
   const paymentStatus=firstString(p,["paymentStatus","pay"],true,50);
   const paymentMethod=firstString(p,["paymentMethod","payMethod"],true,50);

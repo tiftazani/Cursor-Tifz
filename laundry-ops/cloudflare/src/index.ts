@@ -108,7 +108,7 @@ export async function linkFirebaseUid(env: Env, sub: string, email: string): Pro
 
 /** Mencari baris staff yang sah untuk pemakai Firebase yang tokennya sudah diverifikasi. */
 export async function resolveStaff(env: Env, firebaseUser: { sub: string; email: string }): Promise<{ email: string; name: string; role: string } | null> {
-  let staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE firebase_uid=? AND approved=1 AND active=1").bind(firebaseUser.sub).first<{email:string;name:string;role:string}>();
+  let staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE firebase_uid=? AND lower(email)=lower(?) AND approved=1 AND active=1").bind(firebaseUser.sub,firebaseUser.email).first<{email:string;name:string;role:string}>();
   if (!staff) {
     staff = await env.DB.prepare("SELECT email,name,role FROM staff WHERE lower(email)=lower(?) AND approved=1 AND active=1").bind(firebaseUser.email).first<{email:string;name:string;role:string}>();
     if (staff) await linkFirebaseUid(env, firebaseUser.sub, staff.email);

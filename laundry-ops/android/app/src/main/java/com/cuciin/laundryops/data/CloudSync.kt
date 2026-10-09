@@ -5,6 +5,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.cuciin.laundryops.BuildConfig
+import com.google.android.gms.tasks.Tasks
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.OutputStreamWriter
@@ -20,8 +22,8 @@ object CloudSync {
     private const val BATCH_LIMIT = 100
     private val io = Executors.newSingleThreadExecutor()
     private val disk = Executors.newSingleThreadExecutor()
-    private val main = Handler(Looper.getMainLooper())
-    private val poll = Handler(Looper.getMainLooper())
+    private val main by lazy { Handler(Looper.getMainLooper()) }
+    private val poll by lazy { Handler(Looper.getMainLooper()) }
 
     @Volatile var lastStatus: String = "belum nyambung"
         private set
@@ -60,6 +62,8 @@ object CloudSync {
     @Synchronized fun initializeLocalState(snapshot: Snapshot, hadPersistedData: Boolean): Snapshot? {
         latestSnapshot = snapshot
         hadPersistedLocalData = hadPersistedData
+        val originEmail = outbox.migrateLegacyActor(snapshot.sessionEmail)
+        saveState()
         outbox.state.pendingRemote?.let { prepared ->
             if (snapshot.updatedAt > prepared.snapshot.updatedAt) {
                 outbox.completePreparedRemote()
@@ -68,6 +72,7 @@ object CloudSync {
                     CuciinStore.session.value?.branchId,
                     allowedSyncBranches(CuciinStore.session.value, CuciinStore.staff),
                     actorRole = CuciinStore.session.value?.role,
+                    actorEmail = originEmail,
                 )
                 saveState()
                 return null
@@ -83,6 +88,7 @@ object CloudSync {
             session?.branchId,
             allowedSyncBranches(session, CuciinStore.staff),
             actorRole = session?.role,
+            actorEmail = originEmail,
         )
         saveState()
         return null
@@ -97,7 +103,7 @@ object CloudSync {
         }
         io.execute {
             try {
-                val conn = open("POST", apiUrl("/v1/registration"))
+                val conn = open("POST", apiUrl("/v1/registration"), email)
                 conn.doOutput = true
                 val payload = LocalJson.json.encodeToString(RegistrationRequest.serializer(), RegistrationRequest(name.trim(), email.trim(), role, branchId))
                 OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(payload) }
@@ -170,6 +176,10 @@ object CloudSync {
 
     /** Existing store entry point; changes are now recorded per entity before network I/O. */
     @Synchronized fun push(snapshot: Snapshot) {
+        accountSwitchError(CuciinStore.session.value?.email.orEmpty())?.let {
+            markOffline(it)
+            return
+        }
         latestSnapshot = snapshot
         val session = CuciinStore.session.value
         val allowed = allowedSyncBranches(session, CuciinStore.staff)
@@ -179,6 +189,7 @@ object CloudSync {
             session?.branchId,
             allowed,
             actorRole = session?.role,
+            actorEmail = verifiedSessionEmail().orEmpty(),
         )
         saveState()
         if (!endpointConfigured) {
@@ -252,24 +263,16 @@ object CloudSync {
 
     private fun flushCommands(): EndpointResult {
         while (true) {
-            // Perintah yang tertahan dari sesi lain dibuang lebih dulu.
-            //
-            // Antrean bisa berisi perintah yang dibuat saat aktornya masih berhak, lalu izinnya
-            // berubah atau akunnya berganti sebelum perintah itu sempat terkirim. Contoh nyata:
-            // enam `assetType.delete` tertinggal dari perpindahan Owner ke Supervisor. Membiarkan
-            // perintah itu menunggu berarti mereka terkirim pada sync berikutnya.
-            //
-            // Server juga menolaknya setelah `assetType` masuk OWNER_ONLY, tetapi menahan di HP
-            // lebih baik: perintah itu tidak pernah meninggalkan perangkat sama sekali.
-            val dibuang = synchronized(this) { outbox.buangYangTidakBerhak(CuciinStore.session.value?.role) }
-            if (dibuang > 0) {
-                rejectedNeedsRecovery = true
-                saveState()
-                CuciinStore.touchStatus()
+            val actorEmail = verifiedSessionEmail()
+            val batch = synchronized(this) {
+                if (outbox.blockedActor(actorEmail)) null else outbox.nextBatch(BATCH_LIMIT)
             }
-            val batch = synchronized(this) { outbox.nextBatch(BATCH_LIMIT) }
+            if (batch == null) {
+                markOffline("Login akun asal untuk mengirim perubahan")
+                return EndpointResult.FAILED
+            }
             if (batch.isEmpty()) return EndpointResult.OK
-            val conn = open("POST", apiUrl("/v1/sync/commands"))
+            val conn = open("POST", apiUrl("/v1/sync/commands"), actorEmail)
             conn.doOutput = true
             val payload = LocalJson.json.encodeToString(SyncCommandBatch.serializer(), SyncCommandBatch(batch))
             OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(payload) }
@@ -349,6 +352,7 @@ object CloudSync {
         }
         val remote = current
         val revision = after
+        // Stok dan hak akses disamakan dengan snapshot berizin agar jurnal yang pernah terlewat pulih.
         // Hak akses harus disamakan dengan server pada setiap tarikan, bukan hanya saat bootstrap.
         // Perangkat yang sudah `bootstrapped` tidak pernah menjalankan `bootstrapSnapshot` lagi,
         // sedangkan `apply` tidak pernah membuang entitas yang tidak disebut di `changes`. Tanpa
@@ -357,7 +361,7 @@ object CloudSync {
         main.post {
             val accepted = synchronized(this) { outbox.canAcceptRemote(expectedGeneration) }
             if (accepted) {
-                if (collected.isNotEmpty()) {
+                if (collected.isNotEmpty() || kanonik.branchStocks != base.branchStocks || kanonik.inventory != base.inventory) {
                     val prepared = synchronized(this) {
                         outbox.prepareRemote(kanonik, SyncProjection.entities(kanonik), revision, expectedGeneration, responseScope)
                             .also { if (it) saveState() }
@@ -427,6 +431,7 @@ object CloudSync {
                         outbox.enqueue(
                             SyncProjection.entities(local), Clock.nowMs(), session?.branchId,
                             allowedSyncBranches(session, CuciinStore.staff), session?.role,
+                            actorEmail = verifiedSessionEmail().orEmpty(),
                         )
                         saveState()
                     }
@@ -449,6 +454,7 @@ object CloudSync {
                                 remoteEntities, canonicalEntities, remoteRevision, Clock.nowMs(),
                                 session?.branchId, allowedSyncBranches(session, CuciinStore.staff),
                                 session?.role, remoteScope,
+                                actorEmail = verifiedSessionEmail().orEmpty(),
                             )
                         }
                         saveState()
@@ -518,7 +524,12 @@ object CloudSync {
     private fun legacyPushThenPull(): EndpointResult {
         val snapshot = synchronized(this) { latestSnapshot } ?: return legacyPull()
         if (pendingCommands().isNotEmpty()) {
-            val conn = open("PUT")
+            val actorEmail = verifiedSessionEmail()
+            if (synchronized(this) { outbox.blockedActor(actorEmail) }) {
+                markOffline("Login akun asal untuk mengirim perubahan")
+                return EndpointResult.FAILED
+            }
+            val conn = open("PUT", expectedActorEmail = actorEmail)
             conn.doOutput = true
             val payload = LocalJson.json.encodeToString(Snapshot.serializer(), snapshot)
             OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(payload) }
@@ -546,6 +557,12 @@ object CloudSync {
         markOnline("Database server nyambung · mode kompatibilitas")
         return EndpointResult.OK
     }
+
+    @Synchronized fun accountSwitchError(email: String): String? =
+        if (outbox.blockedActor(email)) "Login akun asal untuk mengirim perubahan yang masih tersimpan" else null
+
+    private fun verifiedSessionEmail(): String? = CuciinStore.session.value?.email?.trim()?.lowercase()
+        ?.takeIf { it.isNotBlank() && it.equals(FirebaseCloud.currentEmail, ignoreCase = true) }
 
     @Synchronized private fun pendingCommands(): List<SyncCommand> = outbox.state.pending
     @Synchronized private fun needsBootstrap(): Boolean = !outbox.state.bootstrapped
@@ -592,14 +609,29 @@ object CloudSync {
     private fun rejectionSuffix(base: String): String = if (rejectedCount == 0) base
     else "$base · $rejectedCount konflik perlu ditinjau: ${lastRejectedReason.orEmpty().take(120)}"
 
-    private fun open(method: String, endpoint: URL = URL(BuildConfig.CUCIIN_CLOUD_URL)): HttpURLConnection {
+    private fun open(method: String, endpoint: URL = URL(BuildConfig.CUCIIN_CLOUD_URL), expectedActorEmail: String? = null): HttpURLConnection {
+        val user = if (FirebaseCloud.enabled) FirebaseAuth.getInstance().currentUser else null
+        if (method != "GET") {
+            val actor = expectedActorEmail ?: CuciinStore.session.value?.email
+            check(!actor.isNullOrBlank() && user?.email?.equals(actor.trim(), ignoreCase = true) == true) {
+                "Akun Firebase berbeda dari sesi aplikasi; perubahan tidak dikirim"
+            }
+            if (endpoint.path != "/v1/registration") {
+                check(CuciinStore.session.value?.email?.equals(actor.trim(), ignoreCase = true) == true) {
+                    "Sesi aplikasi berganti; perubahan tidak dikirim"
+                }
+            }
+        }
+        // Token berasal dari user yang diperiksa, bukan akun baru setelah pergantian login.
+        val token = user?.let { Tasks.await(it.getIdToken(false), 10, TimeUnit.SECONDS).token }
+        if (method != "GET") check(!token.isNullOrBlank()) { "Token akun tidak tersedia; perubahan tidak dikirim" }
         val conn = endpoint.openConnection() as HttpURLConnection
         conn.requestMethod = method
         conn.connectTimeout = 12_000
         conn.readTimeout = 12_000
         conn.setRequestProperty("Content-Type", "application/json")
         conn.setRequestProperty("Accept", "application/json")
-        FirebaseCloud.idTokenBlocking()?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
+        token?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
         if (BuildConfig.CUCIIN_CLOUD_KEY.isNotBlank()) conn.setRequestProperty("X-Cuciin-Key", BuildConfig.CUCIIN_CLOUD_KEY)
         conn.useCaches = false
         return conn

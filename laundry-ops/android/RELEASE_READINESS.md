@@ -1,4 +1,12 @@
-# Cuciin 1.10.43 — kesiapan rilis
+# Cuciin 1.10.45 — kesiapan rilis
+
+## Bukti terbaru (9 Oktober 2026)
+
+Kandidat 1.10.45/build 64: 409 tes debug dan 409 tes release lulus; lint 0 error/20 warning per varian. Worker 120 tes lulus. APK debug/rilis dan AAB sudah dibangun; endpoint dex benar; verify_release.py PASS; sertifikat tetap. APK rilis dipasang dan dibuka di emulator API 35 offline, hash cocok dan 0 crash Cuciin.
+
+Perbaikan: stok awal via stockMove, snapshot memulihkan saldo/inventory, asal kasir dan petugas lama dipertahankan, draft dibersihkan saat ganti akun dan outbox terikat akun. Owner tetap boleh menugaskan petugas.
+
+HP pelapor, dua perangkat dengan akun nyata, sapu menu dan layar Riwayat versi setelah login belum terbukti. 14 nota lama tidak diubah. Hasil push/deploy dicatat di AGENT_STATUS.md dan releases/1.10.45-candidate/README.md. Bagian berikut adalah riwayat, bukan status terbaru.
 
 Status: kandidat rilis operasional yang menjalani ulang pemeriksaan kode, build, dan verifikasi cloud pada 1 Oktober 2026. Owner tetap harus menyelesaikan validasi perangkat, rotasi akun, saldo awal, backup terjadwal pertama, dan keputusan go-live. APK bertanda tangan tidak menjamin hilangnya peringatan Play Protect pada distribusi di luar store.
 

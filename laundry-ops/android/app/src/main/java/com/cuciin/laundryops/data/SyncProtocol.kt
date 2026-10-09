@@ -26,6 +26,7 @@ data class SyncCommand(
     val occurredAt: Long,
     val expectedUpdatedAt: Long? = null,
     val payload: JsonElement = JsonNull,
+    val actorEmail: String = "",
 )
 
 @Serializable
@@ -160,6 +161,21 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
     var state: SyncClientState = initial
         private set
 
+    fun blockedActor(email: String?): Boolean = state.pending.any {
+        it.actorEmail.isBlank() || email.isNullOrBlank() || !it.actorEmail.equals(email.trim(), ignoreCase = true)
+    }
+
+    fun migrateLegacyActor(snapshotEmail: String?): String {
+        val saved = snapshotEmail.orEmpty().trim().lowercase()
+        val scope = state.scopeKey.split(':').takeIf { it.size == 3 }
+            ?.get(1)?.trim()?.lowercase().orEmpty()
+        val origin = if (saved.isNotBlank() && scope.isNotBlank() && saved != scope) "" else scope.ifBlank { saved }
+        if (origin.isNotBlank()) state = state.copy(pending = state.pending.map {
+            if (it.actorEmail.isBlank()) it.copy(actorEmail = origin) else it
+        })
+        return origin
+    }
+
     fun initialize(entities: List<SyncEntity>): Boolean {
         if (state.shadow.isNotEmpty() || state.pending.isNotEmpty()) return false
         state = state.copy(shadow = entities)
@@ -167,11 +183,17 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
     }
 
     fun restoreLocal(
+        entities: List<SyncEntity>, occurredAt: Long, defaultBranchId: String?,
+        allowedBranchIds: Set<String>?, actorRole: Role?, legacyCommandId: () -> String,
+    ): List<SyncCommand> = restoreLocal(entities, occurredAt, defaultBranchId, allowedBranchIds, actorRole, "", legacyCommandId)
+
+    fun restoreLocal(
         entities: List<SyncEntity>,
         occurredAt: Long,
         defaultBranchId: String?,
         allowedBranchIds: Set<String>?,
         actorRole: Role? = null,
+        actorEmail: String = "",
         commandId: () -> String = { UUID.randomUUID().toString() },
     ): List<SyncCommand> {
         if (state.pendingRemote != null) return emptyList()
@@ -181,8 +203,13 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
         }
         val newestPendingAt = state.pending.maxOfOrNull { it.occurredAt } ?: Long.MIN_VALUE
         if (state.pending.isNotEmpty() && occurredAt <= newestPendingAt) return emptyList()
-        return enqueue(entities, occurredAt, defaultBranchId, allowedBranchIds, actorRole, commandId)
+        return enqueue(entities, occurredAt, defaultBranchId, allowedBranchIds, actorRole, actorEmail, commandId)
     }
+
+    fun enqueue(
+        entities: List<SyncEntity>, occurredAt: Long, defaultBranchId: String?,
+        allowedBranchIds: Set<String>?, actorRole: Role?, legacyCommandId: () -> String,
+    ): List<SyncCommand> = enqueue(entities, occurredAt, defaultBranchId, allowedBranchIds, actorRole, "", legacyCommandId)
 
     fun enqueue(
         entities: List<SyncEntity>,
@@ -190,8 +217,10 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
         defaultBranchId: String?,
         allowedBranchIds: Set<String>?,
         actorRole: Role? = null,
+        actorEmail: String = "",
         commandId: () -> String = { UUID.randomUUID().toString() },
     ): List<SyncCommand> {
+        if ((actorEmail.isNotBlank() || state.pending.any { it.actorEmail.isNotBlank() }) && blockedActor(actorEmail)) return emptyList()
         val before = if (state.pendingRemote != null && state.pending.isEmpty()) {
             state.pendingRemote!!.entities.associateBy { it.key }
         } else state.shadow.associateBy { it.key }
@@ -245,6 +274,7 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
                 occurredAt = occurredAt,
                 expectedUpdatedAt = expectedUpdatedAt,
                 payload = payload,
+                actorEmail = actorEmail.trim().lowercase(),
             )
         }
         state = state.copy(
@@ -391,6 +421,13 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
     }
 
     fun reconcileBootstrap(
+        remote: List<SyncEntity>, desired: List<SyncEntity>, revision: Long, occurredAt: Long,
+        defaultBranchId: String?, allowedBranchIds: Set<String>?, actorRole: Role?, scopeKey: String,
+        legacyCommandId: () -> String,
+    ): List<SyncCommand> = reconcileBootstrap(remote, desired, revision, occurredAt, defaultBranchId,
+        allowedBranchIds, actorRole, scopeKey, "", legacyCommandId)
+
+    fun reconcileBootstrap(
         remote: List<SyncEntity>,
         desired: List<SyncEntity>,
         revision: Long,
@@ -399,11 +436,12 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
         allowedBranchIds: Set<String>?,
         actorRole: Role? = null,
         scopeKey: String = "",
+        actorEmail: String = "",
         commandId: () -> String = { UUID.randomUUID().toString() },
     ): List<SyncCommand> {
         require(state.pending.isEmpty())
         state = state.copy(revision = revision, shadow = remote, bootstrapped = true, scopeKey = scopeKey)
-        return enqueue(desired, occurredAt, defaultBranchId, allowedBranchIds, actorRole, commandId)
+        return enqueue(desired, occurredAt, defaultBranchId, allowedBranchIds, actorRole, actorEmail, commandId)
     }
 
     /**
@@ -613,6 +651,8 @@ object SyncProjection {
         staff = server.staff,
         accessRoles = server.accessRoles,
         accessPolicies = server.accessPolicies,
+        branchStocks = server.branchStocks,
+        inventory = server.inventory,
     )
 
     /**

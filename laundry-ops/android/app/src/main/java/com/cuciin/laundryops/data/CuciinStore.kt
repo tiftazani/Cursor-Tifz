@@ -795,6 +795,7 @@ object CuciinStore {
     }
 
     fun login(email: String, password: String = "", skipPassword: Boolean = false): Boolean {
+        if (CloudSync.accountSwitchError(email) != null) return false
         val userIndex = staff.indexOfFirst { it.email.equals(email.trim(), ignoreCase = true) }
         val u = staff.getOrNull(userIndex)
         if (u == null) {
@@ -803,6 +804,7 @@ object CuciinStore {
         }
         if (!u.approved) {
             pendingName.value = u.name
+            clearTransactionDraft()
             session.value = null
             persist()
             return false
@@ -822,14 +824,29 @@ object CuciinStore {
         if (!skipPassword && passwordMatches && Passwords.needsUpgrade(u.passwordHash)) {
             staff[userIndex] = u.copy(passwordHash = Passwords.hash(password))
         }
-        pendingName.value = null
-        session.value = Session(u.role, u.name, u.email, u.branchIds.first(), u.branchIds)
-        viewBranch.value = if (u.role == Role.Owner) "all" else u.branchIds.first()
+        authenticateSession(Session(u.role, u.name, u.email, u.branchIds.first(), u.branchIds))
         persist()
         return true
     }
 
+    internal fun authenticateSession(authenticated: Session) {
+        if (!session.value?.email.equals(authenticated.email, ignoreCase = true)) clearTransactionDraft()
+        pendingName.value = null
+        session.value = authenticated
+        viewBranch.value = if (authenticated.role == Role.Owner) "all" else authenticated.branchId
+    }
+
+    private fun clearTransactionDraft() {
+        cart.clear()
+        selectedCustomer.value = null
+        notaBranchId.value = null
+        stockBranchId.value = null
+        revision.intValue++
+    }
+
     fun logout() {
+        clearTransactionDraft()
+        pendingName.value = null
         if (FirebaseCloud.enabled) {
             FirebaseCloud.signOut()
             CloudSync.onSignedOut()
@@ -1062,8 +1079,14 @@ object CuciinStore {
         if (!boleh("stock", "stock.product")) return null
         val p = Product(name.trim(), 0, min.coerceAtLeast(0), "p-${newId()}", kind, unit.trim().ifBlank { "pcs" })
         products.add(p)
+        val initialStock = stock.coerceAtLeast(0)
+        val now = Clock.nowMs()
         branches.forEach { branch ->
-            branchStocks.add(BranchStock(branch.id, p.key, if (branch.id in initialBranchIds) stock.coerceAtLeast(0) else 0))
+            val qty = if (branch.id in initialBranchIds) initialStock else 0
+            branchStocks.add(BranchStock(branch.id, p.key, qty))
+            if (qty > 0) {
+                stockMoves.add(0, StockMove(Clock.nowLabel(now), now, p.key, StockKind.Update, qty, session.value?.name.orEmpty(), branch.id, "Stok awal produk", balanceAfter = qty, syncId = syncEventId()))
+            }
         }
         log("Produk ${p.name} ditambah", session.value?.branchId ?: branches.firstOrNull()?.id.orEmpty())
         bump()
@@ -1458,15 +1481,9 @@ object CuciinStore {
     fun canExportData(): Boolean = canAccess("analytics", "analytics.export")
 
     /** Apakah pengguna yang sedang masuk boleh memilih petugas penanggung jawab layanan. */
-    fun canAssignHandler(): Boolean = canAccess("queue", "queue.status")
+    fun canAssignHandler(): Boolean = session.value?.role == Role.Owner && canAccess("queue", "queue.status")
 
-    /**
-     * Menetapkan petugas penanggung jawab satu layanan di keranjang.
-     *
-     * Dulu dikunci NAMA PERAN (`role != Role.Owner`), sehingga Owner tidak bisa memberi hak ini
-     * kepada role lain. Sekarang memakai fungsi `queue.status`, yang memang mengatur siapa
-     * mengerjakan apa di antrian.
-     */
+    /** Pilihan petugas mengikuti batas Owner pada saveNota dan server. */
     fun setCartHandler(svcId: String, email: String) {
         if (!canAssignHandler()) return
         val staffMember = staff.firstOrNull { it.email.equals(email, true) } ?: return
@@ -1608,12 +1625,15 @@ object CuciinStore {
         // Nota yang sudah dibatalkan uangnya sudah dikembalikan; mengubah rinciannya membuat
         // laporan dan stok bercerita beda dengan kenyataan.
         if (old.canceled) return "Service ini sudah dibatalkan dan tidak dapat diubah lagi"
+        val unmatchedLines = old.lines.toMutableList()
         val clean = newLines.map {
+            val storedIndex = unmatchedLines.indexOfFirst { before -> before.serviceId == it.serviceId }
+            val stored = if (storedIndex < 0) null else unmatchedLines.removeAt(storedIndex)
             it.copy(
                 qty = it.qty.coerceAtLeast(0.0),
                 unitPrice = it.unitPrice.coerceAtLeast(0),
-                handledByEmail = if (s.role == Role.Owner) it.handledByEmail else s.email,
-                handledByName = if (s.role == Role.Owner) it.handledByName else s.name,
+                handledByEmail = if (s.role == Role.Owner) it.handledByEmail else stored?.handledByEmail ?: s.email,
+                handledByName = if (s.role == Role.Owner) it.handledByName else stored?.handledByName ?: s.name,
             )
         }.filter { it.qty > 0.0 }
         if (clean.isEmpty()) return "Service harus memiliki minimal satu layanan"
