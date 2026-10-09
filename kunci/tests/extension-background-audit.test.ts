@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dekToB64, persistVault } from '../extension/crypto.js'
 
 /**
@@ -101,8 +101,17 @@ describe('background.js vault writes', () => {
   let listener: Listener
 
   beforeEach(async () => {
+    // Offline by default. Every write awaits pushCloud, so without this the suite sent a
+    // real PUT to the production Worker and a slow network timed the test out (5000 ms).
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('offline in tests')
+    })
     harness = makeChrome()
     listener = await loadBackground(harness)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   async function unlock(vault: { entries: unknown[]; settings: Record<string, unknown> }) {
