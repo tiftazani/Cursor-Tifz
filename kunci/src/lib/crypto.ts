@@ -181,6 +181,8 @@ export async function rewrapWithPassword(
     salt: bytesToB64(salt),
     wrapIv: wrap.iv,
     wrap: wrap.data,
+    // Newer than the cloud copy, or boot adopts the old wrap after a failed push.
+    savedAt: Date.now(),
   }
 }
 

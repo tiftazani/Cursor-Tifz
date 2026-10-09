@@ -41,4 +41,13 @@ describe('vault crypto', () => {
     expect(unlocked.dekBytes).toEqual(dekBytes)
     await expect(unlockBlob(next, 'lama-password-12')).rejects.toBeTruthy()
   })
+
+  it('stamps a rewrap newer than the cloud copy, so boot keeps the new password', async () => {
+    // Boot adopts the cloud blob when remote.savedAt >= local.savedAt. A rewrap that
+    // kept the old savedAt lost to the old cloud wrap after a failed cloud push.
+    const { blob, key } = await encryptVault({ secret: 'ok' }, 'lama-password-12', 8_000)
+    const old = { ...blob, savedAt: Date.now() - 60_000 }
+    const next = await rewrapWithPassword(old, key, 'baru-password-12')
+    expect(next.savedAt).toBeGreaterThan(old.savedAt!)
+  })
 })
