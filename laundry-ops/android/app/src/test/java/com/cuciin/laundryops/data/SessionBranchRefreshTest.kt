@@ -110,13 +110,11 @@ class SessionBranchRefreshTest {
     }
 
     @Test
-    fun daftarCabangKosongDariServerTidakMengosongkanSesi() {
-        // Baris staf yang cabangnya belum tersinkron tidak boleh membuat akun kehilangan seluruh
-        // cabangnya; perangkat versi lama pernah mengirim payload tanpa branchIds.
+    fun pencabutanSeluruhCabangTidakMempertahankanCabangLama() {
         val aktif = sesi(branchIds = listOf("laupay-kirab", "bunayya"))
         val hasil = SessionScope.refreshed(aktif, baris(branchIds = emptyList()))
-
-        assertEquals(listOf("laupay-kirab", "bunayya"), hasil.branchIds)
-        assertSame(aktif, hasil)
+        assertTrue(hasil.branchIds.isEmpty())
+        assertTrue(hasil.allowedBranchIds.isEmpty())
+        assertEquals("", hasil.branchId)
     }
 }

@@ -1,4 +1,4 @@
-import { pullChanges, pushCommands, syncScopeKey } from "./command-sync.ts";
+import { canonicalNotaPayload, pullChanges, pushCommands, syncScopeKey } from "./command-sync.ts";
 
 interface Env {
   DB: D1Database;
@@ -114,6 +114,20 @@ export async function resolveStaff(env: Env, firebaseUser: { sub: string; email:
     if (staff) await linkFirebaseUid(env, firebaseUser.sub, staff.email);
   }
   return staff ?? null;
+}
+
+export async function compactAccessSnapshot(env: Env, email: string): Promise<JsonRecord> {
+  const person = await env.DB.prepare("SELECT email,name,role,approved,access_role_id FROM staff WHERE organization_id=? AND lower(email)=lower(?) AND approved=1 AND active=1")
+    .bind(ORG_ID,email).first<{email:string;name:string;role:string;approved:number;access_role_id:string}>();
+  const branches = person ? (await env.DB.prepare("SELECT branch_id FROM staff_branches WHERE staff_email=? ORDER BY branch_id").bind(person.email).all<{branch_id:string}>()).results : [];
+  const roles = (await env.DB.prepare("SELECT id,name,built_in,payload_json FROM access_roles WHERE organization_id=? ORDER BY id").bind(ORG_ID).all<{id:string;name:string;built_in:number;payload_json:string}>()).results;
+  const policy = person ? await env.DB.prepare("SELECT payload_json FROM access_policies WHERE organization_id=? AND lower(email)=lower(?)").bind(ORG_ID,person.email).first<{payload_json:string}>() : null;
+  return {
+    staff: person ? [{name:person.name,email:person.email,role:person.role,approved:person.approved===1,branchIds:branches.map(row=>row.branch_id),accessRoleId:person.access_role_id}] : [],
+    accessRoles: roles.map(row=>({...JSON.parse(row.payload_json) as JsonRecord,id:row.id,name:row.name,builtIn:row.built_in===1})),
+    accessPolicies: policy && person ? [{...JSON.parse(policy.payload_json) as JsonRecord,email:person.email}] : [],
+    updatedAt: Date.now(),
+  };
 }
 
 async function authorize(request: Request, env: Env): Promise<Identity | null> {
@@ -315,40 +329,54 @@ function gabungAbsensi(lama:JsonRecord|null,baru:JsonRecord):JsonRecord {
 
 export function applyJournalToSnapshot(base:JsonRecord,changes:SnapshotJournalChange[],revision:number):JsonRecord {
   const snapshot:JsonRecord={...base};
+  const datasets=new Map<string,Map<string,JsonRecord>>();
+  const attendanceKeys=new Map<string,string>();
+  const deleted=new Set(listOfStrings(base.deletedNotaIds));
+  let notasChanged=false;
   for(const change of changes) {
     const dataset=CHANGE_DATASETS[change.entity_type];
     if(!dataset) continue;
+    let rows=datasets.get(dataset);
+    if(!rows) {
+      const initial=dataset==="attendance" ? dedupeAttendance(list(base,dataset)) : list(base,dataset);
+      rows=new Map(initial.map(row=>[journalEntityId(dataset,row),row]));
+      datasets.set(dataset,rows);
+      if(dataset==="attendance") for(const [id,row] of rows) {
+        const key=attendanceIdentity(row); if(key) attendanceKeys.set(key,id);
+      }
+    }
     const parsed=change.payload_json ? JSON.parse(change.payload_json) as unknown : null;
     const incoming=parsed && typeof parsed==="object" && !Array.isArray(parsed) ? parsed as JsonRecord : null;
-    const attendanceKey=dataset==="attendance" && incoming ? attendanceIdentity(incoming) : null;
-    const existing=list(snapshot,dataset);
-    // Aturan pemilik: absensi tidak boleh saling menimpa. Baris yang sudah ada dipakai sebagai
-    // dasar penggabungan, bukan dibuang lalu diganti kiriman yang belum lengkap: kiriman tanpa
-    // jam pulang tidak boleh menghapus jam pulang yang sudah tercatat di snapshot. Bila ada dua
-    // baris kembar untuk catatan yang sama, yang dipakai sebagai dasar adalah yang paling lengkap.
-    const sebelumnya=dataset==="attendance" && incoming
-      ? existing
-          .filter(row=>journalEntityId(dataset,row)===change.entity_id
-            || (attendanceKey !== null && attendanceIdentity(row)===attendanceKey))
-          .reduce<JsonRecord|null>((acc,row)=>acc===null || absensiLebihLengkap(row,acc) ? row : acc,null)
-      : null;
-    const rows=existing.filter(row=>{
-      if(journalEntityId(dataset,row)===change.entity_id) return false;
-      // Id berbeda, catatan sama: jangan sisakan baris kembar.
-      if(attendanceKey && attendanceIdentity(row)===attendanceKey) return false;
-      return true;
-    });
-    if(change.operation!=="delete" && incoming) {
-      rows.push(dataset==="attendance" ? gabungAbsensi(sebelumnya,incoming) : incoming);
+    let previous=rows.get(change.entity_id) ?? null;
+    const key=dataset==="attendance" && incoming ? attendanceIdentity(incoming) : null;
+    if(key) {
+      const otherId=attendanceKeys.get(key);
+      const other=otherId === undefined ? null : rows.get(otherId) ?? null;
+      if(other && (!previous || absensiLebihLengkap(other,previous))) previous=other;
+      if(otherId!==undefined) rows.delete(otherId);
     }
-    snapshot[dataset]=dataset==="attendance" ? dedupeAttendance(rows) : rows;
-    if(change.entity_type==="nota" || change.entity_type==="order") {
-      const deleted=new Set(listOfStrings(snapshot.deletedNotaIds));
+    if(dataset==="attendance") {
+      const old=rows.get(change.entity_id);
+      const oldKey=old ? attendanceIdentity(old) : null;
+      if(oldKey) attendanceKeys.delete(oldKey);
+      if(key) attendanceKeys.delete(key);
+    }
+    rows.delete(change.entity_id);
+    if(change.operation!=="delete" && incoming) {
+      const row=dataset==="attendance" ? gabungAbsensi(previous,incoming) : dataset==="notas" && typeof incoming.cashierName==="string" ? canonicalNotaPayload(incoming) : incoming;
+      const id=journalEntityId(dataset,row);
+      rows.delete(id);
+      rows.set(id,row);
+      if(key) attendanceKeys.set(key,id);
+    }
+    if(dataset==="notas") {
       if(change.operation==="delete") deleted.add(change.entity_id); else deleted.delete(change.entity_id);
-      snapshot.deletedNotaIds=[...deleted];
+      notasChanged=true;
     }
     snapshot.updatedAt=Math.max(num(snapshot,"updatedAt"),change.updated_at);
   }
+  for(const [dataset,rows] of datasets) snapshot[dataset]=[...rows.values()];
+  if(notasChanged) snapshot.deletedNotaIds=[...deleted];
   snapshot.syncRevision=revision;
   return snapshot;
 }
@@ -357,29 +385,58 @@ export async function materializedSnapshot(env:Env,row?:{payload_json:string}|nu
   const stored=row === undefined ? await env.DB.prepare("SELECT payload_json FROM sync_snapshots WHERE organization_id=?").bind(ORG_ID).first<{payload_json:string}>() : row;
   let snapshot=stored ? withoutLocalCredentials(JSON.parse(stored.payload_json) as JsonRecord) : {};
   const storedRevision=num(snapshot,"syncRevision");
+  // Freeze the read boundary: concurrent commands belong to the next pull, not this cached base.
+  const head=await env.DB.prepare("SELECT COALESCE(MAX(sequence),0) AS revision FROM sync_changes WHERE organization_id=?").bind(ORG_ID).first<{revision:number}>();
+  const target=head?.revision ?? 0;
+  if(storedRevision>target) throw new Error("snapshot_recovery_required: revisi cache melampaui jurnal; restore sumber durable harus diverifikasi");
   let revision=storedRevision;
-  while(true) {
-    const changes=(await env.DB.prepare("SELECT sequence,entity_type,entity_id,operation,payload_json,updated_at FROM sync_changes WHERE organization_id=? AND sequence>? ORDER BY sequence ASC LIMIT 500").bind(ORG_ID,revision).all<SnapshotJournalChange>()).results;
-    if(!changes.length) break;
-    revision=changes.at(-1)?.sequence ?? revision;
-    snapshot=applyJournalToSnapshot(snapshot,changes,revision);
-    if(changes.length<500) break;
+  const changes:SnapshotJournalChange[]=[];
+  while(revision<target) {
+    const page=(await env.DB.prepare("SELECT sequence,entity_type,entity_id,operation,payload_json,updated_at FROM sync_changes WHERE organization_id=? AND sequence>? AND sequence<=? ORDER BY sequence ASC LIMIT 4000").bind(ORG_ID,revision,target).all<SnapshotJournalChange>()).results;
+    if(!page.length) break;
+    changes.push(...page);
+    revision=page.at(-1)?.sequence ?? revision;
   }
-  snapshot.syncRevision=revision;
-  // Snapshot tersimpan bisa memuat baris absensi kembar dari jurnal dengan dua skema id
-  // (lama: acak, baru: deterministik per cabang/tanggal). Bila jurnalnya tidak lagi bertambah,
-  // dedupe di jalur perubahan tidak pernah berjalan, jadi pembersihannya dilakukan di sini.
+  const missing=(await env.DB.prepare(`SELECT c.sequence,c.entity_type,c.entity_id,c.operation,c.payload_json,c.updated_at,
+      o.payload_json AS order_payload,o.branch_id AS order_branch,o.updated_at AS order_updated_at,
+      EXISTS(SELECT 1 FROM sync_changes future WHERE future.organization_id=c.organization_id
+        AND future.entity_type IN ('nota','order') AND future.entity_id=c.entity_id AND future.sequence>?) AS advanced
+    FROM sync_changes c LEFT JOIN orders o ON o.organization_id=c.organization_id AND o.id=c.entity_id
+    WHERE c.organization_id=? AND c.sequence<=? AND c.entity_type IN ('nota','order')
+      AND c.operation='upsert' AND (c.payload_json IS NULL OR trim(c.payload_json)='null')
+      AND NOT EXISTS(SELECT 1 FROM sync_changes later WHERE later.organization_id=c.organization_id
+        AND later.entity_type IN ('nota','order') AND later.entity_id=c.entity_id AND later.sequence>c.sequence AND later.sequence<=?)`)
+    .bind(target,ORG_ID,target,target).all<SnapshotJournalChange & {order_payload:string|null;order_branch:string|null;order_updated_at:number|null;advanced:number}>()).results;
+  for(const change of missing) {
+    let payload:unknown;
+    try { payload=change.order_payload ? JSON.parse(change.order_payload) : null; } catch { payload=null; }
+    if(change.advanced || change.order_updated_at==null || change.order_updated_at>change.updated_at || !payload || typeof payload!=="object" || Array.isArray(payload))
+      throw new Error(`snapshot_recovery_required: payload nota ${change.entity_id} tidak tersedia pada revisi ${target}`);
+    const source=payload as JsonRecord;
+    const nota=canonicalNotaPayload(source);
+    if(typeof (source.kasir ?? source.cashierName)!=="string" || typeof (source.customer ?? source.customerName)!=="string"
+      || (typeof source.createdAt!=="string" && typeof source.createdAt!=="number") || !Array.isArray(source.lines)
+      || ![nota.total,nota.paid,nota.updatedAtMs].every(value=>typeof value==="number" && Number.isSafeInteger(value) && value>=0)
+      || Number(nota.paid)>Number(nota.total) || nota.updatedAtMs!==change.order_updated_at
+      || ![nota.pay,nota.payMethod,nota.laundry].every(value=>typeof value==="string" && value.length>0))
+      throw new Error(`snapshot_recovery_required: payload nota ${change.entity_id} tidak lengkap`);
+    if(str(nota,"id")!==change.entity_id || !change.order_branch || str(nota,"branchId")!==change.order_branch)
+      throw new Error(`snapshot_recovery_required: identitas payload nota ${change.entity_id} tidak cocok`);
+    change.payload_json=JSON.stringify(nota);
+  }
+  snapshot=withoutLocalCredentials(applyJournalToSnapshot(snapshot,[...changes,...missing],revision));
   snapshot.attendance=dedupeAttendance(list(snapshot,"attendance"));
-  // Snapshot hasil rekonstruksi belum tentu punya updatedAt: kalau baris sync_snapshots
-  // kosong, snapshot dibangun dari {} sehingga updatedAt bernilai 0. Perangkat menolak
-  // snapshot dengan updatedAt lebih tua daripada state lokalnya (CuciinStore.applyCloud),
-  // jadi snapshot kosong akan dibuang dan data lama di perangkat tidak pernah terhapus.
-  // Nilainya diambil dari waktu sekarang karena revisi bisa 0 saat jurnal juga kosong;
-  // memakai revisi akan menghasilkan 0 dan perangkat tetap membuang snapshotnya.
   if(!num(snapshot,"updatedAt")) snapshot.updatedAt=Date.now();
-  if(stored && revision>storedRevision) {
-    await env.DB.prepare(`UPDATE sync_snapshots SET payload_json=?,updated_at=? WHERE organization_id=? AND COALESCE(CAST(json_extract(payload_json,'$.syncRevision') AS INTEGER),0)<=?`)
-      .bind(JSON.stringify(withoutLocalCredentials(snapshot)),Date.now(),ORG_ID,revision).run();
+  if(!stored || revision>storedRevision || (missing.length && JSON.stringify(snapshot)!==stored.payload_json)) {
+    try {
+      await env.DB.prepare(`INSERT INTO sync_snapshots(organization_id,revision,payload_json,updated_at) VALUES(?,?,?,?)
+        ON CONFLICT(organization_id) DO UPDATE SET revision=excluded.revision,payload_json=excluded.payload_json,updated_at=excluded.updated_at
+        WHERE COALESCE(CAST(json_extract(sync_snapshots.payload_json,'$.syncRevision') AS INTEGER),0)<?
+          OR (COALESCE(CAST(json_extract(sync_snapshots.payload_json,'$.syncRevision') AS INTEGER),0)=? AND sync_snapshots.payload_json=?)`)
+        .bind(ORG_ID,num(snapshot,"updatedAt"),JSON.stringify(snapshot),Date.now(),revision,revision,stored?.payload_json ?? "").run();
+    } catch {
+      console.warn("Snapshot cache tidak dapat ditulis; hasil baca tetap tersedia");
+    }
   }
   return {snapshot,revision};
 }
@@ -391,6 +448,7 @@ export function legacySnapshotWriteAllowed(identity:{bootstrap:boolean}, journal
 function withoutLocalCredentials(snapshot:JsonRecord):JsonRecord {
   const safe={...snapshot};
   safe.staff=list(snapshot,"staff").map(({passwordHash: _passwordHash,...person})=>person);
+  if(Array.isArray(snapshot.notas)) safe.notas=list(snapshot,"notas").map(row=>typeof row.cashierName==="string" ? canonicalNotaPayload(row) : row);
   return safe;
 }
 
@@ -421,7 +479,7 @@ async function projectSnapshot(env: Env, snapshot: JsonRecord, updatedAt: number
   for (const branch of list(snapshot, "branches")) statements.push(env.DB.prepare("INSERT INTO branches(id,organization_id,code,name,address,maps_query,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET code=excluded.code,name=excluded.name,address=excluded.address,maps_query=excluded.maps_query,updated_at=excluded.updated_at").bind(str(branch,"id"),ORG_ID,str(branch,"code"),str(branch,"name"),str(branch,"location"),str(branch,"mapsQuery"),version));
   for (const person of list(snapshot, "staff")) {
     const email = str(person,"email").toLowerCase();
-    statements.push(env.DB.prepare("INSERT INTO staff(email,organization_id,name,role,approved,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET name=excluded.name,role=excluded.role,approved=excluded.approved,updated_at=excluded.updated_at").bind(email,ORG_ID,str(person,"name"),str(person,"role","Kasir"),bool(person,"approved"),version));
+    statements.push(env.DB.prepare("INSERT INTO staff(email,organization_id,name,role,approved,access_role_id,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET name=excluded.name,role=excluded.role,approved=excluded.approved,access_role_id=excluded.access_role_id,updated_at=excluded.updated_at").bind(email,ORG_ID,str(person,"name"),str(person,"role","Kasir"),bool(person,"approved"),str(person,"accessRoleId"),version));
     const branchIds = Array.isArray(person.branchIds) ? person.branchIds : [];
     for (const branchId of branchIds) if (typeof branchId === "string") statements.push(env.DB.prepare("INSERT OR IGNORE INTO staff_branches(staff_email,branch_id) VALUES(?,?)").bind(email,branchId));
   }
@@ -510,8 +568,9 @@ export default {
     if (url.pathname === "/v1/registration" && request.method === "POST") return registerAccount(request, env);
     const identity = await authorize(request, env);
     if (!identity) return json({ error: "Tidak terautentikasi" }, 401);
+    try {
     if (url.pathname === "/v1/me" && request.method === "GET") {
-      return json({ email: identity.email, name: identity.name, role: identity.role, branchIds: identity.branchIds });
+      return json({ email: identity.email, name: identity.name, role: identity.role, branchIds: identity.branchIds, access: await compactAccessSnapshot(env,identity.email) });
     }
     if (url.pathname === "/v1/admin/reproject" && request.method === "POST") {
       if (identity.role !== "Owner") return json({ error: "Khusus Owner" }, 403);
@@ -531,10 +590,14 @@ export default {
       const materialized=await materializedSnapshot(env);
       return new Response(JSON.stringify(visibleSnapshot(materialized.snapshot, identity)), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options":"nosniff", "X-Cuciin-Revision":String(materialized.revision), "X-Cuciin-Scope":syncScopeKey(identity) } });
     }
-    if ((url.pathname === "/api/cuciin" || url.pathname === "/v1/snapshot") && request.method === "PUT") return putSnapshot(request, env, identity);
+    if ((url.pathname === "/api/cuciin" || url.pathname === "/v1/snapshot") && request.method === "PUT") return await putSnapshot(request, env, identity);
     if (url.pathname === "/v1/sync/commands" && request.method === "POST") return pushCommands(request, env, identity);
     if (url.pathname === "/v1/sync/changes" && request.method === "GET") return pullChanges(request, env, identity);
     if (url.pathname === "/v1/reports/cashier-services" && request.method === "GET") return report(request, env, identity);
     return json({ error: "Rute tidak ditemukan" }, 404);
+    } catch(error) {
+      if(error instanceof Error && error.message.startsWith("snapshot_recovery_required:")) return json({code:"snapshot_recovery_required",error:"Cache dan jurnal tidak konsisten; pemulihan server harus diverifikasi"},503);
+      throw error;
+    }
   },
 } satisfies ExportedHandler<Env>;

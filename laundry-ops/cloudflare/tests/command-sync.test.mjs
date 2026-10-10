@@ -124,9 +124,10 @@ test("delta staf dan cabang non-Owner dibatasi ke penugasan cabangnya", async ()
   const identity={email:"kasir@cuciin.id",name:"Kasir",role:"Kasir",branchIds:["melati"],bootstrap:false};
   const result=await pullChanges(new Request("https://cuciin.example/v1/sync/changes?after=0"),env,identity);
   assert.equal(result.status,200);
-  assert.match(statements[0],/entity_type NOT IN \('staff','branch','attendance'\)/);
-  assert.match(statements[0],/json_extract\(payload_json,'\$\.staffEmail'\)/);
-  assert.match(statements[0],/entity_type='branch' AND entity_id IN/);
+  const page = statements.find(sql => sql.startsWith("SELECT sequence,entity_type"));
+  assert.match(page,/entity_type NOT IN \('staff','branch','attendance'\)/);
+  assert.match(page,/json_extract\(payload_json,'\$\.staffEmail'\)/);
+  assert.match(page,/entity_type='branch' AND entity_id IN/);
 });
 
 test("kursor klien yang di depan server dikembalikan ke revisi jurnal terakhir", async () => {
@@ -231,7 +232,7 @@ test("batch memberi status retryable saat eksekusi command mengalami gangguan D1
   assert.equal(body.results[0].status,"retryable");
   assert.equal(body.results[0].code,503);
   assert.equal(body.results[1].status,"retryable");
-  assert.match(body.results[1].error,/command sebelumnya/);
+  assert.match(body.results[1].error,/Batas aman request/);
 });
 
 test("payload riwayat memperoleh syncId stabil dan actor terverifikasi", () => {
@@ -389,6 +390,71 @@ test("stock.batch menjurnal riwayat stok dan saldo sebagai entity yang dikenal p
   assert.equal(rows(env,"SELECT quantity FROM branch_stocks WHERE branch_id='melati' AND product_id='detergen'")[0].quantity,5);
   const types=rows(env,"SELECT entity_type FROM sync_changes WHERE entity_type IN ('stockMove','branchStock','stock') ORDER BY entity_type").map(row=>row.entity_type);
   assert.deepEqual(types,["branchStock","stockMove"],"riwayat stok harus dijurnal dengan tipe yang dipahami materializer");
+});
+
+test("riwayat jual via nota memakai nama layanan dan tidak salah pilih produk bernama sama", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO products(id,organization_id,name,minimum_stock,kind,unit,updated_at)
+    VALUES('sabun','cuciin','Sabun',0,'BarangJual','pcs',1),('a-palsu','cuciin','sabun',0,'BarangJual','pcs',1);
+    INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,product_id,active,updated_at)
+    VALUES('sabun-cair','cuciin','Sabun cair','pcs',8000,0,1,0,0,'sabun',1,1);
+    INSERT INTO branch_stocks VALUES('melati','sabun',9,1),('melati','a-palsu',50,1);
+    INSERT INTO orders(id,organization_id,branch_id,cashier_name,customer_name,total,paid,payment_status,payment_method,work_status,created_at,payload_json,updated_at)
+    VALUES('MLT-J','cuciin','melati','Kasir','Uji',8000,0,'Belum','Tunai','Masuk',1,'{}',1);`);
+  const push=async command=>(await (await pushCommands(commandRequest([command]),env,identities.kasir)).json()).results[0];
+  const body={results:[
+    await push({commandId:"move-jual-0001",type:"stockMove.upsert",entityId:"move-jual",branchId:"melati",
+      payload:{syncId:"move-jual",product:"Sabun cair",kind:"Jual",qty:-1,by:"Kasir",branchId:"melati",note:"Jual via nota",notaId:"MLT-J",atMs:1}}),
+    await push({commandId:"move-tambah-0001",type:"stockMove.upsert",entityId:"move-tambah",branchId:"melati",
+      payload:{syncId:"move-tambah",product:"sabun",kind:"Tambah",qty:1,by:"Kasir",branchId:"melati",note:"Restok",atMs:2}}),
+  ]};
+  assert.deepEqual(body.results.map(r=>r.accepted),[true,true],JSON.stringify(body));
+  const balances=rows(env,"SELECT product_id,quantity FROM branch_stocks ORDER BY product_id").map(r=>({...r}));
+  assert.deepEqual(balances,[{product_id:"a-palsu",quantity:50},{product_id:"sabun",quantity:10}]);
+  assert.equal(JSON.parse(rows(env,"SELECT payload_json FROM stock_moves WHERE id='move-jual'")[0].payload_json).balanceAfter,9);
+});
+
+test("branchStock.delete tidak menghapus saldo selama produk dan cabang masih ada", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO products(id,organization_id,name,minimum_stock,kind,unit,updated_at) VALUES('sabun','cuciin','Sabun',0,'BarangJual','pcs',1);
+    INSERT INTO branch_stocks VALUES('melati','sabun',7,1);`);
+  for (const [who,id] of [[identities.kasir,"del-kasir-0001"],[identities.owner,"del-owner-0001"]]) {
+    const body=await (await pushCommands(commandRequest([{commandId:id,entityType:"branchStock",operation:"delete",entityId:"melati:sabun",branchId:"melati",payload:null}]),env,who)).json();
+    assert.equal(body.results[0].accepted,true,JSON.stringify(body));
+  }
+  assert.equal(rows(env,"SELECT quantity FROM branch_stocks WHERE branch_id='melati' AND product_id='sabun'")[0]?.quantity,7);
+});
+
+test("Owner menghapus produk yang masih punya saldo dan tautan layanan tanpa macet", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO products(id,organization_id,name,minimum_stock,kind,unit,updated_at) VALUES('sabun','cuciin','Sabun',0,'BarangJual','pcs',1);
+    INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,product_id,active,updated_at) VALUES('sabun-cair','cuciin','Sabun cair','pcs',8000,0,1,0,0,'sabun',1,1);
+    INSERT INTO branch_stocks VALUES('melati','sabun',7,1);`);
+  const body=await (await pushCommands(commandRequest([{commandId:"prod-del-0001",entityType:"product",operation:"delete",entityId:"sabun",payload:null}]),env,identities.owner)).json();
+  assert.equal(body.results[0].accepted,true,JSON.stringify(body));
+  assert.equal(rows(env,"SELECT COUNT(*) AS n FROM products WHERE id='sabun'")[0].n,0);
+  assert.equal(rows(env,"SELECT COUNT(*) AS n FROM branch_stocks WHERE product_id='sabun'")[0].n,0);
+  assert.equal(rows(env,"SELECT product_id FROM services WHERE id='sabun-cair'")[0].product_id,null);
+  const late=await (await pushCommands(commandRequest([{commandId:"prod-del-0002",entityType:"branchStock",operation:"delete",entityId:"melati:sabun",branchId:"melati",payload:null}]),env,identities.owner)).json();
+  assert.equal(late.results[0].accepted,true,JSON.stringify(late));
+});
+
+test("Owner menghapus cabang kosong yang masih punya baris saldo tanpa macet", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO branches(id,organization_id,code,name,address,maps_query,updated_at) VALUES('kosong','cuciin','KSG','Kosong','','',1);
+    INSERT INTO products(id,organization_id,name,minimum_stock,kind,unit,updated_at) VALUES('sabun','cuciin','Sabun',0,'BarangJual','pcs',1);
+    INSERT INTO branch_stocks VALUES('kosong','sabun',0,1),('melati','sabun',4,1);`);
+  const body=await (await pushCommands(commandRequest([{commandId:"branch-del-0001",entityType:"branch",operation:"delete",entityId:"kosong",payload:null}]),env,identities.owner)).json();
+  assert.equal(body.results[0].accepted,true,JSON.stringify(body));
+  assert.equal(rows(env,"SELECT COUNT(*) AS n FROM branches WHERE id='kosong'")[0].n,0);
+  assert.deepEqual(rows(env,"SELECT branch_id FROM branch_stocks").map(r=>r.branch_id),["melati"]);
+  // Cabang dengan riwayat Service: ditolak permanen (409), bukan 503 yang menahan antrean.
+  env.db.exec(`INSERT INTO orders(id,organization_id,branch_id,cashier_name,customer_name,total,paid,payment_status,payment_method,work_status,created_at,payload_json,updated_at) VALUES('MLT-H','cuciin','melati','Kasir','Uji',1,0,'Belum','Tunai','Masuk',1,'{}',1)`);
+  const held=await (await pushCommands(commandRequest([{commandId:"branch-del-0002",entityType:"branch",operation:"delete",entityId:"melati",payload:null}]),env,identities.owner)).json();
+  assert.equal(held.results[0].status,"rejected",JSON.stringify(held));
+  assert.equal(held.results[0].code,409);
+  assert.equal(rows(env,"SELECT COUNT(*) AS n FROM branches WHERE id='melati'")[0].n,1);
+  assert.deepEqual(rows(env,"SELECT quantity FROM branch_stocks WHERE branch_id='melati'").map(r=>r.quantity),[4]);
 });
 
 test("harga Service yang menyimpang dari katalog ditolak untuk pengirim non-Owner", async () => {
@@ -914,4 +980,38 @@ test("kunci absensi per cabang benar-benar berlaku di basis data", () => {
   let ditolak=false;
   try { insert("att-3","melati"); } catch { ditolak=true; }
   assert.equal(ditolak,true,"baris kembar untuk cabang yang sama tetap harus ditolak");
+});
+
+test("pengembalian dana nota batal tidak bisa dihapus atau diubah lewat jalur biaya", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  const send=async(cmd,who=identities.owner)=>(await (await pushCommands(commandRequest([cmd]),env,who)).json()).results[0];
+  assert.equal((await send({commandId:"refund-c-0001",type:"order.create",entityId:"MLT-R",branchId:"melati",payload:{id:"MLT-R",branchId:"melati",customerName:"R",phone:"0815",total:10000,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:10000}]}})).accepted,true);
+  assert.equal((await send({commandId:"refund-p-0001",type:"order.payment",entityId:"MLT-R",branchId:"melati",payload:{paid:10000,paymentStatus:"Lunas",paymentMethod:"Tunai"}})).accepted,true);
+  assert.equal((await send({commandId:"refund-x-0001",type:"order.cancel",entityId:"MLT-R",branchId:"melati",payload:{reason:"uji"}})).accepted,true);
+  for (const [who,n] of [[identities.kasir,1],[identities.owner,2]]) {
+    const del=await send({commandId:`refund-del-000${n}`,entityType:"expense",operation:"delete",entityId:"refund-MLT-R",branchId:"melati",payload:null},who);
+    assert.equal(del.accepted,false,JSON.stringify(del));
+    assert.equal(del.code,409);
+    // Selisih biaya dari perangkat yang membatalkan: diterima, tetapi nominal server tidak berubah.
+    const edit=await send({commandId:`refund-upd-000${n}`,type:"expense.upsert",entityId:"refund-MLT-R",branchId:"melati",payload:{id:"refund-MLT-R",branchId:"melati",category:"PengembalianDana",amount:1,occurredAtMs:1}},who);
+    assert.equal(edit.accepted,true,JSON.stringify(edit));
+  }
+  const fake=await send({commandId:"refund-fake-0001",type:"expense.upsert",entityId:"refund-MLT-Z",branchId:"melati",payload:{id:"refund-MLT-Z",branchId:"melati",category:"Gaji",amount:5,occurredAtMs:1}},identities.kasir);
+  assert.equal(fake.accepted,true,JSON.stringify(fake));
+  assert.deepEqual(rows(env,"SELECT amount FROM expenses WHERE id LIKE 'refund-%'").map(r=>r.amount),[10000],"id refund- hanya ditulis order.cancel");
+});
+
+test("pengembalian dana dari perangkat yang tiba sebelum order.cancel tidak memakai nominal perangkat", async () => {
+  const env=fakeD1(); seedBaseline(env);
+  env.db.exec(`INSERT INTO services(id,organization_id,name,unit,default_price,commission_per_unit,retail,drop_out,self_service,active,updated_at)
+    VALUES('cuci-kiloan','cuciin','Cuci kiloan','kg',10000,1000,0,0,0,1,1);`);
+  const send=async(cmd)=>(await (await pushCommands(commandRequest([cmd]),env,identities.owner)).json()).results[0];
+  await send({commandId:"early-c-0001",type:"order.create",entityId:"MLT-E",branchId:"melati",payload:{id:"MLT-E",branchId:"melati",customerName:"E",phone:"0816",total:10000,paid:0,paymentStatus:"Belum lunas",paymentMethod:"Tunai",workStatus:"Masuk antrian",createdAt:1,lines:[{serviceId:"cuci-kiloan",serviceName:"Cuci kiloan",quantity:1,unit:"kg",unitPrice:10000}]}});
+  await send({commandId:"early-p-0001",type:"order.payment",entityId:"MLT-E",branchId:"melati",payload:{paid:10000,paymentStatus:"Lunas",paymentMethod:"Tunai"}});
+  assert.equal((await send({commandId:"early-x-0001",entityType:"expense",operation:"upsert",entityId:"refund-MLT-E",branchId:"melati",payload:{id:"refund-MLT-E",branchId:"melati",category:"PengembalianDana",amount:999999,occurredAtMs:1}})).accepted,true);
+  assert.equal(rows(env,"SELECT COUNT(*) AS n FROM expenses WHERE id='refund-MLT-E'")[0].n,0);
+  assert.equal((await send({commandId:"early-y-0001",type:"order.cancel",entityId:"MLT-E",branchId:"melati",payload:{reason:"uji"}})).accepted,true);
+  assert.deepEqual(rows(env,"SELECT amount FROM expenses WHERE id='refund-MLT-E'").map(r=>r.amount),[10000]);
 });

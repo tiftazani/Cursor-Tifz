@@ -91,7 +91,7 @@ class AccessFunctionEnforcementTest {
         // daftar penolakan hanya punya satu sumber.
         "service.create" to ("canAccess" to 1),
         "service.payment" to ("boleh" to 1),   // markLunas
-        "service.price" to ("canAccess" to 2), // setCartPrice + canChangePrice
+        "service.price" to ("boleh" to 1), // setCartPrice; canChangePrice hanya untuk tampilan
         "service.correct" to ("boleh" to 1),   // updateNotaLines
         "service.delete" to ("boleh" to 1),    // deleteNota
         "service.correctSent" to ("canAccess" to 1), // canCorrectSentNota

@@ -49,8 +49,24 @@ object FirebaseCloud {
     }
 
     fun signOut() {
+        CloudSync.invalidateSession()
         signInAttempt.incrementAndGet()
         if (enabled) FirebaseAuth.getInstance().signOut()
+    }
+
+    fun restoreSession(email: String) {
+        if (!enabled || currentEmail != email.trim().lowercase() || CuciinStore.session.value != null) return
+        val stamp = CloudSync.captureSession()
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20)
+        CloudSync.verifyIdentity { identity, _ ->
+            if (!CloudSync.sessionUnchanged(stamp) || System.nanoTime() - deadline >= 0) return@verifyIdentity
+            if (identity == null || currentEmail != identity.email.trim().lowercase()) return@verifyIdentity
+            val access = identity.access ?: return@verifyIdentity
+            val branchId = identity.branchIds.firstOrNull() ?: return@verifyIdentity
+            if (CuciinStore.finalizeAuthenticatedSession(Session(identity.role, identity.name, identity.email, branchId, identity.branchIds), access)) {
+                CloudSync.onAuthenticated()
+            }
+        }
     }
 
     fun signIn(email: String, password: String, onDone: (ok: Boolean, pending: Boolean, msg: String) -> Unit) {
@@ -60,6 +76,7 @@ object FirebaseCloud {
         // perangkat yang layanan Google-nya tidak lengkap rantai itu tidak pernah selesai. Listener
         // sukses maupun gagal tidak dipanggil, jadi tombol Masuk berhenti tanpa penjelasan apa pun.
         // Karena itu jawaban selalu dipaksa keluar dari sini, bukan diserahkan ke Task.
+        CloudSync.invalidateSession()
         val attempt = signInAttempt.incrementAndGet()
         val done = java.util.concurrent.atomic.AtomicBoolean(false)
         fun finish(ok: Boolean, pending: Boolean, msg: String) {
@@ -74,10 +91,6 @@ object FirebaseCloud {
         }
         val watchdog = Runnable {
             finish(false, false, "Server identitas tidak menjawab. Periksa koneksi lalu coba lagi.")
-        }
-        CloudSync.accountSwitchError(email)?.let {
-            finish(false, false, it)
-            return
         }
         main.postDelayed(watchdog, 20_000)
         FirebaseAuth.getInstance().signInWithEmailAndPassword(email.trim(), password)
@@ -94,8 +107,7 @@ object FirebaseCloud {
                         finish(false, false, error ?: "Akun belum diizinkan")
                         return@verifyIdentity
                     }
-                    val local = CuciinStore.staff.firstOrNull { it.email.equals(identity.email, true) }
-                    val branchId = identity.branchIds.firstOrNull() ?: local?.branchIds?.firstOrNull()
+                    val branchId = identity.branchIds.firstOrNull()
                     if (branchId == null) {
                         FirebaseAuth.getInstance().signOut()
                         finish(false, false, "Akun belum memiliki cabang")
@@ -105,8 +117,16 @@ object FirebaseCloud {
                         finish(false, false, "Identitas akun berubah. Silakan masuk kembali.")
                         return@verifyIdentity
                     }
-                    CuciinStore.authenticateSession(Session(identity.role, identity.name, identity.email, branchId, identity.branchIds))
-                    CuciinStore.bumpPublic()
+                    val access = identity.access
+                    if (access == null) {
+                        FirebaseAuth.getInstance().signOut()
+                        finish(false, false, "Izin akun belum dapat diverifikasi")
+                        return@verifyIdentity
+                    }
+                    if (!CuciinStore.finalizeAuthenticatedSession(Session(identity.role, identity.name, identity.email, branchId, identity.branchIds), access)) {
+                        finish(false, false, "Izin akun tidak dapat disimpan. Periksa ruang penyimpanan lalu coba lagi.")
+                        return@verifyIdentity
+                    }
                     CloudSync.onAuthenticated()
                     finish(true, false, "ok")
                 }

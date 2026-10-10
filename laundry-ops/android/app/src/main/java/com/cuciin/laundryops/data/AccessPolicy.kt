@@ -25,10 +25,10 @@ object AccessPolicy {
      */
     fun effectiveRole(staff: Staff?, roles: List<AccessRole>): AccessRole {
         val catalog = rolesFor(roles)
-        val explicit = staff?.accessRoleId?.takeIf { it.isNotBlank() }?.let { id -> catalog.firstOrNull { it.id == id } }
-        if (explicit != null) return explicit
-        val legacyId = staff?.role?.let { AccessCatalog.builtInIdFor(it) }
-        return catalog.firstOrNull { it.id == legacyId } ?: catalog.first()
+        val roleId = staff?.accessRoleId?.takeIf { it.isNotBlank() }
+            ?: staff?.role?.let { AccessCatalog.builtInIdFor(it) }
+        return catalog.firstOrNull { it.id == roleId }
+            ?: AccessRole(roleId.orEmpty(), "Role belum tersedia")
     }
 
     /** Owner selalu penuh, walaupun daftar role belum tersinkron. */
@@ -46,7 +46,7 @@ object AccessPolicy {
         // saat dibaca supaya pembaruan aplikasi tidak mencabut akses yang sudah dimiliki.
         val (modulBaru, fungsiBaru) = AccessCatalog.migrate(role.modules, role.functions)
         var modules = modulBaru
-        var functions = fungsiBaru
+        var functions = fungsiBaru - AccessCatalog.ownerLocked
         if (policy != null) {
             // Kebijakan pengguna hanya boleh mengurangi, tidak menambah, hak dari role.
             modules = modules.intersect(policy.modules)
@@ -62,7 +62,7 @@ object AccessPolicy {
         module: String,
         function: String? = null,
     ): Boolean {
-        if (staff == null) return false
+        if (staff == null || !staff.approved) return false
         val (modules, functions) = grants(staff, roles, policy)
         if (module !in modules) return false
         return function == null || function in functions

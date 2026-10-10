@@ -173,7 +173,10 @@ internal fun LoginScreen(nav: NavHostController) {
     var resetMessage by remember { mutableStateOf("") }
     var resetFailed by remember { mutableStateOf(false) }
     fun goHome() {
-        nav.navigate("home") { popUpTo("login") { inclusive = true } }
+        nav.navigate("home") { popUpTo("login") { inclusive = true }; launchSingleTop = true }
+    }
+    LaunchedEffect(store.session.value) {
+        if (store.session.value != null) goHome()
     }
     Box(Modifier.fillMaxSize()) {
         Image(
@@ -247,8 +250,9 @@ internal fun LoginScreen(nav: NavHostController) {
                     // lewat toast/snackbar: SnackbarHost berada di Scaffold yang hanya
                     // membungkus rute setelah login, jadi pesan untuk layar Masuk
                     // pernah hilang tanpa jejak dan pengguna tidak tahu kenapa gagal.
-                    if (loginError.isNotBlank()) {
-                        Box(Modifier.padding(top = 12.dp)) { FeedbackBanner(loginError) }
+                    val visibleError = store.storageError ?: loginError
+                    if (visibleError.isNotBlank()) {
+                        Box(Modifier.padding(top = 12.dp)) { FeedbackBanner(visibleError) }
                     }
                     Row(
                         Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 14.dp),
@@ -266,7 +270,7 @@ internal fun LoginScreen(nav: NavHostController) {
                         )
                     }
                     PrimaryBtn(if (busy) "Memeriksa akun…" else "Masuk", enabled = !busy, icon = Icons.Outlined.Login) {
-                        if (busy) return@PrimaryBtn
+                        if (busy || store.storageError != null) return@PrimaryBtn
                         if (email.isBlank() || pass.isBlank()) {
                             loginError = "Email dan kata sandi wajib diisi."
                             return@PrimaryBtn
@@ -279,7 +283,7 @@ internal fun LoginScreen(nav: NavHostController) {
                         FirebaseCloud.signIn(email, pass) { ok, pending, msg ->
                             busy = false
                             when {
-                                ok -> goHome()
+                                ok -> Unit
                                 pending -> nav.navigate("pending")
                                 else -> {
                                     if (store.pendingName.value != null) nav.navigate("pending")

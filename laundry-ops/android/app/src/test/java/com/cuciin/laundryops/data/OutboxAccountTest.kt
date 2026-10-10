@@ -86,7 +86,7 @@ class OutboxAccountTest {
         val tagged = old.copy(commandId = "tagged", actorEmail = "owner@example.com")
         val outbox = SyncOutbox(SyncClientState(pending = listOf(old, tagged), scopeKey = "owner"))
         outbox.migrateLegacyActor(" WIDAD@example.com ")
-        assertEquals(listOf("widad@example.com", "owner@example.com"), outbox.state.pending.map { it.actorEmail })
+        assertEquals(listOf("", "owner@example.com"), outbox.state.pending.map { it.actorEmail })
     }
 
     @Test fun conflictingLegacyEvidenceRemainsBlocked() {
@@ -127,6 +127,38 @@ class OutboxAccountTest {
             listOf(entity), 10, "bunayya", null, Role.Kasir, { "old-restore" }).single().commandId)
         assertEquals("old-bootstrap", SyncOutbox().reconcileBootstrap(emptyList(), listOf(entity), 1, 10,
             "bunayya", null, Role.Kasir, "kasir:widad@example.com:bunayya", { "old-bootstrap" }).single().commandId)
+    }
+
+    @Test fun ownerLegacyOriginSurvivesUpgradeAndRestart() {
+        val command = json.decodeFromString(SyncCommand.serializer(), legacy)
+        val outbox = SyncOutbox(SyncClientState(pending = listOf(command), scopeKey = "owner"))
+        outbox.migrateLegacyActor("owner@example.com")
+        val restarted = SyncOutbox(json.decodeFromString(SyncClientState.serializer(), json.encodeToString(SyncClientState.serializer(), outbox.state)))
+        restarted.migrateLegacyActor("other@example.com")
+        assertEquals("owner@example.com", restarted.state.pending.single().actorEmail)
+        assertFalse(restarted.blockedActor("owner@example.com"))
+        assertTrue(restarted.blockedActor("other@example.com"))
+    }
+
+    @Test fun unknownLegacyCannotBeAdoptedAfterLoginAndRestart() {
+        val command = json.decodeFromString(SyncCommand.serializer(), legacy)
+        val outbox = SyncOutbox(SyncClientState(pending = listOf(command), scopeKey = "owner"))
+        outbox.migrateLegacyActor(null)
+        val restarted = SyncOutbox(json.decodeFromString(SyncClientState.serializer(), json.encodeToString(SyncClientState.serializer(), outbox.state)))
+        restarted.migrateLegacyActor("other@example.com")
+        assertEquals(listOf(command), restarted.state.pending)
+        assertTrue(restarted.blockedActor("other@example.com"))
+    }
+
+    @Test fun unknownAndRejectedPreventEveryRemoteRecoveryWithoutDataLoss() {
+        val command = json.decodeFromString(SyncCommand.serializer(), legacy)
+        val outbox = SyncOutbox(SyncClientState(pending = listOf(command), rejected = listOf(RejectedSyncCommand(command.copy(commandId = "rejected"), "denied", 1))))
+        val before = outbox.state
+        assertFalse(outbox.reconcileRejectedRemote(Snapshot(), emptyList(), 5, "owner"))
+        assertFalse(outbox.resetForScope("owner"))
+        assertFalse(outbox.acceptRemote(emptyList(), 5))
+        assertFalse(outbox.prepareRemote(Snapshot(), emptyList(), 5, before.generation, "owner"))
+        assertEquals(before, outbox.state)
     }
 
     @Test fun persistedCommandsKeepActorAndReadLegacy() {

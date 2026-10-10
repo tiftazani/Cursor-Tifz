@@ -1,4 +1,28 @@
-# Cuciin 1.10.45 — kesiapan rilis
+# Cuciin 1.10.46 — kesiapan rilis
+
+## Kandidat hotfix 1.10.50 (10 Oktober 2026)
+
+492 debug+492 release lulus; lint0error15warning. Worker153/153, typecheck dan skema19 lulus. verify_release PASS; upgrade emulator offline install-r 1.10.49->1.10.50 startup2x, 0FATAL/ANR. Migrasi0010 prod+debug dan deploy keduanya sukses; health200, tanpa token401. Tidak commit/push. HP/Firebase nyata belum terbukti. Tidak menghapus akun, aplikasi, data atau antrean. Artefak dan bukti: releases/1.10.50-candidate/README.md.
+
+## Kandidat hotfix 1.10.49 (10 Oktober 2026, digantikan 1.10.50)
+
+Menggantikan 1.10.48. Rincian dan hasil uji: releases/1.10.49-candidate/README.md. Belum commit/push/deploy; HP nyata, Firebase, upgrade data asli belum terbukti.
+
+## Kandidat hotfix 1.10.48 (10 Oktober 2026, digantikan 1.10.49)
+
+479 debug + 479 release lulus; lint 0 error/15 warning; verify_release PASS; Worker 143/143. Upgrade emulator offline 1.10.47->1.10.48 lulus, hash cocok, crash kosong. Belum commit/push/deploy; HP nyata, Firebase, upgrade data asli belum terbukti. Rincian: releases/1.10.48-candidate/README.md.
+
+## Kandidat hotfix 1.10.47 (10 Oktober 2026, digantikan)
+
+475 debug + 475 release lulus; lint 0 error/15 warning per varian; verify_release PASS. Install/open/restart emulator offline lulus, hash cocok, crash kosong. Belum commit/push/deploy; HP nyata, Firebase, upgrade legacy, uang/stok gagal tulis masih terbuka. Rincian: releases/1.10.47-candidate/README.md.
+
+## Kandidat terbaru 1.10.46 (9 Oktober 2026)
+
+418 tes debug dan 418 release lulus, 0 failures/errors/skipped; lint 0 error/20 warning per varian. Worker 120/0, tidak berubah. APK debug/release dan AAB dibuat; verifikasi endpoint dan verify_release PASS, sertifikat tetap. Upgrade emulator offline dari 1.10.45 ke 1.10.46 dan restart berhasil; hash APK terpasang cocok, buffer crash kosong. Belum commit/push/deploy baru.
+
+Login Firebase HP pelapor, antrean asli HP, dua perangkat nyata, dan jaringan tertunda nyata belum terbukti. Unknown pending tidak dihapus/diadopsi; pengiriman dan edit tetap tertahan. Rincian: releases/1.10.46-candidate/README.md.
+
+Bagian berikut adalah catatan rilis sebelumnya.
 
 ## Bukti terbaru (9 Oktober 2026)
 

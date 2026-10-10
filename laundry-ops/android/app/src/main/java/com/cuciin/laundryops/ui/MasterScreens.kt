@@ -132,7 +132,7 @@ internal fun CustomersScreen(nav: NavHostController, toast: (String) -> Unit) {
                         if (e == null) {
                             val c = store.addCustomer(name, phone, address)
                             if (c == null) {
-                                toast("Akses Ubah pelanggan dicabut untuk role akun ini")
+                                toast(store.storageError ?: "Akses Ubah pelanggan dicabut untuk role akun ini")
                                 return@PrimaryBtn
                             }
                             toast("Pelanggan disimpan")
@@ -727,7 +727,7 @@ internal fun ProductsScreen(nav: NavHostController, toast: (String) -> Unit) {
                         val e = editing
                         if (e == null) {
                             if (store.addProduct(name, stock, min, initialBranchIds, kind, unit) == null) {
-                                toast("Akses Kelola master data dicabut untuk role akun ini"); return@PrimaryBtn
+                                toast(store.storageError ?: "Akses Kelola master data dicabut untuk role akun ini"); return@PrimaryBtn
                             }
                         } else {
                             val tolak = store.updateProduct(e.key, name, min, kind, unit)

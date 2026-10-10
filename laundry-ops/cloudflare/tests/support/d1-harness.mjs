@@ -6,10 +6,10 @@
  * Ini penting untuk memeriksa hal yang hanya terlihat saat runtime: efek ON CONFLICT,
  * penjaga idempotensi, dan otorisasi akses per pengguna.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
-const MIGRATIONS = ["0001_initial.sql", "0002_firebase_identity.sql", "0003_command_sync.sql", "0004_operational_links.sql", "0005_payment_ledger.sql", "0009_attendance_per_branch.sql"];
+const MIGRATIONS = readdirSync(new URL("../../migrations/", import.meta.url)).filter(file => file.endsWith(".sql")).sort();
 
 export function fakeD1() {
   const db = new DatabaseSync(":memory:");

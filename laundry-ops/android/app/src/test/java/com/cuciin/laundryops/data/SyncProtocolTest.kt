@@ -14,6 +14,45 @@ class SyncProtocolTest {
     private fun entity(type: String, id: String, branch: String? = null, value: Int = 1) =
         SyncEntity(type, id, branch, buildJsonObject { put("id", id); put("value", value) })
 
+    @Test fun legacyOrderJournalIsVisibleWithoutCreatingOrderCommands() {
+        val nota = Nota("LEG-1", "b1", "Kasir", "Uji", "", "Cuci", 7000, 0,
+            PayStatus.Belum, LaundryStatus.Masuk, "", 1, "", false)
+        val payload = LocalJson.json.encodeToJsonElement(Nota.serializer(), nota)
+        val result = SyncProjection.apply(Snapshot(), listOf(SyncChange(entityType = "order",
+            entityId = nota.id, operation = "upsert", branchId = "b1", payload = payload)), 2)
+        assertEquals(listOf(nota), result.notas)
+        assertEquals(listOf("nota"), SyncProjection.entities(result).filter { it.entityId == nota.id }.map { it.entityType })
+        assertTrue(SyncProjection.apply(result, listOf(SyncChange(entityType = "order",
+            entityId = nota.id, operation = "delete", branchId = "b1")), 3).notas.isEmpty())
+    }
+
+    @Test fun androidWireMatchesWorkerFixture() {
+        val actor = "kasir@cuciin.id"
+        val line = NotaLine("cuci", "Cuci", 1.0, "kg", 10000, actor, "Kasir Melati", 1000)
+        val initial = Nota("MLT-wire", "melati", "Kasir Melati", "Pelanggan", "0813", "Cuci", 10000, 0,
+            PayStatus.Belum, LaundryStatus.Masuk, "1 Okt 2026, 08.00", 1, "", false, lines = listOf(line), kasirEmail = actor)
+        val cases = linkedMapOf<String, kotlinx.serialization.json.JsonElement>()
+        var next = 0
+        fun commands(before: Snapshot, after: Snapshot): kotlinx.serialization.json.JsonElement {
+            val box = SyncOutbox(SyncClientState(shadow = SyncProjection.entities(before), bootstrapped = true))
+
+            val pending = box.enqueue(SyncProjection.entities(after), 2, "melati", setOf("melati"), Role.Kasir, actor) { "wire-${after.notas.first().id}-${next++}" }
+            return LocalJson.json.encodeToJsonElement(SyncCommandBatch.serializer(), SyncCommandBatch(pending))
+        }
+        val base = Snapshot(notas = listOf(initial))
+        cases["create"] = commands(Snapshot(), base)
+        cases["payment"] = commands(base, base.copy(notas = listOf(initial.copy(paid = 10000, pay = PayStatus.Lunas, payMethod = PayMethod.Qris)),
+            payments = listOf(PaymentRecord("pay-wire", initial.id, "melati", 10000, PayMethod.Qris, 2, "1 Okt 2026, 08.01", "Kasir Melati"))))
+        cases["status"] = commands(base, base.copy(notas = listOf(initial.copy(laundry = LaundryStatus.Selesai, completedAt = "1 Okt 2026, 09.00"))))
+        cases["whatsapp"] = commands(base, base.copy(notas = listOf(initial.copy(waSent = true, waAt = "1 Okt 2026, 09.01"))))
+        val completed = initial.copy(paid = 10000, pay = PayStatus.Lunas, laundry = LaundryStatus.Selesai, completedAt = "1 Okt 2026, 09.00")
+        cases["handoverBase"] = commands(Snapshot(), Snapshot(notas = listOf(completed)))
+        cases["handover"] = commands(Snapshot(notas = listOf(completed)), Snapshot(notas = listOf(completed.copy(pickedUpAt = "1 Okt 2026, 10.00"))))
+        val fixture = kotlinx.serialization.json.JsonObject(cases)
+        java.io.File("build/android-wire.json").apply { parentFile?.mkdirs(); writeText(fixture.toString()) }
+        assertEquals(fixture, LocalJson.json.parseToJsonElement(java.io.File("../../cloudflare/tests/fixtures/android-wire.json").readText()))
+    }
+
     @Test fun debugBootstrapBranchUsesKotlinLocationField() {
         val valid = """{"branches":[{"id":"debug-bunayya","code":"DEBUG","name":"Cabang Debug","location":"Data uji lokal","mapsQuery":""}],"staff":[{"name":"Cuciin","email":"tiftazani.khara@gmail.com","role":"Owner","branchIds":["debug-bunayya"]}]}"""
         val snapshot = LocalJson.json.decodeFromString(Snapshot.serializer(), valid)
@@ -21,6 +60,89 @@ class SyncProtocolTest {
 
         val legacyAddress = valid.replace("\"location\":\"Data uji lokal\"", "\"address\":\"Data uji lokal\"")
         assertTrue(runCatching { LocalJson.json.decodeFromString(Snapshot.serializer(), legacyAddress) }.isFailure)
+    }
+
+    @Test fun acknowledgedNotaDoesNotRequeueWhenOnlyUnrelatedLocalDataChanges() {
+        val nota = Nota("ACK-1", "b1", "Kasir", "Data contoh", "", "Cuci", 7000, 0,
+            PayStatus.Belum, LaundryStatus.Masuk, "", 1, "", false)
+        val local = Snapshot(notas = listOf(nota))
+        val box = SyncOutbox(SyncClientState(bootstrapped = true))
+        val sent = box.enqueue(SyncProjection.entities(local), 1, "b1", null, Role.Owner, "owner@example.test") { "ack-create" }
+        assertEquals(1, sent.size)
+        box.acknowledge(setOf("ack-create"), 7, mapOf("ack-create" to 100L))
+        val changed = local.copy(customers = listOf(Customer("new-customer", "Contoh", "", "")))
+        val commands = box.enqueue(SyncProjection.entities(changed), 2, "b1", null, Role.Owner, "owner@example.test") { "next-customer" }
+        assertEquals(listOf("customer"), commands.map { it.entityType })
+        assertEquals(100L, box.state.shadow.single { it.entityType == "nota" }.payload.jsonObject["updatedAtMs"]!!.jsonPrimitive.content.toLong())
+        assertTrue(box.enqueue(SyncProjection.entities(changed), 3, "b1", null, Role.Owner, "owner@example.test") { "duplicate" }.isEmpty())
+        val edited = changed.copy(notas = listOf(nota.copy(customer = "Perubahan nyata")))
+        val correction = box.enqueue(SyncProjection.entities(edited), 4, "b1", null, Role.Owner, "owner@example.test") { "correction" }.single()
+        assertEquals("nota", correction.entityType)
+        assertEquals(100L, correction.expectedUpdatedAt)
+        assertEquals("Perubahan nyata", correction.payload.jsonObject["customer"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun offlinePaymentsWaitForEveryPendingNotaVersion() {
+        val actor = "kasir@cuciin.id"
+        val line = NotaLine("cuci", "Cuci", 1.0, "kg", 10000, actor, "Kasir Melati", 1000)
+        val nota = Nota("MLT-offline", "melati", "Kasir Melati", "Data contoh", "", "Cuci", 10000, 0,
+            PayStatus.Belum, LaundryStatus.Masuk, "1 Okt 2026, 08.00", 1, "", false, lines = listOf(line), kasirEmail = actor)
+        val box = SyncOutbox(SyncClientState(bootstrapped = true))
+        var id = 0
+        fun enqueue(snapshot: Snapshot) = box.enqueue(SyncProjection.entities(snapshot), 2, "melati", setOf("melati"), Role.Kasir, actor) { "offline-command-${id++}" }
+        enqueue(Snapshot(notas = listOf(nota)))
+        val payment1 = PaymentRecord("offline-pay-1", nota.id, "melati", 4000, PayMethod.Tunai, 2, "1 Okt 2026, 08.01", "Kasir Melati")
+        val payment2 = payment1.copy(id = "offline-pay-2", amount = 6000, atMs = 3)
+        enqueue(Snapshot(notas = listOf(nota.copy(paid = 4000)), payments = listOf(payment1)))
+        enqueue(Snapshot(notas = listOf(nota.copy(paid = 10000, pay = PayStatus.Lunas)), payments = listOf(payment1, payment2)))
+        val batches = mutableListOf<kotlinx.serialization.json.JsonElement>()
+        repeat(3) { version ->
+            val batch = box.nextBatch(100)
+            assertEquals("payment must not race an older nota version", listOf("nota"), batch.map { it.entityType })
+            batches += LocalJson.json.encodeToJsonElement(SyncCommandBatch.serializer(), SyncCommandBatch(batch))
+            box.acknowledge(batch.mapTo(hashSetOf()) { it.commandId }, version + 1L, batch.associate { it.commandId to (100L + version) })
+        }
+        val payments = box.nextBatch(100)
+        assertEquals(listOf("payment", "payment"), payments.map { it.entityType })
+        assertEquals(listOf(4000, 6000), payments.map { it.payload.jsonObject["amount"]!!.jsonPrimitive.content.toInt() })
+        batches += LocalJson.json.encodeToJsonElement(SyncCommandBatch.serializer(), SyncCommandBatch(payments))
+        java.io.File("build/offline-payment-wire.json").writeText(kotlinx.serialization.json.JsonArray(batches).toString())
+        box.acknowledge(payments.mapTo(hashSetOf()) { it.commandId }, 4)
+        assertTrue(box.state.pending.isEmpty())
+        assertTrue(box.state.rejected.isEmpty())
+    }
+
+    @Test fun backlogOver100PreservesPaymentDependenciesAcrossRestart() {
+        val pending = (1..120).flatMap { index ->
+            val notaId = "backlog-$index"
+            listOf(
+                SyncCommand("create-$index", "nota", notaId, "upsert", "melati", 1, payload = buildJsonObject { put("paid", 0) }, actorEmail = "a@example.test"),
+                SyncCommand("paid-$index", "nota", notaId, "upsert", "melati", 2, payload = buildJsonObject { put("paid", 10000) }, actorEmail = "a@example.test"),
+                SyncCommand("payment-$index", "payment", "pay-$index", "upsert", "melati", 2, payload = buildJsonObject { put("notaId", notaId); put("amount", 10000) }, actorEmail = "a@example.test"),
+            )
+        }
+        var box = SyncOutbox(SyncClientState(pending = pending, bootstrapped = true))
+        val paid = hashSetOf<String>()
+        val acknowledged = hashSetOf<String>()
+        var rounds = 0
+        while (box.state.pending.isNotEmpty()) {
+            val batch = box.nextBatch(100)
+            assertTrue("dependency selection must make progress", batch.isNotEmpty())
+            assertTrue(batch.size <= 100)
+            batch.forEach { command ->
+                if (command.entityType == "payment") {
+                    assertTrue("payment before paid nota ACK", command.payload.jsonObject["notaId"]!!.jsonPrimitive.content in paid)
+                } else if (command.commandId.startsWith("paid-")) paid += command.entityId
+                assertTrue("a command may be acknowledged only once", acknowledged.add(command.commandId))
+            }
+            rounds++
+            box.acknowledge(batch.mapTo(hashSetOf()) { it.commandId }, rounds.toLong())
+            box = SyncOutbox(LocalJson.json.decodeFromString(SyncClientState.serializer(), LocalJson.json.encodeToString(SyncClientState.serializer(), box.state)))
+            assertTrue("backlog must finish within a bounded number of requests", rounds <= 8)
+        }
+        assertEquals(360, acknowledged.size)
+        assertEquals(120, paid.size)
+        assertTrue(box.state.rejected.isEmpty())
     }
 
     @Test fun repeatedSnapshotDoesNotCreateDuplicateCommands() {
@@ -175,12 +297,30 @@ class SyncProtocolTest {
         val command = outbox.enqueue(local, 10, "melati", null) { "rejected-edit" }.single()
         outbox.reject(mapOf(command.commandId to "Khusus Owner"), rejectedAt = 11)
 
-        assertTrue(outbox.reconcileRejectedRemote(remote, revision = 12, scopeKey = "owner:all"))
+        assertTrue(outbox.reconcileRejectedRemote(Snapshot(updatedAt = 13), remote, revision = 12, scopeKey = "owner:all"))
         assertTrue(outbox.state.pending.isEmpty())
+        assertEquals("Pemulihan belum boleh menghapus bukti sebelum data tersimpan", 1, outbox.state.rejected.size)
+        assertTrue("Pemulihan harus disiapkan agar snapshot lama tetap diterapkan", outbox.state.pendingRemote != null)
+        val encoded = LocalJson.json.encodeToString(SyncClientState.serializer(), outbox.state)
+        val restarted = SyncOutbox(LocalJson.json.decodeFromString(SyncClientState.serializer(), encoded))
+        assertEquals(outbox.state, restarted.state)
+        assertTrue(outbox.completePreparedRemote())
         assertTrue(outbox.state.rejected.isEmpty())
         assertEquals(remote, outbox.state.shadow)
         assertEquals(12, outbox.state.revision)
         assertEquals("owner:all", outbox.state.scopeKey)
+    }
+
+    @Test fun completedRecoveryKeepsRejectionsCreatedAfterPreparation() {
+        val remote = listOf(entity("expense", "e-1", "melati", value = 1))
+        val box = SyncOutbox().also { it.initialize(remote) }
+        box.enqueue(listOf(entity("expense", "e-1", "melati", value = 2)), 10, "melati", null) { "first" }
+        box.reject(mapOf("first" to "denied"), 11)
+        assertTrue(box.reconcileRejectedRemote(Snapshot(updatedAt = 12), remote, 7))
+        box.enqueue(listOf(entity("expense", "e-1", "melati", value = 3)), 13, "melati", null) { "second" }
+        box.reject(mapOf("second" to "denied later"), 14)
+        assertTrue(box.completePreparedRemote())
+        assertEquals(listOf("second"), box.state.rejected.map { it.command.commandId })
     }
 
     @Test fun paymentJournalIsProjectedAsItsOwnBranchScopedEntity() {
@@ -386,8 +526,8 @@ class SyncProtocolTest {
     }
 
     @Test fun nonOwnerSyncScopeIncludesEveryAssignedBranch() {
-        val session = Session(Role.Kasir, "Rina", "rina@example.com", "melati")
-        val staff = listOf(Staff("Rina", "RINA@example.com", Role.Kasir, listOf("melati", "cibaduyut")))
+        val session = Session(Role.Kasir, "Rina", "rina@example.com", "melati", listOf("melati", "cibaduyut"))
+        val staff = listOf(Staff("Rina", "RINA@example.com", Role.Kasir, listOf("melati")))
         assertEquals(setOf("melati", "cibaduyut"), allowedSyncBranches(session, staff))
         assertEquals(null, allowedSyncBranches(session.copy(role = Role.Owner), staff))
     }

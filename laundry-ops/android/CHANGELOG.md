@@ -2,6 +2,49 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.50 — 10 Okt 2026 (versionCode 69), kandidat hotfix
+
+- Login dan refresh memakai `/v1/me.access` yang berisi staff terverifikasi, katalog role dan policy. Snapshot penuh hanya fallback server lama. Izin tidak sah ditolak tanpa cache/fallback.
+- Laporan Owner tidak mengikuti filter layar kerja; filter Kasir lama dibersihkan. Kasir tetap dibatasi cabang tugas.
+- Alias jurnal `order` dibaca sebagai `nota`; Worker menghasilkan payload yang dapat didecode Kotlin. Fixture sintetis diuji di kedua sisi.
+- Cursor di depan server memulihkan snapshot lengkap secara durable sebelum maju/turun; pending tidak dihapus.
+- Worker membatasi revisi jurnal, memakai Map, paging 4000 dan cache best-effort; cache gagal tidak menggagalkan GET.
+- Login Firebase, jaringan dan dua HP nyata belum terbukti.
+
+## 1.10.49 — 10 Okt 2026 (versionCode 68), kandidat hotfix (digantikan 1.10.50)
+
+- `closeCashPreview` dihitung dari baris nota hari ini yang tidak batal (nama produk, nilai = qty x harga di nota). Sebelumnya menjumlah mutasi `Jual` yang tetap ada setelah batal/hapus/koreksi (uji: 6 pcs Rp48.000 untuk 1 pcs terjual).
+- `saveNota` hanya menyimpan `productKey` untuk layanan retail. Helper `lineProduct` dipakai koreksi/hapus/batal/tutup kas, sehingga layanan non-retail bernama sama dengan produk tidak menambah stok fantom. Worker sudah sama (`s.retail=1`).
+- `addInventory`/`updateInventory`/`deleteInventory` menolak cabang di luar tugas akun (sama dengan `assertBranch` Worker).
+- `addLocalProof` memeriksa sesi dan cabang sebelum foto disalin.
+- Audit belum selesai: HP nyata, Firebase, upgrade data asli, Compose runtime belum terbukti. Worker lokal belum dideploy.
+
+## 1.10.48 — 10 Okt 2026 (versionCode 67), kandidat hotfix (digantikan 1.10.49)
+
+- Gagal simpan stok, biaya, produk baru, aset baru, tutup kas, dan role baru menampilkan `storageError`, bukan pesan izin dicabut atau kas sudah ditutup.
+- Produk, saldo stok cabang, dan nota disalin saat dimuat/diterapkan, sehingga edit memori tidak mengubah snapshot sumber.
+- `createAccessRole` langsung menyimpan (log + bump).
+- Uji filesystem: pelunasan dan stok saat business gagal maupun business tersimpan + antrean gagal; startup menahan lalu mengantre sekali dengan akun asal.
+- Audit belum selesai: HP nyata, Firebase, upgrade data asli, Compose runtime belum terbukti. Worker lokal belum dideploy.
+
+## 1.10.47 — 10 Okt 2026 (versionCode 66), kandidat hotfix (digantikan 1.10.48)
+
+- Menu dan izin mutasi dipisahkan; peran/cabang mengikuti identitas yang diverifikasi.
+- Respons sesi lama, recovery, antrean dan hasil kiriman dijaga saat pergantian akun serta gagal tulis.
+- Perubahan state antrean disimpan sebelum memori dimajukan; data rusak atau server tidak cocok ditahan tanpa penghapusan otomatis.
+- Gagal menyimpan tidak dilaporkan sebagai sukses; foto aset tetap tersedia untuk cadangan.
+- Audit belum selesai. Upgrade tanpa penanda server, pemulihan legacy tanpa asal, uji uang/stok gagal tulis dan HP/Firebase nyata masih terbuka. Jangan sebar massal sebagai rilis final.
+- Worker lokal juga berubah, tetapi APK ini tidak men-deploy Worker atau migrasi 0010.
+
+## 1.10.46 — 9 Okt 2026 (versionCode 65)
+
+- Login lokal dan Firebase tidak lagi ditolak karena antrean perubahan.
+- Antrean tanpa asal atau milik akun lain tetap tersimpan; pengiriman dan edit bisnis ditahan agar identitas tidak tercampur.
+- Migrasi asal antrean dilakukan sekali sebelum sesi lokal dipulihkan. Login berikutnya tidak mengadopsi antrean unknown.
+- Startup memakai snapshot bisnis tersimpan, bukan selisih normalisasi. Jenis aset ikut dimuat kembali.
+- Respons server dari sesi lama tidak diterapkan setelah login/logout/ganti akun.
+- Hapus akun sendiri tidak melaporkan berhasil untuk server yang hanya mengizinkan Owner menghapus pengguna.
+
 ## 1.10.45 — 9 Okt 2026 (versionCode 64)
 
 - Stok awal produk dikirim lewat `stockMove` per cabang, bukan hanya saldo lokal yang diabaikan server.

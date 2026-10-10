@@ -80,7 +80,7 @@ import java.time.LocalDateTime
 private val store get() = CuciinStore
 
 @Composable
-internal fun MoreScreen(nav: NavHostController) {
+internal fun MoreScreen(nav: NavHostController, toast: (String) -> Unit) {
     val ui = rememberUi()
     val ctx = LocalContext.current
     val role = store.session.value?.role ?: Role.Kasir
@@ -127,7 +127,7 @@ internal fun MoreScreen(nav: NavHostController) {
             }
         }
         if (store.canExportData()) item { GhostBtn("Ekspor semua data (JSON)", icon = Icons.Outlined.FileDownload) { FileExports.shareAllData(ctx, store.exportSnapshot()) } }
-        item { GhostBtn("Keluar dari akun", icon = Icons.Outlined.Logout) { store.logout(); nav.navigate("login") { popUpTo(0) } } }
+        item { GhostBtn("Keluar dari akun", icon = Icons.Outlined.Logout) { store.logout()?.let(toast); nav.navigate("login") { popUpTo(0) } } }
     }
 }
 
@@ -610,7 +610,6 @@ internal fun AuditScreen(nav: NavHostController) {
     val ctx = LocalContext.current
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(ui.gap)) {
         item { ScreenHeader("Riwayat aktivitas", "Semua transaksi", onBack = { nav.popBackStack() }) }
-        item { SyncNotice() }
         // Keadaan sinkronisasi ditampilkan di layar data juga, bukan hanya Beranda dan
         // Profil: angka di layar ini bisa belum sama dengan server.
         item { SyncNotice() }
@@ -754,7 +753,7 @@ internal fun CashScreen(nav: NavHostController, toast: (String) -> Unit) {
                     if (tolakKas != null) toast(tolakKas)
                     else {
                         val row = store.closeCash(bid)
-                        if (row == null) toast("Kas cabang ini sudah ditutup hari ini")
+                        if (row == null) toast(store.storageError ?: "Kas cabang ini sudah ditutup hari ini")
                         else {
                             toast("Kas ditutup ${row.at}")
                             nav.popBackStack()
@@ -885,7 +884,7 @@ internal fun ProfilScreen(nav: NavHostController, toast: (String) -> Unit) {
         item { GhostBtn("Theme Aplikasi", icon = Icons.Outlined.Colorize) { nav.navigate("theme") } }
         item { CardBlock { InfoRow(Icons.Outlined.CloudSync, "Sinkronisasi", CloudSync.lastStatus); InfoRow(Icons.Outlined.Info, "Versi aplikasi", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") } }
         item { GhostBtn("Riwayat versi", icon = Icons.Outlined.History) { nav.navigate("versions") } }
-        if (s.role != Role.Owner) item { DangerBtn("Hapus akun saya") { if (store.deleteMyAccount()) { toast("Akun dihapus"); nav.navigate("login") { popUpTo(0) } } } }
+        if (s.role != Role.Owner) item { DangerBtn("Hapus akun saya") { if (store.deleteMyAccount()) { toast("Akun dihapus"); nav.navigate("login") { popUpTo(0) } } else toast("Akun belum dihapus. Minta Owner menghapus akun melalui Daftar User.") } }
     }
 }
 

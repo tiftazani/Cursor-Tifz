@@ -28,20 +28,21 @@ class SnapshotPrivilegeEndpointTest {
     private fun sumber(nama: String): String =
         File(appDir, "src/main/java/com/cuciin/laundryops/data/$nama").readText()
 
-    private fun badanFungsi(teks: String, nama: String): String {
-        val awal = teks.indexOf("private fun $nama(")
-        assertTrue("$nama tidak ditemukan di CloudSync.kt", awal >= 0)
+    private fun badanFungsi(teks: String): String {
+        assertTrue("hakAksesDariServer harus memakai pembaca snapshot bersama", teks.contains("private fun hakAksesDariServer(): Snapshot? = authorizedSnapshot()?.snapshot"))
+        val awal = teks.indexOf("private fun authorizedSnapshot(")
+        assertTrue("authorizedSnapshot tidak ditemukan di CloudSync.kt", awal >= 0)
         // Fungsi ini berbentuk ekspresi: diakhiri `.getOrNull()`. Batasi di situ supaya
         // fungsi berikutnya (bootstrapSnapshot, yang memang benar memakai alamat dasar)
         // tidak ikut terbaca dan menghasilkan temuan palsu.
         val akhir = teks.indexOf(".getOrNull()", awal)
-        assertTrue("akhir $nama tidak ditemukan", akhir > awal)
+        assertTrue("akhir authorizedSnapshot tidak ditemukan", akhir > awal)
         return teks.substring(awal, akhir)
     }
 
     @Test
     fun penyamaanHakAksesMemakaiAlamatSnapshot() {
-        val badan = badanFungsi(sumber("CloudSync.kt"), "hakAksesDariServer")
+        val badan = badanFungsi(sumber("CloudSync.kt"))
 
         assertTrue(
             "hakAksesDariServer harus meminta /v1/snapshot secara eksplisit. " +
@@ -53,7 +54,7 @@ class SnapshotPrivilegeEndpointTest {
 
     @Test
     fun penyamaanHakAksesTidakMemakaiAlamatDasar() {
-        val badan = badanFungsi(sumber("CloudSync.kt"), "hakAksesDariServer")
+        val badan = badanFungsi(sumber("CloudSync.kt"))
 
         // Fungsi lain (bootstrapSnapshot, recoverRejectedSnapshot, legacyPull) memang benar
         // memakai alamat dasar, karena alamat dasar itu SENDIRI adalah endpoint snapshot.

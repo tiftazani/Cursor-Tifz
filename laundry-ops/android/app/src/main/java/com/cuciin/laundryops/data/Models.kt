@@ -471,6 +471,7 @@ data class CloudIdentity(
     val name: String,
     val role: Role,
     val branchIds: List<String>,
+    val access: Snapshot? = null,
 )
 
 @Serializable

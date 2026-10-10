@@ -68,6 +68,21 @@ class LoginTimeoutTest {
     }
 
     @Test
+    fun gagalSimpanSaatBekerjaMembawaPenggunaKePesanDiLogin() {
+        val nav = sumber("ui/CuciinNav.kt")
+        val effect = nav.substringAfter("LaunchedEffect(store.storageError, route)", "")
+            .substringBefore("val showBar")
+        assertTrue("Root belum mengamati storageError dari layar kerja", effect.isNotBlank())
+        assertTrue("Rute kerja harus pindah ke login saat storage tertahan",
+            effect.contains("if (store.storageError != null && route != null && route != \"login\")") &&
+                effect.contains("nav.navigate(\"login\")"))
+        assertTrue("Back tidak boleh kembali ke layar kerja setelah gagal simpan",
+            effect.contains("popUpTo(0)") && effect.contains("launchSingleTop = true"))
+        val auth = sumber("ui/AuthScreens.kt")
+        assertTrue(auth.contains("val visibleError = store.storageError ?: loginError") && auth.contains("FeedbackBanner(visibleError)"))
+    }
+
+    @Test
     fun gagalMasukDitampilkanDiLayarBukanLewatPesanSingkat() {
         val auth = sumber("ui/AuthScreens.kt")
 
@@ -81,8 +96,9 @@ class LoginTimeoutTest {
         )
         assertTrue(
             "pesan kegagalan tidak dirender di layar Masuk",
-            auth.contains("if (loginError.isNotBlank()) {") &&
-                auth.contains("FeedbackBanner(loginError)"),
+            auth.contains("val visibleError = store.storageError ?: loginError") &&
+                auth.contains("if (visibleError.isNotBlank()) {") &&
+                auth.contains("FeedbackBanner(visibleError)"),
         )
         assertTrue(
             "kegagalan masuk kembali dikirim lewat pesan singkat yang tidak terlihat di layar pra-login",

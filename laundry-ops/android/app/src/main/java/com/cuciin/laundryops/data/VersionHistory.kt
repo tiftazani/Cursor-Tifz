@@ -12,10 +12,55 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.45"
-    val currentCode: Int = 64
+    val currentName: String = "1.10.50"
+    val currentCode: Int = 69
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.50", code = 69, date = "10 Okt 2026",
+            notes = listOf(
+                "Verifikasi login dan izin memakai data akses ringkas dari server, tanpa memuat seluruh transaksi.",
+                "Laporan Owner memakai filter laporan sendiri. Filter Kasir lama tidak lagi menyembunyikan nota.",
+                "Nota format lama dibaca kembali. Posisi sinkronisasi yang tidak cocok memulihkan data server tanpa membuang antrean lokal.",
+                "Kandidat uji: login Firebase dan transaksi lintas HP nyata belum terbukti.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.49", code = 68, date = "10 Okt 2026",
+            notes = listOf(
+                "Rincian produk di Tutup Kas dihitung dari nota yang masih berlaku, jadi nota batal, hapus, atau koreksi tidak lagi menambah angka terjual.",
+                "Layanan biasa yang namanya sama dengan produk stok tidak lagi menambah stok saat nota dikoreksi, dihapus, atau dibatalkan.",
+                "Aset hanya dapat dibuat, diubah, dipindah, atau dihapus di cabang tugas akun.",
+                "Foto bukti hanya dapat ditambahkan ke Service di cabang tugas akun.",
+                "Kandidat uji: HP nyata, login Firebase, dan upgrade data asli belum terbukti.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.48", code = 67, date = "10 Okt 2026",
+            notes = listOf(
+                "Gagal menyimpan stok, biaya, produk, aset, tutup kas, atau role menampilkan pesan penyimpanan, bukan pesan akses dicabut.",
+                "Data stok, produk, dan Service di layar tidak lagi berbagi isi dengan salinan simpanan.",
+                "Role baru langsung disimpan saat dibuat.",
+                "Kandidat uji: HP nyata, login Firebase, dan upgrade data asli belum terbukti.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.47", code = 66, date = "10 Okt 2026",
+            notes = listOf(
+                "Menu Kontrol Akses User dipisahkan dari penjaga antrean. Izin mengikuti akun terverifikasi, peran, dan cabang tugasnya.",
+                "Respons sesi lama ditahan. Antrean akun asal dan bukti pemulihan dijaga ketika penulisan data gagal.",
+                "Gagal menyimpan menutup sesi dan menampilkan pesan. Foto aset tetap disimpan agar cadangan masih dapat memulihkannya.",
+                "Kandidat perbaikan: audit perangkat dan upgrade lama belum selesai. Penanda server yang tidak cocok menahan startup tanpa menghapus data.",
+            ),
+        ),
+        AppRelease(
+            name = "1.10.46", code = 65, date = "9 Okt 2026",
+            notes = listOf(
+                "Antrean perubahan tidak lagi menolak login. Antrean akun lain tetap disimpan dan tidak dikirim memakai akun baru.",
+                "Asal antrean lama diperiksa sebelum sesi dipulihkan. Respons server dari sesi lama diabaikan setelah ganti akun.",
+                "Jenis aset dimuat kembali saat aplikasi dibuka. Hapus akun di server tetap melalui Owner.",
+            ),
+        ),
         AppRelease(
             name = "1.10.45", code = 64, date = "9 Okt 2026",
             notes = listOf(

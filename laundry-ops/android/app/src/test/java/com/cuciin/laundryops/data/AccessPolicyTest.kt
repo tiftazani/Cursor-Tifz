@@ -66,6 +66,11 @@ class AccessPolicyTest {
         assertFalse(AccessPolicy.can(person, roles, widened, "access", "access.role"))
     }
 
+    @Test fun missingExplicitRoleCannotRecoverLegacyPrivileges() {
+        val person = staff(Role.Kasir, "deleted-custom-role")
+        assertEquals(emptySet<String>() to emptySet<String>(), AccessPolicy.grants(person, roles, null))
+    }
+
     @Test fun functionsWithoutTheirModuleAreDropped() {
         val (modules, functions) = AccessCatalog.sanitize(setOf("stock"), setOf("stock.write", "service.create"))
         assertEquals(setOf("stock"), modules)
@@ -76,6 +81,44 @@ class AccessPolicyTest {
         val (modules, functions) = AccessCatalog.sanitize(setOf("stock", "modul-tidak-ada"), setOf("stock.write", "fungsi-tidak-ada"))
         assertEquals(setOf("stock"), modules)
         assertEquals(setOf("stock.write"), functions)
+    }
+
+    @Test fun nonOwnerCannotGainOwnerLockedFunctionsFromAssignedRoleOrPolicy() {
+        for (legacy in listOf(Role.Kasir, Role.Supervisor)) {
+            for (roleId in listOf("role-owner", "custom-full")) {
+                val person = staff(legacy, roleId)
+                val catalog = roles + AccessRole("custom-full", "Penuh", AccessCatalog.moduleKeys, AccessCatalog.allFunctionKeys())
+                val policy = UserAccessPolicy(person.email, AccessCatalog.moduleKeys, AccessCatalog.allFunctionKeys())
+                for (fn in AccessCatalog.ownerLocked) {
+                    assertFalse("$legacy/$roleId/$fn", AccessPolicy.can(person, catalog, policy, AccessCatalog.moduleOf(fn)!!, fn))
+                }
+                assertTrue(AccessPolicy.can(person, catalog, policy, "service", "service.price"))
+            }
+        }
+    }
+
+    @Test fun unapprovedAccountCannotUseAnyModuleOrFunction() {
+        for (role in Role.entries) {
+            val person = staff(role).copy(approved = false)
+            for (module in AccessCatalog.modules) {
+                assertFalse(AccessPolicy.can(person, roles, null, module.key))
+                for (function in module.functions) assertFalse(AccessPolicy.can(person, roles, null, module.key, function.key))
+            }
+        }
+    }
+
+    @Test fun missingRoleNeverBorrowsFirstRolePrivileges() {
+        val catalog = listOf(roles.first { it.id == "role-owner" })
+        for (role in listOf(Role.Kasir, Role.Supervisor)) {
+            for (roleId in listOf("", "missing-role")) {
+                val person = staff(role, roleId)
+                assertEquals(emptySet<String>() to emptySet<String>(), AccessPolicy.grants(person, catalog, null))
+                for (module in AccessCatalog.modules) {
+                    assertFalse(AccessPolicy.can(person, catalog, null, module.key))
+                    for (function in module.functions) assertFalse(AccessPolicy.can(person, catalog, null, module.key, function.key))
+                }
+            }
+        }
     }
 
     @Test fun memberCountFollowsAssignedRoleAndLegacyFallback() {

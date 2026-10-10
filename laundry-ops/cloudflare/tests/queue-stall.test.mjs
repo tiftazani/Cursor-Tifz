@@ -110,11 +110,15 @@ test("command ditolak permanen tidak menahan command sesudahnya", async () => {
   const ditolak = body.results.find((item) => item.commandId === "device-uji-ditolak-0001");
   assert.equal(ditolak?.status, "rejected");
   const sesudahnya = body.results.find((item) => item.commandId === "device-uji-setelahnya-0001");
-  assert.notEqual(sesudahnya?.status, "retryable");
-  assert.equal(sesudahnya?.accepted, true);
+  assert.equal(sesudahnya?.status, "retryable");
+  const retried=await (await pushCommands(commandRequest([{
+    commandId:"device-uji-setelahnya-0001",entityType:"audit",entityId:"audit-uji-0002",operation:"upsert",branchId:"melati",occurredAt:2,
+    payload:{at:"18 Sep 2026, 18.01",atMs:2,user:"Kasir Melati",branchId:"melati",action:"Setelah penolakan"},
+  }]),env,identities.kasir)).json();
+  assert.equal(retried.results[0].accepted,true);
 });
 
-test("payment.delete dikenal dan menghapus baris pembayaran", async () => {
+test("payment.delete dikenal tetapi menolak penghapusan ledger tercatat", async () => {
   const env = fakeD1();
   seedOrder(env);
   const result = await pushCommands(
@@ -134,8 +138,9 @@ test("payment.delete dikenal dan menghapus baris pembayaran", async () => {
   );
   const body = await result.json();
   assert.equal(result.status, 200);
-  assert.equal(body.results[0].accepted, true);
-  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM payments WHERE id='pay-uji-0001'")[0].n, 0);
+  assert.equal(body.results[0].accepted, false);
+  assert.equal(body.results[0].code, 409);
+  assert.equal(rows(env, "SELECT COUNT(*) AS n FROM payments WHERE id='pay-uji-0001'")[0].n, 1);
 });
 
 test("payment.delete untuk baris yang sudah hilang dianggap selesai, bukan menahan antrean", async () => {

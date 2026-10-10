@@ -113,7 +113,7 @@ internal fun AccessRolesScreen(nav: NavHostController, toast: (String) -> Unit) 
                     toast("Nama role $name sudah dipakai")
                 } else {
                     val created = accessStore.createAccessRole(name)
-                    if (created == null) toast("Hanya Owner yang dapat membuat role")
+                    if (created == null) toast(accessStore.storageError ?: "Hanya Owner yang dapat membuat role")
                     else { showCreate = false; nav.navigate("accessRole/${created.id}") }
                 }
             }

@@ -81,6 +81,11 @@ fun CuciinRoot() {
     store.revision.intValue
     val ui = rememberUi()
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
+    LaunchedEffect(store.storageError, route) {
+        if (store.storageError != null && route != null && route != "login") {
+            nav.navigate("login") { popUpTo(0); launchSingleTop = true }
+        }
+    }
     val showBar = session != null && route in NavTabs.routes
     val mapLink = MapSelection.pendingLink.value
     LaunchedEffect(mapLink, session?.email) {
@@ -232,7 +237,7 @@ fun CuciinRoot() {
                     composable("stok") { StockScreen(nav, ::toast) }
                     composable("stokEdit") { StockEditScreen(nav, ::toast) }
                     composable("stokHistory") { StockHistoryScreen(nav) }
-                    composable("more") { MoreScreen(nav) }
+                    composable("more") { MoreScreen(nav, ::toast) }
                     composable("analytics") { AnalyticsScreen(nav) }
                     composable("analyticsReport") { AnalyticsReportScreen(nav) }
                     composable("branches") { BranchesScreen(nav, ::toast) }

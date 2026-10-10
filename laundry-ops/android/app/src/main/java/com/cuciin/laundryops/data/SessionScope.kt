@@ -22,13 +22,13 @@ internal object SessionScope {
      * sesi. Peran ikut disamakan supaya penurunan hak akses di server langsung berlaku.
      */
     fun refreshed(aktif: Session, baris: Staff): Session {
-        val cabang = baris.branchIds.ifEmpty { aktif.branchIds }
+        val cabang = baris.branchIds
         if (baris.role == aktif.role && cabang == aktif.branchIds) return aktif
         // Cabang yang sedang dipilih layar dipertahankan bila masih termasuk penugasan; kalau tidak,
         // jatuh ke cabang pertama yang masih diizinkan supaya pilihan tidak menunjuk cabang terlarang.
         val pilihan = aktif.branchId.takeIf { it.isNotBlank() && it in cabang }
             ?: cabang.firstOrNull()
-            ?: aktif.branchId
+            ?: ""
         return aktif.copy(role = baris.role, branchId = pilihan, branchIds = cabang)
     }
 }

@@ -163,8 +163,9 @@ class AccessCatalogMigrationTest {
             "access" to "access.assign",
             "attendance" to "attendance.self",
         ).forEach { (module, function) ->
-            assertTrue(
-                "AccessPolicy harus menerjemahkan kunci lama: $module/$function",
+            assertEquals(
+                "Migrasi tidak boleh membuka fungsi khusus Owner: $module/$function",
+                function !in AccessCatalog.ownerLocked,
                 AccessPolicy.can(kasir, daftar, null, module, function),
             )
         }

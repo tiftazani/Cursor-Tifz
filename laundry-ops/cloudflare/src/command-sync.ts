@@ -129,6 +129,7 @@ export function parseCommand(raw: unknown): SyncCommand {
   const commandId = requiredString(raw, "commandId", 100);
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{7,99}$/.test(commandId)) throw new CommandError(422, "commandId tidak valid");
   const wireEntityType=typeof raw.entityType === "string" ? raw.entityType.trim() : undefined;
+  if (raw.operation != null && !["upsert","delete"].includes(String(raw.operation))) throw new CommandError(422,"operation tidak valid");
   const operation=raw.operation === "delete" ? "delete" : "upsert";
   const aliases:Record<string,string>={branch:"branch",staff:"staff",customer:"customer",service:"service",product:"product",inventory:"inventory",assetType:"assetType",expense:"expense",attendance:"attendance",nota:"order",branchStock:"branchStock",stockMove:"stockMove",audit:"audit",cashClose:"cashClose",payment:"payment",accessRole:"accessRole",accessPolicy:"accessPolicy",whatsappTemplate:"whatsappTemplate"};
   const payload=isObject(raw.payload) ? raw.payload : (operation === "delete" ? {} : null);
@@ -142,6 +143,8 @@ export function parseCommand(raw: unknown): SyncCommand {
   if(!type && wireEntityType && aliases[wireEntityType]) type=cancelIntent ? "order.cancel" : wireEntityType === "nota" ? (operation === "delete" ? "order.delete" : "order.put") : `${aliases[wireEntityType]}.${operation === "delete" ? "delete" : (wireEntityType === "branchStock" ? "put" : "upsert")}`;
   if(!type) throw new CommandError(422,"type atau entityType wajib diisi");
   if (!KNOWN_COMMANDS.has(type)) throw new CommandError(422, `Tipe command tidak didukung: ${type}`);
+  if (raw.entityType != null && (!wireEntityType || !aliases[wireEntityType] || type.split(".")[0] !== aliases[wireEntityType])) throw new CommandError(422,"type dan entityType tidak cocok");
+  if (raw.operation != null && type.endsWith(".delete") !== (operation === "delete")) throw new CommandError(422,"type dan operation tidak cocok");
   const entityId = typeof raw.entityId === "string" ? raw.entityId.trim() : undefined;
   const branchId = typeof raw.branchId === "string" ? raw.branchId.trim() : undefined;
   const expectedUpdatedAt = typeof raw.expectedUpdatedAt === "number" && Number.isSafeInteger(raw.expectedUpdatedAt) ? raw.expectedUpdatedAt : undefined;
@@ -157,7 +160,7 @@ export function commandPermission(identity: SyncIdentity, type: string, branchId
   // tidak boleh dihapus (baris `payments` ber-FK RESTRICT ke `orders`).
   if (type === "order.cancel" && identity.role !== "Owner") return { allowed:false,reason:"owner" };
   if (["expense.upsert", "expense.delete", "cashClose.upsert", "cashClose.delete"].includes(type) && identity.role === "Supervisor") return { allowed:false,reason:"role" };
-  if (["order.create", "order.update", "order.put", "order.payment", "order.handover"].includes(type) && identity.role === "Supervisor") return { allowed:false,reason:"role" };
+  if (["order.create", "order.update", "order.put", "order.payment", "order.handover", "payment.upsert", "payment.delete"].includes(type) && identity.role === "Supervisor") return { allowed:false,reason:"role" };
   if (["customer.upsert", "customer.delete"].includes(type) && identity.role === "Supervisor") return { allowed:false,reason:"role" };
   if (branchId && identity.role !== "Owner" && !identity.branchIds.includes(branchId)) return { allowed:false,reason:"branch" };
   if (type === "attendance.upsert" && identity.role !== "Owner" && staffEmail?.toLowerCase() !== identity.email.toLowerCase()) return { allowed:false,reason:"self" };
@@ -192,7 +195,6 @@ function assertBranch(identity: SyncIdentity, branchId: string): void {
   if (!identity.bootstrap && identity.role !== "Owner" && !identity.branchIds.includes(branchId)) throw new CommandError(403, "Cabang tidak diizinkan");
 }
 function assertRole(identity: SyncIdentity, command: SyncCommand): void {
-  if(identity.role==="Supervisor" && command.type==="order.put" && command.wireEntityType==="nota") return;
   const staffEmail=command.type==="attendance.upsert" ? optionalString(command.payload,"staffEmail",254) : undefined;
   const permission=commandPermission(identity,command.type,command.branchId,staffEmail);
   if (!permission.allowed) throw new CommandError(403, permission.reason === "owner" ? "Command khusus Owner" : "Role tidak diizinkan");
@@ -211,9 +213,9 @@ function assertRole(identity: SyncIdentity, command: SyncCommand): void {
  */
 function customAccessRequirement(command: SyncCommand): { module: string; function?: string } | null {
   if (command.type.startsWith("order.")) {
-    if (command.payload.syncIntent === "status" || command.type === "order.status") return {module:"queue",function:"queue.status"};
+    if (command.type === "order.status") return {module:"queue",function:"queue.status"};
     if (command.type === "order.handover") return {module:"queue",function:"queue.handover"};
-    if (command.payload.waSent === true) return {module:"whatsapp",function:"whatsapp.send"};
+    if (command.type === "order.waSent") return {module:"whatsapp",function:"whatsapp.send"};
     if (command.type === "order.payment") return {module:"service",function:"service.payment"};
     if (command.type === "order.delete") return {module:"service",function:"service.delete"};
     // Pembatalan nota punya fungsi katalognya sendiri (`service.cancel`), terpisah dari
@@ -243,30 +245,38 @@ function customAccessRequirement(command: SyncCommand): { module: string; functi
  * `service.price`. Owner selalu dianggap boleh; akun tanpa baris kebijakan memakai aturan bawaan
  * peran (dan karena itu diperiksa terpisah oleh pemanggilnya).
  */
-async function hasFunction(db: D1Database, email: string, module: string, fn: string): Promise<boolean> {
-  const row = await db.prepare("SELECT payload_json FROM access_policies WHERE organization_id=? AND lower(email)=lower(?)").bind(ORG_ID, email).first<{payload_json:string}>();
-  if (!row) return false;
-  const policy = JSON.parse(row.payload_json) as JsonRecord;
-  const modules = Array.isArray(policy.modules) ? policy.modules.filter((value): value is string => typeof value === "string") : [];
-  const functions = Array.isArray(policy.functions) ? policy.functions.filter((value): value is string => typeof value === "string") : [];
-  return modules.includes(module) && functions.includes(fn);
+const DEFAULT_FUNCTIONS:Record<string,string[]> = {
+  Kasir:["queue.status","queue.handover","service.create","service.payment","service.correct","customer.write","stock.write","attendance.self","whatsapp.send","expense.write","expense.delete","cash.close"],
+  Supervisor:["queue.status","queue.handover","stock.write","inventory.write","attendance.self"],
+};
+
+async function hasFunction(db: D1Database, identity: SyncIdentity, module: string, fn: string): Promise<boolean> {
+  const staff=await db.prepare("SELECT access_role_id FROM staff WHERE organization_id=? AND lower(email)=lower(?)").bind(ORG_ID,identity.email).first<{access_role_id:string}>();
+  const assignment=staff?.access_role_id ?? "";
+  const roleId=assignment || `role-${identity.role.toLowerCase()}`;
+  const role=await db.prepare("SELECT payload_json FROM access_roles WHERE organization_id=? AND id=?").bind(ORG_ID,roleId).first<{payload_json:string}>();
+  const grants=role ? JSON.parse(role.payload_json) as JsonRecord : null;
+  // ponytail: only legacy blank assignments and seed-only built-ins use presets; explicit missing roles deny.
+  const defaults=(!assignment && !role) || (role && grants?.modules == null && grants?.functions == null && roleId===`role-${identity.role.toLowerCase()}`);
+  let allowed=defaults ? (DEFAULT_FUNCTIONS[identity.role] ?? []).includes(fn) : Boolean(Array.isArray(grants?.modules) && grants.modules.includes(module) && Array.isArray(grants?.functions) && (grants.functions.includes(fn) || (fn==="attendance.self" && grants.functions.includes("attendance.write"))));
+  const row=await db.prepare("SELECT payload_json FROM access_policies WHERE organization_id=? AND lower(email)=lower(?)").bind(ORG_ID,identity.email).first<{payload_json:string}>();
+  if(row) {
+    const policy=JSON.parse(row.payload_json) as JsonRecord;
+    allowed=allowed && Array.isArray(policy.modules) && policy.modules.includes(module) && Array.isArray(policy.functions) && policy.functions.includes(fn);
+  }
+  return allowed;
 }
 
 async function assertCustomAccess(db: D1Database, identity: SyncIdentity, command: SyncCommand): Promise<void> {
   if (identity.bootstrap || identity.role === "Owner") return;
   const requirement = customAccessRequirement(command);
   if (!requirement) return;
-  const row = await db.prepare("SELECT payload_json FROM access_policies WHERE organization_id=? AND lower(email)=lower(?)").bind(ORG_ID, identity.email).first<{payload_json:string}>();
-  if (!row) return;
-  const policy = JSON.parse(row.payload_json) as JsonRecord;
-  const modules = Array.isArray(policy.modules) ? policy.modules.filter((value): value is string => typeof value === "string") : [];
-  const functions = Array.isArray(policy.functions) ? policy.functions.filter((value): value is string => typeof value === "string") : [];
   let requiredFunction = requirement.function;
   if (requirement.module === "service" && requiredFunction === "service.correct") {
     const exists = await db.prepare("SELECT 1 AS found FROM orders WHERE id=? AND organization_id=?").bind(command.entityId ?? "", ORG_ID).first<{found:number}>();
     if (!exists) requiredFunction = "service.create";
   }
-  if (!modules.includes(requirement.module) || (requiredFunction && !functions.includes(requiredFunction))) throw new CommandError(403,"Akses fungsi ini dibatasi oleh Owner");
+  if (requiredFunction && !await hasFunction(db,identity,requirement.module,requiredFunction)) throw new CommandError(403,"Akses fungsi ini dibatasi oleh Owner");
 }
 
 async function existingBranchForEntity(db: D1Database, table: string, id: string): Promise<string | null> {
@@ -286,6 +296,12 @@ function audit(db: D1Database, command: SyncCommand, identity: SyncIdentity, tok
     .bind(`cmd:${command.commandId}`, ORG_ID, branchId, identity.email.toLowerCase(), action, orderId, now, command.commandId, ORG_ID, token);
 }
 
+function assertPaymentStatus(status:string, paid:number, total:number):void {
+  if (!["Lunas","Belum","Belum lunas"].includes(status) || (status==="Lunas") !== (total>0 && paid>=total)) {
+    throw new CommandError(422,"Status pembayaran tidak sesuai jumlah pembayaran");
+  }
+}
+
 function guardPreviousMutation(db:D1Database, command:SyncCommand, token:string):D1PreparedStatement {
   return db.prepare(`INSERT INTO sync_command_guards(execution_token,changed_rows) SELECT ?,changes() WHERE ${commandGate()}`)
     .bind(token,command.commandId,ORG_ID,token);
@@ -294,28 +310,42 @@ function guardPreviousMutation(db:D1Database, command:SyncCommand, token:string)
 type Plan = { statements: D1PreparedStatement[]; entityType: string; entityId: string; branchId: string | null; operation?: "upsert"|"delete"; changePayload?: unknown; updatedAt?: number; journaled?: boolean };
 
 type RetailAdjustment={productId:string;productName:string;delta:number};
-async function retailAdjustments(db:D1Database, orderId:string, lines:Array<{serviceId:string;serviceName:string;quantity:number}>):Promise<RetailAdjustment[]> {
-  const old=(await db.prepare(`SELECT p.id AS product_id,p.name AS product_name,l.quantity FROM order_lines l JOIN services s ON s.id=l.service_id AND s.organization_id=? JOIN products p ON p.organization_id=? AND (p.id=s.product_id OR p.id=s.id OR p.name=s.name) WHERE l.order_id=? AND s.retail=1`).bind(ORG_ID,ORG_ID,orderId).all<{product_id:string;product_name:string;quantity:number}>()).results;
+async function retailAdjustments(db:D1Database, orderId:string, lines:Array<{serviceId:string;serviceName:string;quantity:number;productKey?:string}>):Promise<RetailAdjustment[]> {
+  // Stok lama dikembalikan ke produk yang tercatat terjual pada baris nota, bukan tautan layanan saat ini.
+  const old=(await db.prepare(`SELECT l.service_id,p.id AS product_id,p.name AS product_name,l.quantity FROM order_lines l JOIN orders o ON o.id=l.order_id AND o.organization_id=? JOIN services s ON s.id=l.service_id AND s.organization_id=o.organization_id
+    JOIN products p ON p.organization_id=o.organization_id AND p.id=COALESCE((SELECT x.id FROM products x WHERE x.organization_id=o.organization_id AND x.id=NULLIF(json_extract(o.payload_json,'$.lines['||l.line_no||'].productKey'),'')),NULLIF(s.product_id,''),(SELECT x.id FROM products x WHERE x.organization_id=o.organization_id AND x.id=s.id),(SELECT x.id FROM products x WHERE x.organization_id=o.organization_id AND x.name=s.name ORDER BY x.id LIMIT 1))
+    WHERE l.order_id=? AND s.retail=1`).bind(ORG_ID,orderId).all<{service_id:string;product_id:string;product_name:string;quantity:number}>()).results;
+  const sold=new Map(old.map(row=>[row.service_id,row]));
   const serviceIds=[...new Set(lines.map(line=>line.serviceId))];
-  const current=serviceIds.length ? (await db.prepare(`SELECT s.id,p.id AS product_id,p.name AS product_name,s.retail FROM services s LEFT JOIN products p ON p.organization_id=s.organization_id AND (p.id=s.product_id OR p.id=s.id OR p.name=s.name) WHERE s.organization_id=? AND s.id IN (${serviceIds.map(()=>"?").join(",")})`).bind(ORG_ID,...serviceIds).all<{id:string;product_id:string|null;product_name:string|null;retail:number}>()).results : [];
+  const current=serviceIds.length ? (await db.prepare(`SELECT s.id,p.id AS product_id,p.name AS product_name,s.retail FROM services s LEFT JOIN products p ON p.organization_id=s.organization_id AND p.id=COALESCE(NULLIF(s.product_id,''),(SELECT x.id FROM products x WHERE x.organization_id=s.organization_id AND x.id=s.id),(SELECT x.id FROM products x WHERE x.organization_id=s.organization_id AND x.name=s.name ORDER BY x.id LIMIT 1)) WHERE s.organization_id=? AND s.id IN (${serviceIds.map(()=>"?").join(",")})`).bind(ORG_ID,...serviceIds).all<{id:string;product_id:string|null;product_name:string|null;retail:number}>()).results : [];
   const catalogue=new Map(current.map(row=>[row.id,row])); const totals=new Map<string,RetailAdjustment>();
   for(const row of old) { const entry=totals.get(row.product_id)??{productId:row.product_id,productName:row.product_name,delta:0}; entry.delta+=Math.ceil(row.quantity); totals.set(row.product_id,entry); }
   for(const line of lines) {
-    const service=catalogue.get(line.serviceId); if(!service?.retail) continue;
-    if(!service.product_id || !service.product_name) throw new CommandError(422,`Produk untuk layanan retail ${line.serviceName} belum tersedia`);
+    const service=catalogue.get(line.serviceId);
+    // Produk diambil dari baris lama yang sudah terjual, lalu katalog server; kiriman perangkat tidak dipercaya.
+    const product=service?.retail ? sold.get(line.serviceId) ?? service : null;
+    line.productKey=product?.product_id ?? "";
+    if(!service?.retail) continue;
+    if(!product?.product_id || !product.product_name) throw new CommandError(422,`Produk untuk layanan retail ${line.serviceName} belum tersedia`);
     if(!Number.isInteger(line.quantity)) throw new CommandError(422,`Jumlah layanan retail ${line.serviceName} harus bilangan bulat`);
-    const entry=totals.get(service.product_id)??{productId:service.product_id,productName:service.product_name,delta:0}; entry.delta-=line.quantity; totals.set(service.product_id,entry);
+    const entry=totals.get(product.product_id)??{productId:product.product_id,productName:product.product_name,delta:0}; entry.delta-=line.quantity; totals.set(product.product_id,entry);
   }
   return [...totals.values()].filter(item=>item.delta!==0);
 }
 
 function appendRetailStock(db:D1Database, statements:D1PreparedStatement[], command:SyncCommand, identity:SyncIdentity, token:string, branchId:string, adjustments:RetailAdjustment[], now:number):void {
-  for(const item of adjustments) {
-    statements.push(db.prepare(`INSERT OR IGNORE INTO branch_stocks(branch_id,product_id,quantity,updated_at) SELECT ?,?,0,? WHERE ${commandGate()}`).bind(branchId,item.productId,now,command.commandId,ORG_ID,token));
-    statements.push(db.prepare(`UPDATE branch_stocks SET quantity=quantity+?,updated_at=? WHERE branch_id=? AND product_id=? AND ${commandGate()}`).bind(item.delta,now,branchId,item.productId,command.commandId,ORG_ID,token));
-    const entityId=`${branchId}:${item.productId}`;
-    statements.push(db.prepare(`INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id) SELECT ?,'branchStock',?,'upsert',json_object('branchId',?,'productKey',?,'stock',(SELECT quantity FROM branch_stocks WHERE branch_id=? AND product_id=?)),?,?,?,? WHERE ${commandGate()}`).bind(ORG_ID,entityId,branchId,item.productId,branchId,item.productId,now,branchId,identity.email.toLowerCase(),command.commandId,command.commandId,ORG_ID,token));
-  }
+  if (!adjustments.length) return;
+  const payload=JSON.stringify(adjustments);
+  statements.push(db.prepare(`INSERT OR IGNORE INTO branch_stocks(branch_id,product_id,quantity,updated_at)
+    SELECT ?,json_extract(value,'$.productId'),0,? FROM json_each(?) WHERE ${commandGate()}`)
+    .bind(branchId,now,payload,command.commandId,ORG_ID,token));
+  statements.push(db.prepare(`UPDATE branch_stocks SET quantity=quantity+(SELECT json_extract(value,'$.delta') FROM json_each(?) WHERE json_extract(value,'$.productId')=branch_stocks.product_id),updated_at=?
+    WHERE branch_id=? AND product_id IN (SELECT json_extract(value,'$.productId') FROM json_each(?)) AND ${commandGate()}`)
+    .bind(payload,now,branchId,payload,command.commandId,ORG_ID,token));
+  statements.push(db.prepare(`INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id)
+    SELECT ?,'branchStock',?||':'||s.product_id,'upsert',json_object('branchId',?,'productKey',s.product_id,'stock',s.quantity),?,?,?,?
+    FROM branch_stocks s WHERE s.branch_id=? AND s.product_id IN (SELECT json_extract(value,'$.productId') FROM json_each(?)) AND ${commandGate()}`)
+    .bind(ORG_ID,branchId,branchId,now,branchId,identity.email.toLowerCase(),command.commandId,branchId,payload,command.commandId,ORG_ID,token));
 }
 
 async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIdentity, token: string, now: number): Promise<Plan> {
@@ -325,8 +355,12 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
   now=nextEntityVersion(now,existing?.updated_at);
   const branchId = command.branchId || optionalString(p, "branchId", 100) || existing?.branch_id || "";
   assertBranch(identity, branchId);
-  if (existing) assertBranch(identity, existing.branch_id);
-  if (existing?.wa_sent === 1 && identity.role !== "Owner" && command.type === "order.put") throw new CommandError(403, "Service sudah dikirim ke pelanggan; hanya Owner yang dapat mengoreksi");
+  if (existing) {
+    assertBranch(identity, existing.branch_id);
+    // ponytail: perpindahan cabang nota belum didukung; tambah transfer stok atomik saat fitur diperlukan.
+    if(branchId!==existing.branch_id) throw new CommandError(409,"Cabang Service tersimpan tidak dapat dipindahkan");
+  }
+  if (existing?.wa_sent === 1 && identity.role !== "Owner" && ["order.put","order.update","order.create"].includes(command.type)) throw new CommandError(403, "Service sudah dikirim ke pelanggan; hanya Owner yang dapat mengoreksi");
   if(!existing && ["order.create","order.put"].includes(command.type)) {
     const tombstone=await db.prepare("SELECT 1 AS deleted FROM sync_changes WHERE organization_id=? AND entity_type IN ('nota','order') AND entity_id=? AND operation='delete' LIMIT 1").bind(ORG_ID,id).first<{deleted:number}>();
     if(!orderUpsertAllowed(false,Boolean(tombstone))) throw new CommandError(409,"Service sudah dihapus dan tidak dapat dipulihkan tanpa proses restore Owner");
@@ -335,36 +369,18 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
   const gate = commandGate();
   const statements: D1PreparedStatement[] = [];
 
-  if(command.type==="order.put" && identity.role==="Supervisor") {
-    if(!existing) throw new CommandError(403,"Supervisor hanya dapat mengubah status pengerjaan");
-    const status=requiredString(p,"laundry",80);
-    const storedLines=(await db.prepare("SELECT service_id,service_name,quantity,unit,unit_price,handler_email,handler_name,commission_per_unit FROM order_lines WHERE order_id=? ORDER BY line_no").bind(id).all<{service_id:string;service_name:string;quantity:number;unit:string;unit_price:number;handler_email:string;handler_name:string;commission_per_unit:number}>()).results;
-    const storedPayload=existing.payload_json ? JSON.parse(existing.payload_json) as JsonRecord : null;
-    if(storedPayload) {
-      const mutable=new Set(["laundry","completedAt","updatedAtMs","photos","syncIntent"]);
-      const immutable=(value:JsonRecord)=>Object.fromEntries(Object.entries(value).filter(([key])=>!mutable.has(key)));
-      if(stable(immutable(storedPayload))!==stable(immutable(p))) throw new CommandError(403,"Supervisor hanya dapat mengubah status pengerjaan");
-    }
-    const canonical={...(storedPayload ?? {}),id,branchId:existing.branch_id,kasir:existing.cashier_name,customer:existing.customer_name,phone:existing.phone,items:typeof p.items==="string"?p.items:storedLines.map(line=>line.service_name).join(", "),total:existing.total,paid:existing.paid,pay:existing.payment_status,laundry:status,createdAt:typeof p.createdAt==="string"?p.createdAt:String(existing.created_at),createdAtMs:existing.created_at,pickupAt:existing.estimated_finish,waSent:existing.wa_sent===1,photos:[],payMethod:existing.payment_method,completedAt:p.completedAt ?? null,pickedUpAt:existing.picked_up_at,lines:storedLines.map(line=>({serviceId:line.service_id,name:line.service_name,qty:line.quantity,unit:line.unit,unitPrice:line.unit_price,handledByEmail:line.handler_email,handledByName:line.handler_name,commissionPerUnit:line.commission_per_unit})),kasirEmail:existing.cashier_email,updatedAtMs:now};
-    delete (canonical as JsonRecord).syncIntent;
-    statements.push(db.prepare(`UPDATE orders SET work_status=?,completed_at=?,updated_at=?,payload_json=? WHERE id=? AND organization_id=? AND updated_at=? AND ${gate}`).bind(status,p.completedAt ?? null,now,JSON.stringify(canonical),id,ORG_ID,existing.updated_at,command.commandId,ORG_ID,token));
-    statements.push(guardPreviousMutation(db,command,token));
-    statements.push(audit(db,command,identity,token,branchId,"Mengubah status pengerjaan",id,now));
-    return {statements,entityType:"nota",entityId:id,branchId,changePayload:canonical,updatedAt:now};
-  }
-
   if (command.type === "order.delete") {
     // Nota yang belum pernah sampai ke server (dibuat lalu dihapus saat offline, atau
     // sudah hilang di sisi server) sudah sesuai maksud command. Menolaknya 404 membuat
     // perangkat menyimpan command yang tidak akan pernah berhasil dan menahan antreannya.
-    if (!existing) return { statements: [], entityType: command.wireEntityType ?? "order", entityId: id, branchId, operation: "delete", changePayload: null, updatedAt: now };
+    if (!existing) return { statements: [], entityType: "nota", entityId: id, branchId, operation: "delete", changePayload: null, updatedAt: now };
     if (existing.paid > 0) throw new CommandError(422, "Service yang sudah menerima pembayaran tidak dapat dihapus. Catat pengembalian dana terlebih dahulu.");
     const adjustments=await retailAdjustments(db,id,[]);
     statements.push(db.prepare(`DELETE FROM orders WHERE id=? AND organization_id=? AND updated_at=? AND ${gate}`).bind(id, ORG_ID, existing.updated_at, command.commandId, ORG_ID, token));
     statements.push(guardPreviousMutation(db,command,token));
     appendRetailStock(db,statements,command,identity,token,branchId,adjustments,now);
     statements.push(audit(db, command, identity, token, branchId, "Menghapus Service", id, now));
-    return { statements, entityType: command.wireEntityType ?? "order", entityId: id, branchId, operation: "delete", changePayload: null, updatedAt:now };
+    return { statements, entityType: "nota", entityId: id, branchId, operation: "delete", changePayload: null, updatedAt:now };
   }
 
   if (command.type === "order.cancel") {
@@ -377,7 +393,7 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
     if (sudahDibatalkan) {
       // Idempoten: nota yang sudah dibatalkan tidak dibatalkan dua kali, dan pengembalian
       // dananya tidak dicatat dua kali.
-      return { statements: [], entityType: command.wireEntityType ?? "nota", entityId: id, branchId, changePayload: null, updatedAt: now };
+      return { statements: [], entityType: command.wireEntityType ?? "nota", entityId: id, branchId:existing.branch_id, journaled:true, updatedAt:existing.updated_at };
     }
     if (existing.paid <= 0) throw new CommandError(422, "Nota ini belum menerima pembayaran; gunakan Hapus Service untuk membuangnya");
     const storedCancelLines=(await db.prepare("SELECT service_id,service_name,quantity,unit,unit_price,handler_email,handler_name,commission_per_unit FROM order_lines WHERE order_id=? ORDER BY line_no").bind(id).all<{service_id:string;service_name:string;quantity:number;unit:string;unit_price:number;handler_email:string;handler_name:string;commission_per_unit:number}>()).results;
@@ -402,7 +418,7 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
     return { statements, entityType: command.wireEntityType ?? "nota", entityId: id, branchId, changePayload: dibatalkan, updatedAt: now };
   }
 
-  if (["order.status", "order.payment", "order.handover"].includes(command.type)) {
+  if (["order.status", "order.payment", "order.handover", "order.waSent"].includes(command.type)) {
     if (!existing) throw new CommandError(404, "Service tidak ditemukan");
     // Nota yang sudah dibatalkan tidak boleh diubah lagi lewat jalur koreksi biasa: uangnya
     // sudah dikembalikan, jadi pembayaran baru, perubahan status, dan serah terima di atasnya
@@ -416,7 +432,7 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
     // akan menghapus field lain. Susun ulang payload lengkap dari baris tersimpan.
     const storedPayload=existing.payload_json ? JSON.parse(existing.payload_json) as JsonRecord : null;
     const storedLines=(await db.prepare("SELECT service_id,service_name,quantity,unit,unit_price,handler_email,handler_name,commission_per_unit FROM order_lines WHERE order_id=? ORDER BY line_no").bind(id).all<{service_id:string;service_name:string;quantity:number;unit:string;unit_price:number;handler_email:string;handler_name:string;commission_per_unit:number}>()).results;
-    const canonicalFull:JsonRecord={...(storedPayload ?? {}),id,branchId:existing.branch_id,kasirEmail:existing.cashier_email,kasir:existing.cashier_name,customer:existing.customer_name,phone:existing.phone,total:existing.total,paid:existing.paid,pay:existing.payment_status,laundry:existing.work_status,payMethod:existing.payment_method,createdAt:typeof storedPayload?.createdAt==="string"?storedPayload.createdAt:String(existing.created_at),createdAtMs:existing.created_at,pickupAt:existing.estimated_finish,completedAt:existing.completed_at,pickedUpAt:existing.picked_up_at,waSent:existing.wa_sent===1,photos:[],lines:storedLines.map(line=>({serviceId:line.service_id,name:line.service_name,qty:line.quantity,unit:line.unit,unitPrice:line.unit_price,handledByEmail:line.handler_email,handledByName:line.handler_name,commissionPerUnit:line.commission_per_unit})),updatedAtMs:now};
+    const canonicalFull:JsonRecord={...(storedPayload ?? {}),id,branchId:existing.branch_id,kasirEmail:existing.cashier_email,kasir:existing.cashier_name,customer:existing.customer_name,phone:existing.phone,total:existing.total,paid:existing.paid,pay:existing.payment_status,laundry:existing.work_status,payMethod:existing.payment_method,createdAt:typeof storedPayload?.createdAt==="string"?storedPayload.createdAt:String(existing.created_at),createdAtMs:existing.created_at,pickupAt:existing.estimated_finish,completedAt:existing.completed_at,pickedUpAt:existing.picked_up_at,waSent:existing.wa_sent===1,photos:[],lines:storedLines.map((line,index)=>({serviceId:line.service_id,name:line.service_name,qty:line.quantity,unit:line.unit,unitPrice:line.unit_price,handledByEmail:line.handler_email,handledByName:line.handler_name,commissionPerUnit:line.commission_per_unit,productKey:Array.isArray(storedPayload?.lines) && isObject(storedPayload.lines[index]) ? storedPayload.lines[index].productKey ?? "" : ""})),updatedAtMs:now};
     delete (canonicalFull as JsonRecord).syncIntent;
     if (command.type === "order.status") {
       const status = requiredString(p, "workStatus", 80);
@@ -427,16 +443,20 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
       if (paid > existing.total) throw new CommandError(422,"Pembayaran melebihi grand total");
       if (paid < existing.paid) throw new CommandError(422,"Pembayaran tercatat tidak dapat dikurangi tanpa pengembalian dana");
       const status = requiredString(p, "paymentStatus", 50);
+      assertPaymentStatus(status,paid,existing.total);
       const method = requiredString(p, "paymentMethod", 50);
       canonicalFull.paid=paid; canonicalFull.pay=status; canonicalFull.payMethod=method;
       statements.push(db.prepare(`UPDATE orders SET paid=?,payment_status=?,payment_method=?,updated_at=? WHERE id=? AND organization_id=? AND updated_at=? AND ?<=total AND ${gate}`).bind(paid,status,method,now,id,ORG_ID,existing.updated_at,paid,command.commandId,ORG_ID,token));
+    } else if(command.type === "order.waSent") {
+      canonicalFull.waSent=true; canonicalFull.waAt=optionalString(p,"waAt",80) || storedPayload?.waAt || null;
+      statements.push(db.prepare(`UPDATE orders SET wa_sent=1,updated_at=? WHERE id=? AND organization_id=? AND updated_at=? AND ${gate}`).bind(now,id,ORG_ID,existing.updated_at,command.commandId,ORG_ID,token));
     } else {
       const pickedUpAt = requiredString(p, "pickedUpAt", 80);
       canonicalFull.pickedUpAt=pickedUpAt;
       statements.push(db.prepare(`UPDATE orders SET picked_up_at=?,updated_at=? WHERE id=? AND organization_id=? AND updated_at=? AND ${gate}`).bind(pickedUpAt,now,id,ORG_ID,existing.updated_at,command.commandId,ORG_ID,token));
     }
-    statements.push(db.prepare(`UPDATE orders SET payload_json=? WHERE id=? AND organization_id=? AND ${gate}`).bind(JSON.stringify(canonicalFull),id,ORG_ID,command.commandId,ORG_ID,token));
     statements.push(guardPreviousMutation(db,command,token));
+    statements.push(db.prepare(`UPDATE orders SET payload_json=? WHERE id=? AND organization_id=? AND ${gate}`).bind(JSON.stringify(canonicalFull),id,ORG_ID,command.commandId,ORG_ID,token));
     statements.push(audit(db, command, identity, token, branchId, command.type, id, now));
     return { statements, entityType: command.wireEntityType ?? "nota", entityId: id, branchId, changePayload: canonicalFull, updatedAt:now };
   }
@@ -456,7 +476,7 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
     const handlerName = mayReassign && ("handlerName" in raw || "handledByName" in raw) ? firstString(raw,["handlerName","handledByName"],false,160) : storedLine?.handler_name ?? identity.name;
     return {
       serviceId, serviceName: firstString(raw,["serviceName","name"],true,200), quantity: typeof raw.quantity === "number" ? finiteNumber(raw,"quantity",0.001) : finiteNumber(raw,"qty",0.001),
-      unit: requiredString(raw,"unit",40), unitPrice: integer(raw,"unitPrice"), handlerEmail, handlerName,
+      unit: requiredString(raw,"unit",40), unitPrice: integer(raw,"unitPrice"), handlerEmail, handlerName, productKey:optionalString(raw,"productKey",100),
     };
   });
   const serviceIds=[...new Set(parsedLines.map(line=>line.serviceId))];
@@ -470,7 +490,7 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
   // fungsi `service.price` (bawaannya Owner). Tanpa pemeriksaan ini, perangkat yang dimodifikasi
   // bisa menulis harga apa pun ke server walau tombolnya disembunyikan di UI.
   if (identity.role !== "Owner" && !identity.bootstrap) {
-    const bolehUbahHarga = await hasFunction(db, identity.email, "service", "service.price");
+    const bolehUbahHarga = await hasFunction(db, identity, "service", "service.price");
     if (!bolehUbahHarga) {
       const menyimpang = lines.find(line => {
         const katalog = priceCatalogue.get(line.serviceId);
@@ -482,14 +502,15 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
       if (menyimpang) throw new CommandError(403, "Harga Service hanya dapat diubah oleh Owner");
     }
   }
-  const total = lines.reduce((sum, line) => sum + Math.round(line.quantity * line.unitPrice), 0);
+  const total = lines.reduce((sum, line) => sum + Math.trunc(line.quantity * line.unitPrice), 0);
+  if (!Number.isSafeInteger(total)) throw new CommandError(422,"Grand total tidak valid");
   const stockAdjustments=await retailAdjustments(db,id,lines);
   const paid = integer(p,"paid");
   if (paid > total) throw new CommandError(422, "Pembayaran melebihi grand total");
   if (existing && paid < existing.paid) throw new CommandError(422, "Pembayaran tercatat tidak dapat dikurangi tanpa pengembalian dana");
   const cashierEmail = existing?.cashier_email ?? identity.email.toLowerCase();
   const cashierName = existing?.cashier_name ?? identity.name;
-  const canonicalLines=lines.map(line=>({serviceId:line.serviceId,name:line.serviceName,qty:line.quantity,unit:line.unit,unitPrice:line.unitPrice,handledByEmail:line.handlerEmail,handledByName:line.handlerName,commissionPerUnit:line.commissionPerUnit}));
+  const canonicalLines=lines.map(line=>({serviceId:line.serviceId,name:line.serviceName,qty:line.quantity,unit:line.unit,unitPrice:line.unitPrice,handledByEmail:line.handlerEmail,handledByName:line.handlerName,commissionPerUnit:line.commissionPerUnit,productKey:line.productKey}));
   // Penanda pembatalan HANYA boleh berubah lewat `order.cancel`.
   //
   // Nota yang dibatalkan tidak dihapus, hanya ditandai, jadi ia masih bisa tiba di sini lewat
@@ -502,26 +523,30 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
   // Nilai dari baris tersimpan yang dipakai, jadi niat pembatalan hanya datang dari `order.cancel`.
   const storedOrder=existing?.payload_json ? JSON.parse(existing.payload_json) as JsonRecord : null;
   const batalTersimpan=Number(storedOrder?.canceledAtMs ?? 0);
-  if (batalTersimpan > 0 && command.type === "order.put") {
+  if (batalTersimpan > 0 && ["order.put","order.update","order.create"].includes(command.type)) {
     throw new CommandError(409, "Service ini sudah dibatalkan dan tidak dapat diubah lagi");
   }
-  // Dua bentuk payload: perangkat mengirim `entityType: "nota"` (bentuk kanonik dengan `lines`),
-  // sedangkan pemanggil lama memakai `type: "order.put"` langsung. Penjagaan penanda batal harus
-  // berlaku di KEDUANYA, jadi nilai tersimpan dipasang di luar percabangan itu.
-  const kanonikDasar = command.wireEntityType === "nota"
-    ? { ...p,id,branchId,kasirEmail:cashierEmail,kasir:cashierName,total,lines:canonicalLines,photos:[],updatedAtMs:now }
-    : { ...p, id, branchId, cashierEmail, cashierName, total, lines, updatedAt: now };
-  const canonical:JsonRecord = command.type.startsWith("order.")
-    ? { ...kanonikDasar, canceledAtMs:batalTersimpan, canceledAt:storedOrder?.canceledAt ?? "", canceledBy:storedOrder?.canceledBy ?? "", cancelReason:storedOrder?.cancelReason ?? "" }
-    : kanonikDasar;
-  delete canonical[command.wireEntityType === "nota" ? "cashierEmail" : "kasirEmail"];
-  delete canonical[command.wireEntityType === "nota" ? "cashierName" : "kasir"];
   const customerName=firstString(p,["customerName","customer"],true,200);
   const paymentStatus=firstString(p,["paymentStatus","pay"],true,50);
+  assertPaymentStatus(paymentStatus,paid,total);
   const paymentMethod=firstString(p,["paymentMethod","payMethod"],true,50);
   const workStatus=firstString(p,["workStatus","laundry"],true,80);
   const createdAt=typeof p.createdAt === "number" ? integer(p,"createdAt",1) : integer(p,"createdAtMs",1);
   const estimatedFinish=firstString(p,["estimatedFinish","pickupAt"],false,80);
+  const canonical:JsonRecord={...p,id,branchId,kasirEmail:cashierEmail,kasir:cashierName,customer:customerName,
+    phone:optionalString(p,"phone",40),items:optionalString(p,"items",2000) || lines.map(line=>line.serviceName).join(", "),
+    total,paid,pay:paymentStatus,payMethod:paymentMethod,laundry:workStatus,
+    createdAt:typeof p.createdAt==="string" ? p.createdAt : String(createdAt),createdAtMs:createdAt,pickupAt:estimatedFinish,
+    waSent:flag(p,"waSent")===1,lines:canonicalLines,photos:[],updatedAtMs:now,
+    canceledAtMs:batalTersimpan,canceledAt:storedOrder?.canceledAt ?? "",canceledBy:storedOrder?.canceledBy ?? "",cancelReason:storedOrder?.cancelReason ?? ""};
+  delete canonical.syncIntent;
+  // Old direct callers may still read these aliases; journal consumers always get Nota fields too.
+  if(command.wireEntityType!=="nota") {
+    canonical.cashierEmail=cashierEmail; canonical.cashierName=cashierName; canonical.updatedAt=now;
+    canonical.lines=canonicalLines.map((line,index)=>({...lines[index],...line}));
+  } else {
+    delete canonical.cashierEmail; delete canonical.cashierName;
+  }
   const values = [id,ORG_ID,branchId,cashierEmail,cashierName,customerName,optionalString(p,"phone",40),total,paid,paymentStatus,paymentMethod,workStatus,createdAt,estimatedFinish,p.completedAt ?? null,p.pickedUpAt ?? null,flag(p,"waSent"),now,JSON.stringify(canonical)];
   if (command.type === "order.create" || (command.type === "order.put" && !existing)) {
     if (existing) throw new CommandError(409, "ID Service sudah digunakan");
@@ -535,11 +560,12 @@ async function planOrder(db: D1Database, command: SyncCommand, identity: SyncIde
     statements.push(guardPreviousMutation(db,command,token));
     statements.push(db.prepare(`DELETE FROM order_lines WHERE order_id=? AND ${gate}`).bind(id,command.commandId,ORG_ID,token));
   }
-  lines.forEach((line,index) => statements.push(db.prepare(`INSERT INTO order_lines(order_id,service_id,line_no,service_name,quantity,unit,unit_price,handler_email,handler_name,commission_per_unit)
-    SELECT ?,?,?,?,?,?,?,?,?,? WHERE ${gate}`).bind(id,line.serviceId,index,line.serviceName,line.quantity,line.unit,line.unitPrice,line.handlerEmail,line.handlerName,line.commissionPerUnit,command.commandId,ORG_ID,token)));
+  statements.push(db.prepare(`INSERT INTO order_lines(order_id,service_id,line_no,service_name,quantity,unit,unit_price,handler_email,handler_name,commission_per_unit)
+    SELECT ?,json_extract(value,'$.serviceId'),CAST(key AS INTEGER),json_extract(value,'$.serviceName'),json_extract(value,'$.quantity'),json_extract(value,'$.unit'),json_extract(value,'$.unitPrice'),json_extract(value,'$.handlerEmail'),json_extract(value,'$.handlerName'),json_extract(value,'$.commissionPerUnit')
+    FROM json_each(?) WHERE ${gate}`).bind(id,JSON.stringify(lines),command.commandId,ORG_ID,token));
   appendRetailStock(db,statements,command,identity,token,branchId,stockAdjustments,now);
   statements.push(audit(db,command,identity,token,branchId,command.type,id,now));
-  return { statements, entityType:command.wireEntityType ?? "order", entityId:id, branchId, changePayload:canonical, updatedAt:now };
+  return { statements, entityType:"nota", entityId:id, branchId, changePayload:canonical, updatedAt:now };
 }
 
 async function planStock(db: D1Database, command: SyncCommand, identity: SyncIdentity, token: string, now: number): Promise<Plan> {
@@ -591,14 +617,20 @@ async function planStockMove(db:D1Database, command:SyncCommand, identity:SyncId
     return {statements:[db.prepare(`DELETE FROM stock_moves WHERE id=? AND organization_id=? AND ${commandGate()}`).bind(moveId,ORG_ID,command.commandId,ORG_ID,token)],entityType:"stockMove",entityId:moveId,branchId:existing.branch_id,operation:"delete",changePayload:null};
   }
   const productRef=requiredString(p,"product",200);
-  const product=await db.prepare("SELECT id,name FROM products WHERE organization_id=? AND (id=? OR name=?) LIMIT 1").bind(ORG_ID,productRef,productRef).first<{id:string;name:string}>();
+  const orderId=typeof p.notaId === "string"&&p.notaId ? p.notaId : null;
+  // Urutan tetap: id persis, lalu nama. Mutasi jual dari nota memakai nama layanan, jadi
+  // tautan layanan retail dicoba lebih dulu untuk mutasi bernota (sama dengan linkedProduct Android).
+  const byId=()=>db.prepare("SELECT id,name FROM products WHERE organization_id=? AND id=?").bind(ORG_ID,productRef).first<{id:string;name:string}>();
+  const byName=()=>db.prepare("SELECT id,name FROM products WHERE organization_id=? AND name=? ORDER BY id LIMIT 1").bind(ORG_ID,productRef).first<{id:string;name:string}>();
+  const byService=()=>db.prepare(`SELECT p.id,p.name FROM services s JOIN products p ON p.organization_id=s.organization_id AND p.id=COALESCE(NULLIF(s.product_id,''),(SELECT x.id FROM products x WHERE x.organization_id=s.organization_id AND x.id=s.id),(SELECT x.id FROM products x WHERE x.organization_id=s.organization_id AND x.name=s.name ORDER BY x.id LIMIT 1))
+    WHERE s.organization_id=? AND s.name=? AND s.retail=1 ORDER BY s.id LIMIT 1`).bind(ORG_ID,productRef).first<{id:string;name:string}>();
+  const product=await byId() ?? (orderId ? await byService() ?? await byName() : await byName() ?? await byService());
   if(!product) throw new CommandError(422,"Produk stok tidak ditemukan");
   const kind=requiredString(p,"kind",20); const qty=integer(p,"qty",-1_000_000);
   const isSet=kind==="Update";
   const delta=kind==="Tambah" ? Math.abs(qty) : (["Kurang","Jual"].includes(kind) ? -Math.abs(qty) : qty);
   const target=isSet ? (typeof p.balanceAfter === "number" ? integer(p,"balanceAfter") : integer(p,"qty")) : delta;
   const statements:D1PreparedStatement[]=[];
-  const orderId=typeof p.notaId === "string"&&p.notaId ? p.notaId : null;
   if(orderId) {
     const order=await db.prepare("SELECT id FROM orders WHERE id=? AND organization_id=? AND branch_id=?").bind(orderId,ORG_ID,branchId).first();
     const deletedOrder=!order ? await db.prepare("SELECT branch_id FROM sync_changes WHERE organization_id=? AND entity_type IN ('nota','order') AND entity_id=? AND operation='delete' ORDER BY sequence DESC LIMIT 1").bind(ORG_ID,orderId).first<{branch_id:string|null}>() : null;
@@ -647,7 +679,9 @@ async function planDerivedStock(db:D1Database, command:SyncCommand, identity:Syn
   const productId=optionalString(p,"productKey",100) || command.entityId?.slice(branchId.length+1) || "";
   if(command.type.endsWith(".delete")) {
     if(!productId) throw new CommandError(422,"productKey wajib diisi");
-    return {statements:[db.prepare(`DELETE FROM branch_stocks WHERE branch_id=? AND product_id=? AND ${commandGate()}`).bind(branchId,productId,command.commandId,ORG_ID,token)],entityType:"branchStock",entityId:command.entityId || `${branchId}:${productId}`,branchId,operation:"delete",changePayload:null};
+    // Saldo adalah proyeksi stockMove: hanya baris yatim (produk/cabang sudah hilang) yang boleh
+    // dibuang. Selain itu delete diakui sebagai no-op agar saldo aktif tidak hilang tanpa jejak.
+    return {statements:[db.prepare(`DELETE FROM branch_stocks WHERE branch_id=? AND product_id=? AND (NOT EXISTS(SELECT 1 FROM products WHERE id=? AND organization_id=?) OR NOT EXISTS(SELECT 1 FROM branches WHERE id=? AND organization_id=?)) AND ${commandGate()}`).bind(branchId,productId,productId,ORG_ID,branchId,ORG_ID,command.commandId,ORG_ID,token)],entityType:"branchStock",entityId:command.entityId || `${branchId}:${productId}`,branchId,operation:"delete",changePayload:null};
   }
   // Saldo adalah proyeksi stockMove. Command absolut ini diakui agar outbox
   // tidak macet, tetapi tidak boleh menimpa delta dari perangkat lain.
@@ -663,12 +697,7 @@ async function planPayment(db:D1Database, command:SyncCommand, identity:SyncIden
     // terkirim ulang setelah barisnya hilang, dan menolaknya akan menahan antrean.
     if(!existing) return {statements:[],entityType:"payment",entityId:id,branchId:command.branchId || null,operation:"delete",changePayload:null};
     assertBranch(identity,existing.branch_id);
-    const statements=[
-      db.prepare(`DELETE FROM payments WHERE id=? AND organization_id=? AND ${commandGate()}`).bind(id,ORG_ID,command.commandId,ORG_ID,token),
-      guardPreviousMutation(db,command,token),
-      audit(db,command,identity,token,existing.branch_id,"Menghapus pembayaran",existing.order_id,now),
-    ];
-    return {statements,entityType:"payment",entityId:id,branchId:existing.branch_id,operation:"delete",changePayload:null,updatedAt:now};
+    throw new CommandError(409,"Pembayaran tercatat tidak dapat dihapus; gunakan pembatalan nota dan pengembalian dana");
   }
   const notaId=requiredString(p,"notaId",100);
   const branchId=command.branchId || requiredString(p,"branchId",100);
@@ -686,7 +715,10 @@ async function planPayment(db:D1Database, command:SyncCommand, identity:SyncIden
   const payload={id,notaId,branchId,amount,method,atMs,at:optionalString(p,"at",80),by:identity.name};
   const gate=commandGate();
   const statements=[
-    db.prepare(`INSERT INTO payments(id,organization_id,order_id,branch_id,amount,method,received_at,received_by,payload_json,updated_at) SELECT ?,?,?,?,?,?,?,?,?,? WHERE ${gate}`).bind(id,ORG_ID,notaId,branchId,amount,method,atMs,identity.email.toLowerCase(),JSON.stringify(payload),now,command.commandId,ORG_ID,token),
+    db.prepare(`INSERT INTO payments(id,organization_id,order_id,branch_id,amount,method,received_at,received_by,payload_json,updated_at) SELECT ?,?,?,?,?,?,?,?,?,? WHERE ${gate}
+      AND EXISTS(SELECT 1 FROM orders WHERE id=? AND organization_id=? AND branch_id=?
+        AND paid>=?+(SELECT COALESCE(SUM(amount),0) FROM payments WHERE order_id=? AND organization_id=?))`)
+      .bind(id,ORG_ID,notaId,branchId,amount,method,atMs,identity.email.toLowerCase(),JSON.stringify(payload),now,command.commandId,ORG_ID,token,notaId,ORG_ID,branchId,amount,notaId,ORG_ID),
     guardPreviousMutation(db,command,token),
     audit(db,command,identity,token,branchId,"Mencatat pembayaran",notaId,now),
   ];
@@ -780,10 +812,26 @@ async function planGeneric(db:D1Database, command:SyncCommand, identity:SyncIden
       if(!attendanceRecordOwnedBy(identity,existingAttendance.staff_email)) throw new CommandError(403,"Karyawan hanya dapat mengubah absensinya sendiri");
   }
   const gate=commandGate(); const statements:D1PreparedStatement[]=[];
+  // Pengembalian dana nota batal hanya ditulis `order.cancel` dengan id `refund-<nota>`. Perangkat
+  // yang membatalkan juga mengirim selisih biaya itu (urutannya bisa sebelum nota); diterima tanpa
+  // menulis apa pun karena nominal resminya dari server. Menghapusnya membuat uang keluar hilang
+  // dari laporan kas. Biaya manual berkategori sama (id `cost-`) tetap boleh dihapus pemiliknya.
+  if(kind==="expense" && id.startsWith("refund-")) {
+    if(deleting) throw new CommandError(409,"Pengembalian dana nota batal tidak dapat dihapus");
+    return {statements:[],entityType:"expense",entityId:id,branchId,journaled:true,updatedAt:now};
+  }
   if(deleting) {
     if(kind==="attendance" && identity.role!=="Owner") {
       if(!existingAttendance || !attendanceRecordOwnedBy(identity,existingAttendance.staff_email)) throw new CommandError(403,"Karyawan hanya dapat menghapus absensinya sendiri");
     }
+    // FK branch_stocks/services ke products membuat DELETE produk gagal permanen (503 berulang)
+    // dan menahan antrean. Lepas dulu tautannya; Android juga membuang saldo produk yang dihapus.
+    if(kind==="product") {
+      statements.push(db.prepare(`UPDATE services SET product_id=NULL WHERE product_id=? AND organization_id=? AND ${gate}`).bind(id,ORG_ID,command.commandId,ORG_ID,token));
+      statements.push(db.prepare(`DELETE FROM branch_stocks WHERE product_id=? AND EXISTS(SELECT 1 FROM products WHERE id=? AND organization_id=?) AND ${gate}`).bind(id,id,ORG_ID,command.commandId,ORG_ID,token));
+    }
+    // Android menghapus saldo cabang bersama cabangnya; riwayat lain tetap menahan lewat FK (409).
+    if(kind==="branch") statements.push(db.prepare(`DELETE FROM branch_stocks WHERE branch_id=? AND EXISTS(SELECT 1 FROM branches WHERE id=? AND organization_id=?) AND ${gate}`).bind(id,id,ORG_ID,command.commandId,ORG_ID,token));
     statements.push(db.prepare(`DELETE FROM ${config.table} WHERE ${config.idColumn ?? "id"}=? AND organization_id=? AND ${gate}`).bind(id,ORG_ID,command.commandId,ORG_ID,token));
     statements.push(guardPreviousMutation(db,command,token));
     if(kind==="staff") {
@@ -799,7 +847,7 @@ async function planGeneric(db:D1Database, command:SyncCommand, identity:SyncIden
   else if(kind==="branch") statements.push(db.prepare(`INSERT INTO branches(id,organization_id,code,name,address,maps_query,updated_at) SELECT ?,?,?,?,?,?,? WHERE ${gate} ON CONFLICT(id) DO UPDATE SET code=excluded.code,name=excluded.name,address=excluded.address,maps_query=excluded.maps_query,updated_at=excluded.updated_at`).bind(id,ORG_ID,requiredString(p,"code",40),requiredString(p,"name",200),firstString(p,["address","location"],false,500),optionalString(p,"mapsQuery",500),now,command.commandId,ORG_ID,token));
   else if(kind==="staff") {
     const email=requiredString(p,"email",254).toLowerCase();
-    statements.push(db.prepare(`INSERT INTO staff(email,organization_id,name,role,approved,active,updated_at) SELECT ?,?,?,?,?,?,? WHERE ${gate} ON CONFLICT(email) DO UPDATE SET name=excluded.name,role=excluded.role,approved=excluded.approved,active=excluded.active,updated_at=excluded.updated_at`).bind(email,ORG_ID,requiredString(p,"name",160),requiredString(p,"role",30),flag(p,"approved"),p.active===false?0:1,now,command.commandId,ORG_ID,token));
+    statements.push(db.prepare(`INSERT INTO staff(email,organization_id,name,role,approved,active,access_role_id,updated_at) SELECT ?,?,?,?,?,?,?,? WHERE ${gate} ON CONFLICT(email) DO UPDATE SET name=excluded.name,role=excluded.role,approved=excluded.approved,active=excluded.active,access_role_id=excluded.access_role_id,updated_at=excluded.updated_at`).bind(email,ORG_ID,requiredString(p,"name",160),requiredString(p,"role",30),flag(p,"approved"),p.active===false?0:1,optionalString(p,"accessRoleId",100),now,command.commandId,ORG_ID,token));
     statements.push(db.prepare(`DELETE FROM staff_branches WHERE staff_email=? AND ${gate}`).bind(email,command.commandId,ORG_ID,token));
     const ids=Array.isArray(p.branchIds)?p.branchIds.filter((x):x is string=>typeof x==="string"&&x.length>0):[];
     ids.forEach(branch=>statements.push(db.prepare(`INSERT OR IGNORE INTO staff_branches(staff_email,branch_id) SELECT ?,? WHERE ${gate}`).bind(email,branch,command.commandId,ORG_ID,token)));
@@ -831,15 +879,45 @@ async function planGeneric(db:D1Database, command:SyncCommand, identity:SyncIden
   return {statements,entityType:command.wireEntityType ?? config.entity,entityId:id,branchId,changePayload,journaled};
 }
 
+async function classifyNota(db:D1Database, command:SyncCommand):Promise<SyncCommand> {
+  if(command.type!=="order.put" || command.wireEntityType!=="nota") return command;
+  const id=command.entityId || optionalString(command.payload,"id",100);
+  const row=await db.prepare("SELECT * FROM orders WHERE id=? AND organization_id=?").bind(id,ORG_ID).first<JsonRecord>();
+  let stored=row?.payload_json ? JSON.parse(String(row.payload_json)) as JsonRecord : null;
+  if(row && !stored) {
+    const lines=(await db.prepare("SELECT l.*,COALESCE(s.product_id,'') AS product_key FROM order_lines l LEFT JOIN services s ON s.id=l.service_id AND s.organization_id=? WHERE l.order_id=? ORDER BY l.line_no").bind(ORG_ID,id).all<JsonRecord>()).results;
+    stored={id,branchId:row.branch_id,kasirEmail:row.cashier_email,kasir:row.cashier_name,customer:row.customer_name,phone:row.phone,total:row.total,paid:row.paid,pay:row.payment_status,payMethod:row.payment_method,laundry:row.work_status,createdAt:String(row.created_at),createdAtMs:row.created_at,pickupAt:row.estimated_finish,completedAt:row.completed_at,pickedUpAt:row.picked_up_at,waSent:row.wa_sent===1,items:lines.map(line=>line.service_name).join(", "),lines:lines.map(line=>({serviceId:line.service_id,name:line.service_name,qty:line.quantity,unit:line.unit,unitPrice:line.unit_price,handledByEmail:line.handler_email,handledByName:line.handler_name,commissionPerUnit:line.commission_per_unit,productKey:line.product_key}))};
+  }
+  const sameExcept=(keys:string[])=>{
+    // Label tanggal tidak tersimpan pada baris legacy; createdAtMs tetap dibandingkan.
+    const omit=new Set([...keys,"updatedAtMs","photos","syncIntent",...(row && !row.payload_json ? ["createdAt"] : [])]);
+    const fixed=(p:JsonRecord)=>{
+      const normalized={waAt:null,dropOut:false,canceledAtMs:0,canceledAt:"",canceledBy:"",cancelReason:"",...p,lines:Array.isArray(p.lines) ? p.lines.map(line=>isObject(line)?{productKey:"",...line}:line) : p.lines};
+      return Object.fromEntries(Object.entries(normalized).filter(([key])=>!omit.has(key)));
+    };
+    return stored && stable(fixed(stored))===stable(fixed(command.payload));
+  };
+  if(command.payload.syncIntent==="status" || sameExcept(["laundry","completedAt"])) {
+    if(!sameExcept(["laundry","completedAt"])) throw new CommandError(403,"Perubahan status tidak boleh mengubah isi nota");
+    return {...command,type:"order.status",payload:{...command.payload,workStatus:command.payload.laundry}};
+  }
+  if(sameExcept(["pickedUpAt"]) && command.payload.pickedUpAt!=null) return {...command,type:"order.handover"};
+  if(sameExcept(["paid","pay","payMethod"])) return {...command,type:"order.payment",payload:{...command.payload,paymentStatus:command.payload.pay,paymentMethod:command.payload.payMethod}};
+  if(command.payload.waSent===true && sameExcept(["waSent","waAt"])) return {...command,type:"order.waSent"};
+  return command;
+}
+
 async function executeCommand(env:CommandEnv, command:SyncCommand, identity:SyncIdentity):Promise<JsonRecord> {
-  assertRole(identity,command);
-  await assertCustomAccess(env.DB,identity,command);
   const requestHash=await sha256(stable({type:command.type,entityId:command.entityId,branchId:command.branchId,expectedUpdatedAt:command.expectedUpdatedAt,payload:command.payload}));
-  const previous=await env.DB.prepare("SELECT request_hash,result_json FROM processed_commands WHERE command_id=? AND organization_id=?").bind(command.commandId,ORG_ID).first<{request_hash:string|null;result_json:string|null}>();
+  const previous=await env.DB.prepare("SELECT request_hash,result_json,actor_email FROM processed_commands WHERE command_id=? AND organization_id=?").bind(command.commandId,ORG_ID).first<{request_hash:string|null;result_json:string|null;actor_email:string|null}>();
   if(previous) {
+    if(previous.actor_email?.toLowerCase()!==identity.email.toLowerCase()) throw new CommandError(409,"Asal command tersimpan tidak sesuai akun");
     if(previous.request_hash && previous.request_hash!==requestHash) throw new CommandError(409,"commandId pernah dipakai untuk isi berbeda");
     return previous.result_json ? {...JSON.parse(previous.result_json) as JsonRecord,replayed:true} : {commandId:command.commandId,accepted:true,replayed:true};
   }
+  command=await classifyNota(env.DB,command);
+  assertRole(identity,command);
+  await assertCustomAccess(env.DB,identity,command);
   const token=crypto.randomUUID(); const now=Date.now();
   let plan:Plan;
   if(command.type.startsWith("order.")) plan=await planOrder(env.DB,command,identity,token,now);
@@ -863,10 +941,13 @@ async function executeCommand(env:CommandEnv, command:SyncCommand, identity:Sync
     if(String(error).includes("stock_below_zero")) throw new CommandError(409,"Stok tidak mencukupi");
     if(String(error).includes("CHECK constraint failed")) throw new CommandError(409,"Data sudah berubah di perangkat lain");
     if(String(error).includes("UNIQUE constraint")) throw new CommandError(409,"Data bertabrakan dengan perubahan lain");
+    // FK gagal tidak akan sembuh dengan kirim ulang; 503 di sini menahan seluruh antrean perangkat.
+    if(String(error).includes("FOREIGN KEY constraint")) throw new CommandError(409,"Data masih dipakai riwayat lain dan tidak dapat diubah");
     throw error;
   }
-  const saved=await env.DB.prepare("SELECT request_hash,result_json FROM processed_commands WHERE command_id=? AND organization_id=?").bind(command.commandId,ORG_ID).first<{request_hash:string|null;result_json:string|null}>();
+  const saved=await env.DB.prepare("SELECT request_hash,result_json,actor_email FROM processed_commands WHERE command_id=? AND organization_id=?").bind(command.commandId,ORG_ID).first<{request_hash:string|null;result_json:string|null;actor_email:string|null}>();
   if(!saved) throw new CommandError(500,"Command gagal dicatat");
+  if(saved.actor_email?.toLowerCase()!==identity.email.toLowerCase()) throw new CommandError(409,"Asal command tersimpan tidak sesuai akun");
   if(saved.request_hash && saved.request_hash!==requestHash) throw new CommandError(409,"commandId pernah dipakai untuk isi berbeda");
   // Setelah barisnya terhapus dan hasilnya tersimpan, baru akun loginnya dibereskan. Urutannya
   // penting: kegagalan di sini tidak boleh menggagalkan command yang sudah berhasil, karena
@@ -911,21 +992,18 @@ export async function pushCommands(request:Request, env:CommandEnv, identity:Syn
     if(seenIds.has(command.commandId)) return response({error:"commandId dalam satu request tidak boleh duplikat"},422);
     seenIds.add(command.commandId);
   }
-  let priorFailure=false;
+  let attempted=0;
+  // ponytail: tier D1 belum diketahui; satu command menjaga prefix+ACK. Naikkan hanya setelah budget payload maksimum dibuktikan.
   for(const command of commands) {
-    if(priorFailure) {
-      results.push({commandId:command.commandId,accepted:false,status:"retryable",code:503,error:"Menunggu command sebelumnya berhasil"});
+    if(attempted>=1) {
+      results.push({commandId:command.commandId,accepted:false,status:"retryable",code:503,error:"Batas aman request; kirim ulang sisa command"});
       continue;
     }
+    attempted++;
     try { results.push(await executeCommand(env,command,identity)); }
     catch(error) {
       if(!(error instanceof CommandError) || error.status >= 500) console.error("command_retryable",command.commandId,error);
       results.push(commandFailureResult(command.commandId,error));
-      // Hanya gangguan sementara yang menahan command berikutnya. Command yang
-      // ditolak permanen (4xx) sudah dilaporkan ke perangkat dan akan dibuang dari
-      // antrean; menghentikan rantai di sini membuat command sesudahnya berstatus
-      // retryable selamanya sehingga seluruh antrean perangkat macet.
-      priorFailure = !(error instanceof CommandError) || error.status >= 500;
     }
   }
   const acknowledgedCommandIds=results.filter(item=>item.accepted===true).map(item=>String(item.commandId));
@@ -935,14 +1013,28 @@ export async function pushCommands(request:Request, env:CommandEnv, identity:Syn
   return response({revision,acknowledgedCommandIds,results});
 }
 
+export function canonicalNotaPayload(payload:JsonRecord):JsonRecord {
+  if(typeof payload.kasir==="string" && typeof payload.customer==="string" && typeof payload.createdAt==="string") return payload;
+  const lines=Array.isArray(payload.lines) ? payload.lines.filter(isObject).map(line=>({...line,
+    name:line.name ?? line.serviceName,qty:line.qty ?? line.quantity,
+    handledByEmail:line.handledByEmail ?? line.handlerEmail ?? "",handledByName:line.handledByName ?? line.handlerName ?? "",productKey:line.productKey ?? ""})) : [];
+  return {...payload,kasir:payload.kasir ?? payload.cashierName ?? "",kasirEmail:payload.kasirEmail ?? payload.cashierEmail ?? "",
+    customer:payload.customer ?? payload.customerName ?? "",phone:payload.phone ?? "",items:payload.items ?? lines.map(line=>line.name).join(", "),
+    pay:payload.pay ?? payload.paymentStatus,payMethod:payload.payMethod ?? payload.paymentMethod,
+    laundry:payload.laundry ?? payload.workStatus,createdAt:String(payload.createdAt ?? ""),createdAtMs:payload.createdAtMs ?? payload.createdAt ?? 0,
+    pickupAt:payload.pickupAt ?? payload.estimatedFinish ?? "",waSent:payload.waSent===true,photos:[],lines,updatedAtMs:payload.updatedAtMs ?? payload.updatedAt ?? 0};
+}
+
 export async function pullChanges(request:Request, env:CommandEnv, identity:SyncIdentity):Promise<Response> {
   const url=new URL(request.url);
   const after=Number(url.searchParams.get("after") ?? 0);
   const requestedLimit=Number(url.searchParams.get("limit") ?? 200);
   if(!Number.isSafeInteger(after) || after<0 || !Number.isSafeInteger(requestedLimit) || requestedLimit<1) return response({error:"Parameter after/limit tidak valid"},422);
   const limit=Math.min(requestedLimit,MAX_CHANGE_LIMIT);
-  let query="SELECT sequence,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id FROM sync_changes WHERE organization_id=? AND sequence>?";
-  const binds:unknown[]=[ORG_ID,after];
+  const latest=await env.DB.prepare("SELECT COALESCE(MAX(sequence),0) AS revision FROM sync_changes WHERE organization_id=?").bind(ORG_ID).first<{revision:number}>();
+  const latestRevision=latest?.revision ?? 0;
+  let query="SELECT sequence,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id FROM sync_changes WHERE organization_id=? AND sequence>? AND sequence<=?";
+  const binds:unknown[]=[ORG_ID,after,latestRevision];
   if(!identity.bootstrap && identity.role!=="Owner") {
     if(identity.branchIds.length) {
       const slots=identity.branchIds.map(()=>"?").join(",");
@@ -953,12 +1045,10 @@ export async function pullChanges(request:Request, env:CommandEnv, identity:Sync
   query+=" ORDER BY sequence ASC LIMIT ?"; binds.push(limit+1);
   const rows=(await env.DB.prepare(query).bind(...binds).all<{sequence:number;entity_type:string;entity_id:string;operation:string;payload_json:string|null;updated_at:number;branch_id:string|null;actor_email:string|null;command_id:string|null}>()).results;
   const hasMore=rows.length>limit; const page=rows.slice(0,limit);
-  const latest=await env.DB.prepare("SELECT COALESCE(MAX(sequence),0) AS revision FROM sync_changes WHERE organization_id=?").bind(ORG_ID).first<{revision:number}>();
-  const latestRevision=latest?.revision ?? 0;
   // Kursor tidak boleh melebihi revisi jurnal terakhir. Klien yang kursornya sudah di depan server
   // (mis. sesudah jurnal dipangkas atau basis data dipulihkan dari cadangan) akan menerima
   // `nextRevision = after` dan terus memakai kursor lama, sehingga halaman jurnal yang lebih tua
   // dari kursornya tidak pernah dibaca lagi — perubahan server berhenti sampai selamanya.
   const nextRevision=Math.min(page.at(-1)?.sequence ?? after, latestRevision);
-  return response({revision:nextRevision,changes:page.map(row=>({revision:row.sequence,entityType:row.entity_type,entityId:row.entity_id,operation:row.operation,payload:row.payload_json?JSON.parse(row.payload_json):null,updatedAt:row.updated_at,branchId:row.branch_id,actorEmail:row.actor_email,commandId:row.command_id})),nextRevision,latestRevision,hasMore,scopeKey:syncScopeKey(identity)});
+  return response({revision:nextRevision,changes:page.map(row=>({revision:row.sequence,entityType:row.entity_type==="order" ? "nota" : row.entity_type,entityId:row.entity_id,operation:row.operation,payload:row.payload_json ? (row.entity_type==="order" ? canonicalNotaPayload(JSON.parse(row.payload_json) as JsonRecord) : JSON.parse(row.payload_json)) : null,updatedAt:row.updated_at,branchId:row.branch_id,actorEmail:row.actor_email,commandId:row.command_id})),nextRevision,latestRevision,hasMore,scopeKey:syncScopeKey(identity)});
 }

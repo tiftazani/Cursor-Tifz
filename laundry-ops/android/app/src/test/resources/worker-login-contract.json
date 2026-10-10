@@ -1,0 +1,98 @@
+{
+  "identity": {
+    "email": "kasir@cuciin.id",
+    "name": "Kasir contoh",
+    "role": "Kasir",
+    "branchIds": [
+      "melati"
+    ],
+    "access": {
+      "staff": [
+        {
+          "name": "Kasir contoh",
+          "email": "kasir@cuciin.id",
+          "role": "Kasir",
+          "approved": true,
+          "branchIds": [
+            "melati"
+          ],
+          "accessRoleId": "role-kasir"
+        }
+      ],
+      "accessRoles": [
+        {
+          "modules": [
+            "service"
+          ],
+          "functions": [
+            "service.create"
+          ],
+          "id": "role-kasir",
+          "name": "Kasir",
+          "builtIn": true
+        }
+      ],
+      "accessPolicies": [
+        {
+          "modules": [
+            "service"
+          ],
+          "functions": [
+            "service.create"
+          ],
+          "email": "kasir@cuciin.id"
+        }
+      ],
+      "updatedAt": 1
+    }
+  },
+  "nota": {
+    "id": "contract-1",
+    "branchId": "melati",
+    "cashierName": "Kasir contoh",
+    "customerName": "Data contoh",
+    "phone": "",
+    "paid": 0,
+    "paymentStatus": "Belum",
+    "paymentMethod": "Tunai",
+    "workStatus": "Masuk",
+    "createdAt": "123",
+    "estimatedFinish": "",
+    "waSent": false,
+    "lines": [
+      {
+        "serviceId": "contract-service",
+        "serviceName": "Cuci",
+        "quantity": 2,
+        "unit": "kg",
+        "unitPrice": 10000,
+        "handlerEmail": "kasir@cuciin.id",
+        "handlerName": "Kasir contoh",
+        "productKey": "",
+        "commissionPerUnit": 1000,
+        "name": "Cuci",
+        "qty": 2,
+        "handledByEmail": "kasir@cuciin.id",
+        "handledByName": "Kasir contoh"
+      }
+    ],
+    "kasirEmail": "kasir@cuciin.id",
+    "kasir": "Kasir contoh",
+    "customer": "Data contoh",
+    "items": "Cuci",
+    "total": 20000,
+    "pay": "Belum",
+    "payMethod": "Tunai",
+    "laundry": "Masuk",
+    "createdAtMs": 123,
+    "pickupAt": "",
+    "photos": [],
+    "updatedAtMs": 1,
+    "canceledAtMs": 0,
+    "canceledAt": "",
+    "canceledBy": "",
+    "cancelReason": "",
+    "cashierEmail": "kasir@cuciin.id",
+    "updatedAt": 1
+  }
+}

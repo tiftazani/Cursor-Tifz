@@ -716,6 +716,7 @@ internal fun BayarScreen(nav: NavHostController, toast: (String) -> Unit) {
         store.notaReject(cart, paid, branchId)?.let { toast(it); return }
         saving = true
         val n = store.saveNota(cust, cart, paid, pickupValue, method, branchId, sendWa = false)
+            ?: run { toast(store.storageError ?: "Service belum tersimpan"); return }
         if (openWa) {
             try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${store.waMe(n.phone)}?text=${Uri.encode(store.notaText(n))}"))); store.markWaSent(n.id)?.let(toast) }
             catch (_: android.content.ActivityNotFoundException) { toast("Service tersimpan. WhatsApp belum tersedia.") }
@@ -859,7 +860,7 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
     var cancelReason by remember { mutableStateOf(cancelReasons.first()) }
     var cancelNote by remember { mutableStateOf("") }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) toast(if (store.addLocalProof(id, uri) != null) "Bukti tersimpan di perangkat" else "Bukti belum berhasil disimpan")
+        if (uri != null) toast(if (store.addLocalProof(id, uri) != null) "Bukti tersimpan di perangkat" else store.storageError ?: "Bukti belum berhasil disimpan")
     }
     val s = store.session.value
     val done = n.laundry == LaundryStatus.Selesai
@@ -1230,7 +1231,7 @@ internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
                 val targets = BranchPicker.writeTargets(canViewAllBranches(session), session.allowedBranchIds, targetBranches, branchId)
                 if (targets.isEmpty()) { toast("Pilih minimal satu cabang"); return@PrimaryBtn }
                 val saved = store.editStocks(validChanges, targets, kind, date.atZone(Clock.ZONE).toInstant().toEpochMilli())
-                if (saved == CuciinStore.TOLAK_STOK) { toast("Akses Catat stok dicabut untuk role akun ini"); return@PrimaryBtn }
+                if (saved == CuciinStore.TOLAK_STOK) { toast(store.storageError ?: "Akses Catat stok dicabut untuk role akun ini"); return@PrimaryBtn }
                 toast("$saved perubahan stok berhasil dicatat")
                 nav.navigate("stokHistory") { popUpTo("stok") }
             }

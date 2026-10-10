@@ -1,0 +1,352 @@
+{
+  "create": {
+    "commands": [
+      {
+        "commandId": "wire-MLT-wire-0",
+        "entityType": "nota",
+        "entityId": "MLT-wire",
+        "operation": "upsert",
+        "branchId": "melati",
+        "occurredAt": 2,
+        "expectedUpdatedAt": null,
+        "payload": {
+          "id": "MLT-wire",
+          "branchId": "melati",
+          "kasir": "Kasir Melati",
+          "customer": "Pelanggan",
+          "phone": "0813",
+          "items": "Cuci",
+          "total": 10000,
+          "paid": 0,
+          "pay": "Belum",
+          "laundry": "Masuk",
+          "createdAt": "1 Okt 2026, 08.00",
+          "createdAtMs": 1,
+          "pickupAt": "",
+          "waSent": false,
+          "waAt": null,
+          "photos": [],
+          "dropOut": false,
+          "payMethod": "Tunai",
+          "completedAt": null,
+          "pickedUpAt": null,
+          "lines": [
+            {
+              "serviceId": "cuci",
+              "name": "Cuci",
+              "qty": 1.0,
+              "unit": "kg",
+              "unitPrice": 10000,
+              "handledByEmail": "kasir@cuciin.id",
+              "handledByName": "Kasir Melati",
+              "commissionPerUnit": 1000,
+              "productKey": ""
+            }
+          ],
+          "kasirEmail": "kasir@cuciin.id",
+          "updatedAtMs": 0,
+          "canceledAtMs": 0,
+          "canceledAt": "",
+          "canceledBy": "",
+          "cancelReason": ""
+        },
+        "actorEmail": "kasir@cuciin.id"
+      }
+    ]
+  },
+  "payment": {
+    "commands": [
+      {
+        "commandId": "wire-MLT-wire-1",
+        "entityType": "nota",
+        "entityId": "MLT-wire",
+        "operation": "upsert",
+        "branchId": "melati",
+        "occurredAt": 2,
+        "expectedUpdatedAt": null,
+        "payload": {
+          "id": "MLT-wire",
+          "branchId": "melati",
+          "kasir": "Kasir Melati",
+          "customer": "Pelanggan",
+          "phone": "0813",
+          "items": "Cuci",
+          "total": 10000,
+          "paid": 10000,
+          "pay": "Lunas",
+          "laundry": "Masuk",
+          "createdAt": "1 Okt 2026, 08.00",
+          "createdAtMs": 1,
+          "pickupAt": "",
+          "waSent": false,
+          "waAt": null,
+          "photos": [],
+          "dropOut": false,
+          "payMethod": "Qris",
+          "completedAt": null,
+          "pickedUpAt": null,
+          "lines": [
+            {
+              "serviceId": "cuci",
+              "name": "Cuci",
+              "qty": 1.0,
+              "unit": "kg",
+              "unitPrice": 10000,
+              "handledByEmail": "kasir@cuciin.id",
+              "handledByName": "Kasir Melati",
+              "commissionPerUnit": 1000,
+              "productKey": ""
+            }
+          ],
+          "kasirEmail": "kasir@cuciin.id",
+          "updatedAtMs": 0,
+          "canceledAtMs": 0,
+          "canceledAt": "",
+          "canceledBy": "",
+          "cancelReason": ""
+        },
+        "actorEmail": "kasir@cuciin.id"
+      },
+      {
+        "commandId": "wire-MLT-wire-2",
+        "entityType": "payment",
+        "entityId": "pay-wire",
+        "operation": "upsert",
+        "branchId": "melati",
+        "occurredAt": 2,
+        "expectedUpdatedAt": null,
+        "payload": {
+          "id": "pay-wire",
+          "notaId": "MLT-wire",
+          "branchId": "melati",
+          "amount": 10000,
+          "method": "Qris",
+          "atMs": 2,
+          "at": "1 Okt 2026, 08.01",
+          "by": "Kasir Melati"
+        },
+        "actorEmail": "kasir@cuciin.id"
+      }
+    ]
+  },
+  "status": {
+    "commands": [
+      {
+        "commandId": "wire-MLT-wire-3",
+        "entityType": "nota",
+        "entityId": "MLT-wire",
+        "operation": "upsert",
+        "branchId": "melati",
+        "occurredAt": 2,
+        "expectedUpdatedAt": null,
+        "payload": {
+          "id": "MLT-wire",
+          "branchId": "melati",
+          "kasir": "Kasir Melati",
+          "customer": "Pelanggan",
+          "phone": "0813",
+          "items": "Cuci",
+          "total": 10000,
+          "paid": 0,
+          "pay": "Belum",
+          "laundry": "Selesai",
+          "createdAt": "1 Okt 2026, 08.00",
+          "createdAtMs": 1,
+          "pickupAt": "",
+          "waSent": false,
+          "waAt": null,
+          "photos": [],
+          "dropOut": false,
+          "payMethod": "Tunai",
+          "completedAt": "1 Okt 2026, 09.00",
+          "pickedUpAt": null,
+          "lines": [
+            {
+              "serviceId": "cuci",
+              "name": "Cuci",
+              "qty": 1.0,
+              "unit": "kg",
+              "unitPrice": 10000,
+              "handledByEmail": "kasir@cuciin.id",
+              "handledByName": "Kasir Melati",
+              "commissionPerUnit": 1000,
+              "productKey": ""
+            }
+          ],
+          "kasirEmail": "kasir@cuciin.id",
+          "updatedAtMs": 0,
+          "canceledAtMs": 0,
+          "canceledAt": "",
+          "canceledBy": "",
+          "cancelReason": ""
+        },
+        "actorEmail": "kasir@cuciin.id"
+      }
+    ]
+  },
+  "whatsapp": {
+    "commands": [
+      {
+        "commandId": "wire-MLT-wire-4",
+        "entityType": "nota",
+        "entityId": "MLT-wire",
+        "operation": "upsert",
+        "branchId": "melati",
+        "occurredAt": 2,
+        "expectedUpdatedAt": null,
+        "payload": {
+          "id": "MLT-wire",
+          "branchId": "melati",
+          "kasir": "Kasir Melati",
+          "customer": "Pelanggan",
+          "phone": "0813",
+          "items": "Cuci",
+          "total": 10000,
+          "paid": 0,
+          "pay": "Belum",
+          "laundry": "Masuk",
+          "createdAt": "1 Okt 2026, 08.00",
+          "createdAtMs": 1,
+          "pickupAt": "",
+          "waSent": true,
+          "waAt": "1 Okt 2026, 09.01",
+          "photos": [],
+          "dropOut": false,
+          "payMethod": "Tunai",
+          "completedAt": null,
+          "pickedUpAt": null,
+          "lines": [
+            {
+              "serviceId": "cuci",
+              "name": "Cuci",
+              "qty": 1.0,
+              "unit": "kg",
+              "unitPrice": 10000,
+              "handledByEmail": "kasir@cuciin.id",
+              "handledByName": "Kasir Melati",
+              "commissionPerUnit": 1000,
+              "productKey": ""
+            }
+          ],
+          "kasirEmail": "kasir@cuciin.id",
+          "updatedAtMs": 0,
+          "canceledAtMs": 0,
+          "canceledAt": "",
+          "canceledBy": "",
+          "cancelReason": ""
+        },
+        "actorEmail": "kasir@cuciin.id"
+      }
+    ]
+  },
+  "handoverBase": {
+    "commands": [
+      {
+        "commandId": "wire-MLT-wire-5",
+        "entityType": "nota",
+        "entityId": "MLT-wire",
+        "operation": "upsert",
+        "branchId": "melati",
+        "occurredAt": 2,
+        "expectedUpdatedAt": null,
+        "payload": {
+          "id": "MLT-wire",
+          "branchId": "melati",
+          "kasir": "Kasir Melati",
+          "customer": "Pelanggan",
+          "phone": "0813",
+          "items": "Cuci",
+          "total": 10000,
+          "paid": 10000,
+          "pay": "Lunas",
+          "laundry": "Selesai",
+          "createdAt": "1 Okt 2026, 08.00",
+          "createdAtMs": 1,
+          "pickupAt": "",
+          "waSent": false,
+          "waAt": null,
+          "photos": [],
+          "dropOut": false,
+          "payMethod": "Tunai",
+          "completedAt": "1 Okt 2026, 09.00",
+          "pickedUpAt": null,
+          "lines": [
+            {
+              "serviceId": "cuci",
+              "name": "Cuci",
+              "qty": 1.0,
+              "unit": "kg",
+              "unitPrice": 10000,
+              "handledByEmail": "kasir@cuciin.id",
+              "handledByName": "Kasir Melati",
+              "commissionPerUnit": 1000,
+              "productKey": ""
+            }
+          ],
+          "kasirEmail": "kasir@cuciin.id",
+          "updatedAtMs": 0,
+          "canceledAtMs": 0,
+          "canceledAt": "",
+          "canceledBy": "",
+          "cancelReason": ""
+        },
+        "actorEmail": "kasir@cuciin.id"
+      }
+    ]
+  },
+  "handover": {
+    "commands": [
+      {
+        "commandId": "wire-MLT-wire-6",
+        "entityType": "nota",
+        "entityId": "MLT-wire",
+        "operation": "upsert",
+        "branchId": "melati",
+        "occurredAt": 2,
+        "expectedUpdatedAt": null,
+        "payload": {
+          "id": "MLT-wire",
+          "branchId": "melati",
+          "kasir": "Kasir Melati",
+          "customer": "Pelanggan",
+          "phone": "0813",
+          "items": "Cuci",
+          "total": 10000,
+          "paid": 10000,
+          "pay": "Lunas",
+          "laundry": "Selesai",
+          "createdAt": "1 Okt 2026, 08.00",
+          "createdAtMs": 1,
+          "pickupAt": "",
+          "waSent": false,
+          "waAt": null,
+          "photos": [],
+          "dropOut": false,
+          "payMethod": "Tunai",
+          "completedAt": "1 Okt 2026, 09.00",
+          "pickedUpAt": "1 Okt 2026, 10.00",
+          "lines": [
+            {
+              "serviceId": "cuci",
+              "name": "Cuci",
+              "qty": 1.0,
+              "unit": "kg",
+              "unitPrice": 10000,
+              "handledByEmail": "kasir@cuciin.id",
+              "handledByName": "Kasir Melati",
+              "commissionPerUnit": 1000,
+              "productKey": ""
+            }
+          ],
+          "kasirEmail": "kasir@cuciin.id",
+          "updatedAtMs": 0,
+          "canceledAtMs": 0,
+          "canceledAt": "",
+          "canceledBy": "",
+          "cancelReason": ""
+        },
+        "actorEmail": "kasir@cuciin.id"
+      }
+    ]
+  }
+}

@@ -304,7 +304,7 @@ internal fun AssetFormScreen(nav: NavHostController, assetId: String?, toast: (S
                     val bitmap = remember(photoPath) { runCatching { BitmapFactory.decodeFile(photoPath) }.getOrNull() }
                     if (bitmap != null) {
                         Image(bitmap.asImageBitmap(), "Foto aset", modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp))
-                        GhostBtn("Hapus foto", icon = Icons.Outlined.DeleteOutline) { AssetPhotos.delete(photoPath); photoPath = "" }
+                        GhostBtn("Hapus foto", icon = Icons.Outlined.DeleteOutline) { photoPath = "" }
                     }
                 } else {
                     Surface(color = Mist, shape = CuciinShape.card, border = BorderStroke(1.dp, Line)) {
@@ -332,7 +332,7 @@ internal fun AssetFormScreen(nav: NavHostController, assetId: String?, toast: (S
                 val category = legacyCategoryFor(type?.name.orEmpty())
                 if (editing == null) {
                     val row = assetStore.addInventory(branchId, name, category, brand, serial, qty, unit, status, purchaseAt, notes, sellable = false, assetTypeId = effectiveTypeId, photoPath = photoPath)
-                    if (row == null) { toast("Akses Ubah aset dicabut untuk role akun ini"); return@PrimaryBtn }
+                    if (row == null) { toast(assetStore.storageError ?: "Akses Ubah aset dicabut untuk role akun ini"); return@PrimaryBtn }
                     toast("Aset ${row.assetCode.ifBlank { previewCode }} tersimpan")
                     nav.popBackStack()
                 } else {

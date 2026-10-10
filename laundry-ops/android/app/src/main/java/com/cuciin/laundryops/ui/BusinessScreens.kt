@@ -46,15 +46,18 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
     val session = businessStore.session.value ?: return
     var showBranchSheet by rememberSaveable { mutableStateOf(false) }
     businessStore.revision.intValue
-    val allowedBranches = if (canViewAllBranches(session)) businessStore.branches.toList() else businessStore.branches.filter { it.id in session.allowedBranchIds }
+    val allowedBranches = if (session.role == Role.Owner) businessStore.branches.toList() else businessStore.branches.filter { it.id in session.allowedBranchIds }
     var branchId by rememberSaveable { mutableStateOf(session.branchId) }
+    LaunchedEffect(allowedBranches, branchId) {
+        if (allowedBranches.none { it.id == branchId }) branchId = allowedBranches.firstOrNull()?.id.orEmpty()
+    }
     var creating by rememberSaveable { mutableStateOf(false) }
     var category by remember { mutableStateOf(ExpenseCategory.Gaji) }
     var amount by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var time by rememberSaveable { mutableStateOf(DisplayDates.encode(LocalDateTime.now(Clock.ZONE))) }
     val parsedTime = DisplayDates.parse(time) ?: LocalDateTime.now(Clock.ZONE)
-    val rows = businessStore.expenses.filter { it.branchId == branchId }.sortedByDescending { it.occurredAtMs }
+    val rows = businessStore.expenses.filter { it.branchId == branchId && allowedBranches.any { branch -> branch.id == it.branchId } }.sortedByDescending { it.occurredAtMs }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = ui.pad), verticalArrangement = Arrangement.spacedBy(ui.gap), contentPadding = PaddingValues(bottom = 28.dp)) {
         item { ScreenHeader("Biaya operasional", "Semua pengeluaran tercatat per cabang", onBack = { nav.popBackStack() }) }
         if (allowedBranches.size > 1) item {
@@ -89,7 +92,7 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 Field(note, { note = it }, "Keterangan / penerima")
                 PrimaryBtn("Simpan biaya", enabled = (amount.toIntOrNull() ?: 0) > 0 && note.isNotBlank(), icon = Icons.Outlined.Check) {
                     val tersimpan = businessStore.addExpense(branchId, category, amount.toInt(), parsedTime.atZone(Clock.ZONE).toInstant().toEpochMilli(), note)
-                    if (tersimpan == null) toast("Akses Catat biaya dicabut untuk role akun ini")
+                    if (tersimpan == null) toast(businessStore.storageError ?: "Akses Catat biaya dicabut untuk role akun ini")
                     else {
                         toast("Biaya tercatat di ${businessStore.branch(branchId).name}"); amount = ""; note = ""; creating = false
                     }
@@ -157,11 +160,14 @@ internal fun AttendanceScreen(nav: NavHostController, toast: (String) -> Unit) {
     // dimiliki; tanpa itu tombolnya tidak ada dan store pun menolak.
     var editingAttendance by remember { mutableStateOf<AttendanceRecord?>(null) }
     var attendanceNote by remember { mutableStateOf("") }
-    val allowedBranches = if (canViewAllBranches(session)) businessStore.branches.toList()
+    val allowedBranches = if (session.role == Role.Owner) businessStore.branches.toList()
     else businessStore.branches.filter { it.id in session.allowedBranchIds }
+    LaunchedEffect(allowedBranches, branchId) {
+        if (allowedBranches.none { it.id == branchId }) branchId = allowedBranches.firstOrNull()?.id.orEmpty()
+    }
     val today = businessStore.todayAttendance(session.email, branchId)
     val todayAll = businessStore.todayAttendances(session.email)
-    val rows = if (canViewAllBranches(session)) businessStore.visibleAttendance(branchIds = setOf(branchId))
+    val rows = if (session.role == Role.Owner) businessStore.visibleAttendance(branchIds = setOf(branchId))
     else businessStore.visibleAttendance()
     val tap = rememberTapFeedback()
     val takeCheckIn = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
