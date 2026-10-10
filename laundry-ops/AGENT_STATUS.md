@@ -7,7 +7,11 @@ Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **
 
 **Keadaan `main` per 1 Okt: `31e6596`** (rilis 1.10.43 — tutup kas rinci produk + pembatalan nota + penjaga endpoint build; sudah di-push ke `origin/main`, CI hijau, Worker produksi+debug sudah di-deploy). Rincian di bagian 0w di bawah. Sebelumnya: `2727304` (bukti deploy Worker 1.10.43), `a6ce246` (artefak kandidat 1.10.43), `affef30` (rilis 1.10.42 — JPEG), `279c7d1` (rilis 1.10.41), `6f8338d` (kode JPEG).
 
-## Insiden sinkronisasi dua perangkat 1.10.50 (10 Okt 2026)
+## Rilis 1.10.51 / versionCode 70 (10 Okt 2026)
+
+Bump tiga tempat: app/build.gradle.kts, VersionHistory.kt (entri baru + currentName/currentCode), CHANGELOG.md. Kandidat releases/1.10.51-candidate/ (APK debug + APK rilis + AAB + SHA256SUMS + README). Build bersih `clean assembleDebug assembleRelease bundleRelease` BUILD SUCCESSFUL 1m27s (cuciin151-build.log). Gate: 508 debug + 508 release gagal/error 0, lint 0 error 15 peringatan (cuciin151-gate.log). Tes kabel Android→Worker 34/34 (cuciin151-wire.log). verify_release PASS, sertifikat 3a988c53…, endpoint dex sesuai varian. Hash: debug 3c6a976c…, rilis df976c3d…, aab 37021217… . Salinan Owner di ~/Downloads. Worker prod 167ef785 / debug 3f4e86e1 sudah aktif sebelumnya.
+
+Insiden sinkronisasi dua perangkat 1.10.50 (10 Okt 2026)
 
 Deploy Worker 10 Okt 2026 ~14:34 UTC (atas perintah pengguna, BELUM di-commit): debug `3f4e86e1-ccc4-47d9-a9cd-4ed0d280b67c`, prod `167ef785-bf4f-4b24-99db-0cec53d801df`. Pre-deploy `npm run check` 213/213; dry-run bundle sha256 b51fa053abd20316 deterministik x2, memuat guard refund + FK 409. Migrasi: tidak ada yang tertunda (0001-0010). /health 200 keduanya. Hitungan sebelum=sesudah: prod orders1356 payments1357 paid39352000 expenses9 staff12 branches5 products6 branch_stocks22 stock_moves1250 access_roles3 sync_changes24486 seq25019; debug orders21 payments14 paid219000 expenses3 staff10 branches6 products5 branch_stocks16 stock_moves33 access_roles5 sync_changes1249 seq1307. processed_commands terakhir 1791640785154 (sebelum deploy): belum ada lalu lintas nyata yang menguji kode baru. APK belum dibangun; versi berikutnya > 1.10.50/69.
 

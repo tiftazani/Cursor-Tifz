@@ -12,10 +12,21 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.50"
-    val currentCode: Int = 69
+    val currentName: String = "1.10.51"
+    val currentCode: Int = 70
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.51", code = 70, date = "10 Okt 2026",
+            notes = listOf(
+                "Kiriman yang sudah dikonfirmasi server tidak dikirim ulang saat nota diubah lagi.",
+                "Antrean di HP bersama terikat akun pembuatnya, jadi transaksi tidak terkirim atas nama akun lain.",
+                "Pembayaran menunggu seluruh nota yang masih tertunda terkirim lebih dulu.",
+                "Permintaan memuat ulang seluruh data dari server tidak lagi diabaikan.",
+                "Penghapusan produk, cabang, saldo stok, dan pengembalian dana ditangani server tanpa membuat antrean macet.",
+                "Kandidat uji: uji dua HP nyata dengan akun sama belum terbukti.",
+            ),
+        ),
         AppRelease(
             name = "1.10.50", code = 69, date = "10 Okt 2026",
             notes = listOf(

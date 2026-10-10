@@ -2,6 +2,15 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.51 — 10 Okt 2026 (versionCode 70), kandidat hotfix sinkronisasi
+
+- Kiriman yang sudah dikonfirmasi server tidak dikirim ulang saat nota berubah lagi: konfirmasi (ACK) disimpan lengkap, bukan hanya sebagian.
+- Antrean di HP bersama terikat akun pembuatnya; transaksi tidak terkirim atas nama akun lain setelah ganti sesi.
+- Pembayaran menunggu seluruh nota yang masih tertunda terkirim lebih dulu.
+- Permintaan memuat ulang seluruh data dari server (`snapshot_recovery_required`) tidak lagi ditelan; perangkat memulihkan snapshot, bukan melanjutkan delta.
+- Penghapusan produk, cabang, saldo stok, dan pengembalian dana ditangani server tanpa menahan antrean (lihat catatan Worker).
+- Kandidat uji: uji dua HP nyata dengan akun sama belum terbukti.
+
 ## 1.10.50 — 10 Okt 2026 (versionCode 69), kandidat hotfix
 
 - Login dan refresh memakai `/v1/me.access` yang berisi staff terverifikasi, katalog role dan policy. Snapshot penuh hanya fallback server lama. Izin tidak sah ditolak tanpa cache/fallback.
