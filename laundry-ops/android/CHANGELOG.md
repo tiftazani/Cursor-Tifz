@@ -2,6 +2,14 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.53 — 11 Okt 2026 (versionCode 72), hotfix sinkronisasi stok dan alur nota
+
+- Bug: bootstrap perangkat Owner gagal karena jurnal `branchStock` berisi `stock:null` (mutasi bernota tidak menulis `branch_stocks`). Worker hanya menjurnal saldo yang barisnya ada, materializer membuang baris rusak, `SyncProjection.apply` melewatinya.
+- `LocalJson.ServerMismatch` diteruskan ke layar login; banner error memakai ikon error.
+- Tombol Hapus Service disembunyikan untuk nota berbayar; pesan penolakan menyebut Batalkan nota.
+- Batalkan nota tidak lagi menumpuk dialog "Hapus Service" sebelum dialog pembatalan.
+- Worker berubah (`command-sync.ts`, `index.ts`); tanpa migrasi D1.
+
 ## 1.10.52 — 11 Okt 2026 (versionCode 71), kandidat hotfix kontrol akses
 
 - Bug: Owner tidak bisa mengubah stok dengan pesan "Akses Catat stok dicabut untuk role akun ini". Owner selalu punya 42 fungsi; yang menolak adalah `SyncOutbox.blockedActor` (antrean berisi perintah akun lain/tanpa actor), tetapi UI menampilkan pesan role.

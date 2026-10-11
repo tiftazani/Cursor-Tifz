@@ -12,10 +12,19 @@ data class AppRelease(
 )
 
 object VersionHistory {
-    val currentName: String = "1.10.52"
-    val currentCode: Int = 71
+    val currentName: String = "1.10.53"
+    val currentCode: Int = 72
 
     val releases: List<AppRelease> = listOf(
+        AppRelease(
+            name = "1.10.53", code = 72, date = "11 Okt 2026",
+            notes = listOf(
+                "Perangkat Owner tidak lagi gagal memuat data awal karena saldo stok kosong dari mutasi bernota.",
+                "Pesan \"Alamat server tidak cocok\" tampil apa adanya di layar login, dengan ikon error.",
+                "Nota berbayar tidak lagi menampilkan tombol Hapus Service; jalurnya Batalkan nota.",
+                "Batalkan nota langsung membuka dialog alasan pembatalan tanpa konfirmasi hapus ganda.",
+            ),
+        ),
         AppRelease(
             name = "1.10.52", code = 71, date = "11 Okt 2026",
             notes = listOf(

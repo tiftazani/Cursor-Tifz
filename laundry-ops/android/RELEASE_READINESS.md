@@ -1,6 +1,10 @@
-# Cuciin 1.10.52 — kesiapan rilis
+# Cuciin 1.10.53 — kesiapan rilis
 
-## Kandidat hotfix 1.10.52 (11 Oktober 2026)
+## Rilis hotfix 1.10.53 (11 Oktober 2026)
+
+Menggantikan 1.10.52. Bootstrap Owner tidak lagi gagal karena jurnal `branchStock` berisi `stock:null`, pesan server tidak cocok tampil apa adanya, dan alur hapus/batal nota berbayar dirapikan. Android 512 debug + 512 release lulus, lint 0 error; Worker 215/215; verify_release PASS. Worker produksi `367d7aa5` aktif (sebelumnya `167ef785`), tanpa migrasi D1. HP nyata belum terbukti. Artefak dan bukti: `releases/1.10.53-candidate/README.md`.
+
+## Kandidat hotfix 1.10.52 (11 Oktober 2026, digantikan 1.10.53)
 
 Menggantikan 1.10.51. Perbaikan pesan "akses dicabut" palsu untuk Owner saat antrean tertahan akun lain, dan tombol Owner untuk mengirim perubahan tanpa pemilik. Hanya Android; Worker tidak berubah. Belum push. HP nyata belum terbukti. Tidak menghapus akun, aplikasi, data, atau antrean. Artefak dan bukti: `releases/1.10.52-candidate/README.md`.
 
