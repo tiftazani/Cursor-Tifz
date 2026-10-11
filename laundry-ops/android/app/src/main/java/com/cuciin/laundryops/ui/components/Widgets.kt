@@ -487,10 +487,10 @@ fun GhostBtn(text: String, modifier: Modifier = Modifier, enabled: Boolean = tru
 }
 
 @Composable
-fun DangerBtn(text: String, onClick: () -> Unit) {
+fun DangerBtn(text: String, confirmFirst: Boolean = true, onClick: () -> Unit) {
     var confirm by remember { mutableStateOf(false) }
     val tap = rememberTapFeedback()
-    TextButton(onClick = { tap(); confirm = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+    TextButton(onClick = { tap(); if (confirmFirst) confirm = true else onClick() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
         Icon(Icons.Outlined.DeleteOutline, null, tint = Coral, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(text, color = Coral, fontWeight = FontWeight.SemiBold)
     }
     if (confirm) AlertDialog(
@@ -574,11 +574,12 @@ fun StepProgress(step: Int) {
 }
 
 @Composable
-fun FeedbackBanner(text: String) {
+fun FeedbackBanner(text: String, error: Boolean = false) {
+    val tint = if (error) Coral else TealDeep
     Surface(color = Mist, shape = CuciinShape.badge, modifier = Modifier.fillMaxWidth().animateContentSize().semantics { liveRegion = LiveRegionMode.Polite }) {
         Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.CheckCircle, null, tint = TealDeep, modifier = Modifier.size(18.dp))
-            Text(text, fontSize = 12.sp, color = TealDeep, lineHeight = 16.sp)
+            Icon(if (error) Icons.Outlined.ErrorOutline else Icons.Outlined.CheckCircle, null, tint = tint, modifier = Modifier.size(18.dp))
+            Text(text, fontSize = 12.sp, color = tint, lineHeight = 16.sp)
         }
     }
 }

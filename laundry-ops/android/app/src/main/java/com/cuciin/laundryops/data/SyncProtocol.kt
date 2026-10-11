@@ -643,6 +643,10 @@ object SyncProjection {
         val root = LocalJson.json.encodeToJsonElement(Snapshot.serializer(), snapshot).jsonObject.toMutableMap()
         changes.forEach { change ->
             val spec = specs[if (change.entityType == "order") "nota" else change.entityType] ?: return@forEach
+            // Jurnal lama dapat berisi saldo stock:null; satu baris rusak tidak boleh menggagalkan
+            // seluruh sinkronisasi. Saldo terakhir yang sah dipertahankan.
+            if (change.entityType == "branchStock" && change.operation.lowercase() != "delete" &&
+                ((change.payload as? JsonObject)?.get("stock") as? JsonPrimitive)?.intOrNull == null) return@forEach
             val rows = (root[spec.field] as? JsonArray).orEmpty().toMutableList()
             val identity = if (change.entityType == "attendance") attendanceIdentity(change.payload) else null
             // Baris lama dipakai sebagai dasar penggabungan, bukan dibuang. Aturan pemilik:

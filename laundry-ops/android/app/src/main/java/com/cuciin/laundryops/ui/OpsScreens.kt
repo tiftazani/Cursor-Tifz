@@ -965,7 +965,8 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
                         color = Muted,
                         fontSize = 12.sp,
                     )
-                    DangerBtn("Batalkan nota ini") { cancelOpen = true }
+                    // Dialog pembatalan sendiri sudah menjadi konfirmasi; jangan tumpuk dengan dialog "Hapus" generik.
+                    DangerBtn("Batalkan nota ini", confirmFirst = false) { cancelOpen = true }
                 }
             }
         }
@@ -978,7 +979,8 @@ internal fun QueueDetailScreen(nav: NavHostController, id: String, toast: (Strin
                     } else {
                         Text("Ubah layanan, jumlah, atau harga. Semua perubahan tercatat di audit trail.", color = Muted, fontSize = 12.sp)
                         GhostBtn("Edit rincian Service", enabled = n.lines.isNotEmpty(), icon = Icons.Outlined.Edit) { nav.navigate("queueEdit/$id") }
-                        DangerBtn("Hapus Service") {
+                        // Nota yang sudah dibayar tidak bisa dihapus (store menolak); jalurnya Batalkan nota.
+                        if (n.paid <= 0) DangerBtn("Hapus Service") {
                             store.deleteNota(id)?.let(toast) ?: run {
                                 toast("Service $id dihapus")
                                 nav.navigate("home") { popUpTo("home") { inclusive = true } }

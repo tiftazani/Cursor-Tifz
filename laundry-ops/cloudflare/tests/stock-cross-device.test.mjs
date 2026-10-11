@@ -31,3 +31,21 @@ test("Owner Update 10→25→0 ditarik Kasir cabang tujuan, snapshot sama dengan
     cursor = pulled.nextRevision;
   }
 });
+
+test("Mutasi bernota tanpa baris saldo tidak menjurnal branchStock stock:null", async () => {
+  const env = fakeD1();
+  seedBaseline(env);
+  env.db.exec(`INSERT INTO products(id,organization_id,name,updated_at) VALUES('parfum','cuciin','Parfum',1);
+    INSERT INTO orders(id,organization_id,branch_id,cashier_name,customer_name,total,paid,payment_status,payment_method,work_status,created_at,payload_json,updated_at) VALUES('MLT-1','cuciin','melati','Kasir','Uji',1,1,'Lunas','Tunai','Masuk',1,'{}',1)`);
+  const command = { commandId: "batal-nota-1", entityType: "stockMove", entityId: "move-batal-1", operation: "upsert", branchId: "melati", payload: { branchId: "melati", product: "Parfum", kind: "Tambah", qty: 1, notaId: "MLT-1", atMs: 1 } };
+  const pushed = await (await pushCommands(commandRequest([command]), env, identities.owner)).json();
+  assert.equal(pushed.results[0].accepted, true, JSON.stringify(pushed));
+  assert.equal(rows(env, "SELECT count(*) AS n FROM sync_changes WHERE entity_type='branchStock'")[0].n, 0);
+  assert.equal(rows(env, "SELECT count(*) AS n FROM sync_changes WHERE entity_type='stockMove'")[0].n, 1);
+});
+
+test("Materializer membuang saldo stock:null dari cache maupun jurnal", () => {
+  const base = { branchStocks: [{ branchId: "melati", productKey: "rusak", stock: null }, { branchId: "melati", productKey: "soap", stock: 3 }] };
+  const snapshot = applyJournalToSnapshot(base, [{ entity_type: "branchStock", entity_id: "melati:x", operation: "upsert", payload_json: JSON.stringify({ branchId: "melati", productKey: "x", stock: null }), updated_at: 1 }], 1);
+  assert.deepEqual(snapshot.branchStocks, [{ branchId: "melati", productKey: "soap", stock: 3 }]);
+});

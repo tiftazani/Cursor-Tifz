@@ -94,8 +94,8 @@ object CuciinStore {
             ready = true
             revision.intValue++
             true
-        } catch (_: Exception) {
-            storageError = "Data belum tersimpan. Periksa ruang penyimpanan lalu buka ulang aplikasi."
+        } catch (e: Exception) {
+            storageError = (e as? LocalJson.ServerMismatch)?.message ?: "Data belum tersimpan. Periksa ruang penyimpanan lalu buka ulang aplikasi."
             ready = false
             session.value = null
             verifiedAccess = null
@@ -1814,7 +1814,7 @@ object CuciinStore {
             return "Akun ini tidak dapat menghapus Service tersebut"
         }
         if (old.waSent && !canCorrectSentNota()) return tolak("service.correctSent", "Service sudah dikirim ke pelanggan; hanya Owner yang dapat menghapus")
-        if (old.paid > 0) return "Service yang sudah menerima pembayaran tidak dapat dihapus. Catat pengembalian dana terlebih dahulu."
+        if (old.paid > 0) return "Service yang sudah menerima pembayaran tidak dapat dihapus. Gunakan Batalkan nota agar uangnya dicatat sebagai pengembalian dana."
         val now = Clock.nowMs()
         old.lines.forEach { line ->
             val product = lineProduct(id, line) ?: return@forEach

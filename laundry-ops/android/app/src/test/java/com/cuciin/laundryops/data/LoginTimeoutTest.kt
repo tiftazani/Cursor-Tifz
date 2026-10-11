@@ -79,7 +79,7 @@ class LoginTimeoutTest {
         assertTrue("Back tidak boleh kembali ke layar kerja setelah gagal simpan",
             effect.contains("popUpTo(0)") && effect.contains("launchSingleTop = true"))
         val auth = sumber("ui/AuthScreens.kt")
-        assertTrue(auth.contains("val visibleError = store.storageError ?: loginError") && auth.contains("FeedbackBanner(visibleError)"))
+        assertTrue(auth.contains("val visibleError = store.storageError ?: loginError") && auth.contains("FeedbackBanner(visibleError, error = true)"))
     }
 
     @Test
@@ -98,7 +98,7 @@ class LoginTimeoutTest {
             "pesan kegagalan tidak dirender di layar Masuk",
             auth.contains("val visibleError = store.storageError ?: loginError") &&
                 auth.contains("if (visibleError.isNotBlank()) {") &&
-                auth.contains("FeedbackBanner(visibleError)"),
+                auth.contains("FeedbackBanner(visibleError, error = true)"),
         )
         assertTrue(
             "kegagalan masuk kembali dikirim lewat pesan singkat yang tidak terlihat di layar pra-login",
@@ -107,7 +107,7 @@ class LoginTimeoutTest {
         assertTrue(
             "pesan kegagalan pendaftaran tidak tampil di layar pendaftaran",
             auth.contains("var regError by remember { mutableStateOf(\"\") }") &&
-                auth.contains("if (regError.isNotBlank()) FeedbackBanner(regError)"),
+                auth.contains("if (regError.isNotBlank()) FeedbackBanner(regError, error = true)"),
         )
     }
 }

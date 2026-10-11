@@ -252,7 +252,7 @@ internal fun LoginScreen(nav: NavHostController) {
                     // pernah hilang tanpa jejak dan pengguna tidak tahu kenapa gagal.
                     val visibleError = store.storageError ?: loginError
                     if (visibleError.isNotBlank()) {
-                        Box(Modifier.padding(top = 12.dp)) { FeedbackBanner(visibleError) }
+                        Box(Modifier.padding(top = 12.dp)) { FeedbackBanner(visibleError, error = true) }
                     }
                     Row(
                         Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 14.dp),
@@ -380,7 +380,7 @@ internal fun RegisterScreen(nav: NavHostController) {
             )
             // Layar pendaftaran juga berada di luar Scaffold ber-snackbar, jadi
             // pesan kegagalannya ditampilkan sebagai banner di layar.
-            if (regError.isNotBlank()) FeedbackBanner(regError)
+            if (regError.isNotBlank()) FeedbackBanner(regError, error = true)
             PrimaryBtn(if (busy) "Mengirim…" else "Kirim pendaftaran", enabled = !busy) {
                 if (name.isBlank() || email.isBlank()) {
                     regError = "Nama dan email wajib diisi."

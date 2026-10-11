@@ -376,6 +376,8 @@ export function applyJournalToSnapshot(base:JsonRecord,changes:SnapshotJournalCh
     snapshot.updatedAt=Math.max(num(snapshot,"updatedAt"),change.updated_at);
   }
   for(const [dataset,rows] of datasets) snapshot[dataset]=[...rows.values()];
+  // Jurnal/cache lama bisa memuat saldo stock:null; perangkat menolak seluruh snapshot karenanya.
+  if(Array.isArray(snapshot.branchStocks)) snapshot.branchStocks=snapshot.branchStocks.filter(row=>Number.isInteger((row as JsonRecord)?.stock));
   if(notasChanged) snapshot.deletedNotaIds=[...deleted];
   snapshot.syncRevision=revision;
   return snapshot;

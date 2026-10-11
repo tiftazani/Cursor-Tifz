@@ -10,6 +10,9 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
 object LocalJson {
+    /** Pesannya ditampilkan apa adanya di layar login; kegagalan lain memakai pesan umum. */
+    class ServerMismatch : IllegalStateException("Alamat server tidak cocok dengan data lokal. Data tetap tersimpan; gunakan aplikasi dengan server asal.")
+
     private const val TAG = "CuciinDisk"
     val json = Json {
         ignoreUnknownKeys = true
@@ -30,9 +33,7 @@ object LocalJson {
         val hasLocalData = app.filesDir.listFiles()?.any {
             it.name.startsWith("cuciin-") && it != environment || it.name in setOf("attendance", "proofs")
         } ?: error("Folder data tidak dapat dibaca")
-        check(priorEndpoint == currentEndpoint || (!hasLocalData && priorEndpoint.isNullOrBlank())) {
-            "Alamat server tidak cocok dengan data lokal. Data tetap tersimpan; gunakan aplikasi dengan server asal."
-        }
+        if (priorEndpoint != currentEndpoint && (hasLocalData || !priorEndpoint.isNullOrBlank())) throw ServerMismatch()
         if (priorEndpoint != currentEndpoint) environment.writeText(currentEndpoint)
         latestSavedAt = Long.MIN_VALUE
     }

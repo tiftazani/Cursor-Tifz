@@ -1306,6 +1306,7 @@ class LoginOutboxRegressionTest {
                     assertFalse("Penanda $mode harus menahan startup", store.initializeStorage(app))
                     assertNull(store.session.value)
                     assertNotNull(store.storageError)
+                    if (mode != "directory") assertEquals(LocalJson.ServerMismatch().message, store.storageError)
                     originals.forEach { (name, bytes) -> assertEquals("Bukti $name tetap pada $mode", bytes, java.io.File(directory, name).readBytes().toList()) }
                     if (mode == "missing") assertFalse(marker.exists())
                     if (mode == "directory") assertTrue(marker.isDirectory)

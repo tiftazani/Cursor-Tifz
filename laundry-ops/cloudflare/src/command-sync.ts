@@ -602,7 +602,7 @@ async function planStock(db: D1Database, command: SyncCommand, identity: SyncIde
       SELECT ?,'stockMove',?,'upsert',?,?,?,?,? WHERE ${commandGate()}`).bind(ORG_ID,moveId,JSON.stringify(payload),now,branchId,identity.email.toLowerCase(),command.commandId,command.commandId,ORG_ID,token));
     const balanceId=`${branchId}:${item.productId}`;
     statements.push(db.prepare(`INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id)
-      SELECT ?,'branchStock',?,'upsert',json_object('branchId',?,'productKey',?,'stock',(SELECT quantity FROM branch_stocks WHERE branch_id=? AND product_id=?)),?,?,?,? WHERE ${commandGate()}`).bind(ORG_ID,balanceId,branchId,item.productId,branchId,item.productId,now,branchId,identity.email.toLowerCase(),command.commandId,command.commandId,ORG_ID,token));
+      SELECT ?,'branchStock',?,'upsert',json_object('branchId',?,'productKey',?,'stock',s.quantity),?,?,?,? FROM branch_stocks s WHERE s.branch_id=? AND s.product_id=? AND ${commandGate()}`).bind(ORG_ID,balanceId,branchId,item.productId,now,branchId,identity.email.toLowerCase(),command.commandId,branchId,item.productId,command.commandId,ORG_ID,token));
   }
   statements.push(audit(db,command,identity,token,branchId,`Stok batch: ${items.length} produk`,null,now));
   return { statements,entityType:"stock-batch",entityId:command.commandId,branchId,changePayload:null };
@@ -644,7 +644,9 @@ async function planStockMove(db:D1Database, command:SyncCommand, identity:SyncId
   statements.push(db.prepare(`INSERT INTO stock_moves(id,organization_id,branch_id,payload_json,occurred_at,updated_at) SELECT ?,?,?,json_set(?,'$.balanceAfter',(SELECT quantity FROM branch_stocks WHERE branch_id=? AND product_id=?)),?,? WHERE ${commandGate()}`).bind(moveId,ORG_ID,branchId,JSON.stringify(canonical),branchId,product.id,typeof p.atMs === "number" ? p.atMs : now,now,command.commandId,ORG_ID,token));
   statements.push(db.prepare(`INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id) SELECT ?,'stockMove',?,'upsert',json_set(?,'$.balanceAfter',(SELECT quantity FROM branch_stocks WHERE branch_id=? AND product_id=?)),?,?,?,? WHERE ${commandGate()}`).bind(ORG_ID,moveId,JSON.stringify(canonical),branchId,product.id,now,branchId,identity.email.toLowerCase(),command.commandId,command.commandId,ORG_ID,token));
   const balanceId=`${branchId}:${product.id}`;
-  statements.push(db.prepare(`INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id) SELECT ?,'branchStock',?,'upsert',json_object('branchId',?,'productKey',?,'stock',(SELECT quantity FROM branch_stocks WHERE branch_id=? AND product_id=?)),?,?,?,? WHERE ${commandGate()}`).bind(ORG_ID,balanceId,branchId,product.id,branchId,product.id,now,branchId,identity.email.toLowerCase(),command.commandId,command.commandId,ORG_ID,token));
+  // Saldo hanya dijurnal bila barisnya ada; mutasi bernota tidak menyentuh branch_stocks,
+  // dan subquery kosong dulu menghasilkan stock:null yang menggagalkan bootstrap perangkat.
+  statements.push(db.prepare(`INSERT INTO sync_changes(organization_id,entity_type,entity_id,operation,payload_json,updated_at,branch_id,actor_email,command_id) SELECT ?,'branchStock',?,'upsert',json_object('branchId',?,'productKey',?,'stock',s.quantity),?,?,?,? FROM branch_stocks s WHERE s.branch_id=? AND s.product_id=? AND ${commandGate()}`).bind(ORG_ID,balanceId,branchId,product.id,now,branchId,identity.email.toLowerCase(),command.commandId,branchId,product.id,command.commandId,ORG_ID,token));
   statements.push(audit(db,command,identity,token,branchId,`Stok ${kind}: ${product.name}`,typeof p.notaId === "string" ? p.notaId : null,now));
   return {statements,entityType:"stock-batch",entityId:moveId,branchId,changePayload:null};
 }

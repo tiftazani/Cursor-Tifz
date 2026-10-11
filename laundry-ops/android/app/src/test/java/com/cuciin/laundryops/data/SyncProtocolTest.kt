@@ -259,6 +259,17 @@ class SyncProtocolTest {
         assertFalse(deleted.staff.isEmpty())
     }
 
+    @Test fun nullStockJournalRowDoesNotBreakApply() {
+        val base = Snapshot(branchStocks = listOf(BranchStock("melati", "soap", 3)))
+        val rusak = buildJsonObject { put("branchId", "melati"); put("productKey", "soap"); put("stock", null as Int?) }
+        val sah = buildJsonObject { put("branchId", "melati"); put("productKey", "parfum"); put("stock", 2) }
+        val result = SyncProjection.apply(base, listOf(
+            SyncChange(1, "branchStock", "melati:soap", "upsert", "melati", rusak),
+            SyncChange(2, "branchStock", "melati:parfum", "upsert", "melati", sah),
+        ), updatedAt = 5)
+        assertEquals(mapOf("soap" to 3, "parfum" to 2), result.branchStocks.associate { it.productKey to it.stock })
+    }
+
     @Test fun responseAcceptsServerAckAliasesAndDuplicateResult() {
         val response = SyncCommandResponse(
             acknowledgedCommandIds = listOf("a"),
