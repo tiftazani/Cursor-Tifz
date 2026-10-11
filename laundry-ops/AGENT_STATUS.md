@@ -1,6 +1,7 @@
 # Papan status & klaim file antar-agent
 
 Terakhir diperbarui: 9 Oktober 2026 (oleh Hermes).
+10 Oktober 2026 (Hermes, keperluan dokumen): membuat `CLAUDE.md` baru di root `laundry-ops/` untuk serah terima harness ke Claude Code (paket lengkap di folder dokumen `migration-claude/`). Hanya file itu yang disentuh; tidak ada perubahan kode, belum di-commit.
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
 Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **sampai mana pekerjaan berjalan**, supaya Hermes, Codex, Cursor, dan OpenCode tidak menyunting berkas yang sama.
@@ -211,7 +212,8 @@ Status: pemeriksaan server selesai; kandidat lokal 1.10.44/build 63 siap. Kode p
 - Perbaikan Android: `PendaftaranAkun.kt`, `FirebaseCloud.kt`, `AuthScreens.kt`; pendaftaran ulang memakai akun lama setelah sandinya berhasil diverifikasi, dan sebab kegagalan ditampilkan.
 - Perbaikan server: `firebase-admin.ts`, `command-sync.ts`, `index.ts`; `staff.delete` juga mencoba menghapus akun Firebase. Ini best effort: gangguan Firebase tidak membatalkan penghapusan D1, jadi bukan jaminan tidak pernah ada akun tertinggal.
 - Bukti sebelumnya: uji penghapusan di produksi berhasil (`/tmp/uji-hapus-now2.txt`, akun uji dan baris D1 terhapus, pembersihan akun uji selesai). Tiga akun yatim dibersihkan pada sesi sebelumnya: muklisjr36, deccintaaulia180, ihsanibnuabdurrauf.
-- Jangan hapus atau ubah akun `rochnatillah22@gmail.com`, `ujibranch.hermes@gmail.com`, `tiftazani.khara@gmail.com`.
+- Jangan hapus atau ubah akun `ujibranch.hermes@gmail.com`, `tiftazani.khara@gmail.com`.
+- 11 Okt (Claude Code, atas perintah Owner): akun Firebase `rochnatillah22@gmail.com` (localId Erkrmb3SAANSVYAxSy9sulENHz92) dihapus karena yatim di D1 produksi dan debug, supaya email bisa daftar ulang. Firebase kini 15 akun.
 - Pemeriksaan ulang 8 Okt 22.24 WIB: D1 produksi muklis aktif=1, approved=1, Kasir, cabang bunayya. Firebase akun ada, tidak ditandai disabled; dibuat 15.50.21 WIB, lastLoginAt 16.22.41 WIB. Login ke aplikasi di HP pelapor belum terbukti. Jangan mencoba sandi dari foto atau menyetel ulang sandi tanpa izin.
 - Deploy produksi yang terbaca: `0d01b2e1-0279-424a-b04a-7a37e0fed0a5`, 8 Okt 15.30 WIB. `npm run check` dijalankan ulang: 110 tes lulus, 0 gagal, typecheck dan skema lulus.
 - Android 1.10.44/build 63: gate berhasil, debug 382/0 dan release 382/0. Debug dijalankan ulang setelah cleanTestDebugUnitTest (bukan sekadar UP-TO-DATE). Lint kedua varian 0 error/20 warning. Build resmi kedua APK+AAB berhasil, endpoint dex sesuai, penanda PendaftaranAkun ada, verify_release.py PASS dengan sertifikat tetap.
