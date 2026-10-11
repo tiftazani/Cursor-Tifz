@@ -606,8 +606,11 @@ object CuciinStore {
      */
     const val TOLAK_STOK: Int = -1
 
-    /** Pesan penolakan yang menyebut fungsi mana yang dicabut, supaya tidak membingungkan. */
-    private fun tolak(fungsi: String): String =
+    /**
+     * Pesan penolakan yang menyebut fungsi mana yang dicabut, supaya tidak membingungkan.
+     * Bila yang menahan adalah antrean sinkron akun lain, pesannya menyebut itu, bukan role.
+     */
+    fun tolak(fungsi: String): String =
         CloudSync.accountSwitchError(session.value?.email.orEmpty())
             ?: "Akses ${AccessCatalog.functionLabel(fungsi)} dicabut untuk role akun ini"
 

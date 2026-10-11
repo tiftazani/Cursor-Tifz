@@ -1231,7 +1231,7 @@ internal fun StockEditScreen(nav: NavHostController, toast: (String) -> Unit) {
                 val targets = BranchPicker.writeTargets(canViewAllBranches(session), session.allowedBranchIds, targetBranches, branchId)
                 if (targets.isEmpty()) { toast("Pilih minimal satu cabang"); return@PrimaryBtn }
                 val saved = store.editStocks(validChanges, targets, kind, date.atZone(Clock.ZONE).toInstant().toEpochMilli())
-                if (saved == CuciinStore.TOLAK_STOK) { toast(store.storageError ?: "Akses Catat stok dicabut untuk role akun ini"); return@PrimaryBtn }
+                if (saved == CuciinStore.TOLAK_STOK) { toast(store.storageError ?: store.tolak("stock.write")); return@PrimaryBtn }
                 toast("$saved perubahan stok berhasil dicatat")
                 nav.navigate("stokHistory") { popUpTo("stok") }
             }

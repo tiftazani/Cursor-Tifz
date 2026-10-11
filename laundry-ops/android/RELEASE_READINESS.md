@@ -1,6 +1,10 @@
-# Cuciin 1.10.51 — kesiapan rilis
+# Cuciin 1.10.52 — kesiapan rilis
 
-## Kandidat hotfix 1.10.51 (10 Oktober 2026)
+## Kandidat hotfix 1.10.52 (11 Oktober 2026)
+
+Menggantikan 1.10.51. Perbaikan pesan "akses dicabut" palsu untuk Owner saat antrean tertahan akun lain, dan tombol Owner untuk mengirim perubahan tanpa pemilik. Hanya Android; Worker tidak berubah. Belum push. HP nyata belum terbukti. Tidak menghapus akun, aplikasi, data, atau antrean. Artefak dan bukti: `releases/1.10.52-candidate/README.md`.
+
+## Kandidat hotfix 1.10.51 (10 Oktober 2026, digantikan 1.10.52)
 
 Kandidat terkini, menggantikan 1.10.50. APK 1.10.50 dibangun sebelum tiga berkas Android terakhir berubah, jadi kandidat ini wajib untuk membawa perbaikan ACK lengkap, antrean terikat akun, urutan pembayaran, dan pemulihan snapshot. Build bersih sukses (debug+release+AAB); 508 debug + 508 release lulus, lint 0 error 15 peringatan; tes kabel Android→Worker 34/34; verify_release PASS, endpoint dalam dex sesuai varian. Worker produksi `167ef785` dan debug `3f4e86e1` sudah aktif. Belum commit/push. HP nyata, login/logout bergantian, dan upgrade data asli belum terbukti. Tidak menghapus akun, aplikasi, data, atau antrean. Artefak dan bukti: `releases/1.10.51-candidate/README.md`.
 

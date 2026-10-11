@@ -132,7 +132,7 @@ internal fun CustomersScreen(nav: NavHostController, toast: (String) -> Unit) {
                         if (e == null) {
                             val c = store.addCustomer(name, phone, address)
                             if (c == null) {
-                                toast(store.storageError ?: "Akses Ubah pelanggan dicabut untuk role akun ini")
+                                toast(store.storageError ?: store.tolak("customer.write"))
                                 return@PrimaryBtn
                             }
                             toast("Pelanggan disimpan")
@@ -280,7 +280,7 @@ internal fun BranchesScreen(nav: NavHostController, toast: (String) -> Unit) {
                         }
                         if (e == null) {
                             if (store.addBranch(name, code, location, maps) == null) {
-                                toast("Akses Kelola master data dicabut untuk role akun ini")
+                                toast(store.storageError ?: store.tolak("branch.manage"))
                                 return@PrimaryBtn
                             }
                         } else {
@@ -621,7 +621,7 @@ internal fun ServicesScreen(nav: NavHostController, toast: (String) -> Unit) {
                         if (retail && productKey.isBlank()) { toast("Pilih produk stok untuk layanan retail"); return@PrimaryBtn }
                         if (e == null) {
                             if (store.addService(name, unit, price, retail, dropOut, selfService, commission, productKey) == null) {
-                                toast("Akses Kelola master data dicabut untuk role akun ini"); return@PrimaryBtn
+                                toast(store.storageError ?: store.tolak("serviceCatalog.manage")); return@PrimaryBtn
                             }
                         } else {
                             val tolak = store.updateService(e.id, name, unit, price, retail, dropOut, selfService, commission, productKey)
@@ -727,7 +727,7 @@ internal fun ProductsScreen(nav: NavHostController, toast: (String) -> Unit) {
                         val e = editing
                         if (e == null) {
                             if (store.addProduct(name, stock, min, initialBranchIds, kind, unit) == null) {
-                                toast(store.storageError ?: "Akses Kelola master data dicabut untuk role akun ini"); return@PrimaryBtn
+                                toast(store.storageError ?: store.tolak("stock.product")); return@PrimaryBtn
                             }
                         } else {
                             val tolak = store.updateProduct(e.key, name, min, kind, unit)

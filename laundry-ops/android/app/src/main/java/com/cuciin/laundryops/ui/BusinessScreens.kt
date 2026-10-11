@@ -92,7 +92,7 @@ internal fun ExpensesScreen(nav: NavHostController, toast: (String) -> Unit) {
                 Field(note, { note = it }, "Keterangan / penerima")
                 PrimaryBtn("Simpan biaya", enabled = (amount.toIntOrNull() ?: 0) > 0 && note.isNotBlank(), icon = Icons.Outlined.Check) {
                     val tersimpan = businessStore.addExpense(branchId, category, amount.toInt(), parsedTime.atZone(Clock.ZONE).toInstant().toEpochMilli(), note)
-                    if (tersimpan == null) toast(businessStore.storageError ?: "Akses Catat biaya dicabut untuk role akun ini")
+                    if (tersimpan == null) toast(businessStore.storageError ?: businessStore.tolak("expense.write"))
                     else {
                         toast("Biaya tercatat di ${businessStore.branch(branchId).name}"); amount = ""; note = ""; creating = false
                     }

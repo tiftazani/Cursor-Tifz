@@ -2,6 +2,15 @@
 
 Format: versi di `laundry-ops/android/app/build.gradle.kts` (`versionName` / `versionCode`) **harus sama** dengan entri di `VersionHistory.kt`. Layar **Riwayat versi** di app membaca `VersionHistory`.
 
+## 1.10.52 — 11 Okt 2026 (versionCode 71), kandidat hotfix kontrol akses
+
+- Bug: Owner tidak bisa mengubah stok dengan pesan "Akses Catat stok dicabut untuk role akun ini". Owner selalu punya 42 fungsi; yang menolak adalah `SyncOutbox.blockedActor` (antrean berisi perintah akun lain/tanpa actor), tetapi UI menampilkan pesan role.
+- `SyncOutbox.blockedReason(email)` menyebut jumlah perubahan dan akun pemiliknya; `CloudSync.accountSwitchError` dan `markOffline` memakainya.
+- `CuciinStore.tolak(fungsi)` publik dan mendahulukan pesan antrean; 7 layar (stok, produk, aset, pengeluaran, pelanggan, cabang, katalog layanan) tidak lagi memakai teks tetap.
+- `CloudSync.adoptUnknownOrigin()` (khusus Owner, tombol "Kirim atas nama saya" di `SyncNotice`) mengambil alih perintah tanpa actor. Perintah milik akun lain tidak disentuh, tidak ada antrean yang dihapus.
+- Audit 15 modul / 42 fungsi: semua fungsi punya penjaga di store atau rute.
+- Penyebab di HP pengguna belum diverifikasi langsung (tidak ada perangkat adb).
+
 ## 1.10.51 — 10 Okt 2026 (versionCode 70), kandidat hotfix sinkronisasi
 
 - Kiriman yang sudah dikonfirmasi server tidak dikirim ulang saat nota berubah lagi: konfirmasi (ACK) disimpan lengkap, bukan hanya sebagian.

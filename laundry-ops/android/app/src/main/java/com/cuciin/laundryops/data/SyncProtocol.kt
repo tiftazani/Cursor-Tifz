@@ -168,6 +168,38 @@ class SyncOutbox(initial: SyncClientState = SyncClientState()) {
         it.actorEmail.isBlank() || email.isNullOrBlank() || !it.actorEmail.equals(email.trim(), ignoreCase = true)
     }
 
+    /** Alasan [blockedActor] dalam kalimat untuk staf: akun mana yang harus login, atau asal yang tidak tercatat. */
+    fun blockedReason(email: String?): String? {
+        if (!blockedActor(email)) return null
+        if (email.isNullOrBlank()) return "Login dulu untuk mengirim perubahan yang tersimpan di HP ini"
+        val foreign = state.pending.filter { it.actorEmail.isNotBlank() && !it.actorEmail.equals(email.trim(), true) }
+        val unknown = state.pending.count { it.actorEmail.isBlank() }
+        val parts = buildList {
+            if (foreign.isNotEmpty()) {
+                val akun = foreign.map { it.actorEmail.lowercase() }.distinct().joinToString(", ")
+                add("Ada ${foreign.size} perubahan milik $akun yang belum terkirim dari HP ini. Login sebagai akun itu sampai terkirim, baru akun ini bisa menyimpan.")
+            }
+            if (unknown > 0) add("Ada $unknown perubahan lama di HP ini yang tidak tercatat akun pembuatnya. Owner perlu login di HP ini lalu menekan \"Kirim sebagai Owner\" di pemberitahuan sinkron.")
+        }
+        return parts.joinToString(" ")
+    }
+
+    /**
+     * Owner mengambil alih perintah lama tanpa asal supaya HP tidak terkunci selamanya.
+     *
+     * Hanya dijalankan atas tindakan Owner yang disengaja (tidak saat login), dan hanya untuk
+     * perintah dengan `actorEmail` kosong; perintah milik akun lain tetap menunggu akun asalnya.
+     */
+    fun adoptUnknownOrigin(email: String, persist: (SyncClientState) -> Unit = {}): Int {
+        val actor = email.trim().lowercase()
+        val count = state.pending.count { it.actorEmail.isBlank() }
+        if (actor.isBlank() || count == 0) return 0
+        val adopted = state.copy(pending = state.pending.map { if (it.actorEmail.isBlank()) it.copy(actorEmail = actor) else it })
+        persist(adopted)
+        state = adopted
+        return count
+    }
+
     fun migrateLegacyActor(snapshotEmail: String?, persist: (SyncClientState) -> Unit = {}): String {
         if (state.legacyActorChecked) {
             persist(state)

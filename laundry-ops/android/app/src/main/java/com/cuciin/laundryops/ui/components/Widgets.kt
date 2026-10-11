@@ -41,6 +41,7 @@ import com.cuciin.laundryops.data.CloudSync
 import com.cuciin.laundryops.data.CuciinStore
 import com.cuciin.laundryops.data.LaundryStatus
 import com.cuciin.laundryops.data.PayStatus
+import com.cuciin.laundryops.data.Role
 import com.cuciin.laundryops.ui.rememberUi
 import com.cuciin.laundryops.ui.theme.*
 import com.cuciin.laundryops.ui.theme.OnPrim
@@ -399,7 +400,8 @@ fun SyncNotice(modifier: Modifier = Modifier) {
     }
     val body = when {
         rejected > 0 -> CloudSync.lastRejectedReason?.take(160) ?: "Buka Profil untuk melihat konflik yang ditolak server."
-        pending > 0 -> "Perubahan aman di perangkat ini dan akan dikirim saat koneksi pulih. Angka di layar bisa belum sama dengan server."
+        pending > 0 -> CloudSync.accountSwitchError(store.session.value?.email.orEmpty())
+            ?: "Perubahan aman di perangkat ini dan akan dikirim saat koneksi pulih. Angka di layar bisa belum sama dengan server."
         else -> CloudSync.lastStatus
     }
     Surface(
@@ -412,6 +414,10 @@ fun SyncNotice(modifier: Modifier = Modifier) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
                 Text(body, fontSize = 12.sp, lineHeight = 17.sp, color = Muted)
+                // Jalan keluar untuk antrean lama tanpa akun pembuat; hanya Owner, dan harus ditekan sendiri.
+                if (store.session.value?.role == Role.Owner && CloudSync.unknownOriginCount() > 0) {
+                    GhostBtn("Kirim sebagai Owner") { CloudSync.adoptUnknownOrigin() }
+                }
             }
         }
     }

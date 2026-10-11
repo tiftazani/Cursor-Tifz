@@ -167,4 +167,28 @@ class OutboxAccountTest {
         assertTrue(json.encodeToString(SyncCommand.serializer(), command).contains("widad@example.com"))
         assertEquals("widad-1", json.decodeFromString(SyncCommand.serializer(), legacy).commandId)
     }
+
+    @Test fun blockedReasonNamesOriginInsteadOfRole() {
+        val foreign = json.decodeFromString(SyncCommand.serializer(), legacy.dropLast(1) + """, "actorEmail":"widad@example.com"}""")
+        val outbox = SyncOutbox(SyncClientState(pending = listOf(foreign)))
+        val reason = outbox.blockedReason("owner@example.com").orEmpty()
+        assertTrue(reason, reason.contains("widad@example.com"))
+        assertFalse(reason, reason.contains("role"))
+        assertEquals(null, outbox.blockedReason("WIDAD@example.com"))
+    }
+
+    @Test fun ownerAdoptsOnlyUnknownOriginAndOnlyWhenAsked() {
+        val unknown = json.decodeFromString(SyncCommand.serializer(), legacy)
+        val foreign = unknown.copy(commandId = "aida-1", actorEmail = "aida@example.com")
+        val outbox = SyncOutbox(SyncClientState(pending = listOf(unknown)))
+        assertTrue(outbox.blockedReason("owner@example.com").orEmpty().contains("Kirim sebagai Owner"))
+        assertEquals(1, outbox.adoptUnknownOrigin(" OWNER@example.com "))
+        assertFalse(outbox.blockedActor("owner@example.com"))
+        assertEquals(listOf("owner@example.com"), outbox.state.pending.map { it.actorEmail })
+
+        val mixed = SyncOutbox(SyncClientState(pending = listOf(unknown, foreign)))
+        assertEquals(1, mixed.adoptUnknownOrigin("owner@example.com"))
+        assertEquals(listOf("owner@example.com", "aida@example.com"), mixed.state.pending.map { it.actorEmail })
+        assertTrue("perubahan milik akun lain tetap menunggu akun asalnya", mixed.blockedActor("owner@example.com"))
+    }
 }

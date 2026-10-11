@@ -717,10 +717,10 @@ class LoginOutboxRegressionTest {
     @Test fun nullableSaveFailuresShowStorageErrorBeforeFallbackMessage() {
         val ui = java.io.File("src/main/java/com/cuciin/laundryops/ui")
         listOf(
-            "BusinessScreens.kt" to "toast(businessStore.storageError ?: \"Akses Catat biaya dicabut",
-            "MasterScreens.kt" to "toast(store.storageError ?: \"Akses Kelola master data dicabut",
+            "BusinessScreens.kt" to "toast(businessStore.storageError ?: businessStore.tolak(\"expense.write\"))",
+            "MasterScreens.kt" to "toast(store.storageError ?: store.tolak(\"stock.product\"))",
             "MoreScreens.kt" to "toast(store.storageError ?: \"Kas cabang ini sudah ditutup",
-            "AssetScreens.kt" to "toast(assetStore.storageError ?: \"Akses Ubah aset dicabut",
+            "AssetScreens.kt" to "toast(assetStore.storageError ?: assetStore.tolak(\"inventory.write\"))",
             "OpsScreens.kt" to "else store.storageError ?: \"Bukti belum berhasil disimpan\"",
         ).forEach { (file, contract) -> assertTrue("$file wajib mendahulukan storageError", java.io.File(ui, file).readText().contains(contract)) }
     }

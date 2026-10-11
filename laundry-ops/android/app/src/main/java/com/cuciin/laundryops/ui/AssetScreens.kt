@@ -107,7 +107,7 @@ internal fun AssetListScreen(nav: NavHostController, toast: (String) -> Unit) {
                     // diperiksa; tanpa itu role yang hanya boleh membaca tetap bisa mengubah.
                     AssetRow(row, assetStore.assetTypeName(row.assetTypeId).ifBlank { row.category.label }) {
                         if (assetStore.canWriteInventory()) nav.navigate("assetEdit/${row.id}")
-                        else toast("Akses ubah aset dicabut untuk role akun ini")
+                        else toast(assetStore.tolak("inventory.write"))
                     }
                     if (index < rows.lastIndex) RowDivider()
                 }
@@ -332,7 +332,7 @@ internal fun AssetFormScreen(nav: NavHostController, assetId: String?, toast: (S
                 val category = legacyCategoryFor(type?.name.orEmpty())
                 if (editing == null) {
                     val row = assetStore.addInventory(branchId, name, category, brand, serial, qty, unit, status, purchaseAt, notes, sellable = false, assetTypeId = effectiveTypeId, photoPath = photoPath)
-                    if (row == null) { toast(assetStore.storageError ?: "Akses Ubah aset dicabut untuk role akun ini"); return@PrimaryBtn }
+                    if (row == null) { toast(assetStore.storageError ?: assetStore.tolak("inventory.write")); return@PrimaryBtn }
                     toast("Aset ${row.assetCode.ifBlank { previewCode }} tersimpan")
                     nav.popBackStack()
                 } else {

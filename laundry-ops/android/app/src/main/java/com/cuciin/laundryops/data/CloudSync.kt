@@ -415,7 +415,7 @@ object CloudSync {
                 if (outbox.blockedActor(actorEmail)) null else outbox.nextBatch(BATCH_LIMIT)
             }
             if (batch == null) {
-                markOffline("Login akun asal untuk mengirim perubahan")
+                markOffline(synchronized(this) { outbox.blockedReason(actorEmail) } ?: "Login akun asal untuk mengirim perubahan")
                 return EndpointResult.FAILED
             }
             if (batch.isEmpty()) return EndpointResult.OK
@@ -768,7 +768,7 @@ object CloudSync {
         if (requestState.pending.isNotEmpty()) {
             val actorEmail = verifiedSessionEmail()
             if (synchronized(this) { outbox.blockedActor(actorEmail) }) {
-                markOffline("Login akun asal untuk mengirim perubahan")
+                markOffline(synchronized(this) { outbox.blockedReason(actorEmail) } ?: "Login akun asal untuk mengirim perubahan")
                 return EndpointResult.FAILED
             }
             val conn = open("PUT", expectedActorEmail = actorEmail)
@@ -829,7 +829,23 @@ object CloudSync {
     }
 
     @Synchronized fun accountSwitchError(email: String): String? =
-        CuciinStore.storageError ?: if (outbox.blockedActor(email)) "Login akun asal untuk mengirim perubahan yang masih tersimpan" else null
+        CuciinStore.storageError ?: outbox.blockedReason(email)
+
+    /** Jumlah perubahan lama tanpa akun pembuat; bila > 0, Owner dapat mengambil alih lewat [adoptUnknownOrigin]. */
+    @Synchronized fun unknownOriginCount(): Int = outbox.state.pending.count { it.actorEmail.isBlank() }
+
+    /** Tindakan sadar Owner (bukan otomatis saat login): perubahan tanpa asal dikirim atas nama Owner. */
+    @Synchronized fun adoptUnknownOrigin(): Int {
+        val session = CuciinStore.session.value ?: return 0
+        if (session.role != Role.Owner) return 0
+        val adopted = outbox.adoptUnknownOrigin(session.email) { persistence?.save(it) }
+        if (adopted > 0) {
+            pendingCount = outbox.state.pending.size
+            if (outbox.blockedReason(session.email) == null) CuciinStore.revision.intValue++
+            if (started) synchronize()
+        }
+        return adopted
+    }
 
     private fun verifiedSessionEmail(): String? = CuciinStore.session.value?.email?.trim()?.lowercase()
         ?.takeIf { it.isNotBlank() && it.equals(FirebaseCloud.currentEmail, ignoreCase = true) }
