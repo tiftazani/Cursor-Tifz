@@ -29,7 +29,36 @@ export function firebaseProjectIds(env: { FIREBASE_PROJECT_ID?: string; FIREBASE
 type JsonRecord = Record<string, unknown>;
 const ORG_ID = "cuciin";
 const MAX_BODY_BYTES = 4_000_000;
+/**
+ * Ambang peringatan ukuran snapshot ter-serialisasi (byte UTF-8).
+ * Setengah dari MAX_BODY_BYTES: penjaga, bukan batas teknis. Yang benar-benar
+ * mengancam adalah waktu baca 12 detik di perangkat dan batas pernyataan D1
+ * 100.000 byte saat mirror — keduanya tidak bersentuhan dengan angka ini.
+ */
+const SNAPSHOT_WARN_BYTES = 2_000_000;
+/** Ambang kritis ukuran snapshot ter-serialisasi (byte UTF-8). 80% dari MAX_BODY_BYTES. */
+const SNAPSHOT_CRITICAL_BYTES = 3_200_000;
 let jwksCache: { expiresAt: number; keys: JsonWebKey[] } | undefined;
+
+export type SnapshotSizeLevel = "ok" | "warn" | "critical";
+
+/** Petakan ukuran byte ke tingkat penjaga. Murni, tanpa efek samping. */
+export function snapshotSizeLevel(bytes: number): SnapshotSizeLevel {
+  if (bytes >= SNAPSHOT_CRITICAL_BYTES) return "critical";
+  if (bytes >= SNAPSHOT_WARN_BYTES) return "warn";
+  return "ok";
+}
+
+/**
+ * Catat ukuran snapshot ke log bila melewati ambang. Tidak pernah melempar dan
+ * tidak pernah mengubah balasan: GET harus tetap menyajikan apa adanya.
+ */
+export function warnSnapshotSize(bytes: number): SnapshotSizeLevel {
+  const level = snapshotSizeLevel(bytes);
+  if (level === "warn") console.warn(`snapshot_size_warn bytes=${bytes} warn=${SNAPSHOT_WARN_BYTES}`);
+  if (level === "critical") console.error(`snapshot_size_critical bytes=${bytes} critical=${SNAPSHOT_CRITICAL_BYTES} max=${MAX_BODY_BYTES}`);
+  return level;
+}
 
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
@@ -561,7 +590,12 @@ export default {
     if (url.pathname === "/health" && request.method === "GET") {
       try {
         const db=await env.DB.prepare("SELECT COALESCE(MAX(sequence),0) AS revision FROM sync_changes WHERE organization_id=?").bind(ORG_ID).first<{revision:number}>();
-        return json({ ok:true,service:"cuciin-api",environment:env.ENVIRONMENT,database:"ready",revision:db?.revision ?? 0 });
+        // Ukuran dihitung per byte UTF-8 lewat CAST(... AS BLOB), bukan `length()`
+        // yang menghitung karakter. Baris snapshot produksi berisi aksen, dan
+        // selisihnya nyata. SQLite tetap membaca baris ~3,4 MB di sisi server untuk
+        // mengukurnya, tetapi yang dikirim balik cuma satu bilangan bulat.
+        const snapshotBytes=await env.DB.prepare("SELECT COALESCE(MAX(LENGTH(CAST(payload_json AS BLOB))),0) AS snapshot_bytes FROM sync_snapshots WHERE organization_id=?").bind(ORG_ID).first<{snapshot_bytes:number}>();
+        return json({ ok:true,service:"cuciin-api",environment:env.ENVIRONMENT,database:"ready",revision:db?.revision ?? 0,snapshotBytes:snapshotBytes?.snapshot_bytes ?? 0,snapshotBytesLevel:snapshotSizeLevel(snapshotBytes?.snapshot_bytes ?? 0) });
       } catch(error) {
         console.error("health_database_failed",error);
         return json({ok:false,service:"cuciin-api",environment:env.ENVIRONMENT,database:"unavailable"},503);
@@ -590,7 +624,14 @@ export default {
     }
     if ((url.pathname === "/api/cuciin" || url.pathname === "/v1/snapshot") && request.method === "GET") {
       const materialized=await materializedSnapshot(env);
-      return new Response(JSON.stringify(visibleSnapshot(materialized.snapshot, identity)), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options":"nosniff", "X-Cuciin-Revision":String(materialized.revision), "X-Cuciin-Scope":syncScopeKey(identity) } });
+      // Diukur badan yang benar-benar dikirim (visibleSnapshot), bukan cache mentah:
+      // untuk Kasir hasilnya tersaring lebih kecil. Byte, bukan `body.length` yang
+      // menghitung unit UTF-16. Penjaga tidak boleh pernah menggagalkan GET.
+      const body=JSON.stringify(visibleSnapshot(materialized.snapshot, identity));
+      try { warnSnapshotSize(new TextEncoder().encode(body).byteLength); } catch {
+        console.warn("snapshot_size_guard_failed");
+      }
+      return new Response(body, { headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options":"nosniff", "X-Cuciin-Revision":String(materialized.revision), "X-Cuciin-Scope":syncScopeKey(identity) } });
     }
     if ((url.pathname === "/api/cuciin" || url.pathname === "/v1/snapshot") && request.method === "PUT") return await putSnapshot(request, env, identity);
     if (url.pathname === "/v1/sync/commands" && request.method === "POST") return pushCommands(request, env, identity);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -303,5 +303,95 @@ test("nilai sqlite_sequence tidak terhapus oleh DELETE di akhir berkas export", 
     .prepare("SELECT seq FROM sqlite_sequence WHERE name = 'sync_changes'")
     .get();
   assert.equal(sequence?.seq, 2, "nilai sqlite_sequence tidak bertahan");
+});
+
+// ---------------------------------------------------------------------------
+// Laporan pertumbuhan nilai kolom (13 Okt 2026)
+// ---------------------------------------------------------------------------
+
+/**
+ * Baca ukuran byte dan jumlah potongan sebuah kolom dari keluaran perapi.
+ * Bentuk barisnya: `    sync_snapshots.payload_json  130100 byte  ->  2 potongan @80000 byte`.
+ */
+function parseColumnLine(stdout, column) {
+  const escaped = column.replace(".", "\.");
+  const match = stdout.match(
+    new RegExp(`${escaped}\\s+(\\d+) byte\\s+->\\s+(\\d+) potongan`),
+  );
+  assert.ok(match, `baris ${column} tidak ditemukan:\n${stdout}`);
+  return { bytes: Number(match[1]), chunks: Number(match[2]) };
+}
+
+test("perapi melaporkan nilai kolom terbesar dan proyeksi potongannya", () => {
+  const result = runReorder([longStatement, "--check-only"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /nilai kolom terbesar/);
+  assert.match(result.stdout, /sync_snapshots\.payload_json/);
+  assert.match(result.stdout, /potongan/);
+  assert.match(result.stdout, /proyeksi: nilai terbesar/);
+});
+
+test("angka potongan dihitung dari CHUNK_BYTES, bukan dari jumlah karakter", () => {
+  // Fixture memuat karakter non-ASCII: 70.100 karakter tapi 130.100 byte.
+  // Kalau perapi menghitung karakter, `ceil(70100/80000)` = 1 potongan — angka
+  // yang menenangkan padahal aslinya butuh 2. Ukuran nyata yang diterima D1
+  // adalah byte, dan `CHUNK_BYTES` juga berbasis byte.
+  const result = runReorder([longStatement, "--check-only"]);
+  assert.equal(result.status, 0, result.stderr);
+  const { bytes, chunks } = parseColumnLine(result.stdout, "sync_snapshots.payload_json");
+
+  assert.equal(bytes, 130_100, "ukuran byte nilai kolom berubah");
+  assert.equal(chunks, Math.ceil(bytes / 80_000), "jumlah potongan bukan ceil(byte / CHUNK_BYTES)");
+  assert.equal(chunks, 2, "130.100 byte seharusnya jadi 2 potongan @80.000 byte");
+  assert.ok(bytes > 70_100, "fixture seharusnya memuat teks non-ASCII sehingga byte > karakter");
+});
+
+/** Tulis export sintetis dengan satu kolom seukuran `bytes` ke berkas sementara. */
+function writeBigColumnFixture(bytes) {
+  const dir = mkdtempSync(path.join(tmpdir(), "cuciin-growth-"));
+  const out = path.join(dir, "besar.sql");
+  const sql = [
+    "PRAGMA defer_foreign_keys=TRUE;",
+    "CREATE TABLE organizations (",
+    "  id TEXT PRIMARY KEY,",
+    "  name TEXT NOT NULL",
+    ");",
+    `INSERT INTO "organizations" ("id","name") VALUES('cuciin','${"x".repeat(bytes)}');`,
+  ].join("\n");
+  writeFileSync(out, sql, "utf8");
+  return { dir, out };
+}
+
+test("laporan pertumbuhan tidak menggagalkan mirror", () => {
+  // Ambang PERINGATAN 1 MB. Ia harus berbunyi, tetapi kode keluar tetap 0:
+  // kalau sekadar membesar saja sudah mematikan mirror, kegagalan 13 Okt 2026
+  // tinggal berpindah tempat. Hanya penjaga STATEMENT_BUDGET yang boleh balik 1.
+  const { dir, out } = writeBigColumnFixture(1_200_000);
+  try {
+    const result = runReorder([out, "--check-only"]);
+    assert.equal(result.status, 0, `pertumbuhan kolom menggagalkan mirror:\n${result.stderr}`);
+    assert.match(result.stdout, /PERINGATAN/);
+    assert.match(result.stdout, /organizations\.name/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("nilai kolom besar memunculkan peringatan tanpa menaikkan kode keluar", () => {
+  const { dir, out } = writeBigColumnFixture(1_200_000);
+  try {
+    const result = runReorder([out, "--check-only"]);
+    assert.equal(result.status, 0);
+    // Baris peringatan menyebut ambangnya, supaya bisa dicari di log Actions.
+    assert.match(result.stdout, /PERINGATAN: organizations\.name 1200000 byte melewati ambang waspada 1000000 byte/);
+    assert.doesNotMatch(result.stdout, /BAHAYA/);
+    // Ukuran kolom diukur sebelum dipecah, jadi angkanya 1,2 juta byte — bukan
+    // 80.000 byte seperti yang terlihat dari panjang pernyataan hasil pecahan.
+    const { bytes, chunks } = parseColumnLine(result.stdout, "organizations.name");
+    assert.equal(bytes, 1_200_000);
+    assert.equal(chunks, 15);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 

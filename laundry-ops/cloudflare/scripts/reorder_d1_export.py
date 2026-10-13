@@ -86,6 +86,15 @@ STATEMENT_BUDGET = 90_000
 # bagian tetap (nama tabel, daftar kolom, WHERE, kutip, titik koma) ikut terhitung.
 CHUNK_BYTES = 80_000
 
+# Batas pelaporan pertumbuhan kolom. Hanya LAPORAN — tidak pernah mengubah kode
+# keluar. Mirror harus tetap berhasil walau kolom membesar; yang fatal tetap hanya
+# penjaga STATEMENT_BUDGET di main(). Panjang pernyataan hasil pecahan mendatar di
+# sekitar CHUNK_BYTES berapa pun ukuran nilai aslinya, jadi pertumbuhan hanya
+# terlihat dari ukuran nilai kolomnya sendiri.
+COLUMN_REPORT_TOP = 5
+COLUMN_WATCH_BYTES = 1_000_000   # 1 MB: mulai waspada
+COLUMN_ALARM_BYTES = 3_000_000   # 3 MB: sudah dekat dengan pemicu 13 Okt 2026
+
 _TABLE_NAME = re.compile(
     r'^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["`\[]?([A-Za-z_][A-Za-z_0-9]*)["`\]]?',
     re.IGNORECASE,
@@ -552,6 +561,87 @@ def split_long_statements(statements: list[str]) -> list[str]:
     return result
 
 
+def _literal_stored_bytes(item: str) -> int:
+    """Ukuran byte nilai kolom setelah literal SQL dibuka.
+
+    Literal ber-kutip tunggal dikupas kutipnya dan `''` dikembalikan jadi satu
+    kutip, sehingga hasilnya sama dengan panjang kolom di dalam database. Ini yang
+    dibandingkan dengan angka produksi; ukuran teks literalnya sendiri lebih besar
+    karena kutip ganda dihitung dua karakter.
+    """
+    text = item.strip()
+    if len(text) >= 2 and text[0] == "'" and text[-1] == "'":
+        return _byte_len(text[1:-1].replace("''", "'"))
+    return _byte_len(text)
+
+
+def column_value_sizes(statements: list[str]) -> list[tuple[str, str, int]]:
+    """Ukuran byte tiap nilai kolom pada `INSERT` (tabel, kolom, byte)."""
+    result: list[tuple[str, str, int]] = []
+    for statement in statements:
+        if classify(statement) != "insert":
+            continue
+        parsed = _split_insert_columns(statement)
+        if not parsed:
+            continue
+        table, columns = parsed
+        start = _after_values(statement)
+        if start is None:
+            continue
+        parsed_values = _single_value_tuple(statement, start)
+        if not parsed_values:
+            continue
+        items, _ = parsed_values
+        if len(items) != len(columns):
+            continue
+        for column, item in zip(columns, items):
+            result.append((table, column, _literal_stored_bytes(item)))
+    return result
+
+
+def report_column_growth(statements: list[str]) -> None:
+    """Cetak nilai kolom terbesar dan proyeksi potongannya.
+
+    Laporan murni: seluruh isi fungsi ini dibungkus pengecualian supaya parser yang
+    menemukan kasus aneh tidak boleh mematikan mirror. Keluar kode tidak berubah.
+    """
+    try:
+        sizes = column_value_sizes(statements)
+        if not sizes:
+            return
+        biggest = max(sizes, key=lambda row: row[2])[2]
+        ranked = sorted(sizes, key=lambda row: row[2], reverse=True)[:COLUMN_REPORT_TOP]
+        print("  nilai kolom terbesar:")
+        for table, column, size in ranked:
+            chunks = max(1, -(-size // CHUNK_BYTES))
+            detail = (
+                f"  ->  {chunks} potongan @{CHUNK_BYTES} byte"
+                if chunks > 1
+                else "  ->  1 potongan"
+            )
+            print(f"    {table}.{column}  {size} byte{detail}")
+        for table, column, size in ranked:
+            if size >= COLUMN_ALARM_BYTES:
+                print(
+                    f"  BAHAYA: {table}.{column} {size} byte melewati ambang bahaya "
+                    f"{COLUMN_ALARM_BYTES} byte"
+                )
+            elif size >= COLUMN_WATCH_BYTES:
+                print(
+                    f"  PERINGATAN: {table}.{column} {size} byte melewati ambang "
+                    f"waspada {COLUMN_WATCH_BYTES} byte"
+                )
+        projected = max(1, -(-(biggest * 2) // CHUNK_BYTES))
+        print(
+            f"  proyeksi: nilai terbesar {biggest} byte; bila tumbuh 2x menjadi "
+            f"{biggest * 2} byte -> {projected} potongan "
+            f"(pernyataan @{CHUNK_BYTES} byte, batas D1 {STATEMENT_BUDGET} byte)"
+        )
+    except Exception:
+        # Sengaja ditelan: ini laporan, bukan penjaga.
+        pass
+
+
 def replay_strict(statements: list[str]) -> tuple[bool, int, str]:
     """Jalankan pernyataan satu per satu dalam autocommit, foreign key ditegakkan.
 
@@ -623,7 +713,10 @@ def main() -> int:
     ordered = reorder(statements)
 
     # Setelah urutan dibereskan, pecah pernyataan yang melewati batas 100 KB D1.
+    # Ukuran nilai kolom diukur dari daftar SEBELUM dipecah: setelah dipecah, nilai
+    # panjang sudah terpecah jadi potongan dan pertumbuhannya jadi tak terlihat.
     before = len(ordered)
+    presplit = ordered
     ordered = split_long_statements(ordered)
     split_count = len(ordered) - before
 
@@ -668,6 +761,11 @@ def main() -> int:
             f"  {split_count} pernyataan panjang dipecah; "
             f"pernyataan terpanjang sekarang {longest} byte"
         )
+
+    # Pertumbuhan kolom dilaporkan belakangan, dan tidak pernah mengubah kode
+    # keluar: kalau sekadar membesar saja sudah mematikan mirror, kegagalan 13 Okt
+    # 2026 tinggal berpindah tempat.
+    report_column_growth(presplit)
 
     if args.check_only:
         return 0
