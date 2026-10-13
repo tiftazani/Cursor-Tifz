@@ -8,6 +8,67 @@ Tujuan dokumen ini: satu tempat untuk melihat **siapa memegang file apa** dan **
 
 **Keadaan `main` per 1 Okt: `31e6596`** (rilis 1.10.43 — tutup kas rinci produk + pembatalan nota + penjaga endpoint build; sudah di-push ke `origin/main`, CI hijau, Worker produksi+debug sudah di-deploy). Rincian di bagian 0w di bawah. Sebelumnya: `2727304` (bukti deploy Worker 1.10.43), `a6ce246` (artefak kandidat 1.10.43), `affef30` (rilis 1.10.42 — JPEG), `279c7d1` (rilis 1.10.41), `6f8338d` (kode JPEG).
 
+## Cadangan KOSONG lagi 10–13 Okt 2026 — batas panjang pernyataan D1 (13 Okt, Claude Code)
+
+**Status: diperbaiki, cadangan sudah dipulihkan dan diverifikasi. Commit `c33629a`.**
+
+Mirror D1 gagal tiga hari berturut-turut (run 10, 11, 12 Okt; terakhir berhasil 9 Okt).
+Log run 12 Okt menunjukkan galatnya jelas di langkah impor:
+
+```
+ERROR statement too long: SQLITE_TOOBIG
+GALAT: impor gagal.
+```
+
+Sebabnya bukan urutan tabel (yang sudah diperbaiki 25 Sep), tetapi **batas panjang
+pernyataan D1: 100.000 byte**. `sync_snapshots.payload_json` menyimpan seluruh state
+organisasi dalam SATU baris — di produksi baris itu **3.415.652 byte**. `wrangler d1 export`
+menuliskannya sebagai satu literal dalam satu `INSERT`, dan impor berhenti di tengah.
+Karena tabel cadangan sudah keburu dibuang, cadangan kembali kosong — persis pola
+insiden 25 Sep, dengan sebab yang berbeda.
+
+Dua hal yang membuat ini tidak ketahuan lebih dulu:
+
+1. **Batas itu tidak ada di SQLite lokal.** Uji putar ulang di `reorder_d1_export.py`
+   memakai SQLite dan meloloskan pernyataan 3,4 MB tanpa keluhan; kegagalan baru muncul
+   di D1, setelah cadangan dibuang.
+2. **Verifikasi pasca-impor hanya membandingkan 8 tabel** dan tidak memeriksa panjang
+   pernyataan, jadi tidak ada yang menandai bahwa baris terbesar tidak pernah masuk.
+
+Perbaikan (semua di `cloudflare/scripts/reorder_d1_export.py`):
+
+- **Memecah `INSERT` panjang** jadi beberapa pernyataan: yang pertama memuat potongan
+  pertama, sisanya menyambung lewat `UPDATE ... SET kolom = kolom || potongan`. Kunci
+  baris untuk `WHERE` diambil dari kolom PRIMARY KEY tabel (dibaca dari `CREATE TABLE`),
+  karena `wrangler d1 export` tidak menulis `WHERE` pada INSERT-nya. Pada export produksi
+  13 Okt, 42 pernyataan dipecah dan pernyataan terpanjang turun ke 80.131 byte.
+- **Batas dihitung per byte UTF-8**, bukan per karakter, dan kutip tunggal dihitung dua
+  byte saat di-escape. Teks berisi aksen atau emoji tidak lagi bisa diam-diam melewati
+  batas walau `len()` Python masih kecil.
+- **Penjaga terakhir di `main`**: bila masih ada pernyataan di atas anggaran 90.000 byte
+  (mis. `INSERT` multi-baris yang tidak bisa dipecah), skrip berhenti dengan kode 1
+  SEBELUM cadangan disentuh.
+- **Bug laten `sqlite_sequence` ikut ketahuan** saat verifikasi putar-balik: `reorder()`
+  dulu menaruh `DELETE FROM sqlite_sequence;` di akhir berkas, sehingga menghapus nilai
+  penghitung yang baru dimuat dan kolom AUTOINCREMENT di cadangan memulai lagi dari 1.
+  Sekarang DELETE itu diletakkan sebelum INSERT `sqlite_sequence`, seperti urutan aslinya.
+
+Pemulihan dan bukti:
+
+- Mirror dijalankan manual 13 Okt (run `38383301553`) — **sukses**.
+- Verifikasi seluruh **25 tabel**: jumlah baris produksi dan cadangan identik
+  (`orders=1362`, `payments=1363`, `sync_changes=24601`, `audit_logs=19322`, ...).
+- Baris pemicunya utuh di cadangan: `sync_snapshots.payload_json` 3.415.652 byte,
+  revisi `1791880690861` sama dengan produksi.
+- Uji putar-balik 27 tabel database debug identik sebelum dan sesudah perapian.
+- 220 tes proyek lulus (`npm run check`), termasuk 5 tes baru dan fixture
+  `tests/support/export-long-statement.sql`.
+
+**Belum dikerjakan (dicatat, bukan bagian perbaikan ini):** desain Worker masih menyimpan
+~3,4 MB dalam satu baris `sync_snapshots`. Selama itu berlanjut, jumlah pernyataan hasil
+pecahan akan terus bertambah tiap kali state organisasi membesar. Memecah baris itu di
+sisi Worker akan menghilangkan akar masalahnya dan perlu ditimbang terpisah.
+
 ## Rilis 1.10.51 / versionCode 70 (10 Okt 2026)
 
 Bump tiga tempat: app/build.gradle.kts, VersionHistory.kt (entri baru + currentName/currentCode), CHANGELOG.md. Kandidat releases/1.10.51-candidate/ (APK debug + APK rilis + AAB + SHA256SUMS + README). Build bersih `clean assembleDebug assembleRelease bundleRelease` BUILD SUCCESSFUL 1m27s (cuciin151-build.log). Gate: 508 debug + 508 release gagal/error 0, lint 0 error 15 peringatan (cuciin151-gate.log). Tes kabel Android→Worker 34/34 (cuciin151-wire.log). verify_release PASS, sertifikat 3a988c53…, endpoint dex sesuai varian. Hash: debug 3c6a976c…, rilis df976c3d…, aab 37021217… . Salinan Owner di ~/Downloads. Worker prod 167ef785 / debug 3f4e86e1 sudah aktif sebelumnya.
