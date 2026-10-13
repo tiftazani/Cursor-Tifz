@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 /**
@@ -19,11 +21,19 @@ import test from "node:test";
  * berkas yang tidak bisa dijalankan ulang.
  *
  * Fixture `tests/support/export-messy-order.sql` sengaja ditulis dalam urutan yang merusak.
+ *
+ * Sejak 13 Okt 2026 ada satu batas lagi yang tidak terlihat di SQLite lokal: D1 menolak
+ * pernyataan di atas 100.000 byte (`statement too long: SQLITE_TOOBIG`). `sync_snapshots.payload_json`
+ * menyimpan seluruh state organisasi dalam satu baris, dan pada 10 Okt 2026 baris itu 3,4 MB.
+ * Perapi karena itu juga memecah `INSERT` panjang; tes di bawah mengunci hasil pecahannya.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const script = path.join(here, "..", "scripts", "reorder_d1_export.py");
 const messy = path.join(here, "support", "export-messy-order.sql");
+
+/** Batas pernyataan D1 adalah 100.000 byte; perapi memakai anggaran yang lebih ketat. */
+const STATEMENT_BUDGET = 90_000;
 
 /** Jalankan perapi, kembalikan { status, stdout, stderr }. */
 function runReorder(args) {
@@ -105,3 +115,193 @@ test("berkas yang tidak bisa dijalankan ulang ditolak, bukan diteruskan", () => 
   assert.notEqual(result.status, 0, "berkas rusak seharusnya ditolak");
   assert.match(result.stderr, /tidak bisa dijalankan ulang/);
 });
+
+// ---------------------------------------------------------------------------
+// Batas panjang pernyataan D1 (100.000 byte)
+// ---------------------------------------------------------------------------
+
+const longStatement = path.join(here, "support", "export-long-statement.sql");
+
+/** Jalankan perapi ke berkas sementara dan kembalikan isinya. */
+function reorderToFile(source) {
+  const dir = mkdtempSync(path.join(tmpdir(), "cuciin-reorder-"));
+  const out = path.join(dir, "rapi.sql");
+  try {
+    const result = runReorder([source, "--out", out]);
+    assert.equal(result.status, 0, result.stderr);
+    return readFileSync(out, "utf8");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Pecah berkas jadi pernyataan, sadar kutip tunggal dan komentar. Sama seperti
+ * `split_statements` di perapi: titik koma di dalam string atau di dalam komentar
+ * `--`/`/* *​/` bukan pemisah.
+ */
+function splitStatements(sql) {
+  const statements = [];
+  let buffer = "";
+  let inString = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+  for (let i = 0; i < sql.length; i += 1) {
+    const char = sql[i];
+    if (inLineComment) {
+      buffer += char;
+      if (char === "\n") inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      buffer += char;
+      if (char === "*" && sql[i + 1] === "/") {
+        buffer += sql[i + 1];
+        i += 1;
+        inBlockComment = false;
+      }
+      continue;
+    }
+    if (inString) {
+      buffer += char;
+      if (char !== "'") continue;
+      if (sql[i + 1] === "'") {
+        buffer += sql[i + 1];
+        i += 1;
+        continue;
+      }
+      inString = false;
+      continue;
+    }
+    if (char === "-" && sql[i + 1] === "-") {
+      buffer += char + sql[i + 1];
+      i += 1;
+      inLineComment = true;
+      continue;
+    }
+    if (char === "/" && sql[i + 1] === "*") {
+      buffer += char + sql[i + 1];
+      i += 1;
+      inBlockComment = true;
+      continue;
+    }
+    buffer += char;
+    if (char === "'") {
+      inString = true;
+    } else if (char === ";") {
+      const statement = buffer.trim();
+      if (statement && statement !== ";") statements.push(statement);
+      buffer = "";
+    }
+  }
+  const tail = buffer.trim();
+  if (tail) statements.push(tail);
+  return statements;
+}
+
+/**
+ * Jalankan berkas ke SQLite di memori, satu pernyataan per giliran, foreign key aktif —
+ * tiruan terdekat cara D1 menjalankan impor. PRAGMA dari berkas diabaikan karena D1
+ * juga mengabaikannya.
+ */
+function replay(sql) {
+  const db = new DatabaseSync(":memory:");
+  db.exec("PRAGMA foreign_keys=ON");
+  let executed = 0;
+  for (const statement of splitStatements(sql)) {
+    if (statement.trimStart().toUpperCase().startsWith("PRAGMA")) continue;
+    db.exec(statement);
+    executed += 1;
+  }
+  return { db, executed };
+}
+
+/** Seluruh tabel beserta barisnya, untuk membandingkan dua basis data. */
+function snapshot(db) {
+  const tables = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+    .all()
+    .map(row => row.name);
+  return Object.fromEntries(
+    tables.map(name => {
+      const rows = db.prepare(`SELECT * FROM "${name}"`).all();
+      return [name, rows.map(row => JSON.stringify(row))];
+    }),
+  );
+}
+
+test("pernyataan di atas batas D1 dipecah, tidak diteruskan apa adanya", () => {
+  const result = runReorder([longStatement, "--check-only"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /pernyataan panjang dipecah/);
+});
+
+test("tidak ada pernyataan hasil perapian yang melewati batas D1", () => {
+  const sql = reorderToFile(longStatement);
+  const sizes = splitStatements(sql).map(statement => Buffer.byteLength(statement, "utf8"));
+  assert.ok(sizes.length > 1, "pernyataan panjang seharusnya menghasilkan banyak pernyataan");
+  const longest = Math.max(...sizes);
+  assert.ok(
+    longest <= 100_000,
+    `masih ada pernyataan ${longest} byte; D1 menolaknya dengan SQLITE_TOOBIG`,
+  );
+});
+
+test("batas dihitung per byte, bukan per karakter", () => {
+  // Fixture memuat karakter non-ASCII. Kalau perapi memecah berdasarkan jumlah
+  // karakter, potongannya akan tetap di atas batas dalam byte dan gagal di D1
+  // walaupun terlihat aman dari sisi Python.
+  const sql = reorderToFile(longStatement);
+  const longest = Math.max(...splitStatements(sql).map(s => Buffer.byteLength(s, "utf8")));
+  const characters = Math.max(
+    ...splitStatements(sql).map(s => s.length),
+  );
+  assert.ok(
+    longest <= STATEMENT_BUDGET,
+    `pernyataan terpanjang ${longest} byte, di atas anggaran ${STATEMENT_BUDGET} byte`,
+  );
+  assert.notEqual(
+    longest,
+    characters,
+    "jumlah byte sama dengan jumlah karakter; fixture seharusnya memuat teks non-ASCII",
+  );
+});
+
+test("isi baris panjang utuh setelah dipecah dan dijalankan ulang", () => {
+  // Perbandingan langsung: berkas asli dijalankan apa adanya ke satu basis data,
+  // hasil perapian ke basis data lain, lalu seluruh tabel dibandingkan baris per
+  // baris. Ini membuktikan potongan-potongan `UPDATE ... || …` menyusun kembali
+  // kolom teks dengan panjang dan isi yang sama.
+  const original = replay(readFileSync(longStatement, "utf8"));
+  const reordered = replay(reorderToFile(longStatement));
+
+  assert.deepEqual(snapshot(reordered.db), snapshot(original.db));
+
+  const payload = reordered.db
+    .prepare("SELECT payload_json AS v FROM sync_snapshots")
+    .get().v;
+  assert.equal(payload.length, 70_100, "panjang isi kolom teks berubah");
+});
+
+test("nilai sqlite_sequence tidak terhapus oleh DELETE di akhir berkas export", () => {
+  // `wrangler d1 export` menutup berkas dengan `DELETE FROM sqlite_sequence;` lalu
+  // menulis ulang nilai penghitungnya. Kalau perapi memindahkan DELETE itu ke akhir
+  // berkas, ia menghapus nilai yang baru saja dimuat dan kolom AUTOINCREMENT
+  // (`sync_changes.id`) memulai lagi dari 1 pada database cadangan.
+  const sql = reorderToFile(longStatement);
+  const deleteAt = sql.indexOf("DELETE FROM sqlite_sequence");
+  const insertAt = sql.indexOf('INSERT INTO "sqlite_sequence"');
+  assert.notEqual(deleteAt, -1, "DELETE FROM sqlite_sequence hilang dari hasil");
+  assert.notEqual(insertAt, -1, "INSERT INTO sqlite_sequence hilang dari hasil");
+  assert.ok(
+    deleteAt < insertAt,
+    "DELETE FROM sqlite_sequence masih muncul setelah nilai penghitungnya ditulis",
+  );
+
+  const { db } = replay(sql);
+  const sequence = db
+    .prepare("SELECT seq FROM sqlite_sequence WHERE name = 'sync_changes'")
+    .get();
+  assert.equal(sequence?.seq, 2, "nilai sqlite_sequence tidak bertahan");
+});
+
