@@ -11,7 +11,7 @@ name: Cuciin D1 backup verification
 #   - Google Drive (OAuth) -> butuh OAuth client, mentok di brand tanpa billing
 #   - GitHub artifact      -> hanya tersimpan kalau repo privat
 # Salinan cadangan manual disimpan Owner di:
-#   ~/Documents/ChatGPT/Laundry/firebase-migration/backup-d1/
+#   ~/Documents/Hermes-AI/Laundry/firebase-migration/backup-d1/
 # Lihat laundry-ops/AGENT_STATUS.md bagian "Backup" untuk keadaan terbaru.
 
 on:

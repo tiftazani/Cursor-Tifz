@@ -39,7 +39,7 @@ di-gitignore. APK lokal: `app/build/outputs/apk/debug/app-debug.apk`.
 Build rilis butuh berkas signing privat di luar repo:
 
 ```bash
-export CUCIIN_SIGNING_PROPERTIES=/Users/tiftazani/Documents/ChatGPT/Laundry/signing-private/cuciin-signing.properties
+export CUCIIN_SIGNING_PROPERTIES=/Users/tiftazani/Documents/Hermes-AI/Laundry/signing-private/cuciin-signing.properties
 ./gradlew testReleaseUnitTest lintRelease assembleRelease bundleRelease
 python3 scripts/verify_release.py app/build/outputs/apk/release/app-release.apk --build-tools "$ANDROID_HOME/build-tools/35.0.0"
 ```

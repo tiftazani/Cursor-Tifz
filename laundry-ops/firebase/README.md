@@ -25,7 +25,7 @@ Deployment konfigurasi:
 npx firebase-tools deploy --only auth --project cuciin-ops
 ```
 
-Konfigurasi SDK Android produksi disimpan privat di `/Users/tiftazani/Documents/ChatGPT/Laundry/signing-private/google-services.json`. Konfigurasi produksi dan debug digabung lokal ke `laundry-ops/android/app/google-services.json` sebelum build. Path aplikasi tersebut sudah diabaikan Git.
+Konfigurasi SDK Android produksi disimpan privat di `/Users/tiftazani/Documents/Hermes-AI/Laundry/signing-private/google-services.json`. Konfigurasi produksi dan debug digabung lokal ke `laundry-ops/android/app/google-services.json` sebelum build. Path aplikasi tersebut sudah diabaikan Git.
 
 Catatan teknis: endpoint `config` Firebase Management API selalu mengembalikan app pertama untuk semua permintaan, jadi konfigurasi app debug disusun dari `mobilesdk_app_id` app debug yang sebenarnya (lihat `apps:list`), bukan dari hasil unduhan API.
 

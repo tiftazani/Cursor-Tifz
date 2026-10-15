@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-CF = Path("/Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz/laundry-ops/cloudflare")
+CF = Path(__file__).resolve().parents[1]
 TABEL = [
     "access_policies", "access_roles", "asset_types", "attendance", "audit_logs",
     "branch_stocks", "branches", "cash_closes", "customers", "expenses",

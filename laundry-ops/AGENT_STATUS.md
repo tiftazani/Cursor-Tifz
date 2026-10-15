@@ -1,6 +1,7 @@
 # Papan status & klaim file antar-agent
 
 Terakhir diperbarui: 9 Oktober 2026 (oleh Hermes).
+15 Oktober 2026 (OpenCode): seluruh folder `~/Documents/ChatGPT/Laundry` dipindah ke `~/Documents/Hermes-AI/Laundry` (repo ini, `signing-private/`, `firebase-migration/`). Path lama tidak ada lagi. `storeFile` di `signing-private/*.properties` dan skrip `cloudflare/scripts/*.py` (kini relatif ke lokasi file) sudah disesuaikan. Bukti: `assembleDebug assembleRelease` sukses, sertifikat APK rilis SHA-256 `3a988c53…2befee` sama dengan 1.10.53. Log bukti rilis lama tidak diubah.
 10 Oktober 2026 (Hermes, keperluan dokumen): membuat `CLAUDE.md` baru di root `laundry-ops/` untuk serah terima harness ke Claude Code (paket lengkap di folder dokumen `migration-claude/`). Hanya file itu yang disentuh; tidak ada perubahan kode, belum di-commit.
 Baca bersama `AGENT_HANDOVER.md`, `AGENT_WORKFLOW.md`, dan `CODING_AGENT_CONTEXT.md`.
 
@@ -1720,7 +1721,7 @@ Worker debug `cuciin-api-debug` sudah dideploy ulang (version `5599e3c2-f7f1-4a1
 
 **1.10.19 (18 Sep, nama pemilik netral):** nama yang tampil di aplikasi tidak lagi memakai nama pribadi, tetapi nama usaha. Aplikasi ini dijual ke banyak pemilik laundry sehingga nama di layar harus netral. Alamat email sengaja tidak diubah karena itu identitas akun Firebase; menggantinya memutus login semua perangkat. Yang diubah: `CuciinStore.ownerName`, `cloudflare/scripts/seed-debug.sql`, `mockup/index.html`, `mockup/app.js`, dan fixture `SyncProtocolTest.kt`. Migrasi baru `cloudflare/migrations/0008_owner_name_neutral.sql` mengganti nama di tabel `staff` **dan** menulis jurnal `sync_changes`, karena snapshot perangkat dibentuk dari snapshot tersimpan plus jurnal; kalau hanya tabel yang diubah, perangkat yang sudah memegang salinan tetap menampilkan nama lama. Migrasi idempoten (dijalankan dua kali: `rows_written` 5 lalu 0, entri jurnal tetap 1). Dua test Android baru (`OwnerNameTest`, `NoPersonalNameInSourcesTest`) dan dua test Worker baru mengunci aturan ini. Bukti APK: `strings classes*.dex` hanya menyisakan dua kemunculan, yaitu URL Worker dan alamat email. Gate lulus: 130 test debug + 130 test release, 43 test Worker, lint debug dan release, APK/AAB bertanda tangan, `verify_release.py`, checksum `releases/1.10.19-candidate/`.
 
-**Migrasi 0008 sudah diterapkan ke PRODUKSI (18 Sep, 02:40 WIB):** nama Owner di tabel `staff` produksi menjadi "Cuciin", dengan 4 entri jurnal (satu per cabang: bunayya, laupay-kirab, laupay-dayeuh, shelly). Dijalankan ulang: `rows_written` nol, entri tetap 4, total jurnal tetap 397. Backup sebelum migrasi sudah dipindah ke tempat permanen: `~/Documents/ChatGPT/Laundry/firebase-migration/backup-d1/pre-owner-name-neutral-20260918-0235.sql` (496 KB, berisi data: 8 staff, 4 cabang, 7 orders, 393 entri jurnal). Cara memulihkannya ada di `CARA-RESTORE.md` di folder yang sama.
+**Migrasi 0008 sudah diterapkan ke PRODUKSI (18 Sep, 02:40 WIB):** nama Owner di tabel `staff` produksi menjadi "Cuciin", dengan 4 entri jurnal (satu per cabang: bunayya, laupay-kirab, laupay-dayeuh, shelly). Dijalankan ulang: `rows_written` nol, entri tetap 4, total jurnal tetap 397. Backup sebelum migrasi sudah dipindah ke tempat permanen: `~/Documents/Hermes-AI/Laundry/firebase-migration/backup-d1/pre-owner-name-neutral-20260918-0235.sql` (496 KB, berisi data: 8 staff, 4 cabang, 7 orders, 393 entri jurnal). Cara memulihkannya ada di `CARA-RESTORE.md` di folder yang sama.
 
 **BUG YANG DITEMUKAN SEBELUM MIGRASI JALAN, dan pelajarannya:** versi pertama migrasi 0008 menulis SATU entri jurnal saja. Itu salah total. `pullChanges` di `command-sync.ts` menyaring jurnal untuk pengguna non-Owner dengan `branch_id IN (cabang pengguna)` dan entri `staff` hanya lolos bila cabangnya cocok, sehingga kasir dan SPV di cabang lain tidak akan pernah menerima nama baru walaupun Owner melihatnya. Aturan yang benar ada di `staffJournalScopes`: satu entri per cabang tugas. **Setiap migrasi yang menyentuh entitas `staff` wajib menulis satu entri jurnal per cabang, bukan satu saja.** Bug ini ketahuan dengan menyimulasikan filter `pullChanges` per cabang di D1 uji sebelum menyentuh produksi; cara itu wajib dipakai lagi untuk migrasi sejenis.
 
@@ -1758,7 +1759,7 @@ Pengunci: `RouteAccessTest`, `AuditBranchTest`, `BranchLookupTest`, `ReportPerio
 
 **Nama Owner akhirnya sampai ke perangkat (18 Sep, sore):** masalah lama "header Modul masih Tiftazani - Owner" ternyata punya DUA sebab yang keduanya harus diperbaiki, dan yang kedua baru ketahuan sekarang.
 
-1. Migrasi `0008_owner_name_neutral.sql` diterapkan ke D1 **produksi** pada 02:40 tapi TIDAK ke D1 **debug**. Sekarang sudah diterapkan ke debug juga (`changes: 2`), idempoten (`rows_written: 0` saat dijalankan ulang), 5 entri jurnal. Backup sebelum migrasi: `~/Documents/ChatGPT/Laundry/firebase-migration/backup-d1/pre-0008-debug-20260918-1555.sql` (884 KB, teruji bisa dipulihkan: 9 staff, 7 branches, 7 orders, nama Owner masih Tiftazani).
+1. Migrasi `0008_owner_name_neutral.sql` diterapkan ke D1 **produksi** pada 02:40 tapi TIDAK ke D1 **debug**. Sekarang sudah diterapkan ke debug juga (`changes: 2`), idempoten (`rows_written: 0` saat dijalankan ulang), 5 entri jurnal. Backup sebelum migrasi: `~/Documents/Hermes-AI/Laundry/firebase-migration/backup-d1/pre-0008-debug-20260918-1555.sql` (884 KB, teruji bisa dipulihkan: 9 staff, 7 branches, 7 orders, nama Owner masih Tiftazani).
 
 2. **`sync_snapshots` di debug masih memuat nama lama.** Perangkat menerima data dari snapshot penuh saat bootstrap dan dari jurnal saat sync biasa. Migrasi hanya memperbaiki tabel `staff` dan jurnal, TIDAK snapshot. Karena entri jurnal migrasi bernomor 581-585 sedangkan revision perangkat sudah 662, perangkat tidak pernah menariknya. Perbaikan: snapshot debug diperbaiki langsung (`staff.name` -> Cuciin), lalu ditulis entri jurnal BARU bernomor 663-667 (satu per cabang) supaya perangkat ikut menerimanya. Hasil: perangkat revision 667 dan header layar Modul berbunyi **"Cuciin - Owner"**.
 
@@ -1876,7 +1877,7 @@ laundry-ops/cloudflare/tests/command-sync.test.mjs                              
 
 | Hal | Nilai | Cara cek |
 |---|---|---|
-| Repo lokal | `/Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz` | satu-satunya clone; `~/Cursor-Tifz` bukan clone repo ini |
+| Repo lokal | `/Users/tiftazani/Documents/Hermes-AI/Laundry/Cursor-Tifz` | satu-satunya clone; `~/Cursor-Tifz` bukan clone repo ini |
 | Branch | `codex/cuciin-1-8-1` | `git status -sb` |
 | Android | **1.10.35 (versionCode 54)** | `app/build.gradle.kts`; juga harus sama di `VersionHistory.kt` dan `CHANGELOG.md` |
 | Paket aplikasi | `com.cuciin.laundryops` (+ `.debug`) | `app/build.gradle.kts` |
@@ -1944,7 +1945,7 @@ laundry-ops/README.md
 laundry-ops/AGENT_STATUS.md                      (dokumen ini)
 ```
 
-Skrip migrasi dan backup ada di luar repo: `~/Documents/ChatGPT/Laundry/cuciin-theme-mockup/` dan `~/Documents/ChatGPT/Laundry/firebase-migration/`.
+Skrip migrasi dan backup ada di luar repo: `~/Documents/Hermes-AI/Laundry/cuciin-theme-mockup/` dan `~/Documents/Hermes-AI/Laundry/firebase-migration/`.
 
 ### Pegangan Codex (area UI/rilis)
 
@@ -2008,7 +2009,7 @@ File-file itu menyimpan aturan uang, stok, komisi, otorisasi, dan protokol sinkr
     account berkuota nol (`storageQuota limit: 0`, pesan resmi "Service Accounts do not have
     storage quota"); Google Drive lewat OAuth butuh OAuth client, dan halaman Branding mentok
     tanpa billing; artifact GitHub hanya tersimpan kalau repo privat, dan repo ini publik.
-    Backup manual Owner ada di `~/Documents/ChatGPT/Laundry/firebase-migration/backup-d1/`.
+    Backup manual Owner ada di `~/Documents/Hermes-AI/Laundry/firebase-migration/backup-d1/`.
     Cloudflare hanya menyimpan 30 hari, jadi cadangan lokal itu yang penting.
 
 ## 5. Urutan kerja yang disarankan
@@ -2023,7 +2024,7 @@ File-file itu menyimpan aturan uang, stok, komisi, otorisasi, dan protokol sinkr
 ```sh
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
-export CUCIIN_SIGNING_PROPERTIES=/Users/tiftazani/Documents/ChatGPT/Laundry/signing-private/cuciin-signing.properties
+export CUCIIN_SIGNING_PROPERTIES=/Users/tiftazani/Documents/Hermes-AI/Laundry/signing-private/cuciin-signing.properties
 cd laundry-ops/android && ./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
 

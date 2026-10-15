@@ -15,7 +15,7 @@ Database toko di server Cloudflare Worker (`cuciin-api`) — HP kasir/owner nge-
 Kalau repo sudah di-clone:
 
 ```bash
-cd ~/Documents/ChatGPT/Laundry/Cursor-Tifz
+cd ~/Documents/Hermes-AI/Laundry/Cursor-Tifz
 git pull
 ```
 

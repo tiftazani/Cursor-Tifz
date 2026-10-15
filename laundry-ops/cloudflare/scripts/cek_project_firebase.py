@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO = Path("/Users/tiftazani/Documents/ChatGPT/Laundry/Cursor-Tifz")
+REPO = Path(__file__).resolve().parents[3]
 FB = REPO / "laundry-ops" / "firebase"
 
 
